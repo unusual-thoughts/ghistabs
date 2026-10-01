@@ -38,15 +38,13 @@ import ghistabs.parse.TypeDecl.Aggregate.Method
  * included by N CUs produces. One group builds one class, off its most-detailed body.
  */
 class ClassApplier(
-    internal val registry: DataTypeRegistry,
-    internal val program: Program,
+    override val registry: DataTypeRegistry,
+    program: Program,
     internal val resolver: AddressResolver,
-    internal val monitor: TaskMonitor,
-    private val sink: DiagnosticSink,
-) : DiagnosticSink by sink {
+    monitor: TaskMonitor,
+    sink: DiagnosticSink,
+) : VtableSweeper(registry, program, monitor, sink) {
     private val types = registry.hints.types
-    internal val symtab = program.symbolTable
-    internal val dtm = program.dataTypeManager
 
     companion object {
         private val source = SourceType.IMPORTED
@@ -542,24 +540,6 @@ class ClassApplier(
         )
         val resolved = registry.registerAgain(funcDef) as FunctionDefinition
         return PointerDataType(resolved, dtm)
-    }
-
-    /** Vtable records a harvested class claimed, so [sweepUnclaimedVtables] can tell what is left. */
-    internal val claimedVtables = mutableSetOf<Address>()
-
-    /**
-     * gcc 2.x secondary vtables (`_vt.<class>.<base>`) by the qualified class they belong to, one per
-     * record in address order: a.out keeps both `_vt$` and its user-label-prefixed `__vt$` at one
-     * address. Empty for any other ABI.
-     */
-    internal val gcc2SecondaryVtables: Map<String, List<Gcc2SecondaryVtable>> by lazy {
-        buildMap<String, MutableList<Gcc2SecondaryVtable>> {
-            for (sym in symtab.symbolIterator) {
-                val (cls, base) = Gcc2.secondaryVtableClasses(sym.name) ?: continue
-                val abi = CxxAbi.ofVtableSymbol(sym.name) ?: continue
-                getOrPut(cls) { mutableListOf() } += Gcc2SecondaryVtable(base, sym.address, abi)
-            }
-        }.mapValues { (_, tables) -> tables.distinctBy { it.address }.sortedBy { it.address } }
     }
 
     /** `_ZTV<class>` demangled qualified-class-name → address, built once. Replaces the per-class
