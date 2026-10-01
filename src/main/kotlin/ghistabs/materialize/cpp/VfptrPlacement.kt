@@ -30,7 +30,6 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
         classBody: TypeDecl.Aggregate<GlobalTypeId>,
         polyBase: TypeDecl.Aggregate.Base<GlobalTypeId>?,
     ) {
-        val className = classPath.last()
         val vfptrName = ClassUtils.VFPTR
         val parserVptrOffset = vptrOffsetBytesOf(classBody)
 
@@ -92,7 +91,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
 
             is VfptrAction.CollisionAt -> degradation(
                 "vfptr-collision",
-                className,
+                classPath.last(),
                 "cannot place {vfptr} at +${action.offsetBytes} (occupied by ${action.occupantFieldName})",
             )
         }
