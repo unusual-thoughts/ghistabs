@@ -7,10 +7,12 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.util.task.TaskMonitor
+import ghistabs.BoolOption
 import ghistabs.Demangler
 import ghistabs.buildClassNamespaces
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
+import ghistabs.get
 import ghistabs.materialize.DtmRegistry
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.*
@@ -20,10 +22,18 @@ import ghistabs.parse.canonTemplateName
 import ghistabs.parse.leafName
 import ghistabs.parse.nameSegments
 import ghistabs.readPointer
+import ghistabs.set
 
 /** One gcc 2.x secondary vtable record: its symbol's [base] and ABI, and where it sits. */
 internal data class Gcc2SecondaryVtable(val base: String, val address: Address, val abi: CxxAbi)
 
+/**
+ * Lays the vtables of classes nothing describes: every `_ZTV…` (and gcc 2.x `_vt…`) symbol whose record
+ * no one [claimedVtables], typed off whatever sits at the addresses its slots hold. Needs only the
+ * symbol table and memory, so it runs on its own as [ghistabs.entrypoints.VtableSweepAnalyzer] on a
+ * binary with no stabs at all; [ClassApplier] extends it to claim the classes the stabs describe first
+ * and sweep what they leave.
+ */
 open class VtableSweeper(
     internal open val registry: DtmRegistry,
     internal val program: Program,
@@ -32,6 +42,17 @@ open class VtableSweeper(
 ) : DiagnosticSink by sink {
     internal val symtab = program.symbolTable
     internal val dtm = program.dataTypeManager
+
+    companion object {
+        val VTABLES_SWEPT = BoolOption("Vtables Swept", "Unclaimed vtables already swept.", false)
+
+        /** Whether a sweep already ran here: the stabs import's, or [ghistabs.entrypoints.VtableSweepAnalyzer]'s. */
+        val Program.isVtablesSwept get() = this[VTABLES_SWEPT]
+
+        fun Program.markVtablesSwept() {
+            this[VTABLES_SWEPT] = true
+        }
+    }
 
     /** Vtable records a harvested class claimed, so [sweepUnclaimedVtables] can tell what is left. */
     protected val claimedVtables = mutableSetOf<Address>()
@@ -61,15 +82,18 @@ open class VtableSweeper(
      * at the addresses they point to, and the array's length is inferred (see [vtableSlotTargets]).
      * The class struct is *not* synthesised — this is the vtable level only; §24 covers the same
      * classes at the typeinfo-record level.
+     *
+     * Returns the number of primary vtables laid, and marks the program [isVtablesSwept].
      */
-    internal fun sweepUnclaimedVtables() {
+    internal fun sweepUnclaimedVtables(): Int {
         val unclaimed = symtab.symbolIterator
             .filter { it.address !in claimedVtables }
             .mapNotNull { sym -> ResolvedVtable.fromSymbol(sym) }
             .distinctBy { it.address }
             .toList()
 
-        monitor.initialize(unclaimed.size.toLong(), "Stabs: sweeping unclaimed vtables")
+        monitor.initialize(unclaimed.size.toLong(), "Sweeping unclaimed vtables")
+        var laid = 0
         for ((qualified, addr, abi) in unclaimed) {
             monitor.increment()
             val shape = program.vtableShape(addr, abi)
@@ -95,6 +119,7 @@ open class VtableSweeper(
             val ns = symtab.buildClassNamespaces(qualified.nameSegments)
             val addressPoint = program.layVtable(shape, vftable, qualified, ns, abi = abi)
             debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
+            laid++
             // Itanium packs a class's secondaries into the same record, walkable from the primary's
             // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>` symbol,
             // laid below whether or not the class has a primary at all.
@@ -111,6 +136,8 @@ open class VtableSweeper(
                 null,
             )
         }
+        program.markVtablesSwept()
+        return laid
     }
 
     /**
