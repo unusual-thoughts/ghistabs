@@ -78,6 +78,8 @@ internal class SharedOptions : OptionGroup(TITLE) {
     val degradationLog by option("--degradation-log", help = "Write grouped materialization degradations here")
         .file(canBeDir = false)
 
+    val dumps get() = listOfNotNull(recordsJson, harvestJson, registryJson, degradationLog)
+
     fun dumpRecords(records: List<StabRecord>) = recordsJson?.writeDump { dumpJson.encodeToString(records) }
 
     fun dumpHarvest(harvest: Harvest) = harvestJson?.writeDump { dumpJson.encodeToString(harvest) }
