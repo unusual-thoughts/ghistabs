@@ -17,8 +17,6 @@ import ghistabs.importer.VtableSweeper.Companion.isVtablesSwept
 import ghistabs.materialize.DtmRegistry
 import ghistabs.parse.StabReader
 
-const val GCC_VFTABLE_ANALYZER_NAME = "GCC C++ vftables"
-
 /**
  * Lay a `<Class>_vftable` at every gcc vtable symbol, Itanium `_ZTV…` (gcc 3 and later, the record
  * behind an rtti header) or gcc 2.x `_vt…` (the record behind a reserved entry), typed off the
@@ -32,11 +30,11 @@ const val GCC_VFTABLE_ANALYZER_NAME = "GCC C++ vftables"
  *   no label at the address point, and gcc 2.x's `_vt$3Foo` is not an address table to it at all.
  * - The `Windows x86 PE RTTI Analyzer` builds `vftable`s off MSVC's RTTI only
  *   (`PEUtil.isVisualStudioOrClangPe`), so never on a gcc or MinGW binary.
- * - `RTTIGccClassRecoverer` (`RecoverClassesFromRTTIScript`) is a script, not an analyzer. It finds
- *   vtables through the typeinfo graph, so needs Itanium RTTI and finds nothing in gcc 2.x or under
- *   `-fno-rtti`, and recovers whole classes from their constructors with the decompiler. The
- *   `<Class>_vftable` under `/ClassDataTypes/<Class>/` and the `vftable` label laid here are the
- *   names it uses, so it runs over these tables rather than beside them.
+ * - RecoverClassesFromRTTIScript` finds  vtables through the typeinfo graph, so needs Itanium RTTI
+ *   and finds nothing in gcc 2.x or under `-fno-rtti`, and recovers whole classes from their
+ *   constructors with the decompiler. The `<Class>_vftable` under `/ClassDataTypes/<Class>/`
+ *   and the `vftable` label laid here are the names it uses, so it runs over these tables
+ *   rather than beside them.
  *
  * This is the one sweep. On a binary with stabs it has to come after the class pass, whose tables are
  * typed off the declared virtuals and which it must leave alone ([ghistabs.materialize.cpp.abi.isVtableClaimed]
@@ -47,7 +45,7 @@ const val GCC_VFTABLE_ANALYZER_NAME = "GCC C++ vftables"
  */
 class GccVftableAnalyzer :
     AbstractAnalyzer(
-        GCC_VFTABLE_ANALYZER_NAME,
+        NAME,
         "Lay a typed <Class>_vftable at every gcc C++ vtable symbol: Itanium `_ZTV…` (gcc 3 and later) " +
             "and gcc 2.x `_vt…`, with each slot typed from the function it points at.",
         AnalyzerType.BYTE_ANALYZER,
@@ -67,23 +65,24 @@ class GccVftableAnalyzer :
      */
     override fun canAnalyze(program: Program) = !program.isVtablesSwept && GnuDemangler().canDemangle(program)
 
-    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
+    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
         if (program.isVtablesSwept) return false
         // Not imported yet: the import sweeps once its classes have claimed their tables.
         if (!program.isStabsDone && StabReader.hasStabs(program)) return false
 
         // The log only, at INFO and up: no bookmarks. Every table laid would get an Analysis one, and its
         // label and struct already mark it; what goes wrong (an empty table) is a WARN, so it is logged.
-        val sink = log?.let(::MessageLogSink) ?: DummySink
-        val laid = sweep(program, DtmRegistry(program.dataTypeManager), monitor ?: TaskMonitor.DUMMY, sink)
-        if (laid > 0) log?.appendMsg(GCC_VFTABLE_ANALYZER_NAME, "laid $laid vtable(s)")
+        val sink = MessageLogSink(log, originator = "GccVftableAnalyzer")
+        val laid = sweep(program, DtmRegistry(program.dataTypeManager), monitor, sink)
+        if (laid > 0) log.appendMsg(NAME, "laid $laid vtable(s)")
         return true
     }
 
     companion object {
+        const val NAME = "GCC C++ vftables"
+
         /** Whether the analyzer is on in [program]'s analysis options, which the stabs import honours too. */
-        fun isEnabled(program: Program) =
-            program.getOptions(Program.ANALYSIS_PROPERTIES).getBoolean(GCC_VFTABLE_ANALYZER_NAME, true)
+        fun isEnabled(program: Program) = program.getOptions(Program.ANALYSIS_PROPERTIES).getBoolean(NAME, true)
 
         /** Lay every vtable no class claimed, into [registry]; returns how many primaries it laid. */
         fun sweep(program: Program, registry: DtmRegistry, monitor: TaskMonitor, sink: DiagnosticSink) =
