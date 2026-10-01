@@ -76,6 +76,7 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         diamond.children.map(GTreeNode::getName) mustBe listOf("Left", "Right", "Named")
         diamond.children.first().children.map(GTreeNode::getName) mustBe listOf("virtual Base")
         diamond.children.first().children.single().isLeaf.mustBeTrue()
+        "virtual base class" mustBeIn diamond.children.first().children.single().toolTip
     }
 
     companion object {
