@@ -6,7 +6,6 @@ import generic.theme.GIcon
 import ghistabs.hierarchy.ClassHierarchy.ClassInfo
 import ghistabs.hierarchy.ClassHierarchy.Origin
 import ghistabs.parse.Access
-import resources.ResourceManager
 import java.awt.image.BufferedImage
 import javax.swing.Icon
 import javax.swing.ImageIcon
@@ -125,7 +124,7 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
 
 /**
  * Upstream's icon per kind of class: its green class icon with two colour channels swapped, so the
- * shape stays and the hue says the kind. A class without stabs is the greyed version of the same.
+ * shape stays and the hue says the kind. A class without stabs is the greyscale of the same.
  */
 private enum class Kind(val label: String, private val recolor: (Int, Int, Int) -> Triple<Int, Int, Int>) {
     NORMAL("class", { r, g, b -> Triple(r, g, b) }),
@@ -136,26 +135,29 @@ private enum class Kind(val label: String, private val recolor: (Int, Int, Int) 
     ;
 
     // Lazy: painting a themed icon needs the theme up, which a headless test that never draws skips.
-    private val stabs: Icon by lazy { recolored(CLASS_ICON) }
-    private val swept: Icon by lazy { ResourceManager.getDisabledIcon(stabs) }
+    private val stabs: Icon by lazy { if (this == NORMAL) CLASS_ICON else CLASS_ICON.recolored(recolor) }
+    private val swept: Icon by lazy { stabs.recolored(::greyscale) }
 
     fun icon(swept: Boolean) = if (swept) this.swept else stabs
+}
 
-    private fun recolored(icon: Icon): Icon {
-        if (this == NORMAL) return icon
-        val w = icon.iconWidth.coerceAtLeast(1)
-        val h = icon.iconHeight.coerceAtLeast(1)
-        val image = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
-        image.createGraphics().also { icon.paintIcon(null, it, 0, 0) }.dispose()
-        for (y in 0 until h) {
-            for (x in 0 until w) {
-                val argb = image.getRGB(x, y)
-                val (r, g, b) = recolor(argb shr 16 and 0xff, argb shr 8 and 0xff, argb and 0xff)
-                image.setRGB(x, y, (argb and 0xff000000.toInt()) or (r shl 16) or (g shl 8) or b)
-            }
+/** Rec. 601 luma, as a grey. */
+private fun greyscale(r: Int, g: Int, b: Int) = ((299 * r + 587 * g + 114 * b) / 1000).let { Triple(it, it, it) }
+
+/** [this] icon with [recolor] applied to every pixel's colour channels, alpha kept. */
+private fun Icon.recolored(recolor: (Int, Int, Int) -> Triple<Int, Int, Int>): Icon {
+    val w = iconWidth.coerceAtLeast(1)
+    val h = iconHeight.coerceAtLeast(1)
+    val image = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+    image.createGraphics().also { paintIcon(null, it, 0, 0) }.dispose()
+    for (y in 0 until h) {
+        for (x in 0 until w) {
+            val argb = image.getRGB(x, y)
+            val (r, g, b) = recolor(argb shr 16 and 0xff, argb shr 8 and 0xff, argb and 0xff)
+            image.setRGB(x, y, (argb and 0xff000000.toInt()) or (r shl 16) or (g shl 8) or b)
         }
-        return ImageIcon(image)
     }
+    return ImageIcon(image)
 }
 
 private fun escape(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
