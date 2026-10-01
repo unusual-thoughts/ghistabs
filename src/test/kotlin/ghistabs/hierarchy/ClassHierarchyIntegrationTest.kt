@@ -108,6 +108,27 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
             .children.none { it is MemberNode }.mustBeTrue()
     }
 
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `inverted, a basal class expands into the classes derived from it, each under every base`(fixture: String) {
+        load(fixture)
+        val root =
+            ClassHierarchyRootNode(program.name, ClassHierarchy.of(program), showMembers = false, inverted = true)
+        root.children.none {
+            it.name == "Circle" || it.name == "Diamond"
+        }.mustBeTrue("${root.children.map { it.name }}")
+        root.children.single { it.name == "Shape" }.children.map { it.name } mustBe listOf("Circle")
+        // Diamond derives from Left, Right and Named: it shows under each.
+        root.children.single { it.name == "Named" }.children.map { it.name } mustBe listOf("Diamond")
+        val base = root.children.singleOrNull { it.name == "Base" }
+        val left = (base?.children?.single { it.name.startsWith("Left") } ?: root.children.single { it.name == "Left" })
+        if (base != null) {
+            left.name mustBe "Left (virtual)"
+            "derives virtually" mustBeIn left.toolTip
+        }
+        left.children.map { it.name } mustBe listOf("Diamond")
+    }
+
     /** What [replaceRoot] carries over: a path by names, found again in the rebuilt tree. */
     @ParameterizedTest
     @MethodSource("hellos")

@@ -21,23 +21,28 @@ import javax.swing.ImageIcon
 internal val CLASS_ICON: Icon = GIcon("icon.plugin.symboltree.node.class")
 private val NAMESPACE_ICON: Icon = GIcon("icon.plugin.symboltree.node.namespace")
 
-/** The program's classes, filed by namespace, with their members unless [showMembers] is off. */
+/**
+ * The program's classes, filed by namespace, with their members unless [showMembers] is off. [inverted],
+ * files only the basal classes, each expanding into the classes derived from it: a class with several
+ * bases shows under each, and a virtual derivation is marked on the derived class.
+ */
 class ClassHierarchyRootNode(
     private val programName: String,
     hierarchy: ClassHierarchy,
     val showMembers: Boolean = true,
+    val inverted: Boolean = false,
 ) : GTreeNode() {
     init {
-        val classNodes = hierarchy.classes.associate {
-            it.path to
-                ClassNode(it).also { n -> n.showMembers = showMembers }
+        val filed = if (inverted) hierarchy.classes.filter { it.isBasal } else hierarchy.classes
+        val classNodes = filed.associate {
+            it.path to ClassNode(it, inverted).also { n -> n.showMembers = showMembers }
         }
         val folders = mutableMapOf<List<String>, NamespaceNode>()
         val children = mutableMapOf<List<String>, MutableList<GTreeNode>>()
 
         // A namespace that is a class files what it holds as the class's nested classes.
         fun ensure(path: List<String>) {
-            if (path.isEmpty() || path in classNodes || path in folders) return
+            if (path.isEmpty() || (!inverted && path in classNodes) || path in folders) return
             folders[path] = NamespaceNode(path.last())
             ensure(path.dropLast(1))
             children.getOrPut(path.dropLast(1)) { mutableListOf() } += folders.getValue(path)
@@ -48,7 +53,7 @@ class ClassHierarchyRootNode(
         }
         for ((path, kids) in children) {
             val sorted = kids.sortedWith(NODE_ORDER)
-            when (val container = classNodes[path]) {
+            when (val container = classNodes[path]?.takeIf { !inverted }) {
                 null -> (folders[path] ?: this).setChildren(sorted)
 
                 else -> {
@@ -74,33 +79,46 @@ class NamespaceNode(private val name: String) : GTreeNode() {
 }
 
 /**
- * A class: [info] filed under its namespace, or a [base] of the class above it, spelled the way the
- * base clause does (`virtual protected Foo`). A base the program has no class for is a leaf.
+ * A class: [info] filed under its namespace, or reached by an [edge] from the class above it. Normally
+ * that's a base, spelled the way the base clause does (`virtual protected Foo`), and a base the program
+ * has no class for is a leaf. [inverted], it's a class derived from the one above, the clause's
+ * virtuality and access after its name (`Left (virtual)`).
  */
-class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarchy.BaseRef?) : GTreeLazyNode() {
-    constructor(info: ClassInfo) : this(info, null)
+class ClassNode private constructor(
+    val info: ClassInfo?,
+    val edge: ClassHierarchy.BaseRef?,
+    private val inverted: Boolean,
+) : GTreeLazyNode() {
+    constructor(info: ClassInfo, inverted: Boolean = false) : this(info, null, inverted)
 
     /** Classes declared inside this one; only a class filed under its namespace has them. */
     internal val nested = mutableListOf<GTreeNode>()
 
-    private fun basesOf() = info?.bases.orEmpty()
+    private fun linked(): List<ClassNode> = if (inverted) {
+        info?.derived.orEmpty().map { ClassNode(it.cls, it.clause, true).also { n -> n.showMembers = showMembers } }
+    } else {
+        info?.bases.orEmpty().map { ClassNode(it.target, it, false) }
+    }
 
     /** Set off by a root built without members. */
     internal var showMembers = true
 
-    // Only the class filed under its namespace lists its members: under a base, they'd repeat.
-    private fun membersOf() = info?.members?.takeIf { base == null && showMembers }.orEmpty()
+    // Normally only the class filed under its namespace lists its members: under a base, they'd repeat.
+    // Inverted, only the basal classes are filed, so every class lists them.
+    private fun membersOf() = info?.members?.takeIf { (edge == null || inverted) && showMembers }.orEmpty()
 
-    override fun generateChildren(): List<GTreeNode> =
-        basesOf().map { ClassNode(it.target, it) } + membersOf().map(::MemberNode) + nested
+    override fun generateChildren(): List<GTreeNode> = linked() + membersOf().map(::MemberNode) + nested
 
-    override fun getName(): String = base?.let { b ->
-        buildString {
-            if (b.isVirtual) append("virtual ")
-            if (b.access != null && b.access != Access.PUBLIC) append(b.access.name.lowercase()).append(' ')
-            append(b.name)
-        }
-    } ?: info!!.name
+    private val qualifiers
+        get() = edge?.let { e ->
+            listOfNotNull("virtual".takeIf { e.isVirtual }, e.access?.takeIf { it != Access.PUBLIC }?.name?.lowercase())
+        }.orEmpty()
+
+    override fun getName(): String = when {
+        edge == null -> info!!.name
+        inverted -> info!!.qualifiedName + qualifiers.takeIf { it.isNotEmpty() }?.joinToString(" ", " (", ")").orEmpty()
+        else -> (qualifiers + edge.name).joinToString(" ")
+    }
 
     /** Set on a class filed under the class it's declared in. */
     internal var isNested = false
@@ -109,7 +127,7 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
     private val kind
         get() = when {
             isNested -> Kind.NESTED
-            base?.isVirtual == true -> if (info?.isAbstract == true) Kind.VIRTUAL_ABSTRACT else Kind.VIRTUAL
+            edge?.isVirtual == true -> if (info?.isAbstract == true) Kind.VIRTUAL_ABSTRACT else Kind.VIRTUAL
             info?.isAbstract == true -> Kind.ABSTRACT
             info != null && info.origin != Origin.STABS -> Kind.SWEPT
             else -> Kind.NORMAL
@@ -119,7 +137,7 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
 
     override fun getToolTip(): String = buildString {
         append("<html>")
-        append(escape(info?.qualifiedName ?: base?.name.orEmpty()))
+        append(escape(info?.qualifiedName ?: edge?.name.orEmpty()))
         // The typedef shortening pass renamed its struct; the namespace keeps the long spelling.
         info?.struct?.name?.takeIf { it != info.name }?.let { append("<br>shortened: ").append(escape(it)) }
         val origin = when (info?.origin) {
@@ -129,12 +147,17 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
             null -> "no class built for it: a plain struct, or only declared"
         }
         append("<br>").append(origin)
-        if (kind != Kind.NORMAL && kind != Kind.SWEPT) append("<br>").append(kind.label)
+        if (kind != Kind.NORMAL &&
+            kind != Kind.SWEPT
+        ) {
+            append("<br>").append(if (inverted) kind.derivedLabel else kind.label)
+        }
         info?.vftable?.let { append("<br>vftable at ").append(it) }
         if (info?.vftable == null) info?.typeinfo?.let { append("<br>typeinfo at ").append(it) }
     }
 
-    override fun isLeaf() = basesOf().isEmpty() && membersOf().isEmpty() && nested.isEmpty()
+    override fun isLeaf() = (if (inverted) info?.derived.isNullOrEmpty() else info?.bases.isNullOrEmpty()) &&
+        membersOf().isEmpty() && nested.isEmpty()
 
     // Two bases of one class can share a name (a direct and an indirect `Base`); never merge them.
     override fun equals(other: Any?) = this === other
@@ -170,13 +193,18 @@ private val MEMBER_ICONS: Map<MemberKind, Icon> = mapOf(
  * Upstream's icon per kind of class: its green class icon with two colour channels swapped, so the
  * shape stays and the hue says the kind. A swept class with nothing more to say is the same in grey.
  */
-private enum class Kind(val label: String, private val recolor: (Int, Int, Int) -> Triple<Int, Int, Int>) {
-    NORMAL("class", { r, g, b -> Triple(r, g, b) }),
-    ABSTRACT("abstract class", { r, g, b -> Triple(g, r, b) }),
-    VIRTUAL("virtual base class", { r, g, b -> Triple(r, b, g) }),
-    VIRTUAL_ABSTRACT("virtual abstract base class", { r, g, _ -> Triple(g, r, g) }),
-    NESTED("nested class", { _, g, b -> Triple(g, g, b) }),
-    SWEPT("class without stabs", ::greyscale),
+private enum class Kind(
+    val label: String,
+    /** The same, said of a class derived from the one above it in the inverted tree. */
+    val derivedLabel: String,
+    private val recolor: (Int, Int, Int) -> Triple<Int, Int, Int>,
+) {
+    NORMAL("class", "class", { r, g, b -> Triple(r, g, b) }),
+    ABSTRACT("abstract class", "abstract class", { r, g, b -> Triple(g, r, b) }),
+    VIRTUAL("virtual base class", "derives virtually", { r, g, b -> Triple(r, b, g) }),
+    VIRTUAL_ABSTRACT("virtual abstract base class", "abstract, derives virtually", { r, g, _ -> Triple(g, r, g) }),
+    NESTED("nested class", "nested class", { _, g, b -> Triple(g, g, b) }),
+    SWEPT("class without stabs", "class without stabs", ::greyscale),
     ;
 
     // Lazy: painting a themed icon needs the theme up, which a headless test that never draws skips.

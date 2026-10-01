@@ -54,6 +54,7 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
     private var program: Program? = null
     private var shown: ClassHierarchy? = null
     private var showMembers = true
+    private var inverted = false
     private val builder = Executors.newSingleThreadExecutor {
         Thread(it, "Stabs class hierarchy").apply {
             isDaemon =
@@ -96,14 +97,24 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
             object : ToggleDockingAction("Show Class Members", plugin.name) {
                 override fun actionPerformed(context: ActionContext?) {
                     showMembers = isSelected
-                    val p = program
-                    val h = shown
-                    if (p != null && h != null) tree.replaceRoot(ClassHierarchyRootNode(p.name, h, showMembers))
+                    reshow()
                 }
             }.apply {
                 toolBarData = ToolBarData(GIcon("icon.plugin.symboltree.node.function"), null)
                 description = "Show each class's functions and labels, or only the classes"
                 isSelected = true
+                helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+            },
+        )
+        addLocalAction(
+            object : ToggleDockingAction("Show Derived Classes", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    inverted = isSelected
+                    reshow()
+                }
+            }.apply {
+                toolBarData = ToolBarData(GIcon("icon.sort.descending"), null)
+                description = "Put the basal classes at the root, each expanding into the classes derived from it"
                 helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
             },
         )
@@ -148,7 +159,7 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
 
     private fun show(p: Program, hierarchy: ClassHierarchy) {
         shown = hierarchy
-        tree.replaceRoot(ClassHierarchyRootNode(p.name, hierarchy, showMembers))
+        reshow()
         val counts = hierarchy.classes.groupingBy { it.origin }.eachCount()
         val stabs = counts[ClassHierarchy.Origin.STABS] ?: 0
         val swept = hierarchy.classes.size - stabs
@@ -159,6 +170,13 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
                 append(" (no stabs record: Tools > Stabs > Re-import to add it)")
             }
         }
+    }
+
+    /** The shown hierarchy again, as the toolbar toggles now want it. */
+    private fun reshow() {
+        val p = program ?: return
+        val h = shown ?: return
+        tree.replaceRoot(ClassHierarchyRootNode(p.name, h, showMembers, inverted))
     }
 
     private fun openSelected() {

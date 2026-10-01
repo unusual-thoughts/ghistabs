@@ -217,7 +217,11 @@
     <CODE>private Impl</CODE>), each of which expands into its own. After its bases come the class's
     functions and labels, as the Symbol Tree lists them but with its vtables first (a table icon) and
     its other ABI objects next (typeinfo, its name, the VTT: an information icon), then its nested
-    classes; the toolbar's function button hides the members, leaving only the classes. An overloaded
+    classes; the toolbar's function button hides the members, leaving only the classes.
+    The sort button inverts the tree: the basal classes (no base the program has a class for) sit at
+    the root, each expanding into the classes derived from it. A class with several bases shows under
+    each of them, and a derived class carries its clause's virtuality and access after its name
+    (<CODE>Left (virtual)</CODE>). An overloaded
     function is spelled with its parameter types. Double-click a member (or
     press Enter) to go to it; double-click a class to open its struct in the structure editor, or,
     for a class with no struct, to go to its vtable, else its typeinfo.</P>

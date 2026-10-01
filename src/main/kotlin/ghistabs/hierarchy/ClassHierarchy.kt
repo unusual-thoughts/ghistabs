@@ -74,6 +74,9 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
         LABEL,
     }
 
+    /** A class deriving from another, by the base clause naming that other. */
+    data class Derived(val cls: ClassInfo, val clause: BaseRef)
+
     class ClassInfo(
         val namespace: GhidraClass,
         val origin: Origin,
@@ -94,6 +97,13 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
 
         var bases: List<BaseRef> = emptyList()
             internal set
+
+        /** The classes that name this one as a direct base, each with that base clause. */
+        var derived: List<Derived> = emptyList()
+            internal set
+
+        /** No base the program has a class for: a root of the inverted tree. */
+        val isBasal: Boolean get() = bases.none { it.target != null }
 
         /** Where a double-click goes: the vtable, else the typeinfo. */
         val address: Address? get() = vftable ?: typeinfo
@@ -161,7 +171,16 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
                     }
                 }
             }
+            linkDerived(infos.values)
             return ClassHierarchy(infos.values.sortedBy { it.qualifiedName })
+        }
+
+        fun linkDerived(infos: Collection<ClassInfo>) {
+            val derived = infos.flatMap { info ->
+                info.bases.mapNotNull { b -> b.target?.let { it to Derived(info, b) } }
+            }
+                .groupBy({ it.first }, { it.second })
+            for ((base, list) in derived) base.derived = list.sortedBy { it.cls.qualifiedName }
         }
 
         fun classNamespaces(): Sequence<GhidraClass> = symtab.classNamespaces.asSequence()
