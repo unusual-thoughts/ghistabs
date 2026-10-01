@@ -1,10 +1,12 @@
 package ghistabs.hierarchy
 
 import docking.widgets.tree.GTreeNode
+import ghidra.program.model.symbol.SourceType
 import ghistabs.hierarchy.ClassHierarchy.MemberKind
 import ghistabs.hierarchy.ClassHierarchy.Origin
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.parse.Access
+import ghistabs.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Tag
@@ -104,6 +106,31 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         node.children.first().children.none { it is MemberNode }.mustBeTrue()
         ClassHierarchyRootNode(program.name, hierarchy, showMembers = false).children.single { it.name == "Circle" }
             .children.none { it is MemberNode }.mustBeTrue()
+    }
+
+    /** What [replaceRoot] carries over: a path by names, found again in the rebuilt tree. */
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a path in the tree is found again after a rebuild for a renamed member`(fixture: String) {
+        load(fixture)
+        val before = ClassHierarchyRootNode(program.name, ClassHierarchy.of(program))
+        val left = before.children.single { it.name == "Diamond" }.children.first()
+        val circle = before.children.single { it.name == "Circle" }
+        val leftSteps = steps(left)
+        val circleSteps = steps(circle)
+        leftSteps mustBe listOf("Diamond" to 0, "Left" to 0)
+
+        val name = program.functionManager.getFunctions(true)
+            .first { it.name == "name" && it.parentNamespace.name == "Circle" }
+        program.runTransaction { name.setName("label", SourceType.USER_DEFINED) }
+        val after = ClassHierarchyRootNode(program.name, ClassHierarchy.of(program))
+
+        steps(after.find(leftSteps) ?: fail("Diamond/Left is gone")) mustBe leftSteps
+        val rebuilt = after.find(circleSteps) ?: fail("Circle is gone")
+        rebuilt.children.map { it.name }.let { names ->
+            ("label" in names).mustBeTrue("$names")
+            ("name" in names).mustBeFalse()
+        }
     }
 
     companion object {

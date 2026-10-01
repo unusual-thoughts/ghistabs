@@ -98,7 +98,7 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
                     showMembers = isSelected
                     val p = program
                     val h = shown
-                    if (p != null && h != null) tree.setRootNode(ClassHierarchyRootNode(p.name, h, showMembers))
+                    if (p != null && h != null) tree.replaceRoot(ClassHierarchyRootNode(p.name, h, showMembers))
                 }
             }.apply {
                 toolBarData = ToolBarData(GIcon("icon.plugin.symboltree.node.function"), null)
@@ -148,7 +148,7 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
 
     private fun show(p: Program, hierarchy: ClassHierarchy) {
         shown = hierarchy
-        tree.setRootNode(ClassHierarchyRootNode(p.name, hierarchy, showMembers))
+        tree.replaceRoot(ClassHierarchyRootNode(p.name, hierarchy, showMembers))
         val counts = hierarchy.classes.groupingBy { it.origin }.eachCount()
         val stabs = counts[ClassHierarchy.Origin.STABS] ?: 0
         val swept = hierarchy.classes.size - stabs
@@ -192,3 +192,28 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
         override fun isLeaf() = true
     }
 }
+
+/**
+ * Swap in a rebuilt tree, keeping what was expanded and selected: the new nodes are new objects, so
+ * each path is carried over by its [steps].
+ */
+internal fun GTree.replaceRoot(root: GTreeNode) {
+    val expanded = expandedPaths.map { steps(it.lastPathComponent as GTreeNode) }
+    val selected = selectionPaths.orEmpty().map { steps(it.lastPathComponent as GTreeNode) }
+    setRootNode(root)
+    expanded.sortedBy { it.size }.forEach { path -> root.find(path)?.let(::expandPath) }
+    selected.mapNotNull(root::find).takeIf { it.isNotEmpty() }?.let(::setSelectedNodes)
+}
+
+/**
+ * [node]'s path below the root by name, with each node's rank among same-named siblings (overloads, a
+ * direct and an indirect `Base`) to tell those apart.
+ */
+internal fun steps(node: GTreeNode): List<Pair<String, Int>> =
+    generateSequence(node) { it.parent }.takeWhile { it.parent != null }.toList().asReversed().map { n ->
+        n.name to n.parent.children.filter { it.name == n.name }.indexOf(n)
+    }
+
+/** The node at [steps] below this root, in a tree rebuilt since they were taken. */
+internal fun GTreeNode.find(steps: List<Pair<String, Int>>): GTreeNode? =
+    steps.fold(this as GTreeNode?) { node, (name, rank) -> node?.children?.filter { it.name == name }?.getOrNull(rank) }
