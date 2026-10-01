@@ -30,7 +30,7 @@ internal data class Gcc2SecondaryVtable(val base: String, val address: Address, 
 /**
  * Lays the vtables of classes nothing describes: every `_ZTV…` (and gcc 2.x `_vt…`) symbol whose record
  * no one [claimedVtables], typed off whatever sits at the addresses its slots hold. Needs only the
- * symbol table and memory, so it runs on its own as [ghistabs.entrypoints.VtableSweepAnalyzer] on a
+ * symbol table and memory, so it runs on its own as [ghistabs.entrypoints.VftableAnalyzer] on a
  * binary with no stabs at all; [ClassApplier] extends it to claim the classes the stabs describe first
  * and sweep what they leave.
  */
@@ -46,7 +46,7 @@ open class VtableSweeper(
     companion object {
         val VTABLES_SWEPT = BoolOption("Vtables Swept", "Unclaimed vtables already swept.", false)
 
-        /** Whether a sweep already ran here: the stabs import's, or [ghistabs.entrypoints.VtableSweepAnalyzer]'s. */
+        /** Whether a sweep already ran here: the stabs import's, or [ghistabs.entrypoints.VftableAnalyzer]'s. */
         val Program.isVtablesSwept get() = this[VTABLES_SWEPT]
 
         fun Program.markVtablesSwept() {

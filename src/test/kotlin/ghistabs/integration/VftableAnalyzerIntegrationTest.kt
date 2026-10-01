@@ -7,7 +7,7 @@ import ghidra.program.model.data.VoidDataType
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.entrypoints.VtableSweepAnalyzer
+import ghistabs.entrypoints.VftableAnalyzer
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.VtableSweeper.Companion.isVtablesSwept
 import ghistabs.materialize.cpp.ClassNaming
@@ -19,13 +19,13 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
- * [VtableSweepAnalyzer] over one hand-built Itanium record, `_ZTV3Foo` = `{0, &_ZTI3Foo, Foo::a,
+ * [VftableAnalyzer] over one hand-built Itanium record, `_ZTV3Foo` = `{0, &_ZTI3Foo, Foo::a,
  * Foo::b}`, with no stabs to describe `Foo`: the symbols alone must give it a two-slot
  * `Foo_vftable` at the address point. With stab sections present it must leave the table to the
  * stabs import, and it must not sweep a program twice.
  */
 @Tag("integration")
-class VtableSweepAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+class VftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var builder: ProgramBuilder
     private val program get() = builder.program
 
@@ -60,12 +60,12 @@ class VtableSweepAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         dataTypeManager.getDataType(ClassNaming.vftableCategory("Foo"), "Foo_vftable") as? Structure
 
     private fun runAnalyzer() = program.runTransaction("vtable-sweep") {
-        VtableSweepAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog())
+        VftableAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog())
     }
 
     @Test
     fun laysAVtableFromSymbolsAlone() {
-        val analyzer = VtableSweepAnalyzer()
+        val analyzer = VftableAnalyzer()
         analyzer.must("a program with no stabs must be analyzable") { canAnalyze(program) }
         runAnalyzer().mustBe(true)
 
