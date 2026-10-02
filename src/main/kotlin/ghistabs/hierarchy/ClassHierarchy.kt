@@ -252,13 +252,11 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
             ).let { types -> (if (hasVarArgs()) types + "..." else types).joinToString(", ", "(", ")") }
 
         /** A this-adjusting thunk by its linkage name, gcc 2.x or Itanium. */
-        fun Function.isThunkLinkage() = symtab.getSymbols(entryPoint).any { sym ->
-            Gcc2.looksLikeThunk(sym.name) || Itanium.looksLikeThunk(sym.name)
-        }
+        fun Function.isThunkLinkage() = symtab.getSymbols(entryPoint).any { sym -> CxxAbi.looksLikeThunk(sym.name) }
 
         fun Symbol.labelKind(): MemberKind {
             val mangled = (sequenceOf(this) + symtab.getSymbols(address).asSequence())
-                .map { it.name }.firstOrNull { it.startsWith("_Z") }.orEmpty()
+                .map { it.name }.firstOrNull { Itanium.isProbablyMangled(it) }.orEmpty()
             return when {
                 name in VTABLE_LABELS || Itanium.VTABLE_PREFIXES.any(mangled::startsWith) -> MemberKind.VTABLE
                 name in ABI_LABELS || Itanium.SPECIAL_PREFIXES.any(mangled::startsWith) -> MemberKind.ABI

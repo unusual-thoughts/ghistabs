@@ -24,14 +24,20 @@ import ghistabs.readAs
 object Itanium : CxxAbi {
     // Itanium mangling prefixes (ABI §5.1.4). Cygwin's PE loader prepends '_' → "__ZT*".
     const val VTABLE_PREFIX = "_ZTV"
+    const val VTABLE_TABLE_PREFIX = "_ZTT"
+    const val CONSTRUCTION_VTABLE_PREFIX = "_ZTC"
+
     const val TYPEINFO_PREFIX = "_ZTI"
     const val TYPEINFO_NAME_PREFIX = "_ZTS"
 
-    // The other special names: `_ZTT` VTT and `_ZTC` construction vtable lay out like `_ZTV`;
-    // `_ZTh`/`_ZTv`/`_ZTc` are this-adjusting thunks; any other `_ZT*`/`_ZG*` (typeinfo, its name,
-    // guard variables, reference temporaries) is an ABI object.
-    val VTABLE_PREFIXES = listOf(VTABLE_PREFIX, "_ZTT", "_ZTC")
-    val THUNK_PREFIXES = listOf("_ZTh", "_ZTv", "_ZTc")
+    const val NON_VIRTUAL_THUNK_PREFIX = "_ZTh"
+    const val VIRTUAL_THUNK_PREFIX = "_ZTv"
+    const val COVARIANT_THUNK_PREFIX = "_ZTc"
+
+    val VTABLE_PREFIXES = listOf(VTABLE_PREFIX, VTABLE_TABLE_PREFIX, CONSTRUCTION_VTABLE_PREFIX)
+    val THUNK_PREFIXES = listOf(NON_VIRTUAL_THUNK_PREFIX, VIRTUAL_THUNK_PREFIX, COVARIANT_THUNK_PREFIX)
+
+    /** Any other `_ZT*`/`_ZG*` (typeinfo, its name, guard variables, reference temporaries) is an ABI object */
     val SPECIAL_PREFIXES = listOf("_ZT", "_ZG")
 
     // Demangled name of a `_ZTV…` symbol (GnuDemangler emits "vtable", no f) and of a `_ZTI…` one.
