@@ -167,13 +167,7 @@ class ClassApplier(
             val baseNs = dt?.let { namespaceByStruct[it.dataTypePath] }
             ClassHierarchyRecord.Base(
                 baseNs?.id,
-                if (baseNs ==
-                    null
-                ) {
-                    dt?.name ?: "?"
-                } else {
-                    null
-                },
+                if (baseNs == null) dt?.name ?: "?" else null,
                 base.isVirtual,
                 base.access,
             )
@@ -184,12 +178,11 @@ class ClassApplier(
     private fun LocatedType.resolve(): LocatedClass? = when (val structDt = registry.dataTypeFor(type.id)) {
         is Structure -> LocatedClass(this, ensureClassNamespace(), structDt)
 
-        else -> {
+        else -> null.also {
             warn(
                 "class-not-struct",
                 "skipping ${structDt?.let { it::class.simpleName }} class '$className' at ${location.category}",
             )
-            null
         }
     }
 
@@ -561,11 +554,8 @@ class ClassApplier(
                 "vftable-slot-untyped",
                 at,
                 "signature did not unwrap to a method: unwrapped=${
-                    unwrapped?.let {
-                        it::class.simpleName
-                    } ?: "null"
-                } " +
-                    "sig=${m.signature}",
+                    unwrapped?.let { it::class.simpleName} ?: "null"
+                } sig=${m.signature}",
             )
             return PointerDataType(Undefined4DataType.dataType, dtm)
         }

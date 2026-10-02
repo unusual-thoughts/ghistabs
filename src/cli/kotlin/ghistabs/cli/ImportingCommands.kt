@@ -12,7 +12,7 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
 import ghidra.program.util.GhidraProgramUtilities
-import ghistabs.diagnose.dumpJson
+import ghistabs.diagnose.writeDump
 import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
@@ -102,10 +102,10 @@ internal abstract class ImportingCommand(name: String) : StabsCommand(name = nam
             shared.dumpRegistry(it)
             shared.dumpDegradations(diagnostics)
             classHierarchyJson?.let { file ->
-                file.parentFile?.mkdirs()
-                val hierarchy = ClassHierarchy.of(program)
-                file.writeText(dumpJson.encodeToString(hierarchy))
-                log("class-hierarchy", "wrote ${hierarchy.classes.size} classes to $file")
+                ClassHierarchy.of(program).also { hierarchy ->
+                    file.writeDump(hierarchy)
+                    log("class-hierarchy", "wrote ${hierarchy.classes.size} classes to $file")
+                }
             }
         }
     }

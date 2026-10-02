@@ -80,13 +80,11 @@ internal class SharedOptions : OptionGroup(TITLE) {
 
     val dumps get() = listOfNotNull(recordsJson, harvestJson, registryJson, degradationLog)
 
-    fun dumpRecords(records: List<StabRecord>) = recordsJson?.writeDump { dumpJson.encodeToString(records) }
+    fun dumpRecords(records: List<StabRecord>) = recordsJson?.writeDump(records)
 
-    fun dumpHarvest(harvest: Harvest) = harvestJson?.writeDump { dumpJson.encodeToString(harvest) }
+    fun dumpHarvest(harvest: Harvest) = harvestJson?.writeDump(harvest)
 
-    fun dumpSymbols(symbols: List<Symbol<SymbolDecl<GlobalTypeId>>>) = symbolsJson?.writeDump {
-        dumpJson.encodeToString(symbols)
-    }
+    fun dumpSymbols(symbols: List<Symbol<SymbolDecl<GlobalTypeId>>>) = symbolsJson?.writeDump(symbols)
 
     fun dumpRegistry(artifacts: ImportArtifacts) = registryJson?.let(artifacts::writeRegistryDump)
 
@@ -108,6 +106,8 @@ internal class SharedOptions : OptionGroup(TITLE) {
         parentFile?.mkdirs()
         writeText(text())
     }
+
+    private inline fun <reified T> File.writeDump(obj: T) = writeDump { dumpJson.encodeToString(obj) }
 
     companion object {
         const val TITLE = "Common options"
@@ -199,8 +199,7 @@ internal abstract class StabsCommand(name: String) : CliktCommand(name = name) {
 
     private val binary by argument(
         help = "ELF/PE binary carrying .stab/.stabstr debug info (gcc 3.2–12), or a .gzf saved by --save-db",
-    )
-        .file(mustExist = true, canBeDir = false, mustBeReadable = true)
+    ).file(mustExist = true, canBeDir = false, mustBeReadable = true)
 
     /** What this subcommand runs against the loaded program, dumps included. */
     protected abstract fun ImportContext<*>.execute()

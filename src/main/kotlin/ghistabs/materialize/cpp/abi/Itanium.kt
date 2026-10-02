@@ -179,8 +179,7 @@ enum class TypeinfoKind(private val abiClass: String) {
     companion object {
         /** The kind whose vtable is [vtableClass]'s, or null for any other class's. */
         fun ofVtableClass(vtableClass: String) = entries.firstOrNull {
-            "${Itanium.ABI_NAMESPACE}::${it.abiClass}" ==
-                vtableClass
+            "${Itanium.ABI_NAMESPACE}::${it.abiClass}" == vtableClass
         }
     }
 }
@@ -192,21 +191,17 @@ val Symbol.isTypeinfo get() = Itanium.looksLikeZti(name) || name == Itanium.DEMA
  * [Itanium.typeinfoClassOf] off a symbol rather than a name: an external's linkage name too, which
  * survives only as its imported name once demangled, and else the namespace of the demangler's label.
  */
-val Symbol.typeinfoClass: String?
-    get() = linkageNames.firstNotNullOfOrNull(Itanium::typeinfoClassOf) ?: classOfLabel(Itanium.DEMANGLED_TYPEINFO)
+val Symbol.typeinfoClass: String? get() = linkageNames.firstNotNullOfOrNull(Itanium::typeinfoClassOf)
+    ?: classOfLabel(Itanium.DEMANGLED_TYPEINFO)
 
 /** The class a `_ZTV` symbol is the vtable of, as [typeinfoClass] reads a `_ZTI` one. */
-val Symbol.vtableClass: String?
-    get() = linkageNames.filter(Itanium::looksLikeVtable)
-        .firstNotNullOfOrNull { Demangler.of(it)?.let(Itanium::demangledVtableClass) }
-        ?: classOfLabel(Itanium.DEMANGLED_VTABLE)
+val Symbol.vtableClass: String? get() = linkageNames.filter(Itanium::looksLikeVtable)
+    .firstNotNullOfOrNull { Demangler.of(it)?.let(Itanium::demangledVtableClass) }
+    ?: classOfLabel(Itanium.DEMANGLED_VTABLE)
 
-private val Symbol.linkageNames
-    get() = listOfNotNull(
-        name,
-        program.externalManager.getExternalLocation(this)?.originalImportedName.takeIf {
-            isExternal
-        },
-    )
+private val Symbol.linkageNames get() = listOfNotNull(
+    name,
+    program.externalManager.getExternalLocation(this)?.originalImportedName.takeIf { isExternal },
+)
 
 private fun Symbol.classOfLabel(label: String) = parentNamespace.takeIf { name == label && !it.isGlobal }?.getName(true)

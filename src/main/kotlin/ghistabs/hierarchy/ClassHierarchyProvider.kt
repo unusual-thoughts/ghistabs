@@ -58,8 +58,7 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
     private var expandAll = false
     private val builder = Executors.newSingleThreadExecutor {
         Thread(it, "Stabs class hierarchy").apply {
-            isDaemon =
-                true
+            isDaemon = true
         }
     }
     private val generation = AtomicInteger()
@@ -156,23 +155,20 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
     }
 
     private fun rebuild() {
-        val p = program
         val gen = generation.incrementAndGet()
-        if (p == null || !isVisible) {
-            if (p == null) tree.setRootNode(placeholder("No program"))
-            return
-        }
-        status.text = "Reading classes…"
-        builder.execute {
-            val result = runCatching { ClassHierarchy.of(p) }
-            SwingUtilities.invokeLater {
-                if (gen != generation.get() || p !== program) return@invokeLater
-                result.onSuccess { show(p, it) }.onFailure {
-                    Msg.error(this, "Class hierarchy failed: ${it.message}", it)
-                    status.text = "Failed: ${it.message}"
+        program?.takeIf { isVisible }?.let { p ->
+            status.text = "Reading classes…"
+            builder.execute {
+                val result = runCatching { ClassHierarchy.of(p) }
+                SwingUtilities.invokeLater {
+                    if (gen != generation.get() || p !== program) return@invokeLater
+                    result.onSuccess { show(p, it) }.onFailure {
+                        Msg.error(this, "Class hierarchy failed: ${it.message}", it)
+                        status.text = "Failed: ${it.message}"
+                    }
                 }
             }
-        }
+        } ?: run { tree.setRootNode(placeholder("No program")) }
     }
 
     private fun show(p: Program, hierarchy: ClassHierarchy) {
@@ -198,21 +194,17 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
         if (expandAll) tree.expandAll()
     }
 
-    private fun openSelected() {
-        val p = program ?: return
-        fun goTo(at: String?) = at?.let(p.addressFactory::getAddress)
-            ?.let { tool.getService(GoToService::class.java)?.goTo(it) }
+    private fun Program.goTo(at: String?) = at?.let(addressFactory::getAddress)
+        ?.let { tool.getService(GoToService::class.java)?.goTo(it) }
+
+    private fun openSelected() = program?.apply {
         when (val selected = tree.selectionPath?.lastPathComponent) {
             is MemberNode -> goTo(selected.member.address)
 
-            is ClassNode -> {
-                val info = selected.info ?: return
-                val struct = info.structId?.let(p.dataTypeManager::getDataType)
-                if (struct != null) {
+            is ClassNode -> selected.info ?.let { info ->
+                info.structId?.let(dataTypeManager::getDataType)?.let { struct ->
                     tool.getService(DataTypeManagerService::class.java)?.edit(struct)
-                } else {
-                    goTo(info.address)
-                }
+                } ?: goTo(info.address)
             }
         }
     }

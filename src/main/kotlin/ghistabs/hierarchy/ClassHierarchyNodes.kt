@@ -113,10 +113,9 @@ class ClassNode private constructor(
 
     override fun generateChildren(): List<GTreeNode> = linked() + membersOf().map(::MemberNode) + nested
 
-    private val qualifiers
-        get() = edge?.let { e ->
-            listOfNotNull("virtual".takeIf { e.isVirtual }, e.access?.takeIf { it != Access.PUBLIC }?.name?.lowercase())
-        }.orEmpty()
+    private val qualifiers get() = edge?.let { e ->
+        listOfNotNull("virtual".takeIf { e.isVirtual }, e.access?.takeIf { it != Access.PUBLIC }?.name?.lowercase())
+    }.orEmpty()
 
     override fun getName(): String = when {
         edge == null -> info!!.name
@@ -128,14 +127,13 @@ class ClassNode private constructor(
     internal var isNested = false
 
     // SWEPT only for a class the sweep found: a base with no class at all stays a plain class.
-    private val kind
-        get() = when {
-            isNested -> Kind.NESTED
-            edge?.isVirtual == true -> if (info?.isAbstract == true) Kind.VIRTUAL_ABSTRACT else Kind.VIRTUAL
-            info?.isAbstract == true -> Kind.ABSTRACT
-            info != null && info.origin != Origin.STABS -> Kind.SWEPT
-            else -> Kind.NORMAL
-        }
+    private val kind get() = when {
+        isNested -> Kind.NESTED
+        edge?.isVirtual == true -> if (info?.isAbstract == true) Kind.VIRTUAL_ABSTRACT else Kind.VIRTUAL
+        info?.isAbstract == true -> Kind.ABSTRACT
+        info != null && info.origin != Origin.STABS -> Kind.SWEPT
+        else -> Kind.NORMAL
+    }
 
     override fun getIcon(expanded: Boolean): Icon = kind.icon
 
@@ -151,9 +149,7 @@ class ClassNode private constructor(
             null -> "no class built for it: a plain struct, or only declared"
         }
         append("<br>").append(origin)
-        if (kind != Kind.NORMAL &&
-            kind != Kind.SWEPT
-        ) {
+        if (kind != Kind.NORMAL && kind != Kind.SWEPT) {
             append("<br>").append(if (inverted) kind.derivedLabel else kind.label)
         }
         info?.vftable?.let { append("<br>vftable at ").append(it) }

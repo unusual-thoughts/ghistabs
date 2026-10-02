@@ -59,6 +59,7 @@ operator fun AddressSetView.plus(addr: Address): AddressSet = union(AddressSet(a
 operator fun Data.get(i: Int): Data? = this.getComponent(i)
 operator fun Data.get(name: String): Data? =
     (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(this::get)
+inline fun <reified T> Data.getValue(name: String): T? = get(name)?.value as? T
 
 /** Whether the one-bit field [name] is set. */
 fun Data.flag(name: String) = (this[name]?.value as? Scalar)?.unsignedValue == 1L

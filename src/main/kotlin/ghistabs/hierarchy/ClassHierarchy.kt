@@ -11,6 +11,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
+import ghidra.program.model.symbol.SymbolTable
 import ghidra.program.model.symbol.SymbolType
 import ghistabs.Demangler
 import ghistabs.importer.ClassHierarchyRecord
@@ -18,7 +19,7 @@ import ghistabs.isInjected
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.Itanium
-import ghistabs.materialize.cpp.abi.RttiReader
+import ghistabs.materialize.cpp.abi.Rtti
 import ghistabs.materialize.cpp.abi.isTypeinfo
 import ghistabs.materialize.cpp.abi.typeinfoClass
 import ghistabs.parse.Access
@@ -138,10 +139,10 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
     }
 
     private class Builder(val program: Program) {
-        val symtab = program.symbolTable
+        val symtab: SymbolTable = program.symbolTable
         val record = ClassHierarchyRecord.read(program).orEmpty()
         val structIds = ClassHierarchyRecord.readStructs(program)
-        val rtti = RttiReader(program)
+        val rtti = Rtti.Reader(program)
 
         // `_ZTI` objects by the class they describe, off the mangled label or, once Ghidra's demangler
         // ran, its `typeinfo` label in the class's namespace.
@@ -215,17 +216,17 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
             val members = symtab.getSymbols(ns).mapNotNull { sym ->
                 when (sym.symbolType) {
                     SymbolType.FUNCTION -> (sym.`object` as? Function)?.let { fn ->
-                        val kind = if (fn.isThunk || isThunkLinkage(fn)) MemberKind.THUNK else MemberKind.FUNCTION
+                        val kind = if (fn.isThunk || fn.isThunkLinkage()) MemberKind.THUNK else MemberKind.FUNCTION
                         Member(
                             sym.name,
                             sym.address.toString(),
                             kind,
                             fn.getPrototypeString(false, false),
-                            parametersOf(fn),
+                            fn.params,
                         )
                     }
 
-                    SymbolType.LABEL -> Member(sym.name, sym.address.toString(), labelKind(sym))
+                    SymbolType.LABEL -> Member(sym.name, sym.address.toString(), sym.labelKind())
 
                     else -> null
                 }
@@ -240,33 +241,31 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
          * With no signature yet (a swept class's functions, before the demangler analyzer applied one),
          * the parameters its mangled name declares, off the linkage label beside it.
          */
-        fun parametersOf(fn: Function): String {
-            val types = if (fn.signatureSource == SourceType.DEFAULT && fn.parameterCount == 0) {
-                symtab.getSymbols(fn.entryPoint).firstNotNullOfOrNull { Demangler.of(it.name) as? DemangledFunction }
-                    ?.parameters?.map { it.type }?.filterNot { it.isVoid && it.pointerLevels == 0 && !it.isReference }
-                    ?.map { it.signature }
-            } else {
-                null
-            } ?: fn.parameters.filterNot { it.isInjected || it.name == GCC2_IN_CHARGE }.map { it.dataType.displayName }
-            return (if (fn.hasVarArgs()) types + "..." else types).joinToString(", ", "(", ")")
-        }
+        val Function.params: String get() = (
+            symtab.takeIf { signatureSource == SourceType.DEFAULT && parameterCount == 0 }
+                ?.getSymbols(entryPoint)?.firstNotNullOfOrNull { Demangler.of(it.name) as? DemangledFunction }
+                ?.parameters?.map { it.type }
+                ?.filterNot { it.isVoid && it.pointerLevels == 0 && !it.isReference }
+                ?.map { it.signature }
+                ?: parameters.filterNot { it.isInjected || it.name == GCC2_IN_CHARGE }.map { it.dataType.displayName }
+            ).let { types -> (if (hasVarArgs()) types + "..." else types).joinToString(", ", "(", ")") }
 
         /**
          * A this-adjusting thunk by its linkage name: gcc 2.x `__thunk_<delta>_<target>` (cp/method.c
          * make_thunk), Itanium `_ZTh`/`_ZTv`/`_ZTc`. Ghidra makes it a plain function, not a thunk of its target.
          */
-        fun isThunkLinkage(fn: Function) = symtab.getSymbols(fn.entryPoint).any { sym ->
+        fun Function.isThunkLinkage() = symtab.getSymbols(entryPoint).any { sym ->
             // Leading underscores off: the PE loader prefixes one more.
             val name = sym.name.trimStart('_')
             THUNK_LINKAGE.any(name::startsWith)
         }
 
-        fun labelKind(sym: Symbol): MemberKind {
-            val mangled = (sequenceOf(sym) + symtab.getSymbols(sym.address).asSequence())
+        fun Symbol.labelKind(): MemberKind {
+            val mangled = (sequenceOf(this) + symtab.getSymbols(address).asSequence())
                 .map { it.name }.firstOrNull { it.startsWith("_Z") }.orEmpty()
             return when {
-                sym.name in VTABLE_LABELS || VTABLE_MANGLED.any(mangled::startsWith) -> MemberKind.VTABLE
-                sym.name in ABI_LABELS || ABI_MANGLED.any(mangled::startsWith) -> MemberKind.ABI
+                name in VTABLE_LABELS || VTABLE_MANGLED.any(mangled::startsWith) -> MemberKind.VTABLE
+                name in ABI_LABELS || ABI_MANGLED.any(mangled::startsWith) -> MemberKind.ABI
                 else -> MemberKind.LABEL
             }
         }
