@@ -554,7 +554,7 @@ class ClassApplier(
                 "vftable-slot-untyped",
                 at,
                 "signature did not unwrap to a method: unwrapped=${
-                    unwrapped?.let { it::class.simpleName} ?: "null"
+                    unwrapped?.let { it::class.simpleName } ?: "null"
                 } sig=${m.signature}",
             )
             return PointerDataType(Undefined4DataType.dataType, dtm)

@@ -201,7 +201,7 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
         when (val selected = tree.selectionPath?.lastPathComponent) {
             is MemberNode -> goTo(selected.member.address)
 
-            is ClassNode -> selected.info ?.let { info ->
+            is ClassNode -> selected.info?.let { info ->
                 info.structId?.let(dataTypeManager::getDataType)?.let { struct ->
                     tool.getService(DataTypeManagerService::class.java)?.edit(struct)
                 } ?: goTo(info.address)
