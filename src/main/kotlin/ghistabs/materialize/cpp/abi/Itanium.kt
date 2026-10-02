@@ -50,6 +50,7 @@ object Itanium : CxxAbi {
 
     private val VTABLE_PREFIXES = listOf(VTABLE_PREFIX, VTABLE_TABLE_PREFIX, CONSTRUCTION_VTABLE_PREFIX)
     private val THUNK_PREFIXES = listOf(NON_VIRTUAL_THUNK_PREFIX, VIRTUAL_THUNK_PREFIX, COVARIANT_THUNK_PREFIX)
+    private val TYPEINFO_PREFIXES = listOf(TYPEINFO_PREFIX, TYPEINFO_NAME_PREFIX)
 
     // Every special name (`_ZT*`: the above) and `_ZG*` (guard variables, reference temporaries).
     private val SPECIAL_PREFIXES = listOf("_ZT", "_ZG")
@@ -174,6 +175,7 @@ object Itanium : CxxAbi {
         return when {
             any(VTABLE_PREFIXES) -> SpecialName.VTABLE
             any(THUNK_PREFIXES) -> SpecialName.THUNK
+            any(TYPEINFO_PREFIXES) -> SpecialName.TYPEINFO
             any(SPECIAL_PREFIXES) -> SpecialName.OTHER
             else -> null
         }
@@ -215,7 +217,10 @@ enum class SpecialName {
     /** A `_ZTh`/`_ZTv`/`_ZTc` this-adjusting thunk. Ghidra makes it a plain function, not a thunk of its target. */
     THUNK,
 
-    /** Any other object the ABI names rather than the source: typeinfo, its name, a `_ZG*` guard or temporary. */
+    /** A `_ZTI` typeinfo object or the `_ZTS` name string it points at. */
+    TYPEINFO,
+
+    /** Any other object the ABI names rather than the source: a `_ZG*` guard variable or reference temporary. */
     OTHER,
 }
 
