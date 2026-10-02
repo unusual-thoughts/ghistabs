@@ -28,6 +28,11 @@ inline fun <T> List<T>.chunkWith(eq: (T, T) -> Boolean) = chunkOf { acc, item ->
 /** Consecutive runs sharing a [key] — `groupBy` would merge runs that aren't adjacent. */
 inline fun <T, K> List<T>.chunkedBy(key: (T) -> K) = chunkWith { a, b -> key(a) == key(b) }
 
+class Once<T, R>(private val f: (T) -> R) : (T) -> R {
+    private var value: R? = null
+    override fun invoke(arg: T): R = value ?: f(arg).also { value = it }
+}
+
 /**
  * Runs past `E` for [Double]'s sake: a `Long` tops out at 9.22E
  * but zetta and yotta are ordinary magnitudes for a double
