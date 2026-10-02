@@ -10,6 +10,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.Demangler
+import ghistabs.Once
 import ghistabs.baseStackParamOffset
 import ghistabs.frameBias
 import ghistabs.parse.*
@@ -330,16 +331,13 @@ data class Func(
      */
     fun sourceSignature(program: Program) = decl.scope.storageClass() + signature(program)
 
-    // A Func is serializable and holds no Program, so [frameBias] memoizes by hand rather than by lazy.
-    @Transient private var frameBiasMemo: Int? = null
-
     /**
      * [ghistabs.frameBias] of the Ghidra function at [addr], or the convention's when there is none. Asked
      * only once a stack local needs it, then kept.
      */
-    fun frameBias(program: Program) = frameBiasMemo
-        ?: (program.functionManager.getFunctionAt(addr)?.frameBias() ?: program.baseStackParamOffset)
-            .also { frameBiasMemo = it }
+    @Transient val frameBias = Once { program: Program ->
+        program.functionManager.getFunctionAt(addr)?.frameBias() ?: program.baseStackParamOffset
+    }
 
     /**
      * Scope chain the linkage name declares, root-first and canonically spelled
