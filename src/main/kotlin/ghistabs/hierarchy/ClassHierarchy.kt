@@ -18,6 +18,7 @@ import ghistabs.importer.ClassHierarchyRecord
 import ghistabs.isInjected
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.CxxAbi
+import ghistabs.materialize.cpp.abi.Gcc2
 import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.abi.Rtti
 import ghistabs.materialize.cpp.abi.isTypeinfo
@@ -247,25 +248,20 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                 ?.parameters?.map { it.type }
                 ?.filterNot { it.isVoid && it.pointerLevels == 0 && !it.isReference }
                 ?.map { it.signature }
-                ?: parameters.filterNot { it.isInjected || it.name == GCC2_IN_CHARGE }.map { it.dataType.displayName }
+                ?: parameters.filterNot { it.isInjected || it.name == Gcc2.IN_CHARGE }.map { it.dataType.displayName }
             ).let { types -> (if (hasVarArgs()) types + "..." else types).joinToString(", ", "(", ")") }
 
-        /**
-         * A this-adjusting thunk by its linkage name: gcc 2.x `__thunk_<delta>_<target>` (cp/method.c
-         * make_thunk), Itanium `_ZTh`/`_ZTv`/`_ZTc`. Ghidra makes it a plain function, not a thunk of its target.
-         */
+        /** A this-adjusting thunk by its linkage name, gcc 2.x or Itanium. */
         fun Function.isThunkLinkage() = symtab.getSymbols(entryPoint).any { sym ->
-            // Leading underscores off: the PE loader prefixes one more.
-            val name = sym.name.trimStart('_')
-            THUNK_LINKAGE.any(name::startsWith)
+            Gcc2.looksLikeThunk(sym.name) || Itanium.looksLikeThunk(sym.name)
         }
 
         fun Symbol.labelKind(): MemberKind {
             val mangled = (sequenceOf(this) + symtab.getSymbols(address).asSequence())
                 .map { it.name }.firstOrNull { it.startsWith("_Z") }.orEmpty()
             return when {
-                name in VTABLE_LABELS || VTABLE_MANGLED.any(mangled::startsWith) -> MemberKind.VTABLE
-                name in ABI_LABELS || ABI_MANGLED.any(mangled::startsWith) -> MemberKind.ABI
+                name in VTABLE_LABELS || Itanium.VTABLE_PREFIXES.any(mangled::startsWith) -> MemberKind.VTABLE
+                name in ABI_LABELS || Itanium.SPECIAL_PREFIXES.any(mangled::startsWith) -> MemberKind.ABI
                 else -> MemberKind.LABEL
             }
         }
@@ -305,9 +301,8 @@ private val MEMBER_ORDER = compareBy<ClassHierarchy.Member>(
     { it.address },
 )
 
-// The demangler's labels for Itanium special names, and those names' mangled prefixes: `_ZTV` vtable,
-// `_ZTT` VTT, `_ZTC` construction vtable; `_ZTI` typeinfo, `_ZTS` its name, `_ZG*` guard variables
-// and reference temporaries. A static data member (`_ZN…E`) stays a plain label.
+// The demangler's labels for Itanium special names (their mangled prefixes are [Itanium.VTABLE_PREFIXES]
+// and [Itanium.SPECIAL_PREFIXES]). A static data member (`_ZN…E`) stays a plain label.
 private val VTABLE_LABELS = setOf(
     ClassNaming.VFTABLE,
     ClassNaming.INTERNAL_VFTABLE,
@@ -316,11 +311,3 @@ private val VTABLE_LABELS = setOf(
     "construction-vtable",
 )
 private val ABI_LABELS = setOf(Itanium.DEMANGLED_TYPEINFO, "typeinfo-name")
-private val THUNK_LINKAGE = listOf("thunk_", "ZTh", "ZTv", "ZTc")
-
-// gcc 2.x's artificial `int __in_chrg` on constructors of classes with virtual bases and on destructors
-// (cp-tree.h IN_CHARGE_NAME), like `this` not the source's.
-private const val GCC2_IN_CHARGE = "__in_chrg"
-
-private val VTABLE_MANGLED = listOf("_ZTV", "_ZTT", "_ZTC")
-private val ABI_MANGLED = listOf("_ZT", "_ZG")

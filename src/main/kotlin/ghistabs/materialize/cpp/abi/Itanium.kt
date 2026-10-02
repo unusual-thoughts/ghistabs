@@ -27,6 +27,13 @@ object Itanium : CxxAbi {
     const val TYPEINFO_PREFIX = "_ZTI"
     const val TYPEINFO_NAME_PREFIX = "_ZTS"
 
+    // The other special names: `_ZTT` VTT and `_ZTC` construction vtable lay out like `_ZTV`;
+    // `_ZTh`/`_ZTv`/`_ZTc` are this-adjusting thunks; any other `_ZT*`/`_ZG*` (typeinfo, its name,
+    // guard variables, reference temporaries) is an ABI object.
+    val VTABLE_PREFIXES = listOf(VTABLE_PREFIX, "_ZTT", "_ZTC")
+    val THUNK_PREFIXES = listOf("_ZTh", "_ZTv", "_ZTc")
+    val SPECIAL_PREFIXES = listOf("_ZT", "_ZG")
+
     // Demangled name of a `_ZTV…` symbol (GnuDemangler emits "vtable", no f) and of a `_ZTI…` one.
     // Both take GnuDemanglerParser's AddressTableHandler, whose name is the prefix before " for ".
     const val DEMANGLED_VTABLE = "vtable"
@@ -138,6 +145,10 @@ object Itanium : CxxAbi {
 
     /** String-level pre-filter so we don't pay the demangler cost on every label. */
     internal fun looksLikeZti(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(TYPEINFO_PREFIX)
+
+    /** A this-adjusting thunk's linkage name. Ghidra makes it a plain function, not a thunk of its target. */
+    fun looksLikeThunk(symbolName: String) =
+        symbolName.trimDoubleUnderscore().let { n -> THUNK_PREFIXES.any(n::startsWith) }
 
     /** Pure inspection of a demangled object, so it unit-tests without a `Program`. */
     internal fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
