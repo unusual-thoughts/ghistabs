@@ -12,6 +12,7 @@ import ghidra.app.util.opinion.LoaderTier
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.*
 import ghidra.program.model.data.*
+import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.mem.MemoryBlock
@@ -246,22 +247,66 @@ private val Program.framePointer get() = dbxArch?.frameRegister?.let(::getRegist
  * program whose [ghistabs.parse.dbxArch] is unknown keeps the convention-derived bias.
  */
 fun Function.frameBias(monitor: TaskMonitor = TaskMonitor.DUMMY): Int = program.framePointer?.let { fp ->
-    program.listing
-        .getInstructions(entryPoint, true).iterator().asSequence()
-        .take(PROLOGUE_SCAN)
-        .takeWhile { it.flowType.isFallthrough }
-        .firstOrNull { ins ->
-            ins.pcode.any { op ->
-                op.opcode == PcodeOp.COPY && program.getRegister(op.getInput(0)) == program.stackPointer &&
-                    program.getRegister(op.output) == fp
-            }
-        }?.let { setsFp ->
-            CallDepthChangeInfo(this, AddressSet(entryPoint..setsFp.address), null, monitor)
-                .getSPDepth(setsFp.address).takeIf {
-                    it != Function.INVALID_STACK_DEPTH_CHANGE && it != Function.UNKNOWN_STACK_DEPTH_CHANGE
-                }?.let { -it }
-        }
+    setsFramePointer(fp)?.let { setsFp ->
+        CallDepthChangeInfo(this, AddressSet(entryPoint..setsFp.address), null, monitor)
+            .getSPDepth(setsFp.address).takeIf {
+                it != Function.INVALID_STACK_DEPTH_CHANGE && it != Function.UNKNOWN_STACK_DEPTH_CHANGE
+            }?.let { -it }
+    }
 } ?: program.baseStackParamOffset
+
+/** The prologue instruction that copies SP into [fp], within its straight run from the entry. */
+private fun Function.setsFramePointer(fp: Register) = program.listing
+    .getInstructions(entryPoint, true).iterator().asSequence()
+    .take(PROLOGUE_SCAN)
+    .takeWhile { it.flowType.isFallthrough }
+    .firstOrNull { ins ->
+        ins.pcode.any { op ->
+            op.opcode == PcodeOp.COPY && program.getRegister(op.getInput(0)) == program.stackPointer &&
+                program.getRegister(op.output) == fp
+        }
+    }
+
+/** The stack alignments an x86 frame's local area can be laid to: STACK_BOUNDARY up to a 32-byte local. */
+private val FRAME_ALIGNMENTS = listOf(8, 16, 32)
+
+/**
+ * How far above their slots gcc >= 4.8 wrote this function's stab frame [offsets], read off the code in [span].
+ *
+ * Under LRA, dbxout's `eliminate_regs` reads reload's elimination table, last filled by `ira_costs` before
+ * any hard register was allocated. `ix86_compute_frame_layout` then saw no callee-saved register, so the
+ * soft frame pointer locals count from sat at `align(hfp, A)` below the CFA rather than at
+ * `align(hfp + saves, A)`, where `hfp` is the return address and saved frame pointer and `A` the frame's
+ * `stack_alignment_needed`. The shift is the difference of the two. The registers pushed after the frame
+ * pointer give `saves`, but `A` is in no stab, and a register already live before allocation (4.8/4.9's PIC
+ * `%ebx`) was in the stale layout too; so of the shifts those allow, this takes the one that puts most of
+ * [offsets] on a frame-pointer displacement the code uses. 0 on a tie, and when nothing is pushed after
+ * the frame pointer: then both layouts agree, as they do for every gcc before 4.8.
+ */
+fun Function.staleFrameShift(offsets: Collection<Int>, span: AddressSetView): Int {
+    val fp = program.framePointer ?: return 0
+    val setsFp = setsFramePointer(fp) ?: return 0
+    val word = program.defaultPointerSize
+    val saves = program.listing.getInstructions(setsFp.address, true).iterator().asSequence()
+        .drop(1)
+        .takeWhile { it.mnemonicString == "PUSH" }
+        .count() * word
+    if (saves == 0 || offsets.isEmpty()) return 0
+    val used = program.listing.getInstructions(span, true).iterator().asSequence()
+        .flatMap { it.pcode.asSequence() }
+        .filter { it.opcode == PcodeOp.INT_ADD && program.getRegister(it.getInput(0)) == fp }
+        .map { it.getInput(1) }
+        .filter { it.isConstant }
+        .map { (it.offset shl (64 - 8 * it.size) shr (64 - 8 * it.size)).toInt() }
+        // Above that, the saves themselves and the epilogue's `lea -saves(%ebp),%esp`.
+        .filterTo(mutableSetOf()) { it < -saves }
+    val hfp = 2 * word
+    fun align(n: Int, a: Int) = (n + a - 1) / a * a
+    val shifts = (listOf(word) + FRAME_ALIGNMENTS).flatMap { a ->
+        (0..saves step word).map { stale -> align(hfp + saves, a) - align(hfp + stale, a) }
+    }.toSortedSet()
+    return shifts.maxBy { shift -> offsets.count { it - shift in used } }
+}
 
 class LoadedProgram internal constructor(val program: Program, private val consumer: Any) : AutoCloseable {
     override fun close() {
