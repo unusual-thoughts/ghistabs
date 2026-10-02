@@ -102,13 +102,6 @@ internal class SharedOptions : OptionGroup(TITLE) {
         }
     }
 
-    private fun File.writeDump(text: () -> String) {
-        parentFile?.mkdirs()
-        writeText(text())
-    }
-
-    private inline fun <reified T> File.writeDump(obj: T) = writeDump { dumpJson.encodeToString(obj) }
-
     companion object {
         const val TITLE = "Common options"
     }
