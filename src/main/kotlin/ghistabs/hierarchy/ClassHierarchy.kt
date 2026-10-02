@@ -21,6 +21,7 @@ import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.Gcc2
 import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.abi.Rtti
+import ghistabs.materialize.cpp.abi.SpecialName
 import ghistabs.materialize.cpp.abi.isTypeinfo
 import ghistabs.materialize.cpp.abi.typeinfoClass
 import ghistabs.parse.Access
@@ -252,14 +253,16 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
             ).let { types -> (if (hasVarArgs()) types + "..." else types).joinToString(", ", "(", ")") }
 
         /** A this-adjusting thunk by its linkage name, gcc 2.x or Itanium. */
-        fun Function.isThunkLinkage() = symtab.getSymbols(entryPoint).any { sym -> CxxAbi.looksLikeThunk(sym.name) }
+        fun Function.isThunkLinkage() = symtab.getSymbols(entryPoint).any { CxxAbi.looksLikeThunk(it.name) }
 
+        /** A label's kind by its demangled name, else by the first Itanium-mangled name at its address. */
         fun Symbol.labelKind(): MemberKind {
             val mangled = (sequenceOf(this) + symtab.getSymbols(address).asSequence())
-                .map { it.name }.firstOrNull { Itanium.isProbablyMangled(it) }.orEmpty()
+                .map { it.name }.firstOrNull(Itanium::isProbablyMangled).orEmpty()
+            val special = Itanium.specialName(mangled)
             return when {
-                name in VTABLE_LABELS || Itanium.VTABLE_PREFIXES.any(mangled::startsWith) -> MemberKind.VTABLE
-                name in ABI_LABELS || Itanium.SPECIAL_PREFIXES.any(mangled::startsWith) -> MemberKind.ABI
+                name in VTABLE_LABELS || special == SpecialName.VTABLE -> MemberKind.VTABLE
+                name in ABI_LABELS || special != null -> MemberKind.ABI
                 else -> MemberKind.LABEL
             }
         }
@@ -299,8 +302,9 @@ private val MEMBER_ORDER = compareBy<ClassHierarchy.Member>(
     { it.address },
 )
 
-// The demangler's labels for Itanium special names (their mangled prefixes are [Itanium.VTABLE_PREFIXES]
-// and [Itanium.SPECIAL_PREFIXES]). A static data member (`_ZN…E`) stays a plain label.
+// The demangler's labels for Itanium special names, for when only those are left (the mangled names go
+// through [Itanium.specialName]). A static data member (`_ZN…E`)
+// stays a plain label.
 private val VTABLE_LABELS = setOf(
     ClassNaming.VFTABLE,
     ClassNaming.INTERNAL_VFTABLE,

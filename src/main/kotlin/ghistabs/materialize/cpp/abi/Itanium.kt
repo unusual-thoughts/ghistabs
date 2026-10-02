@@ -22,23 +22,37 @@ import ghistabs.readAs
  * references the constants here rather than re-spelling literals.
  */
 object Itanium : CxxAbi {
-    // Itanium mangling prefixes (ABI §5.1.4). Cygwin's PE loader prepends '_' → "__ZT*".
+    // Itanium special-name prefixes (ABI §5.1.4). Cygwin's PE loader prepends '_' → "__ZT*".
+
+    /** A class's virtual table. */
     const val VTABLE_PREFIX = "_ZTV"
+
+    /** A VTT, the table of vtables a class with virtual bases hands its bases' constructors and destructors. */
     const val VTABLE_TABLE_PREFIX = "_ZTT"
+
+    /** A construction vtable: a base's vtable as used inside a derived object while that's built. */
     const val CONSTRUCTION_VTABLE_PREFIX = "_ZTC"
 
+    /** A class's `std::type_info` object. */
     const val TYPEINFO_PREFIX = "_ZTI"
+
+    /** The NTBS a typeinfo object's `__type_name` points at. */
     const val TYPEINFO_NAME_PREFIX = "_ZTS"
 
+    /** A thunk adjusting `this` by a fixed offset. */
     const val NON_VIRTUAL_THUNK_PREFIX = "_ZTh"
+
+    /** A thunk adjusting `this` by an offset read from the vtable (a virtual base's). */
     const val VIRTUAL_THUNK_PREFIX = "_ZTv"
+
+    /** A thunk adjusting both `this` and the returned pointer, for a covariant return. */
     const val COVARIANT_THUNK_PREFIX = "_ZTc"
 
-    val VTABLE_PREFIXES = listOf(VTABLE_PREFIX, VTABLE_TABLE_PREFIX, CONSTRUCTION_VTABLE_PREFIX)
-    val THUNK_PREFIXES = listOf(NON_VIRTUAL_THUNK_PREFIX, VIRTUAL_THUNK_PREFIX, COVARIANT_THUNK_PREFIX)
+    private val VTABLE_PREFIXES = listOf(VTABLE_PREFIX, VTABLE_TABLE_PREFIX, CONSTRUCTION_VTABLE_PREFIX)
+    private val THUNK_PREFIXES = listOf(NON_VIRTUAL_THUNK_PREFIX, VIRTUAL_THUNK_PREFIX, COVARIANT_THUNK_PREFIX)
 
-    /** Any other `_ZT*`/`_ZG*` (typeinfo, its name, guard variables, reference temporaries) is an ABI object */
-    val SPECIAL_PREFIXES = listOf("_ZT", "_ZG")
+    // Every special name (`_ZT*`: the above) and `_ZG*` (guard variables, reference temporaries).
+    private val SPECIAL_PREFIXES = listOf("_ZT", "_ZG")
 
     // Demangled name of a `_ZTV…` symbol (GnuDemangler emits "vtable", no f) and of a `_ZTI…` one.
     // Both take GnuDemanglerParser's AddressTableHandler, whose name is the prefix before " for ".
@@ -138,8 +152,6 @@ object Itanium : CxxAbi {
         return Demangler.of(symbolName)?.let { addressTableClass(it, DEMANGLED_TYPEINFO) }
     }
 
-    private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
-
     /** An Itanium-mangled name. The Cygwin PE/COFF loader prepends `_`, so they also appear as `__Z…`. */
     override fun isProbablyMangled(name: String): Boolean = name.trimDoubleUnderscore().startsWith("_Z")
 
@@ -152,9 +164,20 @@ object Itanium : CxxAbi {
     /** String-level pre-filter so we don't pay the demangler cost on every label. */
     internal fun looksLikeZti(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(TYPEINFO_PREFIX)
 
-    /** A this-adjusting thunk's linkage name. Ghidra makes it a plain function, not a thunk of its target. */
-    fun looksLikeThunk(symbolName: String) =
-        symbolName.trimDoubleUnderscore().let { n -> THUNK_PREFIXES.any(n::startsWith) }
+    /**
+     * Which special name [symbolName] mangles, or null for a source-level one (`_ZN…`, `_Z3foo…`) or an
+     * unmangled one. Its [SpecialName.VTABLE] takes `_ZTT` and `_ZTC` too, where [looksLikeVtable] is `_ZTV` only.
+     */
+    fun specialName(symbolName: String): SpecialName? {
+        val name = symbolName.trimDoubleUnderscore()
+        fun any(prefixes: List<String>) = prefixes.any(name::startsWith)
+        return when {
+            any(VTABLE_PREFIXES) -> SpecialName.VTABLE
+            any(THUNK_PREFIXES) -> SpecialName.THUNK
+            any(SPECIAL_PREFIXES) -> SpecialName.OTHER
+            else -> null
+        }
+    }
 
     /** Pure inspection of a demangled object, so it unit-tests without a `Program`. */
     internal fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
@@ -179,6 +202,21 @@ object Itanium : CxxAbi {
         DTOR_TAIL.containsMatchIn(mangled) -> "~$className"
         else -> null
     }
+}
+
+// Cygwin's PE loader prepends one more `_`: `__ZTV…`.
+private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
+
+/** What an Itanium special name ([Itanium.specialName]) is. */
+enum class SpecialName {
+    /** A `_ZTV` vtable, `_ZTT` VTT or `_ZTC` construction vtable. */
+    VTABLE,
+
+    /** A `_ZTh`/`_ZTv`/`_ZTc` this-adjusting thunk. Ghidra makes it a plain function, not a thunk of its target. */
+    THUNK,
+
+    /** Any other object the ABI names rather than the source: typeinfo, its name, a `_ZG*` guard or temporary. */
+    OTHER,
 }
 
 /** Which `__cxxabiv1` typeinfo class lays out a class's typeinfo object: what [Rtti] has a layout for. */
