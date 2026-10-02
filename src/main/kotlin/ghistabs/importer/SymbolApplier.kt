@@ -431,8 +431,10 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                         return
                     }
                     // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
-                    // prologue-derived [Func.frameBias] (NSA/ghidra#223, #5485).
+                    // prologue-derived [Func.frameBias] (NSA/ghidra#223, #5485), which carries gcc >= 4.8's
+                    // stale frame layout too.
                     func.addStack(this, rawValue.toInt() - open.frameBias(ctx.program))
+                    if (open.staleFrameShift(ctx.program) != 0) debug("local-var-stale-frame-shifted")
                     debug("local-var-add-success")
                 }
 

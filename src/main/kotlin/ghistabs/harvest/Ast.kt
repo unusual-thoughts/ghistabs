@@ -6,6 +6,7 @@ package ghistabs.harvest
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
+import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
@@ -14,6 +15,7 @@ import ghistabs.Once
 import ghistabs.baseStackParamOffset
 import ghistabs.frameBias
 import ghistabs.parse.*
+import ghistabs.staleFrameShift
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -332,11 +334,27 @@ data class Func(
     fun sourceSignature(program: Program) = decl.scope.storageClass() + signature(program)
 
     /**
-     * [ghistabs.frameBias] of the Ghidra function at [addr], or the convention's when there is none. Asked
+     * How far below the entry SP this function's stab frame offsets count from: [ghistabs.frameBias] of the
+     * Ghidra function at [addr] plus its [staleFrameShift], or the convention's when there is none. Asked
      * only once a stack local needs it, then kept.
      */
     @Transient val frameBias = Once { program: Program ->
-        program.functionManager.getFunctionAt(addr)?.frameBias() ?: program.baseStackParamOffset
+        program.functionManager.getFunctionAt(addr)?.let { it.frameBias() + staleFrameShift(program) }
+            ?: program.baseStackParamOffset
+    }
+
+    /**
+     * [ghistabs.staleFrameShift] over the frame-pointer-relative slots of [locals] and [params], read in
+     * the N_FUN's span as well as Ghidra's body: a landing pad that nothing flows to is the function's too.
+     */
+    @Transient val staleFrameShift = Once { program: Program ->
+        program.functionManager.getFunctionAt(addr)?.let { func ->
+            val slots = (locals + params).filter { it.location == VariableLocation.STACK }
+                .map { it.rawValue.toInt() }
+                .filter { it < 0 }
+            val span = sizeBytes?.let { func.body.union(AddressSet(addr, addr.add(it.toLong() - 1))) } ?: func.body
+            func.staleFrameShift(slots, span)
+        } ?: 0
     }
 
     /**
