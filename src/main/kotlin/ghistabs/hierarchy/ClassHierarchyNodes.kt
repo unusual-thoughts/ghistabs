@@ -28,7 +28,7 @@ private val NAMESPACE_ICON: Icon = GIcon("icon.plugin.symboltree.node.namespace"
  */
 class ClassHierarchyRootNode(
     private val programName: String,
-    hierarchy: ClassHierarchy,
+    private val hierarchy: ClassHierarchy,
     val showMembers: Boolean = true,
     val inverted: Boolean = false,
 ) : GTreeNode() {
@@ -68,6 +68,37 @@ class ClassHierarchyRootNode(
     override fun getIcon(expanded: Boolean) = NAMESPACE_ICON
     override fun getToolTip(): String? = null
     override fun isLeaf() = false
+
+    /**
+     * The node for the first of [addresses] the tree has: the member at it, else the class whose vtable
+     * or typeinfo is there. Null when none is a class's.
+     */
+    fun nodeAt(addresses: List<String>): GTreeNode? = addresses.firstNotNullOfOrNull { a ->
+        hierarchy.classes.firstNotNullOfOrNull { c ->
+            c.members.firstOrNull { it.address == a }?.let { m ->
+                nodeOf(c)?.children?.firstOrNull { it is MemberNode && it.member == m }
+            }
+        } ?: hierarchy.classes.firstOrNull { it.address == a }?.let(::nodeOf)
+    }
+
+    /**
+     * The node of [cls] that lists its members: the one filed under its namespace, by name. Inverted,
+     * that's under a basal class, so down from it through each class's first base it has a class for.
+     */
+    fun nodeOf(cls: ClassInfo): ClassNode? {
+        val chain = generateSequence(cls) { c -> c.bases.firstNotNullOfOrNull { hierarchy[it] }.takeIf { inverted } }
+            .toList().asReversed()
+        var node: GTreeNode = this
+        for (name in chain.first().path) {
+            node = node.children.firstOrNull { n ->
+                n.name == name && (n is NamespaceNode || (n is ClassNode && n.edge == null))
+            } ?: return null
+        }
+        for (next in chain.drop(1)) {
+            node = node.children.firstOrNull { it is ClassNode && it.info?.id == next.id } ?: return null
+        }
+        return node as? ClassNode
+    }
 }
 
 /** A namespace that is not itself a class. */

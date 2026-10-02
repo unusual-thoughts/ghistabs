@@ -13,7 +13,10 @@ import ghidra.framework.model.DomainObjectChangedEvent
 import ghidra.framework.model.DomainObjectListener
 import ghidra.framework.plugintool.ComponentProviderAdapter
 import ghidra.framework.plugintool.Plugin
+import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
+import ghidra.program.util.ProgramLocation
+import ghidra.util.HTMLUtilities
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
 import ghidra.util.task.SwingUpdateManager
@@ -56,6 +59,8 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
     private var showMembers = true
     private var inverted = false
     private var expandAll = false
+    private lateinit var navigateIncoming: ToggleDockingAction
+    private var lastLocation: ProgramLocation? = null
     private val builder = Executors.newSingleThreadExecutor {
         Thread(it, "Stabs class hierarchy").apply {
             isDaemon = true
@@ -127,13 +132,39 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
             object : ToggleDockingAction("Show Derived Classes", plugin.name) {
                 override fun actionPerformed(context: ActionContext?) {
                     inverted = isSelected
+                    showDirection()
                     reshow()
                 }
+
+                // The arrow and the tooltip say which way the tree runs now: up to the bases, or down
+                // to the derived classes.
+                fun showDirection() {
+                    toolBarData = ToolBarData(GIcon(if (isSelected) "icon.down" else "icon.up"), null)
+                    description = if (isSelected) {
+                        "Basal classes at the root, each expanding into the classes derived from it. " +
+                            "Toggle off to expand each class into its bases"
+                    } else {
+                        "Each class expands into its bases. " +
+                            "Toggle on to put the basal classes at the root, expanding into the classes derived from them"
+                    }
+                }
             }.apply {
-                toolBarData = ToolBarData(GIcon("icon.sort.descending"), null)
-                description = "Put the basal classes at the root, each expanding into the classes derived from it"
+                showDirection()
                 helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
             },
+        )
+        addLocalAction(
+            object : ToggleDockingAction("Navigate on Incoming", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    if (isSelected) lastLocation?.let(::select)
+                }
+            }.apply {
+                toolBarData = ToolBarData(Icons.NAVIGATE_ON_INCOMING_EVENT_ICON, null)
+                description = HTMLUtilities.toHTML(
+                    "Toggle <b>On</b> means to select the matching tree\nsymbol on program location changes",
+                )
+                helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+            }.also { navigateIncoming = it },
         )
     }
 
@@ -192,6 +223,21 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
         val h = shown ?: return
         tree.replaceRoot(ClassHierarchyRootNode(p.name, h, showMembers, inverted))
         if (expandAll) tree.expandAll()
+    }
+
+    /** The tool's location moved: with Navigate on Incoming on, select what the tree shows for it. */
+    fun locationChanged(loc: ProgramLocation?) {
+        lastLocation = loc
+        if (loc != null && navigateIncoming.isSelected && isVisible) select(loc)
+    }
+
+    /** Select what [loc] is in the tree: see [ClassHierarchyRootNode.nodeAt]. */
+    private fun select(loc: ProgramLocation) {
+        val p = program?.takeIf { it === loc.program } ?: return
+        val addr = loc.address ?: return
+        val root = tree.modelRoot as? ClassHierarchyRootNode ?: return
+        val at = listOfNotNull(addr, p.functionManager.getFunctionContaining(addr)?.entryPoint).map(Address::toString)
+        root.nodeAt(at.distinct())?.let(tree::setSelectedNode)
     }
 
     private fun Program.goTo(at: String?) = at?.let(addressFactory::getAddress)

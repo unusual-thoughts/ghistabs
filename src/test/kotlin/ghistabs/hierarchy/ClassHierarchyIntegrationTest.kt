@@ -170,6 +170,26 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         }
     }
 
+    /** What Navigate on Incoming selects for a location: the member there, under the class that lists it. */
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `an address finds its member's node, inverted too`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        for (inverted in listOf(false, true)) {
+            val root = ClassHierarchyRootNode(program.name, hierarchy, inverted = inverted)
+            for (name in listOf("Circle", "Diamond")) {
+                val cls = hierarchy.cls(name)
+                val member = cls.members.first { it.kind == MemberKind.FUNCTION }
+                val node =
+                    root.nodeAt(listOf(member.address)) as? MemberNode ?: fail("$name: no node at ${member.address}")
+                node.member mustBe member
+                (node.parent as ClassNode).info?.id mustBe cls.id
+            }
+            root.nodeAt(listOf("ffffffff")) mustBe null
+        }
+    }
+
     companion object {
         @JvmStatic
         fun hellos() = FEATURES.list().orEmpty().filter { it.startsWith("hello_") }.sorted()

@@ -143,9 +143,9 @@ end of the import.
 A read-only tree of the C++ classes, ported from the *ClassTypeInfo Tree* of
 [astrelsky/Ghidra-Cpp-Class-Analyzer](https://github.com/astrelsky/Ghidra-Cpp-Class-Analyzer):
 each class under its namespace, expanding into its direct bases (`virtual Base`, `private Impl`)
-and theirs, then its functions and labels (vtables and other ABI objects first). A toolbar toggle inverts it, basal classes at the root expanding into their derived classes. Bases come from the stabs, exact down to virtuality and access, gcc 2.x included;
+and theirs, then its functions and labels (vtables and other ABI objects first). A toolbar toggle (an up arrow, down once on) inverts it, basal classes at the root expanding into their derived classes. Bases come from the stabs, exact down to virtuality and access, gcc 2.x included;
 classes the vtable sweep found without stabs show grey (unless abstract, virtual or nested), with bases read off their Itanium
-typeinfo where there is one. Double-click a class to edit its struct, a member to go to it. Programs imported before this
+typeinfo where there is one. Double-click a class to edit its struct, a member to go to it; *Navigate on Incoming* selects the class or member at the current location, as in the Symbol Tree. Programs imported before this
 window existed need a **Re-import** for their stabs bases.
 
 ### `File > Export Program…`

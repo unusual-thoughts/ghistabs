@@ -12,6 +12,7 @@ import ghidra.framework.plugintool.PluginInfo
 import ghidra.framework.plugintool.PluginTool
 import ghidra.framework.plugintool.util.PluginStatus
 import ghidra.program.model.listing.Program
+import ghidra.program.util.ProgramLocation
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
 import ghistabs.hierarchy.ClassHierarchyProvider
@@ -40,6 +41,8 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
     override fun programActivated(program: Program) = classHierarchy.setProgram(program)
 
     override fun programDeactivated(program: Program) = classHierarchy.setProgram(null)
+
+    override fun locationChanged(loc: ProgramLocation?) = classHierarchy.locationChanged(loc)
 
     override fun dispose() {
         classHierarchy.dispose()
