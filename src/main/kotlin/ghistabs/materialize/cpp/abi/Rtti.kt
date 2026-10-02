@@ -3,7 +3,6 @@ package ghistabs.materialize.cpp.abi
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
-import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
 import ghistabs.materialize.cpp.ClassNaming
@@ -166,7 +165,7 @@ class Rtti(private val dtm: DataTypeManager) {
 
         private fun vmiBases(zti: Address): List<Base>? {
             val count = program.readAt(zti, layouts.vmiClassTypeInfo(1))
-                ?.getValue<Scalar>(NUM_BASES)?.unsignedValue?.toInt()
+                ?.getScalar(NUM_BASES)?.unsignedValue?.toInt()
             if (count == null || count !in 1..MAX_BASES) return null
             val array = program.readAt(zti, layouts.vmiClassTypeInfo(count))?.get(BASES) ?: return null
             return (0 until array.numComponents).map { i ->

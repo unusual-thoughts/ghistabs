@@ -40,7 +40,7 @@ import javax.swing.SwingUtilities
  * Swing thread when the program changes while the window shows. Double-click (or Enter) on a member
  * goes to it; on a class, opens its struct in the structure editor, else goes to its vtable or typeinfo.
  */
-class ClassHierarchyProvider(private val plugin: Plugin) :
+class ClassTree(private val plugin: Plugin) :
     ComponentProviderAdapter(plugin.tool, NAME, plugin.name),
     DomainObjectListener {
     companion object {
@@ -59,7 +59,7 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
     private var showMembers = true
     private var inverted = false
     private var expandAll = false
-    private lateinit var navigateIncoming: ToggleDockingAction
+    private var navigateIncoming: ToggleDockingAction
     private var lastLocation: ProgramLocation? = null
     private val builder = Executors.newSingleThreadExecutor {
         Thread(it, "Stabs class hierarchy").apply {

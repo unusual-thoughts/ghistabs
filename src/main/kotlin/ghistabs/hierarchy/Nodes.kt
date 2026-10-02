@@ -3,20 +3,11 @@ package ghistabs.hierarchy
 import docking.widgets.tree.GTreeLazyNode
 import docking.widgets.tree.GTreeNode
 import generic.theme.GIcon
-import ghistabs.hierarchy.ClassHierarchy.ClassInfo
-import ghistabs.hierarchy.ClassHierarchy.MemberKind
-import ghistabs.hierarchy.ClassHierarchy.Origin
+import ghistabs.hierarchy.ClassHierarchy.*
 import ghistabs.parse.Access
 import java.awt.image.BufferedImage
 import javax.swing.Icon
 import javax.swing.ImageIcon
-
-/*
- * The tree astrelsky's Ghidra-Cpp-Class-Analyzer docks as its "ClassTypeInfo Tree": classes filed under
- * their namespaces, and each class's children its direct bases, which expand into theirs in turn, then
- * its functions and labels as the Symbol Tree shows them, then the classes nested in it. Read-only, and
- * over [ClassHierarchy] instead of a typeinfo database.
- */
 
 internal val CLASS_ICON: Icon = GIcon("icon.plugin.symboltree.node.class")
 private val NAMESPACE_ICON: Icon = GIcon("icon.plugin.symboltree.node.namespace")
@@ -118,7 +109,7 @@ class NamespaceNode(private val name: String) : GTreeNode() {
 class ClassNode private constructor(
     private val hierarchy: ClassHierarchy,
     val info: ClassInfo?,
-    val edge: ClassHierarchy.BaseRef?,
+    val edge: BaseRef?,
     private val inverted: Boolean,
 ) : GTreeLazyNode() {
     constructor(hierarchy: ClassHierarchy, info: ClassInfo, inverted: Boolean = false) :
@@ -197,7 +188,7 @@ class ClassNode private constructor(
 }
 
 /** A function or label of the class above it. */
-class MemberNode(val member: ClassHierarchy.Member) : GTreeNode() {
+class MemberNode(val member: Member) : GTreeNode() {
     override fun getName() = member.label
     override fun getIcon(expanded: Boolean): Icon = MEMBER_ICONS.getValue(member.kind)
     override fun getToolTip(): String = buildString {

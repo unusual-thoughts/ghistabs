@@ -59,10 +59,11 @@ operator fun AddressSetView.plus(addr: Address): AddressSet = union(AddressSet(a
 operator fun Data.get(i: Int): Data? = this.getComponent(i)
 operator fun Data.get(name: String): Data? =
     (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(this::get)
-inline fun <reified T> Data.getValue(name: String): T? = get(name)?.value as? T
+inline fun <reified T> Data.valueOf(name: String): T? = get(name)?.value as? T
+fun Data.getScalar(name: String): Scalar? = valueOf(name)
 
 /** Whether the one-bit field [name] is set. */
-fun Data.flag(name: String) = (this[name]?.value as? Scalar)?.unsignedValue == 1L
+fun Data.flag(name: String) = getScalar(name)?.unsignedValue == 1L
 
 fun Iterable<AddressRange>.gapsIn(range: AddressRange, action: (AddressRange) -> Unit = { }) = sequence {
     var start = range.minAddress

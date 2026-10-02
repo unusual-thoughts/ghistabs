@@ -15,13 +15,13 @@ import ghidra.program.model.listing.Program
 import ghidra.program.util.ProgramLocation
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
-import ghistabs.hierarchy.ClassHierarchyProvider
+import ghistabs.hierarchy.ClassTree
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.parse.StabReader
 
 /**
  * `Tools > Stabs > Re-import`: clears the persistent done-flag and re-runs the StabsAnalyzer.
- * `Window > Class Hierarchy`: the read-only class tree ([ClassHierarchyProvider]).
+ * `Window > Class Hierarchy`: the read-only class tree ([ClassTree]).
  * The render is exported through [StabsDecompExporter] (`File > Export Program…`), not from here.
  */
 @PluginInfo(
@@ -36,7 +36,7 @@ import ghistabs.parse.StabReader
     servicesRequired = [GoToService::class],
 )
 class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
-    private val classHierarchy = ClassHierarchyProvider(this)
+    private val classHierarchy = ClassTree(this)
 
     override fun programActivated(program: Program) = classHierarchy.setProgram(program)
 
