@@ -358,7 +358,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         val size = nonVirtualSizes[cls.dataTypePath] ?: return null
         return selfBases.getOrPut(cls.dataTypePath) {
             val path = ClassUtils.getBaseClassDataTypePath(cls)
-            registry.getOrRegister<Structure>(path.categoryPath, path.dataTypeName) {
+            registry.getOrRegister<Structure>(path) {
                 StructureDataType(path.categoryPath, path.dataTypeName, size, registry.dtm).apply {
                     description = "${cls.name} as a base subobject: its non-virtual part"
                 }

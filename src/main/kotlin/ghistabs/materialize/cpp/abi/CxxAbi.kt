@@ -153,6 +153,9 @@ sealed interface CxxAbi : CxxMemberNaming {
         fun isGeneratedData(name: String) =
             Itanium.isGeneratedData(name) || ofVtableSymbol(name) != null || Gcc2.isTypeinfoName(name)
 
+        /** A this-adjusting thunk by its linkage name: gcc 2.x [Gcc2.looksLikeThunk] or Itanium [SpecialName.THUNK]. */
+        fun looksLikeThunk(name: String) = Gcc2.looksLikeThunk(name) || Itanium.specialName(name) == SpecialName.THUNK
+
         /** Every ABI's spelling for [className]'s vtable, Itanium first. */
         fun vtableCandidates(className: String) = buildList {
             addAll(Itanium.vtableCandidates(className))

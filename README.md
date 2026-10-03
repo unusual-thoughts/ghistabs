@@ -138,6 +138,16 @@ end of the import.
   runs again over the current program. Use it after changing analyzer options. Enabled only
   when the program actually has `.stab`/`.stabstr` blocks.
 
+### `Window > Class Hierarchy`
+
+A read-only tree of the C++ classes, ported from the *ClassTypeInfo Tree* of
+[astrelsky/Ghidra-Cpp-Class-Analyzer](https://github.com/astrelsky/Ghidra-Cpp-Class-Analyzer):
+each class under its namespace, expanding into its direct bases (`virtual Base`, `private Impl`)
+and theirs, then its functions and labels (vtables and other ABI objects first). A toolbar toggle (an up arrow, down once on) inverts it, basal classes at the root expanding into their derived classes. Bases come from the stabs, exact down to virtuality and access, gcc 2.x included;
+classes the vtable sweep found without stabs show grey (unless abstract, virtual or nested), with bases read off their Itanium
+typeinfo where there is one. Double-click a class to edit its struct, a member to go to it; *Navigate on Incoming* selects the class or member at the current location, as in the Symbol Tree. Programs imported before this
+window existed need a **Re-import** for their stabs bases.
+
 ### `File > Export Program…`
 
 Two formats write the reconstructed sources, one file per source file, and they answer different
@@ -248,6 +258,10 @@ command takes them after its own name, and `ghistabs --help` lists them as well 
 | `--degradation-log FILE`                                 |         | Grouped report of every type that materialized to something weaker than the stabs described.       |
 
 `--registry` and `--degradation-log` are products of materialization, so only `dump`, `skeleton` and `decomp` write them.
+
+`--class-hierarchy FILE` (on `dump`, `skeleton` and `decomp`) writes the classes the `Window > Class Hierarchy`
+tree shows as JSON: each class's namespace path and id, origin, vtable/typeinfo addresses, struct, abstractness,
+bases (by namespace id) and members.
 
 Import options, on the commands that actually import (`dump`, `skeleton`, `decomp`):
 
