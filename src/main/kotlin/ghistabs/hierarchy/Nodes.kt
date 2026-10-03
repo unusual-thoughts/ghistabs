@@ -11,6 +11,7 @@ import javax.swing.ImageIcon
 
 internal val CLASS_ICON: Icon = GIcon("icon.plugin.symboltree.node.class")
 private val NAMESPACE_ICON: Icon = GIcon("icon.plugin.symboltree.node.namespace")
+private val ROOT_ICON: Icon = GIcon("icon.plugin.symboltree.node.category.classes.closed")
 
 /**
  * The program's classes, filed by namespace, with their members unless [showMembers] is off. [inverted],
@@ -56,7 +57,7 @@ class ClassHierarchyRootNode(
     }
 
     override fun getName() = programName
-    override fun getIcon(expanded: Boolean) = NAMESPACE_ICON
+    override fun getIcon(expanded: Boolean) = ROOT_ICON
     override fun getToolTip(): String? = null
     override fun isLeaf() = false
 

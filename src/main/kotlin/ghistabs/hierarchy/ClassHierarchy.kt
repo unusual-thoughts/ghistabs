@@ -85,6 +85,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         val origin: Origin,
         /** Where its primary `vftable` label sits, for a polymorphic class. */
         val vftable: String?,
+        val vftableStructId: Long?,
         /** Its `_ZTI` typeinfo object, when the binary has one. */
         val typeinfo: String?,
         /** The struct the stabs laid for it, by datatype id, and its name (shorter, once typedef shortening ran). */
@@ -160,6 +161,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                 val vftable = vftableOf(ns)
                 val typeinfo = typeinfos[ns.id]
                 val struct = structOf(ns)
+                val vftableStruct = vftableStructOf(ns)
                 ClassInfo(
                     id = ns.id,
                     path = ns.getPathList(true).toList(),
@@ -169,6 +171,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                         else -> Origin.SWEPT
                     },
                     vftable = vftable?.toString(),
+                    vftableStructId = vftableStruct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
                     typeinfo = typeinfo?.toString(),
                     structId = struct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
                     structName = struct?.name,
@@ -197,6 +200,9 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         // By the id the import recorded, since typedef shortening may have renamed it; else by name.
         fun structOf(ns: GhidraClass): Structure? =
             VariableUtilities.findExistingClassStruct(ns, program.dataTypeManager)
+
+        fun vftableStructOf(ns: GhidraClass): Structure? =
+            program.dataTypeManager.getDataType(ClassNaming.vftablePath(ns)) as? Structure
 
         fun membersOf(ns: Namespace): List<Member> {
             val members = symtab.getSymbols(ns).mapNotNull { sym ->

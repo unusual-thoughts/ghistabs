@@ -2,6 +2,7 @@ package ghistabs.hierarchy
 
 import docking.ActionContext
 import docking.action.DockingAction
+import docking.action.MenuData
 import docking.action.ToggleDockingAction
 import docking.action.ToolBarData
 import docking.widgets.tree.GTree
@@ -45,6 +46,8 @@ class ClassTree(private val plugin: Plugin) :
     DomainObjectListener {
     companion object {
         const val NAME = "Class Hierarchy"
+        private val STRUCT_ICON = GIcon("icon.plugin.datatypes.structure")
+        private val VTABLE_ICON = GIcon("icon.plugin.navigation.bytes")
     }
 
     private val tree = GTree(placeholder("No program")).apply { isRootVisible = true }
@@ -166,6 +169,26 @@ class ClassTree(private val plugin: Plugin) :
                 helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
             }.also { navigateIncoming = it },
         )
+        addLocalAction(
+            object : DockingAction("Edit class struct", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    selectedClass?.structId?.let { openStruct(it) }
+                }
+            }.apply {
+                popupMenuData = MenuData(arrayOf("Edit class struct"), STRUCT_ICON)
+                popupWhen { selectedClass?.structId != null }
+            },
+        )
+        addLocalAction(
+            object : DockingAction("Edit vtable struct", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    selectedClass?.vftableStructId?.let { openStruct(it) }
+                }
+            }.apply {
+                popupMenuData = MenuData(arrayOf("Edit vtable struct"), VTABLE_ICON)
+                popupWhen { selectedClass?.vftableStructId != null }
+            },
+        )
     }
 
     override fun getComponent(): JComponent = panel
@@ -246,12 +269,15 @@ class ClassTree(private val plugin: Plugin) :
     private fun openSelected() = program?.apply {
         when (val selected = tree.selectionPath?.lastPathComponent) {
             is MemberNode -> goTo(selected.member.address)
+            is ClassNode -> selected.info?.let { info -> goTo(info.address) }
+        }
+    }
 
-            is ClassNode -> selected.info?.let { info ->
-                info.structId?.let(dataTypeManager::getDataType)?.let { struct ->
-                    tool.getService(DataTypeManagerService::class.java)?.edit(struct)
-                } ?: goTo(info.address)
-            }
+    private val selectedClass get() = (tree.selectionPath?.lastPathComponent as? ClassNode)?.info
+
+    private fun openStruct(id: Long) = program?.apply {
+        dataTypeManager.getDataType(id)?.let {
+            tool.getService(DataTypeManagerService::class.java)?.edit(it)
         }
     }
 
