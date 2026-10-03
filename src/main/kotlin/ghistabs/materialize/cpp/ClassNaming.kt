@@ -2,6 +2,7 @@ package ghistabs.materialize.cpp
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeComponent
+import ghidra.program.model.data.DataTypePath
 import ghidra.program.model.symbol.Namespace
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -39,6 +40,10 @@ object ClassNaming {
 
     /** [vftableCategory] of the class [ns] is. */
     fun vftableCategory(ns: Namespace) = vftableCategory(ns.getPathList(true).toList())
+
+    private fun vftableName(className: String) = "${className}_$VFTABLE"
+    fun vftablePath(ns: Namespace) = DataTypePath(vftableCategory(ns), vftableName(ns.name))
+    fun vftablePath(classPath: List<String>) = DataTypePath(vftableCategory(classPath), vftableName(classPath.last()))
 
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
         (if (isVirtual) VBASE_PREFIX else BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()

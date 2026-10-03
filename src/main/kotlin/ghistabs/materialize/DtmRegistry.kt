@@ -77,8 +77,8 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
      * returned as it stands, and one an earlier import left is registered as this one's, with the slot
      * definitions it points at, so a re-import's registry reads as the first's did.
      */
-    internal inline fun <reified T : DataType> getOrRegister(category: CategoryPath, name: String, build: () -> T): T =
-        when (val dt = dtm.getDataType(category, name)) {
+    internal inline fun <reified T : DataType> getOrRegister(path: DataTypePath, build: () -> T): T =
+        when (val dt = dtm.getDataType(path)) {
             is T -> adopt(dt)
             else -> register(build()) as T
         }

@@ -24,7 +24,6 @@ object ClassHierarchyRecord {
     /** A program options category of its own, so the record doesn't crowd Program Information. */
     const val CATEGORY = "Stabs Class Hierarchy"
     private const val BASES = "Bases"
-    private const val STRUCTS = "Structs"
 
     /** A direct base: the class built for it ([namespaceId]), or only its [name] when none was. */
     data class Base(val namespaceId: Long?, val name: String?, val isVirtual: Boolean, val access: Access)
@@ -61,21 +60,12 @@ object ClassHierarchyRecord {
         }
     }
 
-    fun write(program: Program, record: Map<Long, List<Base>>, structs: Map<Long, Long>) =
+    fun write(program: Program, record: Map<Long, List<Base>>) =
         program.getOptions(CATEGORY).run {
             setString(BASES, encode(record))
-            setString(STRUCTS, structs.entries.joinToString("\n") { (ns, dt) -> "$ns\t$dt" })
         }
 
     /** Null when no stabs import recorded one: a program imported before the record existed, or with none. */
     fun read(program: Program): Map<Long, List<Base>>? =
         program.getOptions(CATEGORY).getString(BASES, null)?.let(::decode)
-
-    /** Each class's struct, as a datatype id, by namespace id. */
-    fun readStructs(program: Program): Map<Long, Long> = buildMap {
-        for (line in program.getOptions(CATEGORY).getString(STRUCTS, null).orEmpty().lineSequence()) {
-            val (ns, dt) = line.split('\t').takeIf { it.size == 2 } ?: continue
-            put(ns.toLongOrNull() ?: continue, dt.toLongOrNull() ?: continue)
-        }
-    }
 }

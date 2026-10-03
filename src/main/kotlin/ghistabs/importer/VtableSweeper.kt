@@ -10,6 +10,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.BoolOption
 import ghistabs.Demangler
+import ghistabs.at
 import ghistabs.buildClassNamespaces
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
@@ -105,14 +106,14 @@ open class VtableSweeper(
             }
             val leaf = canonTemplateName(qualified.leafName)
             val ns = symtab.buildClassNamespaces(qualified.nameSegments)
-            val category = ClassNaming.vftableCategory(ns)
-            val vftable = registry.getOrRegister<Structure>(category, "${leaf}_vftable") {
-                StructureDataType(category, "${leaf}_vftable", 0, dtm)
+            val path = ClassNaming.vftableCategory(ns).at(leaf)
+            val vftable = registry.getOrRegister<Structure>(path) {
+                StructureDataType(path.categoryPath, path.dataTypeName, 0, dtm)
             }
             // A class whose own group failed to resolve its vtable left its stab-typed slots here;
             // those beat anything read back off the target addresses.
             if (vftable.numComponents == 0) {
-                addSweptSlots(vftable, category, targets, abi)
+                addSweptSlots(vftable, path.categoryPath, targets, abi)
                 // Itanium puts a primary vptr at 0. gcc 2.x puts it after the fields, and with no class
                 // struct here to read that off, it gets no tag.
                 vftable.describeVxTable(leaf, ClassNaming.VFTABLE, 0L.takeIf { abi.hasRttiHeader })
@@ -163,7 +164,7 @@ open class VtableSweeper(
         val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
             .filter { it.targets.isNotEmpty() }
         subs.forEachIndexed { i, sub ->
-            val vftable = internalVftable(leaf, ns, i, sub.targets, abi)
+            val vftable = internalVftable(ClassNaming.vftablePath(ns), i, sub.targets, abi)
             val vfptrAt = with(abi) { sub.shape.vfptrOffset(program) }
             vftable.describeVxTable(leaf, "${ClassNaming.INTERNAL_VFTABLE} $i", vfptrAt)
             val at = program.layVtable(
@@ -206,7 +207,7 @@ open class VtableSweeper(
                 continue
             }
             val i = laid++
-            val vftable = internalVftable(leaf, ns, i, targets, abi)
+            val vftable = internalVftable(ClassNaming.vftablePath(ns), i, targets, abi)
             val vfptrAt = classStruct?.vfptrOffsetOfBase(base)?.toLong()
             vftable.describeVxTable(leaf, "${ClassNaming.INTERNAL_VFTABLE} $i, for $base", vfptrAt)
             program.layVtable(
@@ -228,13 +229,12 @@ open class VtableSweeper(
      * to. Its slot definitions each get their own `internal_<i>` category, or a thunk sharing its
      * target's leaf name forks a `.conflict` per slot (1874 on crypto_mi).
      */
-    private fun internalVftable(leaf: String, ns: Namespace, i: Int, targets: List<Address>, abi: CxxAbi): Structure {
-        val category = ClassNaming.vftableCategory(ns)
-        val name = "${leaf}_vftable_internal_$i"
-        val vftable = registry.getOrRegister<Structure>(category, name) {
-            StructureDataType(category, name, 0, dtm)
+    private fun internalVftable(path:DataTypePath, i: Int, targets: List<Address>, abi: CxxAbi): Structure {
+        val name = "${path.dataTypeName}_vftable_internal_$i"
+        val vftable = registry.getOrRegister<Structure>(path.categoryPath.at(name)) {
+            StructureDataType(path.categoryPath, name, 0, dtm)
         }
-        if (vftable.numComponents == 0) addSweptSlots(vftable, CategoryPath(category, "internal_$i"), targets, abi)
+        if (vftable.numComponents == 0) addSweptSlots(vftable, CategoryPath(path.categoryPath, "internal_$i"), targets, abi)
         return vftable
     }
 

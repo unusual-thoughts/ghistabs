@@ -2,12 +2,11 @@ package ghistabs.hierarchy
 
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.*
 import ghistabs.Demangler
 import ghistabs.importer.ClassHierarchyRecord
@@ -133,7 +132,6 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
     private class Builder(val program: Program) {
         val symtab: SymbolTable = program.symbolTable
         val record = ClassHierarchyRecord.read(program).orEmpty()
-        val structIds = ClassHierarchyRecord.readStructs(program)
         val rtti = Rtti.Reader(program)
 
         // `_ZTI` objects by the class they describe, off the mangled label or, once Ghidra's demangler
@@ -197,12 +195,8 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         fun vftableOf(ns: Namespace): Address? = symtab.getSymbols(ClassNaming.VFTABLE, ns).firstOrNull()?.address
 
         // By the id the import recorded, since typedef shortening may have renamed it; else by name.
-        fun structOf(ns: GhidraClass): DataType? = structIds[ns.id]?.let(program.dataTypeManager::getDataType)
-            ?: ns.getPathList(true).toList().let { path ->
-                val scope = path.dropLast(1)
-                val category = if (scope.isEmpty()) CategoryPath.ROOT else CategoryPath(CategoryPath.ROOT, scope)
-                program.dataTypeManager.getDataType(category, path.last()) as? Structure
-            }
+        fun structOf(ns: GhidraClass): Structure? =
+            VariableUtilities.findExistingClassStruct(ns, program.dataTypeManager)
 
         fun membersOf(ns: Namespace): List<Member> {
             val members = symtab.getSymbols(ns).mapNotNull { sym ->

@@ -158,6 +158,7 @@ fun <T> DataTypeManager.runTransaction(description: String = "Kotlin Lambda Tran
 val DataType.nameWithoutConflict: String get() = DataTypeUtilities.getNameWithoutConflict(this, false)
 fun DataType.isConflict() = nameWithoutConflict != name
 fun DataTypeManager.conflictBase(dt: DataType): DataType? = getDataType(dt.categoryPath, dt.nameWithoutConflict)
+fun CategoryPath.at(name: String) = DataTypePath(this, name)
 
 val CodeUnit.range get() = minAddress..maxAddress
 
