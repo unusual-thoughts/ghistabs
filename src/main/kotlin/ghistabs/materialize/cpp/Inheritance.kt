@@ -53,7 +53,8 @@ fun TypeGraph.isPolymorphic(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) =
  * Every virtual base in [typeDecl]'s graph, not only the directly-declared ones — a vtable carries one
  * vbase offset per *distinct* virtual base however deep it was inherited. `std::iostream` is the case
  * that forces it: `_ZTISd` declares `istream` and `ostream`, neither virtual, and `__ZTVSd` still has a
- * vbase offset, for the `basic_ios` both of them inherit virtually.
+ * vbase offset, for the `basic_ios` both of them inherit virtually. One offset, though it is two edges,
+ * so edges count by the class they resolve to.
  *
  * Not folded into [Virtuals], which walks the same edges: that one wants each struct once, bases-first,
  * to collect methods, while this wants every *edge*, because a virtual edge to a class already reached
@@ -70,7 +71,7 @@ fun TypeGraph.virtualBases(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) = buildLi
         }
     }
     walk(typeDecl)
-}
+}.distinctBy { resolveAgg(it.type) ?: it.type }
 
 /**
  * How deep [typeDecl] sits in its inheritance graph, so a caller can process bases before the
