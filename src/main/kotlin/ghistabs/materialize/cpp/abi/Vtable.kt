@@ -59,12 +59,15 @@ fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataTyp
 }
 
 /**
- * A vtable record, located: where it starts, the [header] laid there, and the [addressPoint] its function
- * array starts at. An Itanium record's header is a [vtableHeaderLayout], read back through it ([readHeader]).
- * A gcc 2.x record has none: its reserved entry belongs to the vftable struct, and its `{vfptr}` holds
- * the record start rather than the address point. Built by [vtableRecord].
+ * A vtable record, located: where it starts, the [header] laid there, and the [abi] that laid it out. An
+ * Itanium record's header is a [vtableHeaderLayout], read back through it ([readHeader]), and its function
+ * array starts right after it. A gcc 2.x record has none: its reserved entry belongs to the vftable struct,
+ * and its `{vfptr}` holds the record start rather than the address point. Built by [vtableRecord].
  */
-data class VtableRecord(val address: Address, val header: StructureDataType?, val addressPoint: Address) {
+data class VtableRecord(val address: Address, val header: StructureDataType?, val abi: CxxAbi) {
+    /** Where the function array starts: past the header, or past gcc 2.x's reserved entry. */
+    val addressPoint: Address get() = address.add(header?.length?.toLong() ?: abi.headerBytes(address.pointerSize))
+
     /** The vbase/vcall-offset words in front of `offset_to_top`. */
     val prefixWords get() = (header?.field(VTABLE_OFFSETS)?.dataType as? ArrayDataType)?.numElements ?: 0
 
@@ -84,11 +87,11 @@ fun Program.readHeader(record: VtableRecord): Data? = record.header?.let { readA
 fun Program.rttiOf(record: VtableRecord): Address? = readHeader(record)?.valueOf<Address>(Itanium.RTTI)
 
 /** The Itanium record at [start] whose rtti word sits at [rttiSlot], or the canonical 2-word one if null. */
-private fun Program.recordAt(start: Address, rttiSlot: Address?): VtableRecord {
+private fun Program.recordAt(start: Address, rttiSlot: Address?, abi: CxxAbi): VtableRecord {
     val ptr = defaultPointerSize.toLong()
     val prefixWords = rttiSlot?.let { (it.subtract(start) / ptr - 1).toInt() } ?: 0
     val header = vtableHeaderLayout(dataTypeManager, prefixWords)
-    return VtableRecord(start, header, start.add(header.length.toLong()))
+    return VtableRecord(start, header, abi)
 }
 
 /**
@@ -134,7 +137,7 @@ private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
  * entry.
  */
 fun Program.vtableRecord(ztv: Address, abi: CxxAbi = Itanium): VtableRecord {
-    if (!abi.hasRttiHeader) return VtableRecord(ztv, null, ztv.add(abi.headerBytes(defaultPointerSize)))
+    if (!abi.hasRttiHeader) return VtableRecord(ztv, null, abi)
     val ptr = defaultPointerSize.toLong()
     fun holdsTypeinfo(slot: Address) =
         readPointer(slot)?.let { pointee -> symbolTable.getSymbols(pointee).any { it.isTypeinfo } } == true
@@ -142,7 +145,7 @@ fun Program.vtableRecord(ztv: Address, abi: CxxAbi = Itanium): VtableRecord {
         .take(MAX_VTABLE_PREFIX_WORDS)
         .takeWhile { holdsTypeinfo(it) || codeTargetAt(it) == null }
         .firstOrNull(::holdsTypeinfo)
-    return recordAt(ztv, rttiSlot)
+    return recordAt(ztv, rttiSlot, abi)
 }
 
 /** A record of a `_ZTV` group: where its fixed words sit, and the function pointers it holds. */
@@ -184,19 +187,19 @@ private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? {
         // inside the primary's function array.
         .firstOrNull { it > start && readPointer(it) == rtti }
         ?: return null
-    val record = recordAt(start, rttiSlot)
-    return SubVtable(record, vtableSlotTargets(record.addressPoint))
+    val record = recordAt(start, rttiSlot, Itanium)
+    return SubVtable(record, vtableSlotTargets(record))
 }
 
 /**
- * Addresses the function-pointer array at [addressPoint] holds, in slot order. Nothing records its
+ * Addresses the function-pointer array at [record]'s address point holds, in slot order. Nothing records its
  * length, so it ends where the entries stop pointing into executable memory — at the next record's
- * `offset_to_top` (0) or rtti pointer (into .data). Walks by [abi]'s entry stride and reads `pfn` at
+ * `offset_to_top` (0) or rtti pointer (into .data). Walks by the record's ABI's entry stride and reads `pfn` at
  * its offset within the entry, which is what separates a gcc 2.x table without thunks from one with.
  */
-fun Program.vtableSlotTargets(addressPoint: Address, abi: CxxAbi = Itanium): List<Address> =
-    generateSequence(addressPoint) { it.add(abi.stride(defaultPointerSize)) }
-        .map { codeTargetAt(it.add(abi.pfnOffset(defaultPointerSize))) }
+fun Program.vtableSlotTargets(record: VtableRecord): List<Address> =
+    generateSequence(record.addressPoint) { it.add(record.abi.stride(defaultPointerSize)) }
+        .map { codeTargetAt(it.add(record.abi.pfnOffset(defaultPointerSize))) }
         .takeWhile { it != null }
         .filterNotNull()
         .toList()
