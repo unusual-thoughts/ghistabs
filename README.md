@@ -187,6 +187,9 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   namespace with the `vftable` label Ghidra's RTTI scripts expect, so virtual calls resolve to
   named slots even with no stabs. On a binary with stabs the importer runs this sweep as soon
   as its class pass has laid the classes the stabs describe, and the sweep leaves those alone.
+  Ghidra's `RecoverClassesFromRTTIScript` skips any vtable that already has a struct under
+  `/ClassDataTypes`, so it recovers nothing for these classes and retypes their methods' `this` to an
+  empty placeholder: run it on a program analysed with this analyzer off and no stabs import.
 
 The Gap Disassembler and Filler Byte Condenser run before the importer, mostly so its data-coverage report doesn't flag
 compiler scaffolding as missing.
