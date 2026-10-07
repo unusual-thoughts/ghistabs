@@ -85,7 +85,8 @@ class VirtualInheritanceIntegrationTest : FeatureFixtureTest() {
         val vfptr = diamond.definedComponents.firstOrNull { it.fieldName == ClassUtils.VFPTR }
             .mustBeA<DataTypeComponent>("Diamond should own a {vfptr}")
         vfptr.offset mustBe if (gcc2) 24 else 0
-        (vfptr.dataType as? Pointer)?.dataType?.name mustBe "Diamond_vftable"
+        // `Diamond_vftable`, or `Diamond_vftable_for_<Base>` where it has more than one table.
+        (vfptr.dataType as? Pointer)?.dataType?.name?.startsWith("Diamond_vftable").mustBe(true)
         if (gcc2) {
             val left = diamond.getComponentAt(0).dataType.mustBeA<Structure>("Diamond +0 should be Left")
             left.definedComponents.any { it.fieldName.orEmpty().startsWith("_vb$") }

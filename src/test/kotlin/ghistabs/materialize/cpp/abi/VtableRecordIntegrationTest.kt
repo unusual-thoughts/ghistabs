@@ -48,8 +48,9 @@ class VtableRecordIntegrationTest : FeatureFixtureTest() {
     /**
      * `Diamond : Left, Right, Named` has two secondaries under Itanium: `Right`'s at +8, which has no
      * virtuals and so no slots, then `Named`'s at +16 with its destructor thunks. The walk has to step
-     * over the first to reach the second: one `internal_vftable` is laid in Diamond, and the record in
-     * front of it says `offset_to_top` -16.
+     * over the first to reach the second: one secondary is laid in Diamond, and the record in front of
+     * it says `offset_to_top` -16. With the primary that makes two tables, so Ghidra's naming applies:
+     * each is named for the base whose subobject it serves, `Left` at +0 and `Named` at +16.
      */
     @ParameterizedTest
     @MethodSource("itaniumHellos")
@@ -61,14 +62,45 @@ class VtableRecordIntegrationTest : FeatureFixtureTest() {
         }
         assumeTrue(ztv != null, "$fixture has no _ZTV7Diamond")
         val laid = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == ClassNaming.vftableLabel(true) && it.parentNamespace.name == "Diamond" }
-            .map { it.address }.distinct().toList()
+            .filter { ClassNaming.isClassVftableLabel(it.name) && it.parentNamespace.name == "Diamond" }
+            .associate { it.name to it.address }
+        laid.keys.sorted().mustBe(listOf("vftable_for_Left", "vftable_for_Named"))
+        program.listing.getDataAt(laid.getValue("vftable_for_Left"))?.dataType?.name mustBe "Diamond_vftable_for_Left"
+        program.listing.getDataAt(laid.getValue("vftable_for_Named"))?.dataType?.name mustBe
+            "Diamond_vftable_for_Named"
 
-        val at = laid.singleOrNull().mustBeA<Address>("expected Named's secondary alone laid in Diamond, got $laid")
+        val at = laid.getValue("vftable_for_Named")
         val header = program.listing.getDataContaining(at.subtract(program.defaultPointerSize.toLong()))
         header?.dataType?.name mustBe "VtableHeaderStructure"
         header?.getScalar(Itanium.OFFSET_TO_TOP)?.signedValue mustBe -16L
         header?.get(Itanium.OFFSET_TO_TOP)?.defaultValueRepresentation mustBe "-16"
+    }
+
+    /**
+     * `Right` virtually inherits `Base`, so building a `Diamond` runs Right's constructor under a
+     * construction vtable, `_ZTC7Diamond8_5Right`: Base's vbase offset as it stands from Right's subobject,
+     * `offset_to_top` 0, and Right's own typeinfo. The sweep lays its header in `Right-in-Diamond`, under
+     * Ghidra's `construction-vtable` label.
+     */
+    @ParameterizedTest
+    @MethodSource("itaniumHellos")
+    fun `a construction vtable's header is laid`(fixture: String) {
+        load(fixture)
+        val ztc = listOf("_ZTC7Diamond8_5Right", "__ZTC7Diamond8_5Right").firstNotNullOfOrNull {
+            program.symbolTable.getSymbols(it).firstOrNull()
+        }
+        assumeTrue(ztc != null, "$fixture has no _ZTC7Diamond8_5Right")
+        val header = program.listing.getDataAt(ztc!!.address)
+        header?.dataType?.name mustBe "VtableHeaderStructure1"
+        header?.getScalar(Itanium.OFFSET_TO_TOP)?.signedValue mustBe 0L
+        header?.get(Itanium.RTTI)?.value
+            ?.let { program.symbolTable.getSymbols(it as Address) }
+            .orEmpty().any { Itanium.looksLikeZti(it.name) && "5Right" in it.name }
+            .mustBeTrue("rtti word should point at Right's typeinfo")
+        program.symbolTable.getSymbols(ztc.address).any {
+            it.name == ClassNaming.vtableLabel(internal = false, construction = true) &&
+                it.parentNamespace.name == "Right-in-Diamond"
+        }.mustBeTrue("expected a construction-vtable label in Right-in-Diamond")
     }
 
     /**

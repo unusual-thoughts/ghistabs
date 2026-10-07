@@ -34,7 +34,9 @@ class VxTableTagIntegrationTest : FeatureFixtureTest() {
     @MethodSource("hellos")
     fun `a vftable's tag is where the stab puts the vptr that points at it`(fixture: String) {
         load(fixture)
-        val tables = filledVftables().associateBy { it.name.removeSuffix("_vftable") }
+        val tables = filledVftables().filter {
+            it.name.endsWith("_vftable")
+        }.associateBy { it.name.removeSuffix("_vftable") }
         // Circle inherits Shape's vptr, at the same offset since Shape is its base at 0.
         for ((cls, declaring) in listOf("Shape" to "Shape", "Circle" to "Shape", "Named" to "Named")) {
             val vft = tables[cls] ?: continue
@@ -46,20 +48,19 @@ class VxTableTagIntegrationTest : FeatureFixtureTest() {
     /**
      * `Diamond : Left, Right, Named` has two secondaries under Itanium: `Right`'s at +8, which has no
      * virtuals and so no slots, then `Named`'s at +16 with its destructor thunks. The walk has to step
-     * over the first to reach the second, and the table laid there is tagged at +16, its own vptr.
+     * over the first to reach the second, and the table laid there, `Diamond_vftable_for_Named`, is tagged
+     * at +16, its own vptr.
      */
     @ParameterizedTest
     @MethodSource("hellos")
     fun `a secondary behind a slotless one is laid, tagged at its own vptr`(fixture: String) {
         load(fixture)
         assumeTrue("gcc2" !in fixture, "gcc 2.x gives each secondary its own symbol; nothing to walk")
-        assumeTrue(filledVftables().any { it.name == "Diamond_vftable" }, "$fixture laid no Diamond vftable")
+        assumeTrue(filledVftables().any { it.name.startsWith("Diamond_vftable") }, "$fixture laid no Diamond vftable")
 
-        val secondaries = program.dataTypeManager.allDataTypes.asSequence()
-            .filterIsInstance<Structure>()
-            .filter { it.name.startsWith("Diamond_vftable_internal_") && it.numComponents > 0 }
+        val secondaries = filledVftables()
+            .filter { it.name == "Diamond_vftable_for_Named" }
             .map { ClassUtils.validateVtableDescriptionOffsetTag(it.description) }
-            .toList()
         secondaries mustBe listOf(16L)
     }
 
@@ -79,12 +80,12 @@ class VxTableTagIntegrationTest : FeatureFixtureTest() {
                 .mapNotNull { t -> (artifacts.registry.dataTypeFor(t.id) as? Structure)?.let { t.name to it } }
                 .toMap()
             val tagged = program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
-                .filter { it.name.endsWith("_vftable_internal_0") }
+                .filter { "_vftable_for_" in it.name }
                 .mapNotNull { vft -> ClassUtils.validateVtableDescriptionOffsetTag(vft.description)?.let { vft to it } }
                 .toList()
             tagged.mustNotBeEmpty("expected tagged gcc 2.x secondaries in $fixture")
             val misplaced = tagged.filterNot { (vft, at) ->
-                classes[vft.name.removeSuffix("_vftable_internal_0")]?.vfptrAt(at.toInt()) == true
+                classes[vft.name.substringBefore("_vftable_for_")]?.vfptrAt(at.toInt()) == true
             }.map { (vft, at) -> "${vft.name} tagged +$at" }
             misplaced.mustBeEmpty("tags that do not land on a {vfptr} in their class")
         }
@@ -99,7 +100,7 @@ class VxTableTagIntegrationTest : FeatureFixtureTest() {
 
     private fun filledVftables() = program.dataTypeManager.allDataTypes.asSequence()
         .filterIsInstance<Structure>()
-        .filter { "ClassDataTypes" in it.categoryPath.path && it.name.endsWith("_vftable") && it.numComponents > 0 }
+        .filter { "ClassDataTypes" in it.categoryPath.path && "_vftable" in it.name && it.numComponents > 0 }
         .toList()
 
     private fun body(name: String) = artifacts.harvest.types.values

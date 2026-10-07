@@ -59,8 +59,8 @@
             "max": 4
         },
         "data-no-coverage": {
-            "min": 85,
-            "max": 85
+            "min": 63,
+            "max": 63
         },
         "demangle-applied": {
             "min": 3752,
@@ -654,6 +654,10 @@
             "min": 61,
             "max": 61
         },
+        "vtable-construction": {
+            "min": 7,
+            "max": 7
+        },
         "vtable-reconstructed": {
             "min": 11,
             "max": 11,
@@ -672,8 +676,8 @@
             ]
         },
         "vtable-secondary": {
-            "min": 8,
-            "max": 8
+            "min": 16,
+            "max": 16
         },
         "vtable-skipped": {
             "min": 11,

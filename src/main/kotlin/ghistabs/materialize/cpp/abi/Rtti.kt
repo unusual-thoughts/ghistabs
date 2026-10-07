@@ -126,7 +126,11 @@ class Rtti(private val dtm: DataTypeManager) {
      * function (`__ti4Base` is `B` in hello_elf_gcc295's symbols), so only the stabs give its bases.
      */
     class Reader(private val program: Program) {
-        data class Base(val className: String, val isVirtual: Boolean, val access: Access)
+        /**
+         * A direct base. [offset] is `__offset_flags`'s offset: where the base subobject sits in the class,
+         * or for a virtual one where the vtable holds that, relative to the address point (negative).
+         */
+        data class Base(val className: String, val isVirtual: Boolean, val access: Access, val offset: Long = 0)
 
         private val ptr = program.defaultPointerSize
         private val symtab = program.symbolTable
@@ -166,6 +170,7 @@ class Rtti(private val dtm: DataTypeManager) {
                     entry[BASE_TYPE_IN_ENTRY]?.let { classAt(it.address) } ?: return null,
                     isVirtual = entry.flag(IS_VIRTUAL),
                     access = if (entry.flag(IS_PUBLIC)) Access.PUBLIC else Access.PRIVATE,
+                    offset = entry.getScalar(BASE_OFFSET)?.signedValue ?: return null,
                 )
             }
         }

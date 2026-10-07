@@ -23,8 +23,10 @@ import java.io.File
  * gcc 2.x gives a secondary vtable its own symbol, `_vt<m><class><m><base>`, instead of packing it
  * behind the primary. libg++'s streams reach `ios` virtually, and a class whose polymorphic bases are
  * all virtual carries only these: `_vt$9TeeStream$3ios` and no `_vt$9TeeStream`, `_vt.8iostream.3ios`
- * and no `_vt.8iostream`. That table is laid anyway, filled from its slots and labelled
- * `internal_vftable` in the class's namespace at the record start its vptr holds.
+ * and no `_vt.8iostream`. That table is laid anyway, filled from its slots and labelled in the class's
+ * namespace at the record start its vptr holds. TeeStream's stab virtuals fill a `TeeStream_vftable` of
+ * its own, so its table is one of two and named for its base, `vftable_for_ios`; libg++'s `iostream` has
+ * no stabs, so its table is its only one, `internal_vftable` in `iostream_vftable`.
  */
 @Tag("integration")
 class Gcc2SecondaryVtableIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -38,13 +40,15 @@ class Gcc2SecondaryVtableIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
     @ParameterizedTest
     @CsvSource(
-        "iostream_test_aout_gcc263.o, TeeStream, _vt\$9TeeStream\$3ios",
-        "xmltest_elf_gcc272, iostream, _vt.8iostream.3ios",
+        "iostream_test_aout_gcc263.o, TeeStream, _vt\$9TeeStream\$3ios, vftable_for_ios, TeeStream_vftable_for_ios",
+        "xmltest_elf_gcc272, iostream, _vt.8iostream.3ios, internal_vftable, iostream_vftable",
     )
     fun `a class with only a virtual polymorphic base gets its secondary laid`(
         fixture: String,
         cls: String,
         symbol: String,
+        label: String,
+        struct: String,
     ) {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loaded = loadProgram(File("src/test/resources/binaries/$fixture"))
@@ -52,11 +56,11 @@ class Gcc2SecondaryVtableIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val st = program.symbolTable
 
         val at = st.getSymbols(symbol).single().address
-        st.getSymbols(at).filter { it.name == ClassNaming.vftableLabel(true) }.map { it.parentNamespace.name }
-            .mustBe(listOf(cls), "$symbol should carry an internal_vftable label in $cls")
+        st.getSymbols(at).filter { it.name == label }.map { it.parentNamespace.name }
+            .mustBe(listOf(cls), "$symbol should carry a $label label in $cls")
         program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
-            .any { it.name == "${cls}_vftable_internal_0" && it.numComponents > 0 }
-            .mustBeTrue("${cls}_vftable_internal_0 should be filled from the record's slots")
+            .any { it.name == struct && it.numComponents > 0 }
+            .mustBeTrue("$struct should be filled from the record's slots")
     }
 
     /** The names are [ghistabs.Demangler]'s, so this needs Ghidra's native demangler: not a unit test. */

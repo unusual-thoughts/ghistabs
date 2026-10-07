@@ -154,12 +154,21 @@ data class SubVtable(val record: VtableRecord, val targets: List<Address>) {
  * The secondary sub-vtables following the primary record, whose slots end at [afterPrimary] — one per
  * virtual base, each its own `[vcall offsets…] offset_to_top rtti [thunks]` (ABI §2.5.2), none bearing
  * a symbol. Nothing delimits the group, so the walk is bounded by the one invariant that does: every
- * record in it describes the same complete object, hence carries the same [rtti] pointer.
+ * record in it describes the same complete object, hence carries the same [rtti] pointer. That alone
+ * runs on into the next group when it shares the rtti: a construction vtable's names the base, and
+ * CryptoPP lays `GeneratableCryptoMaterial`'s `-in-` groups for three classes back to back. So the walk
+ * also stops at a record whose header holds the next group's own symbol.
  */
 fun Program.secondaryVtables(afterPrimary: Address, rtti: Address): List<SubVtable> =
     generateSequence(subVtableAt(afterPrimary, rtti)) {
         subVtableAt(it.endOfSlots(defaultPointerSize), rtti)
-    }.toList()
+    }.takeWhile { sub -> !opensGroup(sub.record) }.toList()
+
+/** Whether a vtable group's own symbol sits on any word of [record]'s header: the walk is past its group. */
+private fun Program.opensGroup(record: VtableRecord): Boolean =
+    generateSequence(record.address) { it.add(defaultPointerSize.toLong()) }
+        .takeWhile { it < record.addressPoint }
+        .any { at -> symbolTable.getSymbols(at).any { startsVtableGroup(it.name) } }
 
 /**
  * The sub-vtable beginning at [start], or null if what is there does not belong to [rtti]'s group. One
@@ -208,9 +217,11 @@ private fun Program.rttiComment(record: VtableRecord, className: String): String
 }
 
 /**
- * Lay [record], and return the address its `{vfptr}` holds — where the [vftable] struct and the
- * `vftable` label go, so a constructor's `this->vfptr = &<Class>::vftable` resolves to a symbol and a
- * virtual call resolves to one of its fields.
+ * Lay [record], and return the address its `{vfptr}` holds — where the [vftable] struct, if any, and its
+ * label go, so a constructor's `this->vfptr = &<Class>::vftable` resolves to a symbol and a
+ * virtual call resolves to one of its fields. The labels are Ghidra's ([ClassNaming]): `internal_` on a
+ * secondary, `construction-` in a construction group (`_ZTC`), and the vftable's `vftable_for_<[base]>`
+ * once its class has several ([ClassNaming.vftableLabel]); the header's label never takes a base.
  *
  * Itanium points at the address point, and the record's header is laid in front of it as its
  * [vtableHeaderLayout], resolved through [registry]; the rtti pointee stays an untyped `void*` until
@@ -222,24 +233,27 @@ private fun Program.rttiComment(record: VtableRecord, className: String): String
 fun Program.layVtable(
     registry: DtmRegistry,
     record: VtableRecord,
-    vftable: Structure,
+    vftable: Structure?,
     className: String,
     ns: Namespace,
     virtualBases: List<String> = emptyList(),
     internal: Boolean = false,
     source: SourceType = SourceType.IMPORTED,
+    construction: Boolean = false,
+    base: String? = null,
 ): Address {
+    val vftableLabel = ClassNaming.vftableLabel(internal, construction, base)
     // gcc 2.x labels the record start, because that is what a `{vfptr}` holds. The struct is *not*
     // stamped over the bytes: gcc declares the record itself (`__vtbl_ptr_type __vt_9TiXmlNode[20]`),
     // which is authoritative on length in a way nothing here is, and a virtual call resolves off the
     // vfptr's pointee type rather than off whatever data is applied at the target.
     val header = record.header ?: run {
         listing.setComment(record.address, CommentType.EOL, "gcc 2.x vtable: reserved entry, then the slots")
-        labelVtable(record.address, ClassNaming.vftableLabel(internal), ns, source)
+        labelVtable(record.address, vftableLabel, ns, source)
         return record.address
     }
 
-    labelVtable(record.address, ClassNaming.vtableLabel(internal), ns, source)
+    labelVtable(record.address, ClassNaming.vtableLabel(internal, construction), ns, source)
     forceCreateData(record.address, registry.resolveLayout(header))
     val ptr = defaultPointerSize.toLong()
     for (i in 0 until record.prefixWords) {
@@ -250,8 +264,8 @@ fun Program.layVtable(
         listing.setComment(it, CommentType.EOL, "${Itanium.OFFSET_TO_TOP} (to top of complete object)")
     }
     record.fieldAddress(Itanium.RTTI)?.let { listing.setComment(it, CommentType.EOL, rttiComment(record, className)) }
-    forceCreateData(record.addressPoint, vftable)
-    labelVtable(record.addressPoint, ClassNaming.vftableLabel(internal), ns, source)
+    vftable?.let { forceCreateData(record.addressPoint, it) }
+    labelVtable(record.addressPoint, vftableLabel, ns, source)
     return record.addressPoint
 }
 
@@ -265,15 +279,71 @@ private fun Program.labelVtable(at: Address, label: String, ns: Namespace, sourc
 }
 
 /**
+ * Rename [ns]'s [from] label at [at] to [to], as `RTTIGccClassRecoverer` renames a class's tables once it
+ * has several. A [to] already there (an earlier import's) takes the place of [from] instead.
+ */
+fun Program.renameVtableLabel(at: Address, from: String, to: String, ns: Namespace) {
+    if (from == to) return
+    val here = symbolTable.getSymbols(at).filter { it.parentNamespace == ns }
+    val old = here.firstOrNull { it.name == from } ?: return
+    val existing = here.firstOrNull { it.name == to }
+    if (existing != null) {
+        if (old.source == SourceType.IMPORTED) existing.source = SourceType.IMPORTED
+        old.delete()
+    } else {
+        old.setName(to, old.source)
+    }
+}
+
+/**
+ * Whether [label], one of a class's vftable labels ([ClassNaming.isClassVftableLabel]), marks its primary
+ * table. Once a class has several they are all `vftable_for_<Base>`, so that is read off the record: an
+ * Itanium primary's header is labelled `vtable` rather than `internal_vtable`, and a gcc 2.x one sits at
+ * the class's own `_vt` symbol rather than at a `_vt<class><base>` one.
+ */
+fun Program.isPrimaryVftable(label: Symbol): Boolean = when (label.name) {
+    ClassNaming.VFTABLE -> true
+
+    ClassNaming.vftableLabel(internal = true) -> false
+
+    else -> {
+        val header = listing.getDataBefore(label.address)?.takeIf { it.maxAddress.next() == label.address }
+        val atHeader = header?.let { symbolTable.getSymbols(it.address) }.orEmpty()
+        atHeader.any { it.name == ClassNaming.VTABLE && it.parentNamespace == label.parentNamespace } ||
+            symbolTable.getSymbols(label.address).any {
+                CxxAbi.ofVtableSymbol(it.name)?.isPrimaryVtable(it.name) == true
+            }
+    }
+}
+
+/**
+ * The struct of the class table [label] marks: laid there under Itanium, and found by name under gcc 2.x,
+ * which lays none over its record. A `vftable_for_<Base>` label is struct `<leaf>_vftable_for_<Base>`,
+ * and a primary still labelled `vftable` is `<leaf>_vftable` alone or `<leaf>_vftable0` among several.
+ */
+fun Program.vftableStructAt(label: Symbol): Structure? {
+    (listing.getDataAt(label.address)?.dataType as? Structure)?.takeIf { "_${ClassNaming.VFTABLE}" in it.name }
+        ?.let { return it }
+    val suffixes = when {
+        label.name.startsWith(ClassNaming.vftableForLabel("")) -> listOf("_${label.name}")
+        label.name == ClassNaming.VFTABLE -> listOf("_${ClassNaming.VFTABLE}", "_${ClassNaming.VFTABLE}0")
+        else -> return null
+    }
+    val types = dataTypeManager.getCategory(ClassNaming.vftableCategory(label.parentNamespace))?.dataTypes.orEmpty()
+    return suffixes.firstNotNullOfOrNull { suffix ->
+        types.filterIsInstance<Structure>().firstOrNull { it.name.endsWith(suffix) }
+    }
+}
+
+/**
  * Whether a class that describes [record] already laid it: [layVtable] with
- * [SourceType.IMPORTED] left a `vftable` or `internal_vftable` label where its `{vfptr}` points. This
+ * [SourceType.IMPORTED] left one of its own vftable labels ([ClassNaming.isClassVftableLabel]) where
+ * its `{vfptr}` points. This
  * is how a sweep tells what is left without the class pass's own bookkeeping. A swept table is
  * labelled [SourceType.ANALYSIS], so a later sweep lays it again rather than skipping it.
  */
 fun Program.isVtableClaimed(record: VtableRecord): Boolean = symbolTable.getSymbols(record.vptrTarget)
-    .any { it.source == SourceType.IMPORTED && it.name in claimLabels }
-
-private val claimLabels = listOf(true, false).map { ClassNaming.vftableLabel(it) }
+    .any { it.source == SourceType.IMPORTED && ClassNaming.isClassVftableLabel(it.name) }
 
 /** Where a class's vtable record sits, and which ABI lays it out past the header. */
 data class ResolvedVtable(val className: String, val address: Address, val abi: CxxAbi) {

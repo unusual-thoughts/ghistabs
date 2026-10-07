@@ -11,6 +11,7 @@ import ghidra.program.model.data.Enum
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
+import ghidra.program.model.symbol.Symbol
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
@@ -36,6 +37,8 @@ import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.cpp.abi.Gcc2
 import ghistabs.materialize.cpp.abi.Gcc2Abi
 import ghistabs.materialize.cpp.abi.Itanium
+import ghistabs.materialize.cpp.abi.isPrimaryVftable
+import ghistabs.materialize.cpp.abi.vftableStructAt
 import ghistabs.parse.*
 import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -391,7 +394,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             // untyped element, which is the whole reason for laying one.
             .filterNot { (_, addr, _) ->
                 val addressPoint = addr.add(Itanium.vtablePrefixBytes(program.defaultPointerSize))
-                program.listing.getDataAt(addressPoint)?.dataType?.name?.endsWith("_vftable") == true
+                program.listing.getDataAt(addressPoint)?.dataType?.name?.contains("_vftable") == true
             }
             .map { (n, a, _) -> "$n @ $a is ${program.listing.getDataAt(a)?.dataType?.name}" }
         val wrong = applied.filter { (_, arr, elements) -> arr.numElements.toLong() != elements }
@@ -714,7 +717,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         fun eol(a: Address) = program.listing.getComment(CommentType.EOL, a)
 
         val addressPoints = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == ClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
+            .filter { it.isPrimaryVftableLabel() }
             .map { it.address }.distinct().toList()
         assumeTrue(addressPoints.isNotEmpty(), "Skipping: no vftable laid in this fixture")
 
@@ -1096,7 +1099,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
         val raw = declaring.filterNot { (_, dt, off) ->
             dt.getComponentAt(off)?.takeIf { it.offset == off && it.fieldName == ClassUtils.VFPTR }
-                ?.let { (it.dataType as? Pointer)?.dataType?.name?.endsWith("_vftable") } == true
+                ?.let { (it.dataType as? Pointer)?.dataType?.name?.contains("_vftable") } == true
         }.map { (_, dt, off) -> "${dt.pathName} +$off: ${dt.getComponentAt(off)?.run { "$fieldName $dataType" }}" }
         raw.sorted().take(10).mustBeEmpty(
             "${raw.size} of ${declaring.size} classes declaring their own vptr have no {vfptr} of their own there",
@@ -1125,17 +1128,17 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // (`ios` at -12 in TeeStream) where the primary's are 0, so the word before slot 0 need not
         // look like a header word at all.
         val labels = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == ClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
-            .map { it.parentSymbol.name to it.address }.distinct().toList()
+            .filter { it.isPrimaryVftableLabel() }
+            .distinctBy { it.address }.toList()
         assumeTrue(labels.isNotEmpty(), "Skipping: no vftable labels in this fixture")
 
         // Slot 0's offset within the struct, which is 0 for Itanium (the label is the address point)
         // and the header width for gcc 2.x (the label is the record start).
         val ptr = program.defaultPointerSize.toLong()
-        val bad = labels.mapNotNull { (ns, addr) ->
-            val vft = program.dataTypeManager.allDataTypes.asSequence()
-                .filterIsInstance<Structure>()
-                .firstOrNull { it.name == "${ns}_vftable" && it.numComponents > 0 }
+        val bad = labels.mapNotNull { label ->
+            val ns = label.parentSymbol.name
+            val addr = label.address
+            val vft = program.vftableStructAt(label)?.takeIf { it.numComponents > 0 }
                 // libstdc++ links without stabs, so its classes carry a label and no struct. There is
                 // no declared slot 0 to measure a basing against, which is this test's whole
                 // mechanism; whether every label gets a struct is a separate question.
@@ -1178,7 +1181,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             ?.let { target -> labelsAt(target).any(Itanium::looksLikeZti) } == true
 
         val primaries = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == ClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
+            .filter { it.isPrimaryVftableLabel() }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(primaries.isNotEmpty(), "Skipping: no vftable laid in this fixture")
 
@@ -1189,10 +1192,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 .takeWhile { nextObject == null || it < nextObject }
                 .take(MAX_GROUP_WORDS)
                 .filter { isRttiHeader(it) }
-                .filterNot { ClassNaming.vftableLabel(true) in labelsAt(it.add(ptr)) }
-                .map {
-                    "$cls@$point: sub-vtable rtti at $it, no ${ClassNaming.vftableLabel(true)} at ${it.add(ptr)}"
-                }
+                .filterNot { labelsAt(it.add(ptr)).any(ClassNaming::isClassVftableLabel) }
+                .map { "$cls@$point: sub-vtable rtti at $it, no vftable label at ${it.add(ptr)}" }
         }
         unlabelled.take(10).mustBeEmpty("${unlabelled.size} sub-vtables inside a _ZTV group are unannotated")
     }
@@ -1374,7 +1375,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun classesInheritingAVtableAreStillAnnotated() {
-        val vftables = filledVftables().associateBy { it.name.removeSuffix("_vftable") }
+        val vftables = primaryVftables()
         val inheriting = artifacts.harvest.types.values.mapNotNull { it.asAgg() }
             .filter { (_, body) -> with(artifacts.types) { hasPolymorphicBaseSubobject(body) } }
             // Only classes that reached the DTM at all — a class with no type is [everyDeclaredSlot…]'s.
@@ -1432,7 +1433,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val backEdges = vftables.count { vft ->
             program.dataTypeManager.allDataTypes.asSequence()
                 .filterIsInstance<Structure>()
-                .filter { it.name == vft.name.removeSuffix("_vftable") }
+                .filter { it.name == vft.name.substringBeforeLast("_vftable") }
                 .any { cls -> cls.components.any { (it.dataType as? Pointer)?.dataType === vft } }
         }
 
@@ -1567,7 +1568,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun laidVftablesMapBackToTheirClass() {
         val laid = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == ClassNaming.VFTABLE || it.name == ClassNaming.vftableLabel(true) }
+            .filter { ClassNaming.isClassVftableLabel(it.name) }
             .mapNotNull { sym ->
                 val vft = program.listing.getDataAt(sym.address)?.dataType as? Structure ?: return@mapNotNull null
                 (sym.parentNamespace to vft).takeIf { vft.name.contains("_vftable") }
@@ -1604,7 +1605,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun declaredVirtualsAllGetAVftableSlot() {
-        val vftables = filledVftables().associateBy { it.name.removeSuffix("_vftable") }
+        val vftables = primaryVftables()
         assumeTrue(vftables.isNotEmpty(), "Skipping: no populated vftable in this fixture")
         val bias = program.symbolTable.prevailingAbi()!!.reservedEntries(program.defaultPointerSize)
 
@@ -2157,9 +2158,25 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         return slots.count { (it.dataType as? Pointer)?.dataType is FunctionDefinition } to slots.size
     }
 
-    /** Every `<Class>_vftable` that got slots, one copy per name (the fullest). */
+    /**
+     * Each class's primary table that got slots, by the class its name spells: `<Class>_vftable`, or
+     * `<Class>_vftable_for_<Base>` / `<Class>_vftable0` once the class has several, found off its label.
+     */
+    private fun primaryVftables(): Map<String, Structure> {
+        val renamed = program.symbolTable.symbolIterator.iterator().asSequence()
+            .filter { it.isPrimaryVftableLabel() }
+            .mapNotNull { program.vftableStructAt(it) }
+        return (filledVftables().filter { it.name.endsWith("_vftable") } + renamed)
+            .filter { it.numComponents > 0 }
+            .associateBy { it.name.substringBeforeLast("_vftable") }
+    }
+
+    private fun Symbol.isPrimaryVftableLabel() = ClassNaming.isClassVftableLabel(name) &&
+        program.memory.getBlock(address) != null && program.isPrimaryVftable(this)
+
+    /** Every `<Class>_vftable…` that got slots, one copy per name (the fullest). */
     private fun filledVftables() = program.dataTypeManager.allDataTypes.asSequence()
-        .filterIsInstance<Structure>().filter { it.name.endsWith("_vftable") }
+        .filterIsInstance<Structure>().filter { it.name.contains("_vftable") }
         .groupBy { it.name }.values.map { copies -> copies.maxBy { it.numComponents } }
         .filter { it.numComponents > 0 }
 

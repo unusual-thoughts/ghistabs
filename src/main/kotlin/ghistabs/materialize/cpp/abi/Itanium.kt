@@ -197,6 +197,16 @@ object Itanium : CxxAbi {
 private val STRUCTOR_CODE = Regex("""CI[12]|C[1-4]|D[0124]""")
 
 // Cygwin's PE loader prepends one more `_`: `__ZTV…`.
+
+/** Whether [symbolName] names a group of vtable records: a `_ZTV`, a `_ZTC` or a VTT. */
+internal fun startsVtableGroup(symbolName: String) = symbolName.trimDoubleUnderscore().let { n ->
+    listOf(Itanium.VTABLE_PREFIX, Itanium.CONSTRUCTION_VTABLE_PREFIX, Itanium.VTABLE_TABLE_PREFIX).any(n::startsWith)
+}
+
+/** Whether [symbolName] names a construction vtable (`_ZTC`), Cygwin's extra underscore or not. */
+internal fun looksLikeZtc(symbolName: String) =
+    symbolName.trimDoubleUnderscore().startsWith(Itanium.CONSTRUCTION_VTABLE_PREFIX)
+
 private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
 
 /**

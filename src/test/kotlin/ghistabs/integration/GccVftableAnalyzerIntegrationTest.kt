@@ -132,7 +132,8 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
     /**
      * `ns::Bar`, a primary and one secondary: both tables go under `/ClassDataTypes/ns/Bar/`, which
      * `RecoveredClassHelper.getClassNamespace` turns back into the namespace that holds their labels.
-     * Under the leaf alone shift-D finds no `Bar` namespace and skips them.
+     * Under the leaf alone shift-D finds no `Bar` namespace and skips them. Its typeinfo is blank, so
+     * no base is known for either: numbered as Ghidra numbers them, labels left as they are.
      */
     @Test
     fun filesAScopedClassUnderItsNamespace() {
@@ -152,9 +153,9 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         val category = ClassNaming.vftableCategory(listOf("ns", "Bar"))
         category.path.mustBe("/ClassDataTypes/ns/Bar")
         val dtm = program.dataTypeManager
-        val primary = dtm.getDataType(category, "Bar_vftable") as? Structure
+        val primary = dtm.getDataType(category, "Bar_vftable0") as? Structure
         primary.mustNotBeNull("no ns::Bar vftable under $category")
-        val secondary = dtm.getDataType(category, "Bar_vftable_internal_0") as? Structure
+        val secondary = dtm.getDataType(category, "Bar_vftable1") as? Structure
         secondary.mustNotBeNull("no ns::Bar secondary under $category")
         // Its slot definitions keep a category of their own, or the thunk's would collide with `a`'s.
         val thunkSlot = secondary!!.definedComponents.mapNotNull { (it.dataType as? Pointer)?.dataType }
