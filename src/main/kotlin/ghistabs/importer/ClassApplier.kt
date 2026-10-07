@@ -390,7 +390,7 @@ class ClassApplier(
         }
 
         val record = vtable?.let { program.vtableRecord(it.address, abi) }
-        val targets = record?.let { program.vtableSlotTargets(it.addressPoint, abi) }.orEmpty()
+        val targets = record?.let { program.vtableSlotTargets(it) }.orEmpty()
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)
         // Read off the laid struct, which records where gcc 2.x put the vptr (after the fields). Not
@@ -419,7 +419,7 @@ class ClassApplier(
 
         val addressPoint = program.layVtable(registry, record, vftable, name, ns, virtualBases)
         debug("vtable-applied", "class=$name abi=$abi", address = addressPoint)
-        if (abi.hasRttiHeader) laySecondaryVtables(record, vftable, name, ns, abi)
+        if (abi.hasRttiHeader) laySecondaryVtables(record, vftable, name, ns)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or

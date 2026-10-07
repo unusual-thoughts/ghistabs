@@ -60,7 +60,7 @@ class Gcc2VtableSlotIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 "addressPoint should land right after the reserved header",
             )
 
-            val targets = program.vtableSlotTargets(located.addressPoint, abi)
+            val targets = program.vtableSlotTargets(located)
             targets.size.mustBe(2, "expected exactly the two real slots, header excluded")
 
             val firstFunc = program.functionManager.getFunctionAt(targets[0])
