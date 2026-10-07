@@ -405,7 +405,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         }
 
         val typedefs = typeDecls
-            .filter { it.body !is TypeDecl.Aggregate && it.body !is TypeDecl.Enum }
+            .filter { it.body !is TypeDecl.Aggregate && it.body !is TypeDecl.Enum && !it.namesItsTarget() }
             .mapNotNull { ast ->
                 ast.name?.let { Td(ast, it, ast.body.renderDecl(it)) }
             }
@@ -440,6 +440,21 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             }
         }
         return claims
+    }
+
+    /**
+     * C's `typedef struct {…} div_t;` gives the typedef a variant copy of the anonymous struct (gcc's
+     * `clone_underlying_type`), and dbxout spells the variant as a reference to it:
+     * `div_t:t(1,1)=(1,2)=s8quot:(0,1),0,32;rem:(0,1),32,32;;`. The harvest names `(1,2)` after the
+     * typedef, so its body already renders `typedef struct {…} div_t;`. A target with no line of its own
+     * (` :T(13,684)=ePowerActionNone:0,…;` under `POWER_ACTION:t(13,685)=(13,684)`) renders nowhere. A
+     * late name (gcc ≥ 10's `Vec:t(0,9)` after `v:(0,9)=(0,10)=s8…`, §85) is a typedef of its own.
+     */
+    private fun Type.namesItsTarget(): Boolean {
+        if (lateName) return false
+        val targetId = body.id ?: return false
+        val target = types.byId(targetId) ?: return false
+        return target.kind == TypeNameKind.TYPEDEF && target.name == name && target.line != null
     }
 
     /**
