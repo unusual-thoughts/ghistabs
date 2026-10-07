@@ -2,6 +2,7 @@ package ghistabs.importer
 
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.entrypoints.GccVftableAnalyzer
+import ghistabs.entrypoints.RttiLayoutAnalyzer
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
@@ -65,6 +66,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     },
                 )
             }.also {
+                // Typeinfos first, so the coverage report counts them in every analysis order: some
+                // `_ZTI` labels only exist once this import has applied its globals.
+                if (RttiLayoutAnalyzer.isEnabled(ctx.program)) {
+                    RttiLayoutAnalyzer.layTypeinfos(ctx.program, registry, ctx)
+                }
                 // The classes the stabs describe are laid; the analyzer's sweep takes the rest now, on
                 // this import's registry and diagnostics, ahead of the demangler stub replacement.
                 if (GccVftableAnalyzer.isEnabled(ctx.program)) {
