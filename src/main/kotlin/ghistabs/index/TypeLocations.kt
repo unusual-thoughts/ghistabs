@@ -3,8 +3,9 @@
 package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.DataTypePath
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.harvest.*
+import ghistabs.harvest.Type
 import ghistabs.parse.*
 import kotlinx.serialization.Serializable
 
@@ -293,7 +294,7 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
 }
 
 @Serializable(with = ToStringSerializer::class)
-data class TypeLocation(val category: CategoryPath, val name: String) {
+data class TypeLocation(val category: CategoryPath, val name: String) : DataTypePath(category, name) {
     constructor(path: String, name: String) : this(CategoryPath(path), name)
 
     override fun toString() = "$category/$name"

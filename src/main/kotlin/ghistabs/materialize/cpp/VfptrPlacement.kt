@@ -2,6 +2,7 @@ package ghistabs.materialize.cpp
 
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
+import ghistabs.at
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.GlobalTypeId
@@ -174,7 +175,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
     private fun baseFieldsRun(baseDt: Structure, from: Int, until: Int): Structure? {
         if (until <= from) return null
         val name = "${baseDt.name}_fields_${from}_$until"
-        return registry.getOrRegister<Structure>(baseDt.categoryPath, name) {
+        return registry.getOrRegister<Structure>(baseDt.categoryPath.at(name)) {
             StructureDataType(baseDt.categoryPath, name, until - from, dtm).apply {
                 description = "${baseDt.name} as a base subobject (+$from..$until): its fields " +
                     "without the vptr the deriving class now owns"
@@ -195,10 +196,10 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
  * at, where `RecoveredClassHelper` and shift-S round-trip expect it. [classPath] is the class's
  * namespace path, the class itself last. Empty until the class pass fills it.
  */
-internal fun DataTypeRegistry.vftableOf(classPath: List<String>): Structure {
-    val category = ClassNaming.vftableCategory(classPath)
-    val name = "${classPath.last()}_vftable"
-    return getOrRegister<Structure>(category, name) { StructureDataType(category, name, 0, dtm) }
+internal fun DataTypeRegistry.vftableOf(classPath: List<String>) = ClassNaming.vftablePath(classPath).let { dtPath ->
+    getOrRegister<Structure>(dtPath) {
+        StructureDataType(dtPath.categoryPath, dtPath.dataTypeName, 0, dtm)
+    }
 }
 
 /**

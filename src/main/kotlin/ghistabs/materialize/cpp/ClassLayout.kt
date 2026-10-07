@@ -135,7 +135,7 @@ internal fun DataTypeRegistry.fillStructBases(
 }
 
 private fun DataTypeRegistry.isEmptyBase(type: GlobalTypeDecl) =
-    types.resolveStruct(type)?.sizeBytes?.let { it <= 1 } == true
+    types.resolveAgg(type)?.sizeBytes?.let { it <= 1 } == true
 
 /** The base subobjects [body]'s struct holds: its non-virtual bases, and each distinct virtual base in its graph. */
 internal fun DataTypeRegistry.baseSubobjects(body: TypeDecl.Aggregate<GlobalTypeId>): Int =
@@ -239,14 +239,13 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
     /** Each embedded class's non-virtual part, as a struct of its own. */
     private val selfBases = mutableMapOf<DataTypePath, Structure>()
 
-    fun layAll() {
-        val laid = mutableSetOf<DataTypePath>()
+    fun layAll() = buildSet {
         for (located in registry.classesBasesFirst()) {
             val struct = registry.dataTypeFor(located.type.id) as? Structure ?: continue
             runCatching {
                 // Two locations can fill one struct (`/stabs/basic_ostream<…>` and `/std/basic_ostream<…>`),
                 // and a second pass would take the laid virtual base for own data.
-                if (laid.add(struct.dataTypePath) && types.hasVirtualBase(located.classBody)) {
+                if (add(struct.dataTypePath) && types.hasVirtualBase(located.classBody)) {
                     layVirtualInheritance(
                         located.classBody,
                         struct,
@@ -358,7 +357,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         val size = nonVirtualSizes[cls.dataTypePath] ?: return null
         return selfBases.getOrPut(cls.dataTypePath) {
             val path = ClassUtils.getBaseClassDataTypePath(cls)
-            registry.getOrRegister<Structure>(path.categoryPath, path.dataTypeName) {
+            registry.getOrRegister<Structure>(path) {
                 StructureDataType(path.categoryPath, path.dataTypeName, size, registry.dtm).apply {
                     description = "${cls.name} as a base subobject: its non-virtual part"
                 }

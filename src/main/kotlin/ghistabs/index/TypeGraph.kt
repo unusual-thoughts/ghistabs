@@ -71,11 +71,15 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
 
     private val virtualBaseAnswers = mutableMapOf<GlobalTypeDecl, Boolean>()
 
+    /** Whether [aggregate] inherits virtually anywhere in its base graph. */
+    fun hasVirtualBase(aggregate: TypeDecl.Aggregate<GlobalTypeId>) = aggregate.bases.any {
+        it.isVirtual || inheritsVirtually(it.type)
+    }
+
     /** Whether the struct a base's [decl] names inherits virtually anywhere, answered once per base. */
     fun inheritsVirtually(decl: GlobalTypeDecl): Boolean = virtualBaseAnswers[decl] ?: run {
         virtualBaseAnswers[decl] = false // a cycle through corrupt stabs answers no
-        (resolveStruct(decl)?.bases?.any { it.isVirtual || inheritsVirtually(it.type) } == true)
-            .also { virtualBaseAnswers[decl] = it }
+        (resolveAgg(decl)?.let { hasVirtualBase(it) } == true).also { virtualBaseAnswers[decl] = it }
     }
 
     // Pre-warm with empty `visited` so collision classification isn't biased by traversal order.
@@ -211,7 +215,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     /** The first [T] [decl] names, through the indirection [resolveWith] walks. */
     inline fun <reified T : GlobalTypeDecl> resolve(decl: GlobalTypeDecl): T? = resolveWith(decl) { it as? T }
 
-    fun resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Aggregate<GlobalTypeId>>(typeDecl)
+    fun resolveAgg(decl: GlobalTypeDecl) = resolve<TypeDecl.Aggregate<GlobalTypeId>>(decl)
 
     fun thisParamTypeId(fn: Func) = fn.thisParamTypeId { byId(it)?.body }
 
