@@ -75,13 +75,17 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
     /**
      * Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. One found there is
      * returned as it stands, and one an earlier import left is registered as this one's, with the slot
-     * definitions it points at, so a re-import's registry reads as the first's did.
+     * definitions it points at, so a re-import's registry reads as the first's did. A [handler] replaces
+     * the shared one for what [build] gives.
      */
-    internal inline fun <reified T : DataType> getOrRegister(category: CategoryPath, name: String, build: () -> T): T =
-        when (val dt = dtm.getDataType(category, name)) {
-            is T -> adopt(dt)
-            else -> register(build()) as T
-        }
+    internal inline fun <reified T : DataType> getOrRegister(
+        path: DataTypePath,
+        handler: DataTypeConflictHandler = conflictHandler,
+        build: () -> T,
+    ): T = when (val dt = dtm.getDataType(path)) {
+        is T -> adopt(dt)
+        else -> register(build(), handler) as T
+    }
 
     /**
      * [existing] registered as this import's, as it stands, with the function definitions its slots

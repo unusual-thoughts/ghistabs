@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * PR #11 review flagged `vtableSlotTargets` as reading a gcc 2.x record's reserved header word as
- * though it were the first virtual's function pointer. It doesn't: [Vtable.vtableShape] already
+ * though it were the first virtual's function pointer. It doesn't: [Vtable.vtableRecord] already
  * advances `addressPoint` past the header for a [CxxAbi.vptrAtRecordStart] ABI (the same 2-pointer
  * width [Itanium.vtablePrefixBytes] computes, which [Gcc2Abi.headerBytes] independently arrives at
  * too — see its doc). This builds a minimal record of each gcc 2.x entry shape by hand — no thunks
@@ -54,13 +54,13 @@ class Gcc2VtableSlotIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val program = builder.program
             val ztv = program.addressFactory.defaultAddressSpace.getAddress(ztvAddr.toLong())
 
-            val shape = program.vtableShape(ztv, abi)
-            shape.addressPoint.mustBe(
+            val located = program.vtableRecord(ztv, abi)
+            located.addressPoint.mustBe(
                 ztv.add(abi.headerBytes(4)),
                 "addressPoint should land right after the reserved header",
             )
 
-            val targets = program.vtableSlotTargets(shape.addressPoint, abi)
+            val targets = program.vtableSlotTargets(located.addressPoint, abi)
             targets.size.mustBe(2, "expected exactly the two real slots, header excluded")
 
             val firstFunc = program.functionManager.getFunctionAt(targets[0])

@@ -1,19 +1,21 @@
 package ghistabs.materialize.cpp.abi
 
 import ghidra.app.util.demangler.DemangledAddressTable
+import ghidra.app.util.demangler.DemangledFunction
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
 import ghidra.program.model.listing.Program
-import ghidra.program.model.scalar.Scalar
+import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
+import ghistabs.getScalar
+import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.namespaces
 import ghistabs.parse.isTemplated
 import ghistabs.parse.member
 import ghistabs.parse.nameSegments
 import ghistabs.parse.qualifiedName
-import ghistabs.readAs
 
 /**
  * Single source of Itanium C++ ABI facts for the gcc/Cygwin corpus: mangled names,
@@ -21,15 +23,38 @@ import ghistabs.readAs
  * references the constants here rather than re-spelling literals.
  */
 object Itanium : CxxAbi {
-    // Itanium mangling prefixes (ABI §5.1.4). Cygwin's PE loader prepends '_' → "__ZT*".
+    // Itanium special-name prefixes (ABI §5.1.4). Cygwin's PE loader prepends '_' → "__ZT*".
+
+    /** A class's virtual table. */
     const val VTABLE_PREFIX = "_ZTV"
+
+    /** A VTT, the table of vtables a class with virtual bases hands its bases' constructors and destructors. */
+    const val VTABLE_TABLE_PREFIX = "_ZTT"
+
+    /** A construction vtable: a base's vtable as used inside a derived object while that's built. */
+    const val CONSTRUCTION_VTABLE_PREFIX = "_ZTC"
+
+    /** A class's `std::type_info` object. */
     const val TYPEINFO_PREFIX = "_ZTI"
+
+    /** The NTBS a typeinfo object's `__type_name` points at. */
     const val TYPEINFO_NAME_PREFIX = "_ZTS"
 
-    // Demangled name of a `_ZTV…` symbol (GnuDemangler emits "vtable", no f) and of a `_ZTI…` one.
-    // Both take GnuDemanglerParser's AddressTableHandler, whose name is the prefix before " for ".
-    const val DEMANGLED_VTABLE = "vtable"
-    const val DEMANGLED_TYPEINFO = "typeinfo"
+    /** A thunk adjusting `this` by a fixed offset. */
+    const val NON_VIRTUAL_THUNK_PREFIX = "_ZTh"
+
+    /** A thunk adjusting `this` by an offset read from the vtable (a virtual base's). */
+    const val VIRTUAL_THUNK_PREFIX = "_ZTv"
+
+    /** A thunk adjusting both `this` and the returned pointer, for a covariant return. */
+    const val COVARIANT_THUNK_PREFIX = "_ZTc"
+
+    private val VTABLE_PREFIXES = listOf(VTABLE_PREFIX, VTABLE_TABLE_PREFIX, CONSTRUCTION_VTABLE_PREFIX)
+    private val THUNK_PREFIXES = listOf(NON_VIRTUAL_THUNK_PREFIX, VIRTUAL_THUNK_PREFIX, COVARIANT_THUNK_PREFIX)
+    private val TYPEINFO_PREFIXES = listOf(TYPEINFO_PREFIX, TYPEINFO_NAME_PREFIX)
+
+    // Every special name (`_ZT*`: the above) and `_ZG*` (guard variables, reference temporaries).
+    private val SPECIAL_PREFIXES = listOf("_ZT", "_ZG")
 
     // gcc __cxxabiv1 typeinfo classes — owners of the RTTI structs (see RttiStructs).
     const val ABI_NAMESPACE = "__cxxabiv1"
@@ -64,10 +89,6 @@ object Itanium : CxxAbi {
      */
     private val IMPLICIT_SPECIAL_MEMBER_TAIL = Regex("""(?:C[123]|D[012]|aS)E(?:v|RKS_|OS_)$""")
 
-    // The same `C[123]`/`D[012]` tails, without the implicit-member restriction on the arg list.
-    private val CTOR_TAIL = Regex("""C[123]E[a-zA-Z_0-9$]*$""")
-    private val DTOR_TAIL = Regex("""D[012]E[a-zA-Z_0-9$]*$""")
-
     /** Vtable header before the function-pointer array: offset_to_top + rtti = 2 pointers. */
     fun vtablePrefixBytes(ptrSize: Int) = 2L * ptrSize.toLong()
 
@@ -90,18 +111,18 @@ object Itanium : CxxAbi {
         listOf(
             "$VTABLE_PREFIX$it",
             "_$VTABLE_PREFIX$it", // Cygwin/PE leading underscore
-            className.member(DEMANGLED_VTABLE),
+            className.member(ClassNaming.VTABLE),
         )
     }
 
-    override fun demangledVtableClass(obj: DemangledObject) = addressTableClass(obj, DEMANGLED_VTABLE)
+    override fun demangledVtableClass(obj: DemangledObject) = addressTableClass(obj, ClassNaming.VTABLE)
 
     /** Type of the `offset_to_top` header word (a signed pointer-sized integer). */
     fun offsetToTopType(ptrSize: Int): DataType =
         if (ptrSize == 8) LongLongDataType.dataType else IntegerDataType.dataType
 
-    override fun VtableShape.vfptrOffset(program: Program): Long? =
-        program.readAs<Scalar>(topSlot, offsetToTopType(program.defaultPointerSize))?.signedValue?.let { -it }
+    override fun VtableRecord.vfptrOffset(program: Program): Long? =
+        program.readHeader(this)?.getScalar(OFFSET_TO_TOP)?.signedValue?.let { -it }
 
     fun zti(className: String) = "$TYPEINFO_PREFIX${mangleClassName(className)}"
 
@@ -121,10 +142,8 @@ object Itanium : CxxAbi {
      *  line, so knowing the class is enough to file it where the class is declared — see §38. */
     fun typeinfoClassOf(symbolName: String): String? {
         if (!looksLikeZti(symbolName)) return null
-        return Demangler.of(symbolName)?.let { addressTableClass(it, DEMANGLED_TYPEINFO) }
+        return Demangler.of(symbolName)?.let { addressTableClass(it, ClassNaming.TYPEINFO) }
     }
-
-    private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
 
     /** An Itanium-mangled name. The Cygwin PE/COFF loader prepends `_`, so they also appear as `__Z…`. */
     override fun isProbablyMangled(name: String): Boolean = name.trimDoubleUnderscore().startsWith("_Z")
@@ -137,6 +156,22 @@ object Itanium : CxxAbi {
 
     /** String-level pre-filter so we don't pay the demangler cost on every label. */
     internal fun looksLikeZti(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(TYPEINFO_PREFIX)
+
+    /**
+     * Which special name [symbolName] mangles, or null for a source-level one (`_ZN…`, `_Z3foo…`) or an
+     * unmangled one. Its [SpecialName.VTABLE] takes `_ZTT` and `_ZTC` too, where [looksLikeVtable] is `_ZTV` only.
+     */
+    fun specialName(symbolName: String): SpecialName? {
+        val name = symbolName.trimDoubleUnderscore()
+        fun any(prefixes: List<String>) = prefixes.any(name::startsWith)
+        return when {
+            any(VTABLE_PREFIXES) -> SpecialName.VTABLE
+            any(THUNK_PREFIXES) -> SpecialName.THUNK
+            any(TYPEINFO_PREFIXES) -> SpecialName.TYPEINFO
+            any(SPECIAL_PREFIXES) -> SpecialName.OTHER
+            else -> null
+        }
+    }
 
     /** Pure inspection of a demangled object, so it unit-tests without a `Program`. */
     internal fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
@@ -153,12 +188,129 @@ object Itanium : CxxAbi {
     override fun physnameIsImplicit(physname: String): Boolean =
         physname.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(physname)
 
-    /** In-class display form of a ctor/dtor linkage name — `_ZN3FooC[123]E…` → `Foo`,
-     *  `_ZN3FooD[012]E…` → `~Foo`. Itanium emits up to three symbols per ctor/dtor, all carrying one
-     *  source-level name; Ghidra tells them apart by address. Null for anything else. */
-    override fun specialMemberDisplayName(mangled: String, className: String): String? = when {
-        CTOR_TAIL.containsMatchIn(mangled) -> className
-        DTOR_TAIL.containsMatchIn(mangled) -> "~$className"
-        else -> null
+    /** In-class display form of a ctor/dtor linkage name: its [StructorVariant]'s. */
+    override fun specialMemberDisplayName(mangled: String, className: String): String? =
+        StructorVariant.of(mangled)?.displayName(className)
+}
+
+/** A constructor or destructor name, as gcc's mangle.cc writes them (`write_special_name_constructor`). */
+private val STRUCTOR_CODE = Regex("""CI[12]|C[1-4]|D[0124]""")
+
+// Cygwin's PE loader prepends one more `_`: `__ZTV…`.
+private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
+
+/**
+ * A constructor's or destructor's variant, by its Itanium linkage name ([of]). gcc >= 3 emits one
+ * function per variant it needs, all under the one name the source gives.
+ */
+enum class StructorVariant(val code: String, val label: String) {
+    COMPLETE_CTOR("C1", "complete"),
+    BASE_CTOR("C2", "base"),
+
+    /** In the ABI; gcc never emits it. */
+    ALLOCATING_CTOR("C3", "allocating"),
+
+    /** gcc's "unified" one, which both of the above call to share code. */
+    UNIFIED_CTOR("C4", "unified"),
+
+    /** gcc >= 7's constructor inherited from a base (`using Base::Base`). */
+    COMPLETE_INHERITING_CTOR("CI1", "complete inheriting"),
+    BASE_INHERITING_CTOR("CI2", "base inheriting"),
+    DELETING_DTOR("D0", "deleting"),
+    COMPLETE_DTOR("D1", "complete"),
+    BASE_DTOR("D2", "base"),
+    UNIFIED_DTOR("D4", "unified"),
+    ;
+
+    val isDestructor get() = code[0] == 'D'
+
+    /**
+     * How the class [className] spells this member in its own body: `Foo`, `~Foo`. Every variant carries
+     * the one source-level name; Ghidra tells them apart by address.
+     */
+    fun displayName(className: String) = if (isDestructor) "~$className" else className
+
+    companion object {
+        private val byCode = entries.associateBy { it.code }
+
+        /**
+         * Which variant of a constructor or destructor [symbolName] mangles (`_ZN3FooC2Ev` is Foo's base
+         * object constructor), or null for any other name. The demangler prints every variant alike, so
+         * this asks it where the variant's code sits instead: the one `C1`-like spelling that, with the
+         * name cut short before it, still demangles to the same structor of the same class. One inside an
+         * identifier (`3AC1`) or a parameter's type cuts the name somewhere else.
+         */
+        fun of(symbolName: String): StructorVariant? {
+            val fn = Demangler.of(symbolName) as? DemangledFunction ?: return null
+            return STRUCTOR_CODE.findAll(symbolName).firstNotNullOfOrNull { code ->
+                val stub = symbolName.substring(0, code.range.first) + (if (code.value[0] == 'D') "D1Ev" else "C1Ev")
+                val probe = Demangler.of(stub) as? DemangledFunction
+                val cls = fn.namespace ?: return@firstNotNullOfOrNull null
+                // An inheriting constructor demangles under its base's name (`_ZN1BCI21AEi` is `B::A(int)`).
+                val sameName = probe?.name == fn.name || code.value.startsWith("CI")
+                byCode[code.value].takeIf {
+                    probe != null && sameName && probe.namespace?.namespaceString == cls.namespaceString &&
+                        // A structor takes its class's name, less template arguments and ABI tags.
+                        probe.name.removePrefix("~") == cls.name.substringBefore('<').substringBefore("[abi:")
+                }
+            }
+        }
     }
 }
+
+/** What an Itanium special name ([Itanium.specialName]) is. */
+enum class SpecialName {
+    /** A `_ZTV` vtable, `_ZTT` VTT or `_ZTC` construction vtable. */
+    VTABLE,
+
+    /** A `_ZTh`/`_ZTv`/`_ZTc` this-adjusting thunk. Ghidra makes it a plain function, not a thunk of its target. */
+    THUNK,
+
+    /** A `_ZTI` typeinfo object or the `_ZTS` name string it points at. */
+    TYPEINFO,
+
+    /** Any other object the ABI names rather than the source: a `_ZG*` guard variable or reference temporary. */
+    OTHER,
+}
+
+/** Which `__cxxabiv1` typeinfo class lays out a class's typeinfo object: what [Rtti] has a layout for. */
+enum class TypeinfoKind(private val abiClass: String) {
+    /** `__class_type_info`: no bases. */
+    CLASS(Itanium.CLASS_TYPE_INFO),
+
+    /** `__si_class_type_info`: one public, non-virtual base at offset 0. */
+    SI(Itanium.SI_CLASS_TYPE_INFO),
+
+    /** `__vmi_class_type_info`: anything else, each base with its own offset and flags. */
+    VMI(Itanium.VMI_CLASS_TYPE_INFO),
+    ;
+
+    companion object {
+        /** The kind whose vtable is [vtableClass]'s, or null for any other class's. */
+        fun ofVtableClass(vtableClass: String) = entries.firstOrNull {
+            "${Itanium.ABI_NAMESPACE}::${it.abiClass}" == vtableClass
+        }
+    }
+}
+
+/** A typeinfo object's label: its `_ZTI` linkage name, or the demangler's `typeinfo` for it. */
+val Symbol.isTypeinfo get() = Itanium.looksLikeZti(name) || name == ClassNaming.TYPEINFO
+
+/**
+ * [Itanium.typeinfoClassOf] off a symbol rather than a name: an external's linkage name too, which
+ * survives only as its imported name once demangled, and else the namespace of the demangler's label.
+ */
+val Symbol.typeinfoClass: String? get() = linkageNames.firstNotNullOfOrNull(Itanium::typeinfoClassOf)
+    ?: classOfLabel(ClassNaming.TYPEINFO)
+
+/** The class a `_ZTV` symbol is the vtable of, as [typeinfoClass] reads a `_ZTI` one. */
+val Symbol.vtableClass: String? get() = linkageNames.filter(Itanium::looksLikeVtable)
+    .firstNotNullOfOrNull { Demangler.of(it)?.let(Itanium::demangledVtableClass) }
+    ?: classOfLabel(ClassNaming.VTABLE)
+
+private val Symbol.linkageNames get() = listOfNotNull(
+    name,
+    program.externalManager.getExternalLocation(this)?.originalImportedName.takeIf { isExternal },
+)
+
+private fun Symbol.classOfLabel(label: String) = parentNamespace.takeIf { name == label && !it.isGlobal }?.getName(true)

@@ -36,6 +36,17 @@ object Gcc2 {
     /** Prefix for the non-slot fields of a gcc 2.x vftable — its reserved header entry. */
     const val RESERVED = "__reserved"
 
+    /** A this-adjusting thunk, `__thunk_<delta>_<target>` (cp/method.c make_thunk). */
+    const val THUNK_PREFIX = "__thunk_"
+
+    // The artificial `int __in_chrg` on constructors of classes with virtual bases and on destructors
+    // (cp-tree.h IN_CHARGE_NAME), like `this` not the source's.
+    const val IN_CHARGE = "__in_chrg"
+
+    /** A [THUNK_PREFIX] linkage name, [USER_LABEL_PREFIX]ed or not. Ghidra makes it a plain function. */
+    fun looksLikeThunk(symbolName: String) =
+        symbolName.startsWith(THUNK_PREFIX) || symbolName.removePrefix(USER_LABEL_PREFIX).startsWith(THUNK_PREFIX)
+
     /**
      * String-level pre-filter for a gcc 2.x vtable symbol — the gcc 2.x parallel to
      * [Itanium.looksLikeVtable], and just as cheap. Such a record carries none of the Itanium fixed

@@ -30,16 +30,12 @@ import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
 import ghistabs.materialize.conflictCount
-import ghistabs.materialize.cpp.ClassNaming
-import ghistabs.materialize.cpp.VfptrModel
+import ghistabs.materialize.cpp.*
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.cpp.abi.Gcc2
 import ghistabs.materialize.cpp.abi.Gcc2Abi
 import ghistabs.materialize.cpp.abi.Itanium
-import ghistabs.materialize.cpp.hasPolymorphicBaseSubobject
-import ghistabs.materialize.cpp.isBaseField
-import ghistabs.materialize.cpp.vptrOffsetBytesOf
 import ghistabs.parse.*
 import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -1193,9 +1189,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 .takeWhile { nextObject == null || it < nextObject }
                 .take(MAX_GROUP_WORDS)
                 .filter { isRttiHeader(it) }
-                .filterNot { ClassNaming.INTERNAL_VFTABLE in labelsAt(it.add(ptr)) }
+                .filterNot { ClassNaming.vftableLabel(true) in labelsAt(it.add(ptr)) }
                 .map {
-                    "$cls@$point: sub-vtable rtti at $it, no ${ClassNaming.INTERNAL_VFTABLE} at ${it.add(ptr)}"
+                    "$cls@$point: sub-vtable rtti at $it, no ${ClassNaming.vftableLabel(true)} at ${it.add(ptr)}"
                 }
         }
         unlabelled.take(10).mustBeEmpty("${unlabelled.size} sub-vtables inside a _ZTV group are unannotated")
@@ -1208,7 +1204,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun typeinfoGlobalsKeepTheirDemangledPrimary() {
-        val demangled = program.symbolTable.getSymbols(Itanium.DEMANGLED_TYPEINFO)
+        val demangled = program.symbolTable.getSymbols(ClassNaming.TYPEINFO)
             .filterNot { it.parentNamespace.isGlobal }
         assumeTrue(demangled.isNotEmpty(), "Skipping: no demangled typeinfo symbols in this fixture")
         val clobbered = demangled
@@ -1379,7 +1375,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun classesInheritingAVtableAreStillAnnotated() {
         val vftables = filledVftables().associateBy { it.name.removeSuffix("_vftable") }
-        val inheriting = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
+        val inheriting = artifacts.harvest.types.values.mapNotNull { it.asAgg() }
             .filter { (_, body) -> with(artifacts.types) { hasPolymorphicBaseSubobject(body) } }
             // Only classes that reached the DTM at all — a class with no type is [everyDeclaredSlot…]'s.
             .filter { (ast, _) -> artifacts.registry.dataTypeFor(ast.id) != null }
@@ -1571,7 +1567,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun laidVftablesMapBackToTheirClass() {
         val laid = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == ClassNaming.VFTABLE || it.name == ClassNaming.INTERNAL_VFTABLE }
+            .filter { it.name == ClassNaming.VFTABLE || it.name == ClassNaming.vftableLabel(true) }
             .mapNotNull { sym ->
                 val vft = program.listing.getDataAt(sym.address)?.dataType as? Structure ?: return@mapNotNull null
                 (sym.parentNamespace to vft).takeIf { vft.name.contains("_vftable") }
@@ -1612,7 +1608,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         assumeTrue(vftables.isNotEmpty(), "Skipping: no populated vftable in this fixture")
         val bias = program.symbolTable.prevailingAbi()!!.reservedEntries(program.defaultPointerSize)
 
-        val misplaced = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
+        val misplaced = artifacts.harvest.types.values.mapNotNull { it.asAgg() }
             .flatMap { (ast, body) ->
                 val vft = vftables[ast.ghidraName] ?: return@flatMap emptyList()
                 body.methods
@@ -1701,13 +1697,13 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         dumpJson.encodeToStream(harvest, harvestFile.outputStream())
 
         val classStructs = harvest.types.values
-            .mapNotNull { it.asStruct() }
+            .mapNotNull { it.asAgg() }
             .filter { (_, body) -> body.isCxxClass }
             .toList()
         println("${classStructs.size} class structs")
 
         val emptyStructs = harvest.types.values
-            .mapNotNull { it.asStruct() }
+            .mapNotNull { it.asAgg() }
             .filter { (_, body) -> body.fields.isEmpty() && body.methods.isEmpty() }
             .toList()
 
@@ -1949,7 +1945,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // gcc 4.x emits no method entries at all — tagging is left to the demangler's `isThisCall`,
         // which decides by comparing detected parameters against the mangled name's and so answers
         // only after auto-analysis. That is a property of Ghidra and the binary, not of the import.
-        val declaredMethods = artifacts.harvest.types.values.sumOf { it.asStruct()?.second?.methods?.size ?: 0 }
+        val declaredMethods = artifacts.harvest.types.values.sumOf { it.asAgg()?.second?.methods?.size ?: 0 }
         if (declaredMethods > 0) {
             thiscalled.mustNotBeEmpty(
                 "binary=$binaryName: ${classFuncs.size} class methods, none tagged __thiscall, " +
@@ -2027,7 +2023,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun classesAreTruncatedToTheirLastDescribedByte() {
-        val classes = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
+        val classes = artifacts.harvest.types.values.mapNotNull { it.asAgg() }
             .mapNotNull { (ast, _) -> artifacts.registry.dataTypeFor(ast.id) as? Structure }
             .filter { it.numComponents > 0 && !it.isZeroLength }
         assumeTrue(classes.isNotEmpty(), "Skipping: no classes materialized in this fixture")
@@ -2170,7 +2166,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     /** The Ghidra function for each `STATIC`-flagged method the stabs name, keyed by linkage name.
      *  The Cygwin PE loader prefixes symbols with `_`, so both spellings are tried. */
     private fun staticMethodsByMangledName(): Map<String, Function> = artifacts.harvest.types.values
-        .mapNotNull { it.asStruct() }
+        .mapNotNull { it.asAgg() }
         .flatMap { (_, body) -> body.methods.filter { it.virt == VirtKind.STATIC }.mapNotNull { it.mangled } }
         .distinct()
         .mapNotNull { mangled ->
@@ -2205,7 +2201,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         methodOwners[mangled] ?: Demangler.of(mangled)?.namespace?.demanglerPath?.path?.let { bodiesByPath[it] }
 
     private val methodOwners by lazy {
-        artifacts.harvest.types.values.mapNotNull { it.asStruct() }
+        artifacts.harvest.types.values.mapNotNull { it.asAgg() }
             .flatMap { (ast, body) -> body.methods.mapNotNull { it.mangled }.map { it to (ast.ghidraName to body) } }
             .toMap()
     }

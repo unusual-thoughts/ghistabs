@@ -20,6 +20,7 @@ import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.abi.Rtti
+import ghistabs.materialize.cpp.abi.resolveLayout
 import ghistabs.materialize.typedefAliases
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.canonTemplateName
@@ -216,7 +217,7 @@ class DemanglerReplacer(
         return findByExactName(bareName, preferredCategory)?.also { debug("demangler-exact-match") }
             ?: registry.byDemangledClass[pathName]?.also { debug("demangler-reverse-demangle-match") }
             ?: soleInstantiation[bareName]?.also { debug("demangler-sole-instantiation-match", bareName) }
-            ?: rtti.typeInfoLayout(bareName)?.let { dtm.resolve(it, null) }
+            ?: rtti.typeInfoLayout(bareName)?.let(registry::resolveLayout)
                 ?.also { debug("demangler-rtti-match") }
     }
 

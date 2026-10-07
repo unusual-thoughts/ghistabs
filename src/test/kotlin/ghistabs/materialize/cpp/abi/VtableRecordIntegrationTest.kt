@@ -1,12 +1,13 @@
 package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.scalar.Scalar
+import ghistabs.get
+import ghistabs.getScalar
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.materialize.cpp.ClassNaming
-import ghistabs.readAs
-import ghistabs.readPointer
-import ghistabs.test.*
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeA
+import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -24,21 +25,24 @@ import org.junit.jupiter.params.provider.MethodSource
  *    memory; moving them by the stab base fixup as well sent every one of them past its target.
  */
 @Tag("integration")
-class VtableShapeIntegrationTest : FeatureFixtureTest() {
+class VtableRecordIntegrationTest : FeatureFixtureTest() {
     @ParameterizedTest
     @MethodSource("itaniumElfHellos")
     fun `a primary record's vbase offset is not taken for its offset_to_top`(fixture: String) {
         load(fixture)
         val ztv = program.symbolTable.getSymbols("_ZTV7Diamond").firstOrNull()?.address
         assumeTrue(ztv != null, "$fixture has no _ZTV7Diamond")
-        val shape = program.vtableShape(ztv!!)
+        val record = program.vtableRecord(ztv!!)
 
-        shape.prefix.size mustBe 1
-        with(Itanium) { shape.vfptrOffset(program) } mustBe 0L
-        program.readPointer(shape.rttiHeader)
+        record.prefixWords mustBe 1
+        record.header?.name mustBe "VtableHeaderStructure1"
+        with(Itanium) { record.vfptrOffset(program) } mustBe 0L
+        program.rttiOf(record)
             ?.let { program.symbolTable.getSymbols(it) }
             .orEmpty().any { it.name == "_ZTI7Diamond" }
             .mustBeTrue("rtti word should point at _ZTI7Diamond")
+        program.listing.getDataAt(ztv)?.get(VTABLE_OFFSETS)?.get(0)?.defaultValueRepresentation
+            ?.endsWith("h").mustBe(false, "a laid vbase offset should render in decimal")
     }
 
     /**
@@ -57,13 +61,34 @@ class VtableShapeIntegrationTest : FeatureFixtureTest() {
         }
         assumeTrue(ztv != null, "$fixture has no _ZTV7Diamond")
         val laid = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == ClassNaming.INTERNAL_VFTABLE && it.parentNamespace.name == "Diamond" }
+            .filter { it.name == ClassNaming.vftableLabel(true) && it.parentNamespace.name == "Diamond" }
             .map { it.address }.distinct().toList()
 
         val at = laid.singleOrNull().mustBeA<Address>("expected Named's secondary alone laid in Diamond, got $laid")
-        val ptr = program.defaultPointerSize.toLong()
-        program.readAs<Scalar>(at.subtract(2 * ptr), Itanium.offsetToTopType(program.defaultPointerSize))
-            ?.signedValue mustBe -16L
+        val header = program.listing.getDataContaining(at.subtract(program.defaultPointerSize.toLong()))
+        header?.dataType?.name mustBe "VtableHeaderStructure"
+        header?.getScalar(Itanium.OFFSET_TO_TOP)?.signedValue mustBe -16L
+        header?.get(Itanium.OFFSET_TO_TOP)?.defaultValueRepresentation mustBe "-16"
+    }
+
+    /**
+     * `Diamond`'s typeinfo is a `__vmi_class_type_info` with one entry per direct base, whose offsets
+     * read in decimal.
+     */
+    @ParameterizedTest
+    @MethodSource("itaniumElfHellos")
+    fun `vmi base offsets render in decimal`(fixture: String) {
+        load(fixture)
+        val zti = program.symbolTable.getSymbols("_ZTI7Diamond").firstOrNull()?.address
+        assumeTrue(zti != null, "$fixture has no _ZTI7Diamond")
+        val vmi = program.listing.getDataAt(zti!!)
+        assumeTrue(vmi?.dataType?.name?.startsWith("VmiClassTypeInfoStructure") == true, "typeinfo not laid")
+
+        val bases = vmi!![Rtti.BASES]
+        val offsets = (0 until (bases?.numComponents ?: 0)).mapNotNull { bases?.get(it)?.get(Rtti.BASE_OFFSET) }
+        offsets.isNotEmpty().mustBeTrue("expected base entries in $vmi")
+        offsets.map { it.defaultValueRepresentation }.filter { it.endsWith("h") }
+            .mustBe(emptyList(), "base offsets should render in decimal")
     }
 
     companion object {

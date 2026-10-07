@@ -10,12 +10,8 @@ import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
-import ghistabs.Demangler
-import ghistabs.Once
-import ghistabs.baseStackParamOffset
-import ghistabs.frameBias
+import ghistabs.*
 import ghistabs.parse.*
-import ghistabs.staleFrameShift
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -153,7 +149,7 @@ data class Type(
         null
     }
 
-    fun asStruct() = asType<TypeDecl.Aggregate<GlobalTypeId>>()
+    fun asAgg() = asType<TypeDecl.Aggregate<GlobalTypeId>>()
 
     /**
      * A declaration the harvest attributes to a file at a line: what a local file is checked against.

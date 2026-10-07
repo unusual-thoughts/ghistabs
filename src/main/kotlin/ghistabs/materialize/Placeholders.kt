@@ -2,7 +2,6 @@ package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghistabs.harvest.Type
-import ghistabs.materialize.cpp.hasVirtualBase
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl

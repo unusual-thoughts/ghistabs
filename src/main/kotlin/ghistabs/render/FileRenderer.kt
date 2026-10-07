@@ -4,17 +4,17 @@ import ghidra.program.model.address.Address
 import ghistabs.Demangler
 import ghistabs.chunkOf
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.harvest.*
-import ghistabs.index.*
+import ghistabs.harvest.Func
+import ghistabs.harvest.GhidraSourceFile
+import ghistabs.harvest.StaticSymbol
+import ghistabs.harvest.Type
+import ghistabs.index.EffectiveSource
+import ghistabs.index.hasHeaderExtension
+import ghistabs.index.includeSpelling
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.Gcc2
-import ghistabs.materialize.cpp.abi.Itanium
-import ghistabs.parse.GlobalTypeDecl
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.TypeDecl
-import ghistabs.parse.VirtKind
-import ghistabs.parse.qualifiedName
-import ghistabs.parse.templateLeaf
+import ghistabs.materialize.cpp.abi.StructorVariant
+import ghistabs.parse.*
 
 /**
  * One source file's render. Each pass (decomp, typedefs, locals, globals, braces, type bodies,
@@ -268,7 +268,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             member != leaf && member != "~$leaf" && member != "operator=" -> false
 
             member.startsWith("~") && body.declaresVirtualDtor() &&
-                body.bases.none { types.resolveStruct(it.type)?.hasVirtualDtor() == true } -> false
+                body.bases.none { types.resolveAgg(it.type)?.hasVirtualDtor() == true } -> false
 
             line == cls.line -> true
 
@@ -285,7 +285,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
      */
     private fun TypeDecl.Aggregate<GlobalTypeId>.declaresVirtualDtor() = methods.any { m ->
         val physname = m.mangled ?: return@any false
-        val dtor = Itanium.specialMemberDisplayName(physname, "") == "~" || Gcc2.isDtorName(physname)
+        val dtor = StructorVariant.of(physname)?.isDestructor == true || Gcc2.isDtorName(physname)
         m.virt == VirtKind.VIRTUAL && dtor
     }
 
@@ -293,7 +293,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     private fun TypeDecl.Aggregate<GlobalTypeId>.hasVirtualDtor(seen: MutableSet<Any> = mutableSetOf()): Boolean =
         seen.add(this) && (
             declaresVirtualDtor() ||
-                bases.any { types.resolveStruct(it.type)?.hasVirtualDtor(seen) == true }
+                bases.any { types.resolveAgg(it.type)?.hasVirtualDtor(seen) == true }
             )
 
     /** Declarations gcc gave no line: real, only their row is unknown. See [EffectiveSource.linelessTypes]. */

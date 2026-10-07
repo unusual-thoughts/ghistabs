@@ -2,7 +2,9 @@ package ghistabs.materialize.cpp
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeComponent
+import ghidra.program.model.data.DataTypePath
 import ghidra.program.model.symbol.Namespace
+import ghistabs.at
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
@@ -18,13 +20,21 @@ object ClassNaming {
     // Spelled out rather than taken from ClassUtils.VFTABLE, which only arrives in 12.1.
     const val VFTABLE = "vftable"
 
+    // What GnuDemangler names a `_ZTV…` symbol (no f) and a `_ZTI…` one, in the class's namespace: both
+    // take GnuDemanglerParser's AddressTableHandler, whose name is the prefix before " for ".
+    const val VTABLE = "vtable"
+    const val TYPEINFO = "typeinfo"
+
     // RTTIGccClassRecoverer#createVfunctionSymbol prefixes "internal_" onto VFTABLE_LABEL for any
     // non-primary vtable; nothing exposes that prefix as a constant, so it is spelled out here.
-    const val INTERNAL_VFTABLE = "internal_$VFTABLE"
+    const val INTERNAL_PREFIX = "internal_"
 
     // ghistabs' own base-subobject field naming, applied uniformly regardless of the class's ABI.
     const val BASE_PREFIX = "_base_"
     const val VBASE_PREFIX = "_vbase_"
+
+    fun vtableLabel(internal: Boolean) = INTERNAL_PREFIX.takeIf { internal }.orEmpty() + VTABLE
+    fun vftableLabel(internal: Boolean) = INTERNAL_PREFIX.takeIf { internal }.orEmpty() + VFTABLE
 
     fun isBaseField(name: String) = name.startsWith(BASE_PREFIX) || name.startsWith(VBASE_PREFIX)
 
@@ -39,6 +49,19 @@ object ClassNaming {
 
     /** [vftableCategory] of the class [ns] is. */
     fun vftableCategory(ns: Namespace) = vftableCategory(ns.getPathList(true).toList())
+
+    fun vftableName(className: String) = "${className}_$VFTABLE"
+
+    /** `<leaf>_vftable` in the class [ns]'s category; [leaf] may spell the class otherwise than [ns] does. */
+    fun vftablePath(ns: Namespace, leaf: String = ns.name) = vftableCategory(ns).at(vftableName(leaf))
+    fun vftablePath(classPath: List<String>) = DataTypePath(vftableCategory(classPath), vftableName(classPath.last()))
+
+    /** The secondary [i] of the primary vftable at [primary], beside it: `<leaf>_vftable_internal_<i>`. */
+    fun internalVftablePath(primary: DataTypePath, i: Int) =
+        primary.categoryPath.at("${primary.dataTypeName}_$INTERNAL_PREFIX$i")
+
+    /** Where that secondary's slot definitions go, apart from the primary's: `internal_<i>`. */
+    fun internalSlotCategory(primary: DataTypePath, i: Int) = CategoryPath(primary.categoryPath, "$INTERNAL_PREFIX$i")
 
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
         (if (isVirtual) VBASE_PREFIX else BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()
