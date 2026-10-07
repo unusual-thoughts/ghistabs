@@ -115,9 +115,7 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
             ?: layoutContent(visited)
 
         // Plain `-gstabs` drops const and volatile (dbxout.c), and neither changes a layout.
-        is TypeDecl.Const -> inner.describe(visited)
-
-        is TypeDecl.Volatile -> inner.describe(visited)
+        is TypeDecl.Const, is TypeDecl.Volatile -> wrapped!!.describe(visited)
 
         TypeDecl.Void, is TypeDecl.Float, is TypeDecl.Complex, is TypeDecl.Enum, // no children
         is TypeDecl.Array, is TypeDecl.FreeFunction, is TypeDecl.Member, // two children
