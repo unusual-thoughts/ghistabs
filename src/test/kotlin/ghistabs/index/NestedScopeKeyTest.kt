@@ -94,6 +94,20 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         groups.map { it.members.toSet() } mustBe listOf(asts.map { it.id }.toSet())
     }
 
+    /**
+     * A demoted class keeps its namespace below the header category: Ghidra's class-struct lookup
+     * (`VariableUtilities.findExistingClassStruct`) matches a category's tail against the namespace
+     * path, so `N::S` is found under `…/N` and missed at the header category itself.
+     */
+    @Test fun demotedScopeGroupKeepsItsNamespaceUnderTheHeader() {
+        fun sized(size: Long) = struct(listOf(method("_ZN1N1S1fEv"))).copy(sizeBytes = size)
+        val groups = locatedTypesOf(ast(id(), "S", sized(4)), ast(id(), "S", sized(8))).keys
+            .filter { it.name == "S" }
+        groups.must("expected S demoted below its header, under N: $groups") {
+            isNotEmpty() && all { it.category.name == "N" && it.category.parent != CategoryPath.ROOT }
+        }
+    }
+
     @Test fun qualifiedNameScopesMethodlessNested() {
         // gcc emits `basic_ostream<char,…>::sentry` method-less in some CUs; the qualifier alone scopes it,
         // under the same member category the method-bearing ostream files members under (`So`→`ostream`).

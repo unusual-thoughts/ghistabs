@@ -239,6 +239,11 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
     // their CU knew of a referenced class are still one class, and splitting them forks `.conflict`s.
     val sourcesOfCopies = allTypes.groupBy({ it.ghidraName to it.body.sizeBytes }, { it.id.source })
     fun Type.headerKey() = attribution.keyForAst(this, sourcesOfCopies.getValue(ghidraName to body.sizeBytes).toSet())
+
+    // A demoted class keeps its namespace under the header category, so Ghidra's class-struct
+    // lookup, which matches the category's tail against the namespace path, still finds it.
+    fun TypeLocation.within(scope: CategoryPath) =
+        TypeLocation(scope.pathElements.fold(category) { c, e -> CategoryPath(c, e) }, name)
     val nesting = ScopeLocator(this@locateTypesWith)
 
     // Scope→header→hash ladder. A type whose enclosing C++ scope is derivable (any member's
@@ -246,12 +251,12 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
     // this-param class-struct creator looks, so our filled type is the one it reuses instead of
     // synthesizing an empty stub. Header attribution is the fallback for method-less types (C
     // aggregates, gcc anonymous copies) AND the collision-breaker: a scope key holding genuinely
-    // divergent content (same (scope,name), several bodies) demotes each body to its header key.
+    // divergent content (same (scope,name), several bodies) demotes each body to its header key, with
+    // the namespace path kept below it.
     //
-    // Each type gets its key first and the keys are grouped once, so a demoted body and a scope-less
-    // copy of the same name meet in one slot: xmltest_gcc421_fullstabs's own-code `basic_istream` (bases
-    // spelled as fields, no methods) and libstdc++'s at `/src/allocator-inst.cc/multi`. A slot's winner
-    // is picked from its voters: a kept scope's owners, or every member of a header key.
+    // Each type gets its key first and the keys are grouped once, so a demoted body outside any namespace
+    // and a scope-less copy of the same name meet in one slot. A slot's winner is picked from its voters:
+    // a kept scope's owners, or every member of a header key.
     class Slot(val voters: List<Type>, val members: List<Type>) {
         val ids get() = members.map { it.id }
         constructor(single: Type) : this(listOf(single), listOf(single))
@@ -278,7 +283,10 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
                     else if owners.distinctBy { content(it.body) }.size == 1 ->
                         return@flatMap listOf(scopeKey to Slot(owners, members))
 
-                    else -> debug("canonical-scope-collision", "$scopeKey: divergent bodies → demoted to header keys")
+                    else -> {
+                        debug("canonical-scope-collision", "$scopeKey: divergent bodies → demoted to header keys")
+                        return@flatMap members.map { it.headerKey().within(scopeKey.category) to Slot(it) }
+                    }
                 }
             }
             members.map { it.headerKey() to Slot(it) }
