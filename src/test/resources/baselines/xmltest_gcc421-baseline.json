@@ -51,8 +51,8 @@
             "max": 60
         },
         "data-no-coverage": {
-            "min": 154,
-            "max": 154
+            "min": 135,
+            "max": 135
         },
         "demangle-applied": {
             "min": 3465,

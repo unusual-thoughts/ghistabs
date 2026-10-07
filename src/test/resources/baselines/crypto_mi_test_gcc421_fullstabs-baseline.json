@@ -152,8 +152,8 @@
             "max": 60
         },
         "data-no-coverage": {
-            "min": 570,
-            "max": 570
+            "min": 476,
+            "max": 476
         },
         "demangle-applied": {
             "min": 30659,
@@ -1456,6 +1456,10 @@
         "typedef-shorten": {
             "min": 1,
             "max": 1
+        },
+        "typeinfo-unread": {
+            "min": 81,
+            "max": 81
         },
         "unresolved-symbol": {
             "min": 945,
