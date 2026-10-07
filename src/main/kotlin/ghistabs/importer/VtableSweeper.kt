@@ -99,7 +99,7 @@ open class VtableSweeper(
         for ((qualified, addr, abi) in unclaimed) {
             monitor.increment()
             val record = program.vtableRecord(addr, abi)
-            val targets = program.vtableSlotTargets(record.addressPoint, abi)
+            val targets = program.vtableSlotTargets(record)
             if (targets.isEmpty()) {
                 degradation("vtable-swept-empty", qualified, "no function pointers", record.addressPoint)
                 continue
@@ -125,7 +125,7 @@ open class VtableSweeper(
             // Itanium packs a class's secondaries into the same record, walkable from the primary's
             // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>` symbol,
             // laid below whether or not the class has a primary at all.
-            if (abi.hasRttiHeader) laySecondaryVtables(record, vftable, leaf, ns, abi, SWEPT)
+            if (abi.hasRttiHeader) laySecondaryVtables(record, vftable, leaf, ns, SWEPT)
         }
         // What the class pass left: gcc 2.x secondaries of classes linked without stabs. No class struct
         // to find the base's vptr in, so these go untagged.
@@ -157,7 +157,7 @@ open class VtableSweeper(
             val ns = constructionNamespace(sym.name) ?: continue
             val name = ns.getName(true)
             val record = program.vtableRecord(sym.address)
-            val targets = program.vtableSlotTargets(record.addressPoint)
+            val targets = program.vtableSlotTargets(record)
             val path = ClassNaming.vftablePath(ns)
             // A base with no virtuals of its own (`Left`) has a header and no slots: nothing to type.
             val vftable = targets.takeIf { it.isNotEmpty() }?.let {
@@ -172,7 +172,7 @@ open class VtableSweeper(
             }
             val at = program.layVtable(registry, record, vftable, ns.name, ns, source = SWEPT, construction = true)
             debug("vtable-construction", "$name: ${targets.size} slot(s)", at)
-            laySecondaryVtables(record, vftable, ns.name, ns, Itanium, SWEPT, construction = true)
+            laySecondaryVtables(record, vftable, ns.name, ns, SWEPT, construction = true)
         }
     }
 
@@ -207,13 +207,13 @@ open class VtableSweeper(
         primaryVftable: Structure?,
         leaf: String,
         ns: Namespace,
-        abi: CxxAbi,
         source: SourceType = SourceType.IMPORTED,
         construction: Boolean = false,
     ) {
+        val abi = primary.abi
         val rtti = program.rttiOf(primary) ?: return
         val ptr = program.defaultPointerSize.toLong()
-        val slots = program.vtableSlotTargets(primary.addressPoint).size
+        val slots = program.vtableSlotTargets(primary).size
         // Only a record with slots is laid: an empty one has no function array to put a struct over.
         val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
             .filter { it.targets.isNotEmpty() }
@@ -286,11 +286,11 @@ open class VtableSweeper(
         }
         val first = count - records.size
         records.forEachIndexed { i, (key, targets) ->
-            val (base, record, abi) = key
+            val (base, record) = key
             val index = first + i
             val name = names.getOrNull(index)
             val at = path.categoryPath.at(ClassNaming.vftableName(path, index, count, name))
-            val vftable = internalVftable(at, ClassNaming.internalSlotCategory(path, i), targets, abi)
+            val vftable = internalVftable(at, ClassNaming.internalSlotCategory(path, i), targets, record.abi)
             val vfptrAt = classStruct?.vfptrOffsetOfBase(base)?.toLong()
             val label = ClassNaming.vftableLabel(internal = true, base = name)
             vftable.describeVxTable(leaf, label, vfptrAt)
@@ -315,14 +315,14 @@ open class VtableSweeper(
     /** [className]'s gcc 2.x secondaries no class laid yet, with their slots; one with none is skipped. */
     private fun unlaidGcc2Secondaries(className: String) =
         gcc2SecondaryVtables[className].orEmpty().mapNotNull { (base, at, abi) ->
-            val record = program.vtableRecord(at, abi)
-            if (program.isVtableClaimed(record)) return@mapNotNull null
-            val targets = program.vtableSlotTargets(record.addressPoint, abi)
-            if (targets.isEmpty()) {
-                degradation("vtable-secondary-empty", className, "no slots read for base $base", at)
-                return@mapNotNull null
+            when (val record = program.vtableRecord(at, abi)) {
+                else if program.isVtableClaimed(record) -> null
+
+                else -> program.vtableSlotTargets(record).ifEmpty {
+                    degradation("vtable-secondary-empty", className, "no slots read for base $base", at)
+                    null
+                }?.let { (base to record) to it }
             }
-            Triple(base, record, abi) to targets
         }
 
     /** What [Rtti] says sits where in the class [primary] is the primary of: a direct base per subobject offset. */
