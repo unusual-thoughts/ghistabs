@@ -78,8 +78,8 @@
             "max": 66
         },
         "data-no-coverage": {
-            "min": 491,
-            "max": 491
+            "min": 177,
+            "max": 177
         },
         "demangle-applied": {
             "min": 27357,
@@ -138,8 +138,8 @@
             "max": 109
         },
         "demangler-sole-instantiation-declined": {
-            "min": 27,
-            "max": 27
+            "min": 32,
+            "max": 32
         },
         "demangler-sole-instantiation-match": {
             "min": 1,
@@ -1171,6 +1171,10 @@
             "min": 453,
             "max": 453
         },
+        "vtable-construction": {
+            "min": 241,
+            "max": 241
+        },
         "vtable-reconstructed": {
             "min": 571,
             "max": 571,
@@ -1749,8 +1753,8 @@
             ]
         },
         "vtable-secondary": {
-            "min": 444,
-            "max": 444
+            "min": 603,
+            "max": 603
         },
         "vtable-skipped": {
             "min": 712,

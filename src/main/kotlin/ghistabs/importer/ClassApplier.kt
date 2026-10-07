@@ -419,7 +419,7 @@ class ClassApplier(
 
         val addressPoint = program.layVtable(registry, record, vftable, name, ns, virtualBases)
         debug("vtable-applied", "class=$name abi=$abi", address = addressPoint)
-        if (abi.hasRttiHeader) laySecondaryVtables(record, name, ns, abi)
+        if (abi.hasRttiHeader) laySecondaryVtables(record, vftable, name, ns, abi)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
