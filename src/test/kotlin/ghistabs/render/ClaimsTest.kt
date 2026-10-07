@@ -48,6 +48,19 @@ class ClaimsTest {
     }
 
     @Test
+    fun `a hosted class rides the row its member's body opens on, not one the body slid into`() {
+        // `struct Named { virtual ~Named() {} … };`: class and destructor both at L43, its statements
+        // too, so they slide to 44 and 45. A class dated at 44 is no host of that body.
+        val head = Claim(Owner.FUNCTION_BODY, 43, listOf(Row("Named::~Named() {")), anchoring = Anchoring.AFTER)
+        val stmts = Claim(Owner.FUNCTION_BODY, 43, listOf(Row("s"), Row("}")), anchoring = Anchoring.AFTER)
+        val named = claim(Owner.TYPE_BODY, 43, rows = 3, fit = Fit.ELASTIC).copy(hosted = true)
+        val other = claim(Owner.TYPE_BODY, 44, rows = 3, fit = Fit.ELASTIC).copy(hosted = true)
+        val out = allocate(listOf(head, stmts, named, other), range = 1..60)
+        out.placed.single { it.claim === named }.range mustBe 43..43
+        out.dropped.map { it.claim } mustBe listOf(other)
+    }
+
+    @Test
     fun `priority breaks a genuine tie and the loser is dropped with a reason, never displaced`() {
         // Both want row 10 outright. §29's sweep demoted the loser to a `// stray:` blob; it is now a
         // dropped claim carrying why, which the renderer may trace and the diagnostics always count.

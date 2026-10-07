@@ -130,6 +130,11 @@ data class Claim(
     val anchoring: Anchoring = if (line == null) Anchoring.BAND else Anchoring.EXACT,
     /** Furthest row an [Anchoring.AFTER] claim may slide to — a function body stays in its span. */
     val limit: Int? = null,
+    /**
+     * A class whose written member opens on the class's own line: `struct Named { virtual ~Named() {}
+     * … };`, where gcc dates both at L43. It rides the row the member's body opens on, ahead of it.
+     */
+    val hosted: Boolean = false,
 )
 
 /** [claim] got [range]; [copies] > 1 when identical claims merged. */
@@ -222,6 +227,9 @@ fun allocate(claims: List<Claim>, range: ClosedRange<Int>): Allocation {
     // (claim, copies, row) — the row it *resolved to*, which for an AFTER claim is not the one it
     // asked for. Re-reading `claim.line` here put every crammed statement back on its own anchor.
     val shared = mutableListOf<Triple<Claim, Int, Int>>()
+    // Rows a body holds at the line it asked for, which a [Claim.hosted] class may ride. A row a body
+    // slid into is the middle of a function, not its opening.
+    val opened = mutableSetOf<Int>()
     var cursor = 1
     val reserved = anchored.mapNotNull { (claim, copies) ->
         val asked = claim.line
@@ -253,10 +261,13 @@ fun allocate(claims: List<Claim>, range: ClosedRange<Int>): Allocation {
             // has; `stale` decides who reserves *first*, which is what stops it taking the row.
             held[line] == claim.owner.group -> shared.add(Triple(claim, copies, line)).let { null }
 
+            claim.hosted && line in opened -> shared.add(Triple(claim, copies, line)).let { null }
+
             line in held -> dropped.add(Dropped(claim, ROW_TAKEN)).let { null }
 
             else -> {
                 held[line] = claim.owner.group
+                if (line == asked && claim.owner.group == "body") opened += line
                 Triple(claim, copies, line)
             }
         }

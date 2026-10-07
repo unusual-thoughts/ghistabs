@@ -516,7 +516,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                 // Identical claims merged; say how many there were rather than silently showing one.
                 // Aliased copies (ctor C1/C2, dtor D0/D1/D2) are one declaration emitted N times.
                 val note = content.note?.let { if (copies > 1) "$it ×$copies" else it }
-                canvas[row] += Fragment(indent, content.text, note, claim.owner.noteShape)
+                canvas[row] += Fragment(indent, content.text, note, claim.owner.noteShape, claim.hosted)
                 prev = row
                 prevIndent = indent
             }
@@ -663,10 +663,15 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                 // unrelated type-resolution changes.
                 val ast = group.maxWith(compareBy({ it.body.memberCount() }, { it.name }))
                 mergedInstantiations += group.filterNot { it === ast }
-                ast.emitTypeBody(group.size)?.also { claims += it }
+                ast.emitTypeBody(group.size)?.also { claims += it.copy(hosted = ast.hostsMember()) }
             }
         }
         return claims
+    }
+
+    /** Whether one of the class's own written members opens on the class's line. See [Claim.hosted]. */
+    private fun Type.hostsMember() = (rawFuncs - compilerWritten).any {
+        it.declLine == line && Demangler.namespaces(it.name).qualifiedName == name
     }
 
     /** How many members a body declares — the tiebreak when instantiations of one template differ. */
