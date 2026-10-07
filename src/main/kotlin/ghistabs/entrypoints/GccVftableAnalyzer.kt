@@ -29,11 +29,14 @@ import ghistabs.parse.StabReader
  *   no label at the address point, and gcc 2.x's `_vt$3Foo` is not an address table to it at all.
  * - The `Windows x86 PE RTTI Analyzer` builds `vftable`s off MSVC's RTTI only
  *   (`PEUtil.isVisualStudioOrClangPe`), so never on a gcc or MinGW binary.
- * - RecoverClassesFromRTTIScript` finds  vtables through the typeinfo graph, so needs Itanium RTTI
+ * - `RecoverClassesFromRTTIScript` finds vtables through the typeinfo graph, so needs Itanium RTTI
  *   and finds nothing in gcc 2.x or under `-fno-rtti`, and recovers whole classes from their
  *   constructors with the decompiler. The `<Class>_vftable` under `/ClassDataTypes/<ns>/<Class>/`
- *   and the `vftable` label laid here are the names it uses, so it runs over these tables
- *   rather than beside them.
+ *   and the `vftable` label laid here are the names it uses, so shift-S and shift-D work on these
+ *   tables. The script itself does not: it takes a struct already under `/ClassDataTypes` at an
+ *   address point for one it processed (`RecoveredClassHelper.getFunctionsFromVftable`), so a class
+ *   whose table is laid here gets no vftable, constructors or members from it, and its methods'
+ *   `this` retyped to a near-empty placeholder. Run it with this analyzer off, and without stabs.
  *
  * This is the one sweep. On a binary with stabs it has to come after the class pass, whose tables are
  * typed off the declared virtuals and which it must leave alone ([ghistabs.materialize.cpp.abi.isVtableClaimed]
