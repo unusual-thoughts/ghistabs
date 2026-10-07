@@ -8,12 +8,9 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghistabs.BoolOption
-import ghistabs.Demangler
-import ghistabs.buildClassNamespaces
+import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
-import ghistabs.get
 import ghistabs.materialize.DtmRegistry
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.*
@@ -22,8 +19,6 @@ import ghistabs.materialize.cpp.vfptrOffsetOfBase
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.leafName
 import ghistabs.parse.nameSegments
-import ghistabs.readPointer
-import ghistabs.set
 
 /** One gcc 2.x secondary vtable record: its symbol's [base] and ABI, and where it sits. */
 internal data class Gcc2SecondaryVtable(val base: String, val address: Address, val abi: CxxAbi)
@@ -90,41 +85,41 @@ open class VtableSweeper(
         val unclaimed = symtab.symbolIterator
             .mapNotNull { sym -> ResolvedVtable.fromSymbol(sym) }
             .distinctBy { it.address }
-            .filterNot { (_, addr, abi) -> program.isVtableClaimed(program.vtableShape(addr, abi), abi) }
+            .filterNot { (_, addr, abi) -> program.isVtableClaimed(program.vtableRecord(addr, abi)) }
             .toList()
 
         monitor.initialize(unclaimed.size.toLong(), "Sweeping unclaimed vtables")
         var laid = 0
         for ((qualified, addr, abi) in unclaimed) {
             monitor.increment()
-            val shape = program.vtableShape(addr, abi)
-            val targets = program.vtableSlotTargets(shape.addressPoint, abi)
+            val record = program.vtableRecord(addr, abi)
+            val targets = program.vtableSlotTargets(record.addressPoint, abi)
             if (targets.isEmpty()) {
-                degradation("vtable-swept-empty", qualified, "no function pointers", shape.addressPoint)
+                degradation("vtable-swept-empty", qualified, "no function pointers", record.addressPoint)
                 continue
             }
             val leaf = canonTemplateName(qualified.leafName)
             val ns = symtab.buildClassNamespaces(qualified.nameSegments)
-            val category = ClassNaming.vftableCategory(ns)
-            val vftable = registry.getOrRegister<Structure>(category, "${leaf}_vftable") {
-                StructureDataType(category, "${leaf}_vftable", 0, dtm)
+            val path = ClassNaming.vftablePath(ns, leaf)
+            val vftable = registry.getOrRegister<Structure>(path) {
+                StructureDataType(path.categoryPath, path.dataTypeName, 0, dtm)
             }
             // A class whose own group failed to resolve its vtable left its stab-typed slots here;
             // those beat anything read back off the target addresses.
             if (vftable.numComponents == 0) {
-                addSweptSlots(vftable, category, targets, abi)
+                addSweptSlots(vftable, path.categoryPath, targets, abi)
                 // Itanium puts a primary vptr at 0. gcc 2.x puts it after the fields, and with no class
                 // struct here to read that off, it gets no tag.
                 vftable.describeVxTable(leaf, ClassNaming.VFTABLE, 0L.takeIf { abi.hasRttiHeader })
             }
 
-            val addressPoint = program.layVtable(shape, vftable, qualified, ns, abi = abi, source = SWEPT)
+            val addressPoint = program.layVtable(registry, record, vftable, qualified, ns, source = SWEPT)
             debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
             laid++
             // Itanium packs a class's secondaries into the same record, walkable from the primary's
             // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>` symbol,
             // laid below whether or not the class has a primary at all.
-            if (abi.hasRttiHeader) laySecondaryVtables(shape, leaf, ns, abi, SWEPT)
+            if (abi.hasRttiHeader) laySecondaryVtables(record, leaf, ns, abi, SWEPT)
         }
         // What the class pass left: gcc 2.x secondaries of classes linked without stabs. No class struct
         // to find the base's vptr in, so these go untagged.
@@ -149,13 +144,13 @@ open class VtableSweeper(
      * declares fewer virtuals than its table holds, which put the walk inside the function array.
      */
     internal fun laySecondaryVtables(
-        primary: VtableShape,
+        primary: VtableRecord,
         leaf: String,
         ns: Namespace,
         abi: CxxAbi,
         source: SourceType = SourceType.IMPORTED,
     ) {
-        val rtti = program.readPointer(primary.rttiHeader) ?: return
+        val rtti = program.rttiOf(primary) ?: return
         val ptr = program.defaultPointerSize.toLong()
         val slots = program.vtableSlotTargets(primary.addressPoint).size
         // Only a record with slots is laid: an empty one has no function array to put a struct over.
@@ -163,18 +158,10 @@ open class VtableSweeper(
         val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
             .filter { it.targets.isNotEmpty() }
         subs.forEachIndexed { i, sub ->
-            val vftable = internalVftable(leaf, ns, i, sub.targets, abi)
-            val vfptrAt = with(abi) { sub.shape.vfptrOffset(program) }
-            vftable.describeVxTable(leaf, "${ClassNaming.INTERNAL_VFTABLE} $i", vfptrAt)
-            val at = program.layVtable(
-                sub.shape,
-                vftable,
-                leaf,
-                ns,
-                label = ClassNaming.INTERNAL_VFTABLE,
-                abi = abi,
-                source = source,
-            )
+            val vftable = internalVftable(ClassNaming.vftablePath(ns, leaf), i, sub.targets, abi)
+            val vfptrAt = with(abi) { sub.record.vfptrOffset(program) }
+            vftable.describeVxTable(leaf, "${ClassNaming.vftableLabel(internal = true)} $i", vfptrAt)
+            val at = program.layVtable(registry, sub.record, vftable, leaf, ns, internal = true, source = source)
             debug("vtable-secondary", "class=$leaf index=$i slots=${sub.targets.size}", address = at)
         }
     }
@@ -198,43 +185,36 @@ open class VtableSweeper(
     ) {
         var laid = 0
         for ((base, at, abi) in gcc2SecondaryVtables[className].orEmpty()) {
-            val shape = program.vtableShape(at, abi)
-            if (program.isVtableClaimed(shape, abi)) continue
-            val targets = program.vtableSlotTargets(shape.addressPoint, abi)
+            val record = program.vtableRecord(at, abi)
+            if (program.isVtableClaimed(record)) continue
+            val targets = program.vtableSlotTargets(record.addressPoint, abi)
             if (targets.isEmpty()) {
                 debug("vtable-secondary-empty", "class=$className base=$base", address = at)
                 continue
             }
             val i = laid++
-            val vftable = internalVftable(leaf, ns, i, targets, abi)
+            val vftable = internalVftable(ClassNaming.vftablePath(ns, leaf), i, targets, abi)
             val vfptrAt = classStruct?.vfptrOffsetOfBase(base)?.toLong()
-            vftable.describeVxTable(leaf, "${ClassNaming.INTERNAL_VFTABLE} $i, for $base", vfptrAt)
-            program.layVtable(
-                shape,
-                vftable,
-                leaf,
-                ns,
-                label = ClassNaming.INTERNAL_VFTABLE,
-                abi = abi,
-                source = source,
-            )
+            vftable.describeVxTable(leaf, "${ClassNaming.vftableLabel(internal = true)} $i, for $base", vfptrAt)
+            program.layVtable(registry, record, vftable, leaf, ns, internal = true, source = source)
             debug("vtable-secondary", "class=$className index=$i base=$base slots=${targets.size}", address = at)
         }
     }
 
     /**
-     * [leaf]'s secondary [i], `<leaf>_vftable_internal_<i>`, typed off its [targets] like a swept table.
-     * The table sits beside the primary in [ns]'s category, where shift-D finds the class it belongs
+     * The secondary [i] of the primary at [path], `<leaf>_vftable_internal_<i>`, typed off its [targets]
+     * like a swept table. The table sits beside the primary, where shift-D finds the class it belongs
      * to. Its slot definitions each get their own `internal_<i>` category, or a thunk sharing its
      * target's leaf name forks a `.conflict` per slot (1874 on crypto_mi).
      */
-    private fun internalVftable(leaf: String, ns: Namespace, i: Int, targets: List<Address>, abi: CxxAbi): Structure {
-        val category = ClassNaming.vftableCategory(ns)
-        val name = "${leaf}_vftable_internal_$i"
-        val vftable = registry.getOrRegister<Structure>(category, name) {
-            StructureDataType(category, name, 0, dtm)
+    private fun internalVftable(path: DataTypePath, i: Int, targets: List<Address>, abi: CxxAbi): Structure {
+        val at = ClassNaming.internalVftablePath(path, i)
+        val vftable = registry.getOrRegister<Structure>(at) {
+            StructureDataType(at.categoryPath, at.dataTypeName, 0, dtm)
         }
-        if (vftable.numComponents == 0) addSweptSlots(vftable, CategoryPath(category, "internal_$i"), targets, abi)
+        if (vftable.numComponents == 0) {
+            addSweptSlots(vftable, ClassNaming.internalSlotCategory(path, i), targets, abi)
+        }
         return vftable
     }
 

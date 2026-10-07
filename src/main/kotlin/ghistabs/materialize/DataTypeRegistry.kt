@@ -10,6 +10,7 @@ import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.index.*
 import ghistabs.materialize.cpp.abi.Rtti
+import ghistabs.materialize.cpp.abi.resolveLayout
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
@@ -155,7 +156,7 @@ class DataTypeRegistry(
      * not cycle-break stubs — callers cache them in [byId] and must never file them under [xrefStubs].
      */
     internal fun Type.substitute(): DataType? = resolveBuiltin(body)
-        ?: rttiStructs.typeInfoLayout(ghidraName)?.also {
+        ?: rttiStructs.typeInfoLayout(ghidraName)?.let(::resolveLayout)?.also {
             debug("rtti-pseudo-substituted", "name=$ghidraName")
         }
 

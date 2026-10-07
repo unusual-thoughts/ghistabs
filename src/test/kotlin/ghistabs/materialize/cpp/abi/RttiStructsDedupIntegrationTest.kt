@@ -3,6 +3,7 @@ package ghistabs.materialize.cpp.abi
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataUtilities
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.materialize.DtmRegistry
 import ghistabs.runTransaction
 import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Tag
@@ -12,8 +13,8 @@ import org.junit.jupiter.api.Test
  * gcc 3.4.5 emits each `_ZTI` typeinfo global as a per-CU COMDAT, so the same RttiStructs layout is
  * applied to that address dozens of times. Because the layout carries an auto-named PointerTypedef
  * field that never compares isEquivalent to its own resolved form, handing the unresolved template
- * to createData forked a `ClassTypeInfoStructure.conflict` on every reapply. RttiStructs now resolves
- * each layout into the DTM once and hands out the resolved, DTM-resident type.
+ * to createData forked a `ClassTypeInfoStructure.conflict` on every reapply. [resolveLayout] hands out
+ * the DTM-resident type, the one already at the layout's path when there is one.
  */
 @Tag("integration")
 class RttiStructsDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -25,13 +26,15 @@ class RttiStructsDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val dtm = program.dataTypeManager
         try {
             program.runTransaction("rtti-dedup") {
-                val rtti = Rtti(dtm)
+                val registry = DtmRegistry(dtm)
                 // Both the plain (PointerTypedef) and Si (nested ClassTypeInfoStructure*) layouts,
-                // each applied at several distinct addresses — the COMDAT-duplication pattern.
+                // each applied at several distinct addresses — the COMDAT-duplication pattern — and
+                // resolved afresh each time, by a fresh registry, as RttiLayoutAnalyzer runs do.
                 for ((slot, name) in listOf(Itanium.CLASS_TYPE_INFO_PSEUDO, Itanium.SI_CLASS_TYPE_INFO_PSEUDO)
                     .withIndex()) {
-                    val layout = rtti.typeInfoLayout(name)!!
                     repeat(5) { i ->
+                        val layout = (if (i % 2 == 0) registry else DtmRegistry(dtm))
+                            .resolveLayout(Rtti(dtm).typeInfoLayout(name)!!)
                         val addr = program.addressFactory.defaultAddressSpace
                             .getAddress(0x401000L + slot * 0x100 + i * 0x20)
                         DataUtilities.createData(

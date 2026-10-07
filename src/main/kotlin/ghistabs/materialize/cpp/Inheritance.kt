@@ -1,13 +1,9 @@
 package ghistabs.materialize.cpp
 
 import ghistabs.index.TypeGraph
-import ghistabs.parse.GlobalTypeDecl
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.TypeDecl
+import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import ghistabs.parse.VirtKind
-import ghistabs.parse.isVptrFieldName
 
 /**
  * Byte offset of the vptr [typeDecl] declares, or null if it declares none. The single answer to
@@ -46,7 +42,7 @@ fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Aggregate<GlobalTypeId>): 
     }
     .sortedBy { it.offsetBits }
     .firstOrNull { base ->
-        resolveStruct(base.type)?.let { it.declaresVptr || firstPolymorphicBase(it) != null } ?: false
+        resolveAgg(base.type)?.let { it.declaresVptr || firstPolymorphicBase(it) != null } ?: false
     }
 
 /** Whether [typeDecl] has a vtable: its own, or one inherited through a polymorphic base subobject. */
@@ -75,15 +71,11 @@ fun TypeGraph.virtualBases(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) = buildLi
         if (!seen.add(cls)) return
         for (base in cls.bases) {
             if (base.isVirtual) add(base)
-            resolveStruct(base.type)?.let(::walk)
+            resolveAgg(base.type)?.let(::walk)
         }
     }
     walk(typeDecl)
 }
-
-/** Whether [aggregate] inherits virtually anywhere in its base graph. */
-fun TypeGraph.hasVirtualBase(aggregate: TypeDecl.Aggregate<GlobalTypeId>) =
-    aggregate.bases.any { it.isVirtual || inheritsVirtually(it.type) }
 
 /**
  * How deep [typeDecl] sits in its inheritance graph, so a caller can process bases before the
@@ -101,7 +93,7 @@ fun TypeGraph.inheritanceDepth(
 ): Int = typeDecl.bases.maxOfOrNull { base ->
     memo[base.type] ?: run {
         memo[base.type] = 0
-        (resolveStruct(base.type)?.let { inheritanceDepth(it, memo) } ?: -1).also { memo[base.type] = it }
+        (resolveAgg(base.type)?.let { inheritanceDepth(it, memo) } ?: -1).also { memo[base.type] = it }
     }
 }?.let { it + 1 } ?: 0
 
@@ -125,7 +117,7 @@ fun TypeGraph.inheritanceDepth(
 fun TypeGraph.collectAllVirtuals(struct: TypeDecl.Aggregate<GlobalTypeId>): Map<Int, Method<GlobalTypeId>> = buildMap {
     val visited = mutableSetOf<TypeDecl.Aggregate<GlobalTypeId>>()
     fun walk(cls: TypeDecl.Aggregate<GlobalTypeId>) {
-        for (base in cls.bases) resolveStruct(base.type)?.takeIf(visited::add)?.let(::walk)
+        for (base in cls.bases) resolveAgg(base.type)?.takeIf(visited::add)?.let(::walk)
         cls.methods
             .filter { it.virt == VirtKind.VIRTUAL }
             .forEach { m -> m.vtableOffsetBits?.let { put(it.toInt(), m) } }

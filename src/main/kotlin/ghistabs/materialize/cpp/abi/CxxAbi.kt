@@ -130,7 +130,7 @@ sealed interface CxxAbi : CxxMemberNaming {
      * offset for a secondary. A gcc 2.x record states no such word; its tables are placed by the
      * symbol that names them and the class struct.
      */
-    fun VtableShape.vfptrOffset(program: Program): Long? = null
+    fun VtableRecord.vfptrOffset(program: Program): Long? = null
 
     companion object {
         /**
@@ -152,6 +152,9 @@ sealed interface CxxAbi : CxxMemberNaming {
          */
         fun isGeneratedData(name: String) =
             Itanium.isGeneratedData(name) || ofVtableSymbol(name) != null || Gcc2.isTypeinfoName(name)
+
+        /** A this-adjusting thunk by its linkage name: gcc 2.x [Gcc2.looksLikeThunk] or Itanium [SpecialName.THUNK]. */
+        fun looksLikeThunk(name: String) = Gcc2.looksLikeThunk(name) || Itanium.specialName(name) == SpecialName.THUNK
 
         /** Every ABI's spelling for [className]'s vtable, Itanium first. */
         fun vtableCandidates(className: String) = buildList {
@@ -195,7 +198,7 @@ sealed interface CxxAbi : CxxMemberNaming {
          * they mangle members identically and differ only in vtable geometry, which a binary with no
          * vtable symbol has no record of — so [Gcc2Thunks] stands for gcc 2.x.
          */
-        private fun mangledBy(name: String): CxxAbi? = when {
+        fun mangledBy(name: String): CxxAbi? = when {
             Itanium.isProbablyMangled(name) -> Itanium
             Gcc2.isProbablyMangled(name) -> Gcc2Thunks
             else -> null

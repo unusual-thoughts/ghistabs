@@ -7,7 +7,10 @@ import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.integration.Fixtures
 import ghistabs.loadProgram
 import ghistabs.materialize.cpp.abi.Gcc2
-import ghistabs.test.*
+import ghistabs.test.defaultContext
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeNull
+import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -49,7 +52,7 @@ class Gcc2SecondaryVtableIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val st = program.symbolTable
 
         val at = st.getSymbols(symbol).single().address
-        st.getSymbols(at).filter { it.name == ClassNaming.INTERNAL_VFTABLE }.map { it.parentNamespace.name }
+        st.getSymbols(at).filter { it.name == ClassNaming.vftableLabel(true) }.map { it.parentNamespace.name }
             .mustBe(listOf(cls), "$symbol should carry an internal_vftable label in $cls")
         program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
             .any { it.name == "${cls}_vftable_internal_0" && it.numComponents > 0 }

@@ -9,7 +9,6 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.VtableSweeper

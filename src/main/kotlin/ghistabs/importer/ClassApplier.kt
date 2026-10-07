@@ -14,7 +14,6 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.harvest.AddressResolver
 import ghistabs.index.LocatedType
-import ghistabs.index.demangledClassPath
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.buildFunctionDefinition
 import ghistabs.materialize.cpp.*
@@ -44,7 +43,7 @@ class ClassApplier(
     monitor: TaskMonitor,
     sink: DiagnosticSink,
 ) : VtableSweeper(registry, program, monitor, sink) {
-    private val types = registry.hints.types
+    private val types = registry.types
 
     companion object {
         private val source = SourceType.IMPORTED
@@ -115,7 +114,7 @@ class ClassApplier(
      */
     private fun Structure.refiledUnder(category: CategoryPath): Structure = also {
         if (categoryPath == category) return@also
-        runCatching { setCategoryPath(category) }
+        runCatching { categoryPath = category }
             .onFailure { degradation("vftable-refile-failed", name, "$categoryPath -> $category: ${it.message}") }
     }
 
@@ -149,12 +148,11 @@ class ClassApplier(
     private fun LocatedType.resolve(): LocatedClass? = when (val structDt = registry.dataTypeFor(type.id)) {
         is Structure -> LocatedClass(this, ensureClassNamespace(), structDt)
 
-        else -> {
+        else -> null.also {
             warn(
                 "class-not-struct",
                 "skipping ${structDt?.let { it::class.simpleName }} class '$className' at ${location.category}",
             )
-            null
         }
     }
 
@@ -391,8 +389,8 @@ class ClassApplier(
             return
         }
 
-        val shape = vtable?.let { program.vtableShape(it.address, abi) }
-        val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, abi) }.orEmpty()
+        val record = vtable?.let { program.vtableRecord(it.address, abi) }
+        val targets = record?.let { program.vtableSlotTargets(it.addressPoint, abi) }.orEmpty()
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)
         // Read off the laid struct, which records where gcc 2.x put the vptr (after the fields). Not
@@ -401,27 +399,27 @@ class ClassApplier(
         val vfptrAt = structDt.vfptrOffset()?.toLong() ?: 0L.takeIf { abi.hasRttiHeader }
         vftable.describeVxTable(name, ClassNaming.VFTABLE, vfptrAt)
 
-        if (shape == null) return
+        if (record == null) return
 
         // One vbase offset per virtual base, so the two counts must agree. They are derived
-        // independently — the stab's base graph vs. where vtableShape put offset_to_top — which makes
+        // independently — the stab's base graph vs. where vtableRecord put offset_to_top — which makes
         // a disagreement the one cheap check that the address point was located correctly.
         // gcc 2.x puts no vbase/vcall words in front of the record at all, so the prefix is empty by
         // construction there and the comparison would only ever manufacture a mismatch.
         val virtualBases = types.virtualBases(body)
             .map { registry.resolveRef(it.type)?.name ?: "<unresolved base>" }
-        if (abi.hasRttiHeader && shape.prefix.size < virtualBases.size) {
+        if (abi.hasRttiHeader && record.prefixWords < virtualBases.size) {
             degradation(
                 "vtable-vbase-count-mismatch",
                 name,
-                "${shape.prefix.size} prefix word(s) before offset_to_top, " +
+                "${record.prefixWords} prefix word(s) before offset_to_top, " +
                     "${virtualBases.size} virtual base(s) declared",
             )
         }
 
-        val addressPoint = program.layVtable(shape, vftable, name, ns, virtualBases, abi = abi)
+        val addressPoint = program.layVtable(registry, record, vftable, name, ns, virtualBases)
         debug("vtable-applied", "class=$name abi=$abi", address = addressPoint)
-        if (abi.hasRttiHeader) laySecondaryVtables(shape, name, ns, abi)
+        if (abi.hasRttiHeader) laySecondaryVtables(record, name, ns, abi)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
@@ -437,7 +435,7 @@ class ClassApplier(
                     program.listing.setComment(
                         func.entryPoint,
                         CommentType.PLATE,
-                        "virtual ${m.name}; ${name}_vftable offset " +
+                        "virtual ${m.name}; ${ClassNaming.vftableName(name)} offset " +
                             "${abi.slotOffset(slot, program.defaultPointerSize)}",
                     )
                 } else {
@@ -526,11 +524,8 @@ class ClassApplier(
                 "vftable-slot-untyped",
                 at,
                 "signature did not unwrap to a method: unwrapped=${
-                    unwrapped?.let {
-                        it::class.simpleName
-                    } ?: "null"
-                } " +
-                    "sig=${m.signature}",
+                    unwrapped?.let { it::class.simpleName } ?: "null"
+                } sig=${m.signature}",
             )
             return PointerDataType(Undefined4DataType.dataType, dtm)
         }
