@@ -558,19 +558,10 @@
             "max": 2
         },
         "struct-mostly-undefined": {
-            "min": 11,
-            "max": 11,
+            "min": 2,
+            "max": 2,
             "degrades": [
-                "/build/buildd/mingw32-runtime-3.12/build_dir/src/w32api/include/winnt.h/Anon_winnt_474_bed1a7c2",
                 "/std/fpos<mbstate_t>",
-                "/std/oaidl/Anon_oaidl_98_533edd29",
-                "/std/oaidl/Anon_oaidl_98_83bed669",
-                "/std/oaidl/Anon_oaidl_98_ed489352",
-                "/std/oaidl/_wireVARIANT",
-                "/std/objidl/tagPROPVARIANT",
-                "/std/winnt/Anon_winnt_461_bbacae17",
-                "/std/winnt/Anon_winnt_463_21ea8ac1",
-                "/std/winnt/Anon_winnt_464_527503ce",
                 "/std/winnt/_TAPE_SET_POSITION"
             ]
         },
