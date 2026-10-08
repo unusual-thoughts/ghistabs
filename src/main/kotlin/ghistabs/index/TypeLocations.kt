@@ -224,35 +224,42 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
     // synthesizing an empty stub. Header attribution is the fallback for method-less types (C
     // aggregates, gcc anonymous copies) AND the collision-breaker: a scope key holding genuinely
     // divergent content (same (scope,name), several bodies) demotes each body to its header key.
-    val slots = allTypes
+    //
+    // Each type gets its key first and the keys are grouped once, so a demoted body and a scope-less
+    // copy of the same name meet in one slot: xmltest_gcc421_fullstabs's own-code `basic_istream` (bases
+    // spelled as fields, no methods) and libstdc++'s at `/src/allocator-inst.cc/multi`. A slot's winner
+    // is picked from its voters: a kept scope's owners, or every member of a header key.
+    class Slot(val voters: List<Type>, val members: List<Type>)
+    val keyed = allTypes
         .filter { it.body.canBeXRefTarget }
         .groupBy(nesting::scopeKey)
         .flatMap { (scopeKey, members) ->
-            if (scopeKey == null) {
-                members.groupBy { it.headerKey() }.map { (k, ms) -> nesting.classifyGroup(k, ms) }
+            if (scopeKey == null) return@flatMap members.map { it.headerKey() to Slot(listOf(it), listOf(it)) }
+            // Divergence is decided by the scope-owning (method-bearing) members alone. A
+            // method-less nested type recovered into this slot is the same type as its qualified
+            // sibling — layout-identical, differing only in emitted methods, which never enter the
+            // DTM struct — so it rides along and aliases onto the owners' winner instead of forking
+            // the group. Genuine divergence among the owners still demotes every member to header.
+            // Method-bearing only, even though an out-of-line member states a scope just as firmly
+            // (§57): a body that declares methods is the one whose *content* is worth comparing.
+            // Counting the bound-but-method-less copies as owners put every CU's stub declaration of
+            // `std::type_info` in the vote, they diverge, and the demotion emptied `/std/type_info` —
+            // the slot Ghidra's demangler had already forged and was waiting for us to fill.
+            val owners = members.filter { it.demangledClassPath() != null }.ifEmpty { members }
+            // Layout-only: owners diverge only in per-CU method flags/order (gcc VIRTUAL vs NORMAL,
+            // reordering), which never enter the DTM struct — don't let that noise demote the group.
+            if (owners.groupBy { content(it.body) }.size == 1) {
+                listOf(scopeKey to Slot(owners, members))
             } else {
-                // Divergence is decided by the scope-owning (method-bearing) members alone. A
-                // method-less nested type recovered into this slot is the same type as its qualified
-                // sibling — layout-identical, differing only in emitted methods, which never enter the
-                // DTM struct — so it rides along and aliases onto the owners' winner instead of forking
-                // the group. Genuine divergence among the owners still demotes every member to header.
-                // Method-bearing only, even though an out-of-line member states a scope just as firmly
-                // (§57): a body that declares methods is the one whose *content* is worth comparing.
-                // Counting the bound-but-method-less copies as owners put every CU's stub declaration of
-                // `std::type_info` in the vote, they diverge, and the demotion emptied `/std/type_info` —
-                // the slot Ghidra's demangler had already forged and was waiting for us to fill.
-                val owners = members.filter { it.demangledClassPath() != null }.ifEmpty { members }
-                // Layout-only: owners diverge only in per-CU method flags/order (gcc VIRTUAL vs NORMAL,
-                // reordering), which never enter the DTM struct — don't let that noise demote the group.
-                if (owners.groupBy { content(it.body) }.size == 1) {
-                    val group = nesting.classifyGroup(scopeKey, owners)
-                    listOf(if (owners.size == members.size) group else group.copy(members = members.map { it.id }))
-                } else {
-                    debug("canonical-scope-collision", "$scopeKey: divergent bodies → demoted to header keys")
-                    members.groupBy { it.headerKey() }.map { (k, ms) -> nesting.classifyGroup(k, ms) }
-                }
+                debug("canonical-scope-collision", "$scopeKey: divergent bodies → demoted to header keys")
+                members.map { it.headerKey() to Slot(listOf(it), listOf(it)) }
             }
         }
+    val slots = keyed.groupBy({ it.first }, { it.second }).map { (key, parts) ->
+        val members = parts.flatMap { it.members }
+        val group = nesting.classifyGroup(key, parts.flatMap { it.voters })
+        if (group.members.size == members.size) group else group.copy(members = members.map { it.id })
+    }
 
     // §B: merge by layout, not content — a class's method-less header/`multi` copies share the
     // scope-keyed method-bearing copy's layout (methods never enter the DTM struct), so they fold
