@@ -55,6 +55,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         // Pass C — apply symbols, then build classes/vtables, demangle, and replace demangler stubs
         val applied = ctx.program.runTransaction("Stabs: apply symbols") {
             SymbolApplier(ctx, registry).run {
+                recordMemberFunctions()
                 ImportResult.ApplyResults(
                     functions = applyAllFunctions(),
                     globals = applyAllGlobals(),
