@@ -52,7 +52,8 @@ interface RenderContext {
     /** Render a Struct's body members for in-skeleton expansion: one bare C-style decl per entry. */
     fun TypeDecl.Aggregate<GlobalTypeId>.renderFull(owner: String? = null): List<String> {
         val instanceFields = fields.filterNot { it.isStatic }.sortedBy { it.offsetBits }.map { f ->
-            f.access to "${f.type.renderDecl(f.name)};  /* +${f.offsetBits / 8}B */"
+            f.access to "${f.type.renderDecl(f.name)}${types.bitfieldWidth(f)?.let{" : $it"}.orEmpty()};  " +
+                "/* +${f.offsetBits / 8}B${(f.offsetBits % 8).takeIf { it > 0 }?.let { "+${it}b" }.orEmpty()} */"
         }
         // Static members occupy no storage, so they have no offset to sort by and were dropped outright.
         // Their linkage name is the only stabs link to the emitted symbol, so show it.
