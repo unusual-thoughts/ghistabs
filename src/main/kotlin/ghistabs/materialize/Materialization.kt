@@ -181,11 +181,14 @@ internal fun DataTypeRegistry.fillComposite(
         }
     }
 
-    // A class with virtual bases is [layClasses]'s to finish, and to report. Any other struct is
-    // reported once [materializeAll] has filled every type: a member whose type is still an empty
-    // placeholder holds one byte until that type is filled and widens it, so checking now would count
-    // the rest as a hole (`tagVARIANT`, whose only member is an anonymous union filled after it).
-    if (placeholder is Structure && !types.hasVirtualBase(body)) holesToReport += placeholder to qualifiedName
+    // A class with virtual bases, or with a base [layClasses] lays, is [layClasses]'s to finish, and to
+    // report. Any other struct is reported once [materializeAll] has filled every type: a member whose
+    // type is still an empty placeholder holds one byte until that type is filled and widens it, so
+    // checking now would count the rest as a hole (`tagVARIANT`, whose only member is an anonymous union
+    // filled after it).
+    if (placeholder is Structure && !types.hasVirtualBase(body) && basesLaidByClassLayout(body).isEmpty()) {
+        holesToReport += placeholder to qualifiedName
+    }
 
     return placeholder
 }
