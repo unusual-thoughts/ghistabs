@@ -233,22 +233,18 @@
             "max": 32
         },
         "struct-mostly-undefined": {
-            "min": 15,
-            "max": 15,
+            "min": 11,
+            "max": 11,
             "degrades": [
                 "/shared/determinism.c/multi/b2BodyEvents",
                 "/src/broad_phase.h/b2MovePair",
                 "/src/contact.c/b2ContactRegister",
-                "/src/joint.h/b2JointSim",
                 "/src/parallel_for.c/b2ParallelForTask",
                 "/src/physics_world.c/b2JointEvents",
                 "/src/physics_world.c/multi/b2RecArgs_StateHash",
                 "/src/physics_world.h/b2RecBuffer",
                 "/src/scheduler.c/b2SchedulerWorkerContext",
                 "/src/world_snapshot.c/b2SnapReader",
-                "/stabs/b2Mutex",
-                "/stabs/b2Semaphore",
-                "/stabs/b2Shape",
                 "/test/test_thread.c/SemData",
                 "/test/test_thread.c/SumData"
             ]
