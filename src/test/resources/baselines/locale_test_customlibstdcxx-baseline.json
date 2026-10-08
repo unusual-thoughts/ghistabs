@@ -770,18 +770,6 @@
             "min": 52,
             "max": 52
         },
-        "vtable-vbase-count-mismatch": {
-            "min": 6,
-            "max": 6,
-            "degrades": [
-                "basic_fstream<char,std::char_traits<char>>",
-                "basic_fstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_iostream<char,std::char_traits<char>>",
-                "basic_iostream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_stringstream<char,std::char_traits<char>,std::allocator<char>>",
-                "basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>"
-            ]
-        },
         "vtable-virtual-no-impl": {
             "min": 38,
             "max": 38

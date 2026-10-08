@@ -137,13 +137,20 @@ internal fun DataTypeRegistry.fillStructBases(
 private fun DataTypeRegistry.isEmptyBase(type: GlobalTypeDecl) =
     types.resolveAgg(type)?.sizeBytes?.let { it <= 1 } == true
 
+/**
+ * Each distinct virtual base in [body]'s graph, with the struct it lays as, or null where it resolves to none.
+ * Distinct by that struct: a diamond reaches one class through several edges (`basic_iostream` reaches
+ * `basic_ios` through `basic_istream` and `basic_ostream`), and the struct is what gets one vbase offset and
+ * one subobject. A stab body is no identity for that, since equal bodies need not be one class.
+ */
+internal fun DataTypeRegistry.virtualBaseStructs(body: TypeDecl.Aggregate<GlobalTypeId>) = types.virtualBases(body)
+    .map { it to resolveRef(it.type) }
+    .distinctBy { (base, dt) -> dt?.dataTypePath ?: base.type }
+
 /** The base subobjects [body]'s struct holds: its non-virtual bases, and each distinct virtual base in its graph. */
 internal fun DataTypeRegistry.baseSubobjects(body: TypeDecl.Aggregate<GlobalTypeId>): Int =
     body.bases.count { !it.isVirtual } + when {
-        types.hasVirtualBase(body) -> types.virtualBases(body).mapNotNull {
-            resolveRef(it.type)?.dataTypePath
-        }.toSet().size
-
+        types.hasVirtualBase(body) -> virtualBaseStructs(body).count { (_, dt) -> dt != null }
         else -> 0
     }
 
@@ -321,10 +328,8 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         nvEnd: Int,
         nvAlign: Int,
     ) {
-        val laidOnce = mutableSetOf<DataTypePath>()
-        val vbases = types.virtualBases(body)
-            .mapNotNull { base -> registry.resolveRef(base.type)?.let { base to it } }
-            .filter { (_, dt) -> laidOnce.add(dt.dataTypePath) }
+        val vbases = registry.virtualBaseStructs(body)
+            .mapNotNull { (base, dt) -> dt?.let { base to it } }
             .filterNot { (base, dt) -> dt.isZeroLength || registry.isEmptyBase(base.type) }
             .map { (base, dt) -> base to (selfBaseOf(dt) ?: dt) }
         val offsets = virtualBaseOffsets(

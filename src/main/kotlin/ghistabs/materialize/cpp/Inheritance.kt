@@ -53,7 +53,9 @@ fun TypeGraph.isPolymorphic(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) =
  * Every virtual base in [typeDecl]'s graph, not only the directly-declared ones — a vtable carries one
  * vbase offset per *distinct* virtual base however deep it was inherited. `std::iostream` is the case
  * that forces it: `_ZTISd` declares `istream` and `ostream`, neither virtual, and `__ZTVSd` still has a
- * vbase offset, for the `basic_ios` both of them inherit virtually.
+ * vbase offset, for the `basic_ios` both of them inherit virtually. Edges, not classes: that `basic_ios`
+ * is two of them, and only [ghistabs.materialize.DataTypeRegistry] knows they lay as one struct, so its
+ * [virtualBaseStructs] is what counts them.
  *
  * Not folded into [Virtuals], which walks the same edges: that one wants each struct once, bases-first,
  * to collect methods, while this wants every *edge*, because a virtual edge to a class already reached

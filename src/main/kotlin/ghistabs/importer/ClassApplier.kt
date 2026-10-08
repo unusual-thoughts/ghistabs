@@ -406,8 +406,7 @@ class ClassApplier(
         // a disagreement the one cheap check that the address point was located correctly.
         // gcc 2.x puts no vbase/vcall words in front of the record at all, so the prefix is empty by
         // construction there and the comparison would only ever manufacture a mismatch.
-        val virtualBases = types.virtualBases(body)
-            .map { registry.resolveRef(it.type)?.name ?: "<unresolved base>" }
+        val virtualBases = registry.virtualBaseStructs(body).map { (_, dt) -> dt?.name ?: "<unresolved base>" }
         if (abi.hasRttiHeader && record.prefixWords < virtualBases.size) {
             degradation(
                 "vtable-vbase-count-mismatch",
