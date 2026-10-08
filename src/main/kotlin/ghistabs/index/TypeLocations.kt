@@ -127,9 +127,7 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
         index.resolveWith(base.type) {
             when (it) {
                 is TypeDecl.XRef -> it.tagName
-                is TypeDecl.Ref -> index.byId(it.id)?.name
-                is TypeDecl.InlineDef -> index.byId(it.id)?.name
-                else -> null
+                else -> it.id?.let(index::byId)?.name
             }
         }
     }
