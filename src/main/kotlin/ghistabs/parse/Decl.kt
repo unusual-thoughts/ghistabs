@@ -252,6 +252,11 @@ sealed interface TypeDecl<out Id : IdInterface> {
             hasVTablePointerMarker ||
             fields.any { isVptrFieldName(it.name) }
 
+        /** Whether the class says it has a vptr of its own: a vtable marker, a virtual method, or a vptr field. */
+        val declaresVptr get() = hasVTablePointerMarker ||
+            methods.any { it.virt == VirtKind.VIRTUAL } ||
+            fields.any { isVptrFieldName(it.name) }
+
         /**
          * C++ at all, so worth class materialization. Inheritance qualifies whatever its access —
          * gcc emits the `!N,` base block only for C++ records, a C struct never has one.
