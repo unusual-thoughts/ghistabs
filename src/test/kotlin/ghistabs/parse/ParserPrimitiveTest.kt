@@ -54,6 +54,18 @@ class ParserPrimitiveTest {
     }
 
     @Test
+    fun testGcc42TruncatedLongLongBoundsAreSigned64() {
+        // crypto_mi_test_gcc421 and xmltest_gcc421: gcc 4.2's stabstr_D keeps only each bound's low 32 bits.
+        val range = (
+            (Parser("long long int:t(0,12)=r(0,12);-0;4294967295;").parseSymbol() as ParseResult.Ok).inner
+                as SymbolDecl.NamedType
+            ).type as TypeDecl.Range
+        range.lower mustBe -BigInteger.TWO.pow(63)
+        range.upper mustBe BigInteger.TWO.pow(63) - BigInteger.ONE
+        range.sizeBits mustBe 64L
+    }
+
+    @Test
     fun testLongLongIntSizeAttrOctal() {
         val input = "long long int:t(0,6)=@s64;r(0,6);0000000000000;01777777777777777777777;"
         val expected = SymbolDecl.NamedType(

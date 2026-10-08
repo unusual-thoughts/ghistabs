@@ -117,12 +117,12 @@
             "max": 5
         },
         "canonical-key-merged": {
-            "min": 401,
-            "max": 401
+            "min": 403,
+            "max": 403
         },
         "canonical-key-multi-hash": {
-            "min": 25,
-            "max": 25
+            "min": 23,
+            "max": 23
         },
         "canonical-scope-collision": {
             "min": 22,
@@ -684,17 +684,12 @@
             "max": 148
         },
         "struct-mostly-undefined": {
-            "min": 14,
-            "max": 14,
+            "min": 9,
+            "max": 9,
             "degrades": [
-                "/src/allocator-inst.cc/multi/_stati64",
                 "/stabs/basic_iostream<char,std::char_traits<char>>",
                 "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
-                "/std/fpos<int>",
-                "/tinyxml.cpp/anon/$_5",
-                "/tinyxmlerror.cpp/anon/$_2",
-                "/tinyxmlparser.cpp/anon/$_2",
-                "/xmltest_min.cpp/anon/$_2"
+                "/std/fpos<int>"
             ]
         },
         "struct-truncated": {
