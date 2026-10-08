@@ -37,11 +37,9 @@
             "max": 239
         },
         "base-synthesized": {
-            "min": 5,
-            "max": 5,
+            "min": 3,
+            "max": 3,
             "degrades": [
-                "/dll.cpp/CCM_Base@+0",
-                "/dll.cpp/GCM_Base@+0",
                 "/dll.cpp/OpenErr@+0",
                 "/dll.cpp/ReadErr@+0",
                 "/dll.cpp/WriteErr@+0"
@@ -306,8 +304,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 763,
-            "max": 763
+            "min": 765,
+            "max": 765
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -1037,13 +1035,11 @@
             "max": 98
         },
         "struct-mostly-undefined": {
-            "min": 7,
-            "max": 7,
+            "min": 5,
+            "max": 5,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
-                "/dll.cpp/CCM_Base",
-                "/dll.cpp/GCM_Base",
                 "/dll.cpp/OpenErr",
                 "/dll.cpp/ReadErr",
                 "/dll.cpp/WriteErr"
@@ -1082,16 +1078,16 @@
             "max": 12
         },
         "vfptr-inherited-from-base": {
-            "min": 200,
-            "max": 200
+            "min": 198,
+            "max": 198
         },
         "vfptr-normalized": {
             "min": 57,
             "max": 57
         },
         "vfptr-split-from-base": {
-            "min": 455,
-            "max": 455
+            "min": 457,
+            "max": 457
         },
         "vtable-skipped": {
             "min": 712,
