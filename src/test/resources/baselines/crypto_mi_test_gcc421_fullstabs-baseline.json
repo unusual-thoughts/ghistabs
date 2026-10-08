@@ -103,28 +103,18 @@
             "max": 268
         },
         "base-empty-ebo-inferred": {
-            "min": 18,
-            "max": 18
+            "min": 2,
+            "max": 2
         },
         "base-synthesized": {
-            "min": 31,
-            "max": 31,
+            "min": 5,
+            "max": 5,
             "degrades": [
                 "/dll.cpp/CCM_Base@+0",
                 "/dll.cpp/GCM_Base@+0",
                 "/dll.cpp/OpenErr@+0",
                 "/dll.cpp/ReadErr@+0",
-                "/dll.cpp/WriteErr@+0",
-                "/stabs/basic_fstream<char,std::char_traits<char>>@+0",
-                "/stabs/basic_fstream<wchar_t,std::char_traits<wchar_t>>@+0",
-                "/stabs/basic_ifstream<char,std::char_traits<char>>@+0",
-                "/stabs/basic_ifstream<wchar_t,std::char_traits<wchar_t>>@+0",
-                "/stabs/basic_iostream<char,std::char_traits<char>>@+0",
-                "/stabs/basic_iostream<char,std::char_traits<char>>@+8",
-                "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>@+0",
-                "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>@+8",
-                "/stabs/basic_ofstream<char,std::char_traits<char>>@+0",
-                "/stabs/basic_ofstream<wchar_t,std::char_traits<wchar_t>>@+0"
+                "/dll.cpp/WriteErr@+0"
             ]
         },
         "canonical-content-merged": {
@@ -132,12 +122,12 @@
             "max": 6
         },
         "canonical-key-merged": {
-            "min": 2160,
-            "max": 2160
+            "min": 2153,
+            "max": 2153
         },
         "canonical-key-multi-hash": {
-            "min": 100,
-            "max": 100
+            "min": 94,
+            "max": 94
         },
         "canonical-scope-collision": {
             "min": 55,
@@ -243,19 +233,12 @@
             "min": 1,
             "max": 8,
             "degrades": [
-                "/stabs/basic_ifstream<char,std::char_traits<char>>.conflict",
-                "/stabs/basic_istream<char,std::char_traits<char>>.conflict",
-                "/stabs/basic_istream<char,std::char_traits<char>>.conflict1",
-                "/stabs/basic_ofstream<char,std::char_traits<char>>.conflict",
-                "/stabs/basic_ostream<char,std::char_traits<char>>.conflict",
-                "/stabs/basic_ostream<char,std::char_traits<char>>.conflict1",
-                "/stabs/basic_ostream<char,std::char_traits<char>>.conflict2",
                 "/wchar_t.conflict"
             ]
         },
         "dtm-conflicts-post": {
-            "min": 13,
-            "max": 13
+            "min": 1,
+            "max": 1
         },
         "dtm-conflicts-pre": {
             "min": 2,
@@ -429,8 +412,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 919,
-            "max": 919
+            "min": 879,
+            "max": 879
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -1113,12 +1096,12 @@
             ]
         },
         "placeholder-created": {
-            "min": 53915,
-            "max": 53915
+            "min": 53832,
+            "max": 53832
         },
         "placeholder-undefined-fields": {
-            "min": 960,
-            "max": 960,
+            "min": 948,
+            "max": 948,
             "degrades": [
                 "AllocatorWithCleanup<char,false>",
                 "AllocatorWithCleanup<unsigned_char,false>",
@@ -1282,10 +1265,6 @@
                 "allocator<unsigned_long_long>",
                 "allocator<unsigned_short>",
                 "allocator<wchar_t>",
-                "basic_iostream<char,std::char_traits<char>>",
-                "basic_iostream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_istream<char,std::char_traits<char>>",
-                "basic_ostream<char,std::char_traits<char>>",
                 "bidirectional_iterator_tag",
                 "forward_iterator_tag",
                 "less<char_const*>",
@@ -1360,8 +1339,8 @@
             "max": 378
         },
         "struct-mostly-undefined": {
-            "min": 17,
-            "max": 17,
+            "min": 9,
+            "max": 9,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
@@ -1370,28 +1349,18 @@
                 "/dll.cpp/OpenErr",
                 "/dll.cpp/ReadErr",
                 "/dll.cpp/WriteErr",
-                "/stabs/basic_iostream<char,std::char_traits<char>>",
-                "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>"
+                "/stabs/basic_ostream<char,std::char_traits<char>>",
+                "/stabs/basic_ostream<wchar_t,std::char_traits<wchar_t>>"
             ]
         },
         "struct-truncated": {
-            "min": 31,
-            "max": 31,
+            "min": 5,
+            "max": 5,
             "degrades": [
                 "AlgorithmParametersTemplate<bool>",
                 "AlgorithmParametersTemplate<unsigned_char>",
                 "Store",
-                "_Unwind_Exception",
-                "basic_fstream<char,std::char_traits<char>>",
-                "basic_fstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ifstream<char,std::char_traits<char>>",
-                "basic_ifstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_istream<char,std::char_traits<char>>",
-                "basic_istream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ofstream<char,std::char_traits<char>>",
-                "basic_ofstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ostream<char,std::char_traits<char>>",
-                "basic_ostream<wchar_t,std::char_traits<wchar_t>>"
+                "_Unwind_Exception"
             ]
         },
         "text-boundaries-out-of-order": {
