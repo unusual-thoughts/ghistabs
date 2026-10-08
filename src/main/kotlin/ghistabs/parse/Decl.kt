@@ -77,6 +77,9 @@ sealed interface TypeDecl<out Id : IdInterface> {
      */
     val wrapped: TypeDecl<Id>? get() = null
 
+    /** The id this node binds directly: the one a [Ref] points at, or the one an [InlineDef] defines. */
+    val id: Id? get() = null
+
     /**
      * Every TypeDecl nested directly in this one, one list per slot (an [Array]'s element and index type, an
      * [Aggregate]'s bases, fields, methods and vptr base), each in declaration order. The generic walks over
@@ -98,7 +101,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     /** Forward reference to a type defined elsewhere by id. */
     @Serializable
-    data class Ref<Id : IdInterface>(@Contextual val id: Id) : TypeDecl<Id>
+    data class Ref<Id : IdInterface>(@Contextual override val id: Id) : TypeDecl<Id>
 
     /**
      * gcc's void: a type *explicitly* defined as itself (`(x,y)=(x,y)`). Only the `=`-definition
@@ -385,7 +388,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
     @Serializable
-    data class InlineDef<Id : IdInterface>(@Contextual val id: Id, val inner: TypeDecl<Id>) : TypeDecl<Id> {
+    data class InlineDef<Id : IdInterface>(@Contextual override val id: Id, val inner: TypeDecl<Id>) : TypeDecl<Id> {
         override val wrapped get() = inner
     }
 

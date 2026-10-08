@@ -124,11 +124,7 @@ class TypeStore(
                 // Either spelling of "the base is over there": a plain `(0,333)` Ref, or the
                 // inline cross-reference `(0,70)=xsBlockCipher:` gcc 3.4.5 writes when the CU has
                 // only seen the base forward-declared. Both carry the id the base will resolve at.
-                val refId = when (val t = field.type) {
-                    is TypeDecl.Ref -> t.id
-                    is TypeDecl.InlineDef -> t.id
-                    else -> null
-                } ?: continue
+                val refId = field.type.id ?: continue
                 if (field.name.isEmpty()) continue
                 if (!isInheritancePseudoField(field, refId, structBits)) continue
                 // Rewrite fires regardless of whether the Ref is bound — the bogus-bitsize
@@ -201,11 +197,7 @@ class TypeStore(
     internal fun anonymousTypedefTargetNames() = buildMap {
         for (td in byId.values) {
             val name = td.name ?: continue
-            val targetId = when (val body = td.body) {
-                is TypeDecl.InlineDef -> body.id
-                is TypeDecl.Ref -> body.id
-                else -> continue
-            }
+            val targetId = td.body.id ?: continue
             val target = byId[targetId] ?: continue
             if (target.name != null) continue
             if (target.body !is TypeDecl.Aggregate && target.body !is TypeDecl.Enum) continue

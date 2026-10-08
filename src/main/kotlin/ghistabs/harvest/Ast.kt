@@ -376,13 +376,7 @@ data class Func(
     fun thisParamTypeId(bodyOf: (GlobalTypeId) -> GlobalTypeDecl?): GlobalTypeId? {
         val self = params.firstOrNull()?.body?.takeIf { it.name == "this" } ?: return null
         val pointee = self.type.aliases(bodyOf).firstNotNullOfOrNull { it as? TypeDecl.Pointer }?.inner
-        return pointee?.aliases(bodyOf)?.firstNotNullOfOrNull {
-            when (it) {
-                is TypeDecl.Ref -> it.id
-                is TypeDecl.InlineDef -> it.id
-                else -> null
-            }
-        }
+        return pointee?.aliases(bodyOf)?.firstNotNullOfOrNull { it.id }
     }
 
     /**
