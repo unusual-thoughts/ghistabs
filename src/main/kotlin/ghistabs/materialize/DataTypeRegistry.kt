@@ -56,6 +56,9 @@ class DataTypeRegistry(
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     internal val placeholders = mutableMapOf<GlobalTypeId, DataType>()
 
+    /** Structs [reportHoles] checks once every type is filled; see [fillComposite]. */
+    internal val holesToReport = mutableListOf<Pair<Structure, String>>()
+
     // Baseline the DTM's `.conflict` census at construction (before any of our passes touch the DTM;
     // harvest doesn't). Ghidra's own analysis may have forked some, so the end-of-import delta
     // ([reportConflictDelta]) attributes only the forks the stabs import introduced.
