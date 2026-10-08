@@ -557,11 +557,11 @@
             "min": 2,
             "max": 2
         },
-        "struct-truncated": {
+        "struct-mostly-undefined": {
             "min": 1,
             "max": 1,
             "degrades": [
-                "_Unwind_Exception"
+                "//_Unwind_Exception"
             ]
         },
         "text-boundaries-out-of-order": {

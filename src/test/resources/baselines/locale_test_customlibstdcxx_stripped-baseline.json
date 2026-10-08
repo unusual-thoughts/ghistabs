@@ -625,11 +625,11 @@
             "min": 146,
             "max": 146
         },
-        "struct-truncated": {
+        "struct-mostly-undefined": {
             "min": 1,
             "max": 1,
             "degrades": [
-                "_Unwind_Exception"
+                "/libsupc++/eh_alloc.cc/multi/_Unwind_Exception"
             ]
         },
         "text-boundaries-out-of-order": {
