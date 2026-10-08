@@ -112,17 +112,17 @@
                 "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>@+8"
             ]
         },
+        "canonical-content-merged": {
+            "min": 5,
+            "max": 5
+        },
         "canonical-key-merged": {
-            "min": 426,
-            "max": 426
+            "min": 401,
+            "max": 401
         },
         "canonical-key-multi-hash": {
-            "min": 35,
-            "max": 35
-        },
-        "canonical-key-multi-kind": {
-            "min": 4,
-            "max": 4
+            "min": 25,
+            "max": 25
         },
         "canonical-scope-collision": {
             "min": 22,
@@ -609,8 +609,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 40858,
-            "max": 40858
+            "min": 41213,
+            "max": 41213
         },
         "placeholder-undefined-fields": {
             "min": 215,
@@ -684,14 +684,17 @@
             "max": 148
         },
         "struct-mostly-undefined": {
-            "min": 11,
-            "max": 11,
+            "min": 14,
+            "max": 14,
             "degrades": [
-                "/libsupc++/del_op.cc/multi/$_2",
                 "/src/allocator-inst.cc/multi/_stati64",
                 "/stabs/basic_iostream<char,std::char_traits<char>>",
                 "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
-                "/std/fpos<int>"
+                "/std/fpos<int>",
+                "/tinyxml.cpp/anon/$_5",
+                "/tinyxmlerror.cpp/anon/$_2",
+                "/tinyxmlparser.cpp/anon/$_2",
+                "/xmltest_min.cpp/anon/$_2"
             ]
         },
         "struct-truncated": {

@@ -88,17 +88,17 @@
             "min": 44,
             "max": 44
         },
-        "canonical-key-merged": {
-            "min": 302,
-            "max": 302
-        },
-        "canonical-key-multi-hash": {
-            "min": 34,
-            "max": 34
-        },
-        "canonical-key-multi-kind": {
+        "canonical-content-merged": {
             "min": 2,
             "max": 2
+        },
+        "canonical-key-merged": {
+            "min": 300,
+            "max": 300
+        },
+        "canonical-key-multi-hash": {
+            "min": 27,
+            "max": 27
         },
         "canonical-scope-collision": {
             "min": 27,
@@ -581,8 +581,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 43366,
-            "max": 43366
+            "min": 43634,
+            "max": 43634
         },
         "placeholder-undefined-fields": {
             "min": 202,
