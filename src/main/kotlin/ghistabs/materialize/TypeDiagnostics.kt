@@ -169,8 +169,19 @@ internal fun DataType.naturalAlignment(): Int = when (this) {
 }
 
 /**
+ * The widest scalar [this] holds: an upper bound on its alignment, which is what padding stays under. Not
+ * [naturalAlignment], whose `long long` is Ghidra's 4 where MinGW's gcc aligns it at 8.
+ */
+internal fun DataType.widestScalar(): Int = when (this) {
+    is Composite -> definedComponents.maxOfOrNull { it.dataType.widestScalar() } ?: 1
+    is GhidraArray -> dataType.widestScalar()
+    is TypeDef -> baseDataType.widestScalar()
+    else -> alignedLength
+}
+
+/**
  * Whether [gap] is the padding that rounds [this] up to its alignment: it ends the struct, follows a
- * defined component, and is shorter than the alignment. `_TAPE_SET_POSITION`'s 7 bytes after its
+ * defined component, and is shorter than its widest scalar. `_TAPE_SET_POSITION`'s 7 bytes after its
  * one-byte `Immediate`, which a `LARGE_INTEGER` aligns at 8. A struct with nothing defined has no
  * padding, only a hole.
  */
@@ -179,7 +190,7 @@ internal fun Structure.isTailPadding(gap: GapRecord): Boolean {
     val length = (gap.lengthBits / 8).toInt()
     return start > 0 && start + length == this.length &&
         definedComponents.any { it.offset < start } &&
-        length < naturalAlignment()
+        length < widestScalar()
 }
 
 /**
