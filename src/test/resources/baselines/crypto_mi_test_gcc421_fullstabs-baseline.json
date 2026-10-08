@@ -1360,8 +1360,8 @@
             "max": 378
         },
         "struct-mostly-undefined": {
-            "min": 19,
-            "max": 19,
+            "min": 17,
+            "max": 17,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
@@ -1370,10 +1370,8 @@
                 "/dll.cpp/OpenErr",
                 "/dll.cpp/ReadErr",
                 "/dll.cpp/WriteErr",
-                "/hrtimer.cpp/multi/_TAPE_SET_POSITION",
                 "/stabs/basic_iostream<char,std::char_traits<char>>",
-                "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
-                "/std/fpos<int>"
+                "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>"
             ]
         },
         "struct-truncated": {
