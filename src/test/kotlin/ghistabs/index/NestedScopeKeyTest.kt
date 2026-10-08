@@ -2,6 +2,7 @@ package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*
@@ -43,9 +44,10 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     private fun struct(
         methods: List<Method<GlobalTypeId>> = emptyList(),
         fields: List<Field<GlobalTypeId>> = emptyList(),
+        sizeBytes: Long = 4L,
     ) = TypeDecl.Aggregate(
         kind = AggrKind.STRUCT,
-        sizeBytes = 4L,
+        sizeBytes = sizeBytes,
         bases = emptyList(),
         fields = fields,
         methods = methods,
@@ -121,5 +123,20 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         val wcharKey = hiderKeyFor(wcharString, "_ZNSbIwSt11char_traitsIwESaIwEE5clearEv", TypeDecl.Builtin(21))
         charKey.name mustBe "_Alloc_hider"
         wcharKey.category.mustNotBe(charKey.category)
+    }
+
+    @Test fun aSmallerBodyMergedIntoALargerOneIsReported() {
+        // istream's and ostream's sentry, both unqualified and method-less: nothing scopes them, so they
+        // share one header key and the 1-byte one is materialized as the 8-byte winner.
+        val ok = field("_M_ok", TypeDecl.Builtin(0))
+        val istream = ast(id(), "sentry", struct(fields = listOf(ok), sizeBytes = 1))
+        val ostream =
+            ast(id(), "sentry", struct(fields = listOf(ok, field("_M_os", TypeDecl.Builtin(0))), sizeBytes = 8))
+        val diag = StabsDiagnostics()
+        val hints = hintsOf(harvestOf(istream, ostream), foldSources = false, sink = diag)
+
+        val slot = hints.types.locateTypes(hints).values.single { istream.id in it.members }
+        slot.type mustBe ostream
+        diag.degradationTargets()["struct-longer-than-stab"].orEmpty() mustBe listOf(slot.location.toString())
     }
 }

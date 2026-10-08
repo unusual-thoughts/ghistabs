@@ -187,6 +187,25 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
         val winner = members.pickWinner(index, { it.body }, { it.id.source.filename })
         return LocatedType(key, winner, members.map { it.id }, contentClasses.size)
     }
+
+    /**
+     * Every member of a slot resolves to its winner's DataType, and the winner is the largest body, so a
+     * member gcc laid out smaller is materialized longer than its own stab: istream's 1-byte `sentry` and
+     * ostream's 8-byte one share a header key when neither carries a method to scope it, and two winnt.h
+     * versions disagree on `_REPARSE_DATA_BUFFER`. Its fields are the winner's, not its own.
+     */
+    fun reportSmallerBodies(key: TypeLocation, winner: Type, members: List<Type>) {
+        val size = (winner.body as? TypeDecl.Aggregate)?.sizeBytes ?: return
+        val smaller = members.filter { ((it.body as? TypeDecl.Aggregate)?.sizeBytes ?: size) < size }
+        if (smaller.isEmpty()) return
+        val bySize = smaller.groupBy({ (it.body as TypeDecl.Aggregate).sizeBytes }, { it.id.source.filename })
+            .map { (bytes, files) -> "$bytes bytes in ${files.toSet().joinToString()}" }
+        degradation(
+            "struct-longer-than-stab",
+            key.toString(),
+            "$size-byte body from ${winner.id.source.filename} stands in for ${bySize.joinToString()}",
+        )
+    }
 }
 
 /**
@@ -261,6 +280,7 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
             members.map { it.headerKey() to Slot(it) }
         }.groupBy({ it.first }, { it.second }).map { (key, slots) ->
             nesting.classifyGroup(key, slots.flatMap { it.voters }).copy(members = slots.flatMap { it.ids })
+                .also { nesting.reportSmallerBodies(key, it.type, slots.flatMap { slot -> slot.members }) }
         }
 
     // §B: merge by layout, not content — a class's method-less header/`multi` copies share the
