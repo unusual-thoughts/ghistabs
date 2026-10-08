@@ -49,11 +49,6 @@ fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Aggregate<GlobalTypeId>): 
 fun TypeGraph.isPolymorphic(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) =
     hasPolymorphicBaseSubobject(typeDecl) || typeDecl.declaresVptr
 
-/** Whether a class says it has a vptr of its own: a vtable marker, a virtual method, or a vptr field. */
-val TypeDecl.Aggregate<*>.declaresVptr get() = hasVTablePointerMarker ||
-    methods.any { it.virt == VirtKind.VIRTUAL } ||
-    fields.any { isVptrFieldName(it.name) }
-
 /**
  * Every virtual base in [typeDecl]'s graph, not only the directly-declared ones — a vtable carries one
  * vbase offset per *distinct* virtual base however deep it was inherited. `std::iostream` is the case

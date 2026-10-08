@@ -102,10 +102,6 @@
             "min": 268,
             "max": 268
         },
-        "base-empty-ebo-inferred": {
-            "min": 2,
-            "max": 2
-        },
         "base-synthesized": {
             "min": 5,
             "max": 5,
@@ -1339,8 +1335,8 @@
             "max": 378
         },
         "struct-mostly-undefined": {
-            "min": 9,
-            "max": 9,
+            "min": 7,
+            "max": 7,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
@@ -1348,9 +1344,7 @@
                 "/dll.cpp/GCM_Base",
                 "/dll.cpp/OpenErr",
                 "/dll.cpp/ReadErr",
-                "/dll.cpp/WriteErr",
-                "/stabs/basic_ostream<char,std::char_traits<char>>",
-                "/stabs/basic_ostream<wchar_t,std::char_traits<wchar_t>>"
+                "/dll.cpp/WriteErr"
             ]
         },
         "struct-truncated": {

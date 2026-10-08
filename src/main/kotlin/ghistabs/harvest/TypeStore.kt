@@ -115,8 +115,7 @@ class TypeStore(
         // Outer struct id → its inheritance-pseudo-fields. Rewriting moves them to `bases`
         // so the materializer's BaseInsertionPlanner / firstPolymorphicBase / vtable wiring
         // sees the inheritance.
-        val outerRewrites =
-            mutableMapOf<GlobalTypeId, MutableList<Field<GlobalTypeId>>>()
+        val outerRewrites = mutableMapOf<GlobalTypeId, MutableList<Field<GlobalTypeId>>>()
         for (ast in byId.values) {
             val struct = ast.body as? TypeDecl.Aggregate ?: continue
             val structBits = struct.sizeBytes * 8
@@ -151,12 +150,34 @@ class TypeStore(
             )
             append(*synthetic.toTypedArray())
         }
+
+        /**
+         * Whether [this] is a dynamic class, with a vptr of its own or a base's: [ghistabs.materialize.cpp.isPolymorphic]
+         * before there is a graph to resolve bases in, and with [outerRewrites], the bases still spelled as fields.
+         * A class whose own vptr is at 0 has no non-virtual dynamic base, which would have shared it, so a
+         * dynamic base there is a virtual one: gcc 4.2.1's `basic_ostream<char,…>:T(0,134)=s140basic_ios<char,…>:
+         * (0,128),32,8704;_vptr$basic_ostream:(0,253),0,32;;`. A virtual base with no vptr stays non-virtual.
+         */
+        fun GlobalTypeDecl.isDynamic(seen: MutableSet<GlobalTypeId> = mutableSetOf()): Boolean {
+            val id = id?.takeIf(seen::add) ?: return false
+            val struct = byId[id]?.body as? TypeDecl.Aggregate ?: return false
+            if (struct.declaresVptr) return true
+            val bases = struct.bases.map { it.type } + outerRewrites[id].orEmpty().map { it.type }
+            return bases.any { it.isDynamic(seen) }
+        }
+
         for ((outerId, pseudoFields) in outerRewrites) {
             val outer = byId[outerId] ?: continue
             val struct = outer.body as? TypeDecl.Aggregate ?: continue
             val pseudoSet = pseudoFields.toSet()
+            val ownVptr = struct.fields.any { isVptrFieldName(it.name) }
             val newBases = struct.bases + pseudoFields.map { f ->
-                Base(type = f.type, isVirtual = false, access = Access.PUBLIC, offsetBits = f.offsetBits)
+                Base(
+                    type = f.type,
+                    isVirtual = ownVptr && f.type.isDynamic(),
+                    access = Access.PUBLIC,
+                    offsetBits = f.offsetBits,
+                )
             }
             val newFields = struct.fields.filter { it !in pseudoSet }
             byId[outerId] = outer.copy(

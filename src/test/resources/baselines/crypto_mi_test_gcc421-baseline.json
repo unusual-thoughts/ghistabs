@@ -36,16 +36,10 @@
             "min": 239,
             "max": 239
         },
-        "base-empty-ebo-inferred": {
-            "min": 4,
-            "max": 4
-        },
         "base-synthesized": {
-            "min": 7,
-            "max": 7,
+            "min": 5,
+            "max": 5,
             "degrades": [
-                "/algparam.cpp/multi/basic_fstream<char,std::char_traits<char>>@+0",
-                "/algparam.cpp/multi/basic_fstream<wchar_t,std::char_traits<wchar_t>>@+0",
                 "/dll.cpp/CCM_Base@+0",
                 "/dll.cpp/GCM_Base@+0",
                 "/dll.cpp/OpenErr@+0",
@@ -327,8 +321,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 761,
-            "max": 761
+            "min": 763,
+            "max": 763
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -1058,13 +1052,11 @@
             "max": 38
         },
         "struct-mostly-undefined": {
-            "min": 9,
-            "max": 9,
+            "min": 7,
+            "max": 7,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
-                "/algparam.cpp/multi/basic_iostream<char,std::char_traits<char>>",
-                "/algparam.cpp/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
                 "/dll.cpp/CCM_Base",
                 "/dll.cpp/GCM_Base",
                 "/dll.cpp/OpenErr",
@@ -1073,22 +1065,12 @@
             ]
         },
         "struct-truncated": {
-            "min": 14,
-            "max": 14,
+            "min": 4,
+            "max": 4,
             "degrades": [
                 "AlgorithmParametersTemplate<bool>",
                 "AlgorithmParametersTemplate<unsigned_char>",
-                "Store",
-                "basic_fstream<char,std::char_traits<char>>",
-                "basic_fstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ifstream<char,std::char_traits<char>>",
-                "basic_ifstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_istream<char,std::char_traits<char>>",
-                "basic_istream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ofstream<char,std::char_traits<char>>",
-                "basic_ofstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ostream<char,std::char_traits<char>>",
-                "basic_ostream<wchar_t,std::char_traits<wchar_t>>"
+                "Store"
             ]
         },
         "text-boundaries-out-of-order": {
@@ -1119,17 +1101,21 @@
             "min": 47,
             "max": 47
         },
+        "vbase-applied": {
+            "min": 12,
+            "max": 12
+        },
         "vfptr-inherited-from-base": {
-            "min": 202,
-            "max": 202
+            "min": 200,
+            "max": 200
         },
         "vfptr-normalized": {
             "min": 57,
             "max": 57
         },
         "vfptr-split-from-base": {
-            "min": 453,
-            "max": 453
+            "min": 455,
+            "max": 455
         },
         "vtable-construction": {
             "min": 241,
