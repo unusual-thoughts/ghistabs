@@ -77,6 +77,21 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         hiderId mustBeIn groups.getValue(key).members
     }
 
+    /**
+     * Owners that diverge are demoted to the header key, which a method-less copy with no stated scope
+     * already holds (xmltest_gcc421_fullstabs's own-code `basic_istream` against libstdc++'s). One slot.
+     */
+    @Test fun demotedScopeGroupAndHeaderGroupShareTheirSlot() {
+        fun sized(size: Long, vararg mangled: String) = struct(mangled.map(::method)).copy(sizeBytes = size)
+        val asts = listOf(
+            ast(id(), "S", sized(4, "_ZN1S1fEv")),
+            ast(id(), "S", sized(8, "_ZN1S1fEv")),
+            ast(id(), "S", sized(12)),
+        )
+        val groups = locatedTypesOf(*asts.toTypedArray()).values.filter { it.type.name == "S" }
+        groups.map { it.members.toSet() } mustBe listOf(asts.map { it.id }.toSet())
+    }
+
     @Test fun qualifiedNameScopesMethodlessNested() {
         // gcc emits `basic_ostream<char,…>::sentry` method-less in some CUs; the qualifier alone scopes it,
         // under the same member category the method-bearing ostream files members under (`So`→`ostream`).

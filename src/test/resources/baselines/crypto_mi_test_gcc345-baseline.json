@@ -52,8 +52,8 @@
             "max": 3
         },
         "canonical-key-merged": {
-            "min": 1426,
-            "max": 1426
+            "min": 1430,
+            "max": 1430
         },
         "canonical-key-multi-hash": {
             "min": 80,
@@ -72,12 +72,12 @@
             "max": 211
         },
         "demangle-applied": {
-            "min": 27993,
-            "max": 27993
+            "min": 27996,
+            "max": 27996
         },
         "demangle-attempted": {
-            "min": 27993,
-            "max": 27993
+            "min": 27996,
+            "max": 27996
         },
         "demangle-displaced-function-renamed": {
             "min": 0,
@@ -492,8 +492,8 @@
             "max": 1570
         },
         "method-implicit-not-emitted": {
-            "min": 837,
-            "max": 837
+            "min": 834,
+            "max": 834
         },
         "method-static-no-this": {
             "min": 37,
@@ -991,8 +991,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 25675,
-            "max": 25675
+            "min": 25669,
+            "max": 25669
         },
         "placeholder-undefined-fields": {
             "min": 202,
@@ -1155,8 +1155,8 @@
             "max": 800
         },
         "resolve-ambiguous": {
-            "min": 1075,
-            "max": 1075
+            "min": 1072,
+            "max": 1072
         },
         "rtti-pseudo-substituted": {
             "min": 150,
