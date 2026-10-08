@@ -7,6 +7,7 @@ import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
 import ghistabs.index.demangledClassPath
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.naturalAlignment
 import ghistabs.materialize.reportHoles
 import ghistabs.materialize.resolveRef
 import ghistabs.materialize.undef
@@ -14,7 +15,6 @@ import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.member
-import ghidra.program.model.data.Array as GhidraArray
 
 /**
  * A vptr at a base's offset is inherited: it is in the base subobject laid there, or in the non-virtual
@@ -272,7 +272,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         embedNonVirtualParts(body, struct, qualifiedName)
         val nv = struct.definedComponents
         val nvEnd = nv.maxOfOrNull { it.offset + it.length } ?: 0
-        val nvAlign = nv.maxOfOrNull { alignmentOf(it.dataType) } ?: 1
+        val nvAlign = nv.maxOfOrNull { it.dataType.naturalAlignment() } ?: 1
         layVirtualBases(body, struct, qualifiedName, nvEnd, nvAlign)
         nonVirtualSizes[struct.dataTypePath] = alignUp(nvEnd, nvAlign)
         registry.reportHoles(struct, qualifiedName)
@@ -330,7 +330,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         val offsets = virtualBaseOffsets(
             nvEnd,
             nvAlign,
-            vbases.map { (_, dt) -> dt.length to alignmentOf(dt) },
+            vbases.map { (_, dt) -> dt.length to dt.naturalAlignment() },
             body.sizeBytes.toInt(),
         ) ?: return degradation(
             "vbase-layout-mismatch",
@@ -378,13 +378,5 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
                         degradation("self-base-field-dropped", "${into.name}.${it.fieldName}", e.message)
                     }
             }
-    }
-
-    /** Natural alignment. Ours are non-packed structs, which Ghidra aligns at 1 whatever they hold. */
-    private fun alignmentOf(dt: DataType): Int = when (dt) {
-        is Composite -> dt.definedComponents.maxOfOrNull { alignmentOf(it.dataType) } ?: 1
-        is GhidraArray -> alignmentOf(dt.dataType)
-        is TypeDef -> alignmentOf(dt.baseDataType)
-        else -> registry.dtm.dataOrganization.getAlignment(dt)
     }
 }
