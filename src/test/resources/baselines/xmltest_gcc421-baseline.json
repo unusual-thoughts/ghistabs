@@ -26,18 +26,6 @@
             "min": 18,
             "max": 18
         },
-        "base-empty-ebo-inferred": {
-            "min": 4,
-            "max": 4
-        },
-        "base-synthesized": {
-            "min": 2,
-            "max": 2,
-            "degrades": [
-                "/tinyxml.cpp/multi/basic_stringstream<char,std::char_traits<char>,std::allocator<char>>@+0",
-                "/tinyxml.cpp/multi/basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>@+0"
-            ]
-        },
         "canonical-content-merged": {
             "min": 10,
             "max": 10
@@ -277,8 +265,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 78,
-            "max": 78
+            "min": 80,
+            "max": 80
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -375,29 +363,11 @@
             "min": 2,
             "max": 2
         },
-        "struct-mostly-undefined": {
-            "min": 2,
-            "max": 2,
-            "degrades": [
-                "/tinyxml.cpp/multi/basic_iostream<char,std::char_traits<char>>",
-                "/tinyxml.cpp/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>"
-            ]
-        },
         "struct-truncated": {
-            "min": 11,
-            "max": 11,
+            "min": 1,
+            "max": 1,
             "degrades": [
-                "TiXmlText",
-                "basic_istream<char,std::char_traits<char>>",
-                "basic_istream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_istringstream<char,std::char_traits<char>,std::allocator<char>>",
-                "basic_istringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
-                "basic_ostream<char,std::char_traits<char>>",
-                "basic_ostream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ostringstream<char,std::char_traits<char>,std::allocator<char>>",
-                "basic_ostringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
-                "basic_stringstream<char,std::char_traits<char>,std::allocator<char>>",
-                "basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>"
+                "TiXmlText"
             ]
         },
         "text-boundaries-out-of-order": {
@@ -424,17 +394,21 @@
             "min": 15,
             "max": 15
         },
+        "vbase-applied": {
+            "min": 12,
+            "max": 12
+        },
         "vfptr-inherited-from-base": {
-            "min": 10,
-            "max": 10
+            "min": 8,
+            "max": 8
         },
         "vfptr-normalized": {
             "min": 12,
             "max": 12
         },
         "vfptr-split-from-base": {
-            "min": 67,
-            "max": 67
+            "min": 69,
+            "max": 69
         },
         "vtable-construction": {
             "min": 14,
