@@ -1043,12 +1043,11 @@
             "max": 98
         },
         "struct-mostly-undefined": {
-            "min": 13,
-            "max": 13,
+            "min": 10,
+            "max": 10,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
-                "/algparam.cpp/multi/_stati64",
                 "/algparam.cpp/multi/basic_iostream<char,std::char_traits<char>>",
                 "/algparam.cpp/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
                 "/dll.cpp/CCM_Base",
@@ -1056,9 +1055,7 @@
                 "/dll.cpp/OpenErr",
                 "/dll.cpp/ReadErr",
                 "/dll.cpp/WriteErr",
-                "/hrtimer.cpp/multi/_SHQUERYRBINFO",
-                "/hrtimer.cpp/multi/_TAPE_SET_POSITION",
-                "/sha.cpp/anon/$_2"
+                "/hrtimer.cpp/multi/_TAPE_SET_POSITION"
             ]
         },
         "struct-truncated": {
