@@ -87,6 +87,23 @@ object Demangler {
     /** Parent-namespace chain, root-first, for [mangled]. Empty for a name that does not demangle
      *  *and* for one with no enclosing namespace — callers have never told those apart. */
     fun namespaces(mangled: String): List<String> = of(mangled)?.namespaces.orEmpty()
+
+    /**
+     * The class a member named [mangled] belongs to, root-first and class-last, or empty when the name
+     * does not state it. Unlike [namespaces], a conversion operator inside a template is no evidence:
+     * Ghidra's `ConversionOperatorHandler` strips the template arguments off the namespace it builds,
+     * so `GetValueHelperClass<A,B>::operator bool()` lands in plain `GetValueHelperClass`, and all
+     * 22 instantiations would claim that one scope.
+     */
+    fun classPath(mangled: String): List<String> {
+        val obj = of(mangled) ?: return emptyList()
+        val strippedScope = obj.name.startsWith(CONVERSION_OPERATOR) &&
+            '<' in obj.originalDemangled.orEmpty().substringBefore("::operator ")
+        return if (strippedScope) emptyList() else obj.namespaces
+    }
+
+    /** The name Ghidra gives a conversion operator: `operator.cast.to.bool`. */
+    private const val CONVERSION_OPERATOR = "operator.cast.to."
 }
 
 /**

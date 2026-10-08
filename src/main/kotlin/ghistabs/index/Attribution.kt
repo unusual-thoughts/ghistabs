@@ -132,7 +132,7 @@ fun Type.isCuLocalName() = name?.let { CU_LOCAL_NAME.matches(it) } == true
 /**
  * The type's own demangled path, root-first (`std::string::_M_replace` → `["std", "string"]`), or null
  * when the stab carries no scope signal (method-less, or no member's mangled name demangles). Read off
- * any member's Itanium-mangled name: [Demangler.namespaces] yields the method's namespace, which IS the class's
+ * any member's Itanium-mangled name: [Demangler.classPath] yields the method's namespace, which IS the class's
  * full path. The leaf is the name Ghidra's `this`-param class-struct creator uses — which diverges from
  * the stabs spelling for abbreviation/typedef'd STL types (`Ss` demangles to `std::string`, not
  * `std::basic_string<char,…>`) — so it's what our type must be named to be reused rather than shadowed.
@@ -142,7 +142,7 @@ fun Type.demangledClassPath(): List<String>? {
     // demangles to one, it would satisfy `none {}` vacuously, and callers take its `last()`.
     val methods = (body as? TypeDecl.Aggregate<GlobalTypeId>)?.methods ?: return null
     return methods.firstNotNullOfOrNull { m ->
-        m.mangled?.let(Demangler::namespaces)
+        m.mangled?.let(Demangler::classPath)
             ?.takeIf { it.isNotEmpty() && it.none(Gcc2::isCompilerGeneratedName) }
     }
 }
