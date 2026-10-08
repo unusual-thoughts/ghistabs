@@ -185,14 +185,11 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
  * [field]'s bitsize when it is a bitfield, by `fillComposite`'s test: an integer or enum field whose
  * bitsize is narrower than its type, or whose bitpos is off a byte boundary. Null for any other field.
  */
-fun TypeGraph.bitfieldWidth(field: TypeDecl.Aggregate.Field<GlobalTypeId>): Long? {
-    val typeBits = resolveWith(field.type) { d ->
-        when (d) {
-            is TypeDecl.Range<*>, is TypeDecl.Enum<*>, is TypeDecl.Builtin<*> ->
-                d.sizeBits ?: d.resolveBuiltin()?.length?.times(8L)
-
-            else -> null
-        }
-    } ?: return null
-    return field.sizeBits.takeIf { it > 0 && (it < typeBits || field.offsetBits % 8 != 0L) }
+fun TypeGraph.bitfieldWidth(field: TypeDecl.Aggregate.Field<GlobalTypeId>): Long? = resolveWith(field.type) { d ->
+    when (d) {
+        is TypeDecl.Range, is TypeDecl.Enum, is TypeDecl.Builtin -> d.sizeBits ?: d.resolveBuiltin()?.length?.times(8L)
+        else -> null
+    }
+}?.let { typeBits ->
+    field.sizeBits.takeIf { it > 0 && (it < typeBits || field.offsetBits % 8 != 0L) }
 }
