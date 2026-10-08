@@ -205,10 +205,11 @@ private fun Structure.insertBitField(offsetBits: Long, sizeBits: Long, ft: DataT
 
 /**
  * Reports runs ≥ 4 bytes of unnamed Undefined1 (Ghidra autofills empty bytes with Undefined1
- * components so consecutive components are always contiguous — a naive offset-gap detector never fires).
+ * components so consecutive components are always contiguous — a naive offset-gap detector never fires),
+ * except the struct's [tail padding][Structure.isTailPadding].
  */
 internal fun DataTypeRegistry.reportHoles(struct: Structure, qualifiedName: String) {
-    val holes = struct.detectUndefinedRuns(minRunBytes = 4)
+    val holes = struct.detectUndefinedRuns(minRunBytes = 4).filterNot(struct::isTailPadding)
     diagnostics.recordStructGaps(qualifiedName, holes)
     if (holes.isEmpty()) return
     val bytesInHoles = holes.sumOf { (it.lengthBits / 8).toInt() }
