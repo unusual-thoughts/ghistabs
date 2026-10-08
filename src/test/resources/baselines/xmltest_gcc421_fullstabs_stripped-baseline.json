@@ -684,12 +684,11 @@
             "max": 148
         },
         "struct-mostly-undefined": {
-            "min": 9,
-            "max": 9,
+            "min": 8,
+            "max": 8,
             "degrades": [
                 "/stabs/basic_iostream<char,std::char_traits<char>>",
-                "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
-                "/std/fpos<int>"
+                "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>"
             ]
         },
         "struct-truncated": {
