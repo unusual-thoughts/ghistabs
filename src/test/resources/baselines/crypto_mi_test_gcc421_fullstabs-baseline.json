@@ -274,12 +274,13 @@
             "max": 15
         },
         "field-dropped": {
-            "min": 11,
-            "max": 11,
+            "min": 12,
+            "max": 12,
             "degrades": [
                 "/hrtimer.cpp/multi/$_166.",
                 "/hrtimer.cpp/multi/_FULL_PTR_XLAT_TABLES.XlatSide",
                 "/hrtimer.cpp/multi/_IMAGE_FUNCTION_ENTRY64.",
+                "/hrtimer.cpp/multi/_IMAGE_RESOURCE_DIRECTORY_ENTRY.",
                 "/hrtimer.cpp/multi/_KEY_EVENT_RECORD.uChar",
                 "/hrtimer.cpp/multi/_LDT_ENTRY.HighWord",
                 "/hrtimer.cpp/multi/_NT_TIB.",
@@ -1381,8 +1382,8 @@
             "max": 378
         },
         "struct-mostly-undefined": {
-            "min": 35,
-            "max": 35,
+            "min": 36,
+            "max": 36,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
@@ -1397,6 +1398,7 @@
                 "/hrtimer.cpp/multi/_CHAR_INFO",
                 "/hrtimer.cpp/multi/_IMAGE_FUNCTION_ENTRY64",
                 "/hrtimer.cpp/multi/_IMAGE_LINENUMBER",
+                "/hrtimer.cpp/multi/_IMAGE_RESOURCE_DIRECTORY_ENTRY",
                 "/hrtimer.cpp/multi/_IMAGE_SYMBOL",
                 "/hrtimer.cpp/multi/_LDT_ENTRY",
                 "/hrtimer.cpp/multi/_PROCESS_HEAP_ENTRY",

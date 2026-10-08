@@ -63,6 +63,9 @@ private fun TypeDecl.Aggregate<GlobalTypeId>.usefulStructSize(): Long {
     // bound its legitimate tail padding. Counting it trims every gcc 2.x polymorphic class to 0.
     val nonStatic = fields.filter { !it.isStatic && it.sizeBits > 0 }
     if (nonStatic.isEmpty()) return sizeBytes
+    // A bitfield's storage unit is its type, which can end past its last bit: `unsigned ro:1;` is 4
+    // bytes with one bit used, and nothing here sizes the type to bound that tail.
+    if (nonStatic.any { it.sizeBits % 8 != 0L || it.offsetBits % 8 != 0L }) return sizeBytes
     val fieldEnd = nonStatic.maxOf { ((it.offsetBits + it.sizeBits + 7) / 8) }
     val maxFieldSize = nonStatic.maxOf { ((it.sizeBits + 7) / 8) }
     return if (sizeBytes - fieldEnd > maxFieldSize) fieldEnd else sizeBytes

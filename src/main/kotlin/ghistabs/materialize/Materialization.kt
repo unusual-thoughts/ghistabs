@@ -150,8 +150,14 @@ internal fun DataTypeRegistry.fillComposite(
 
             else -> ft.length
         }
+        // A bitsize narrower than the type, or a bitpos off a byte boundary, is a bitfield. A bitsize of 0
+        // is gcc 2.x's unpacked vptr, whose extent is its type's.
+        val isBitfield = sizeBits > 0 && (sizeBits < ft.length * 8L || offsetBits % 8 != 0L) &&
+            BitFieldDataType.isValidBaseDataType(ft)
         try {
             when (placeholder) {
+                is Structure if isBitfield -> placeholder.insertBitField(offsetBits, sizeBits, ft, name)
+
                 is Structure -> placeholder.replaceAtOffset(
                     (offsetBits / 8).toInt(),
                     ft,
@@ -159,6 +165,8 @@ internal fun DataTypeRegistry.fillComposite(
                     name,
                     null,
                 )
+
+                is Union if isBitfield -> placeholder.addBitField(ft, sizeBits.toInt(), name, null)
 
                 is Union -> placeholder.add(ft, name, null)
 
@@ -177,6 +185,19 @@ internal fun DataTypeRegistry.fillComposite(
     if (placeholder is Structure && !types.hasVirtualBase(body)) reportHoles(placeholder, qualifiedName)
 
     return placeholder
+}
+
+/**
+ * The stab's bitpos counts from the first byte in memory order: from its least significant bit on a
+ * little-endian target, from its most significant on a big-endian one. Ghidra's bitOffset is the
+ * field's left shift within the storage unit, so a big-endian one counts back from the unit's end.
+ */
+private fun Structure.insertBitField(offsetBits: Long, sizeBits: Long, ft: DataType, name: String) {
+    val byteOffset = (offsetBits / 8).toInt()
+    val bitInByte = (offsetBits % 8).toInt()
+    val byteWidth = (bitInByte + sizeBits.toInt() + 7) / 8
+    val bitOffset = if (dataOrganization.isBigEndian) byteWidth * 8 - bitInByte - sizeBits.toInt() else bitInByte
+    insertBitFieldAt(byteOffset, byteWidth, bitOffset, ft, sizeBits.toInt(), name, null)
 }
 
 /**
