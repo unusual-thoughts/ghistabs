@@ -251,6 +251,16 @@
             "min": 2,
             "max": 2
         },
+        "struct-longer-than-stab": {
+            "min": 4,
+            "max": 4,
+            "degrades": [
+                "/adler32.c/multi/internal_state",
+                "/deflate.c/multi/static_tree_desc_s",
+                "/infblock.c/multi/inflate_blocks_state",
+                "/infblock.c/multi/inflate_codes_state"
+            ]
+        },
         "text-data-no-coverage": {
             "min": 8,
             "max": 8

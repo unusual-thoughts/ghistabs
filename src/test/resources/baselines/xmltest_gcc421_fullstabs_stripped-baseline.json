@@ -659,6 +659,13 @@
             "min": 148,
             "max": 148
         },
+        "struct-longer-than-stab": {
+            "min": 1,
+            "max": 1,
+            "degrades": [
+                "/tinyxml.cpp/multi/sentry"
+            ]
+        },
         "struct-mostly-undefined": {
             "min": 1,
             "max": 1,

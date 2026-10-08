@@ -1206,6 +1206,14 @@
             "min": 2,
             "max": 2
         },
+        "struct-longer-than-stab": {
+            "min": 2,
+            "max": 2,
+            "degrades": [
+                "/std/istream/sentry",
+                "/std/winnt/_REPARSE_DATA_BUFFER"
+            ]
+        },
         "struct-mostly-undefined": {
             "min": 4,
             "max": 4,
