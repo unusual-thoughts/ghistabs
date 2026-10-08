@@ -2,8 +2,11 @@ package ghistabs.materialize
 
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.data.Composite
+import ghidra.program.model.data.DataOrganization
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.Structure
+import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.Undefined
 import ghistabs.DEMANGLER_CATEGORY
 import ghistabs.conflictBase
@@ -11,6 +14,7 @@ import ghistabs.diagnose.GapRecord
 import ghistabs.harvest.Type
 import ghistabs.isConflict
 import ghistabs.parse.TypeDecl
+import ghidra.program.model.data.Array as GhidraArray
 
 /**
  * Compromised DataTypes — anonymous (no name in stab), empty-placeholder (body never
@@ -155,6 +159,28 @@ val DataType.isUndefined get() = Undefined.isUndefined(this)
 /** Every component is in the `UndefinedN` family — distinguishes "body ran but bound nothing" from "body never ran". */
 private fun Composite.allComponentsUndefined(): Boolean = numComponents != 0 &&
     components.all { it.dataType.isUndefined }
+
+/** Natural alignment. Ours are non-packed structs, which Ghidra aligns at 1 whatever they hold. */
+internal fun DataType.naturalAlignment(): Int = when (this) {
+    is Composite -> definedComponents.maxOfOrNull { it.dataType.naturalAlignment() } ?: 1
+    is GhidraArray -> dataType.naturalAlignment()
+    is TypeDef -> baseDataType.naturalAlignment()
+    else -> alignment
+}
+
+/**
+ * Whether [gap] is the padding that rounds [this] up to its alignment: it ends the struct, follows a
+ * defined component, and is shorter than the alignment. `_TAPE_SET_POSITION`'s 7 bytes after its
+ * one-byte `Immediate`, which a `LARGE_INTEGER` aligns at 8. A struct with nothing defined has no
+ * padding, only a hole.
+ */
+internal fun Structure.isTailPadding(gap: GapRecord): Boolean {
+    val start = (gap.offsetBits / 8).toInt()
+    val length = (gap.lengthBits / 8).toInt()
+    return start > 0 && start + length == this.length &&
+        definedComponents.any { it.offset < start } &&
+        length < naturalAlignment()
+}
 
 /**
  * Report runs of unnamed Undefined1 ≥ [minRunBytes] in a struct's component list.
