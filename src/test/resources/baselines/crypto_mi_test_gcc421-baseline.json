@@ -36,26 +36,17 @@
             "min": 239,
             "max": 239
         },
-        "base-synthesized": {
-            "min": 3,
-            "max": 3,
-            "degrades": [
-                "/dll.cpp/OpenErr@+0",
-                "/dll.cpp/ReadErr@+0",
-                "/dll.cpp/WriteErr@+0"
-            ]
-        },
         "canonical-content-merged": {
             "min": 10,
             "max": 10
         },
         "canonical-key-merged": {
-            "min": 1975,
-            "max": 1975
+            "min": 1977,
+            "max": 1977
         },
         "canonical-key-multi-hash": {
-            "min": 81,
-            "max": 81
+            "min": 80,
+            "max": 80
         },
         "canonical-scope-collision": {
             "min": 33,
@@ -319,8 +310,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 765,
-            "max": 765
+            "min": 769,
+            "max": 769
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -829,12 +820,12 @@
             ]
         },
         "placeholder-created": {
-            "min": 13391,
-            "max": 13391
+            "min": 13392,
+            "max": 13392
         },
         "placeholder-undefined-fields": {
-            "min": 761,
-            "max": 761,
+            "min": 757,
+            "max": 757,
             "degrades": [
                 "AllocatorWithCleanup<char,false>",
                 "AllocatorWithCleanup<unsigned_char,false>",
@@ -896,7 +887,6 @@
                 "NullAllocator<unsigned_int>",
                 "OFB_Mode<CryptoPP::DES>",
                 "OFB_Mode_ExternalCipher",
-                "OpenErr",
                 "P1363_EMSA2",
                 "PKCS1v15",
                 "PSS",
@@ -906,7 +896,6 @@
                 "RSASS<CryptoPP::PKCS1v15,CryptoPP::SHA>",
                 "RSASS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD2>",
                 "RSASS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD5>",
-                "ReadErr",
                 "Rijndael",
                 "Rijndael_Info",
                 "SKIPJACK",
@@ -916,7 +905,6 @@
                 "TF_SS<CryptoPP::PKCS1v15,CryptoPP::SHA,CryptoPP::RSA,CryptoPP::TF_SS<CryptoPP::PKCS1v15,CryptoPP::SHA,CryptoPP::RSA,int>>",
                 "TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD2,CryptoPP::RSA,CryptoPP::TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD2,CryptoPP::RSA,int>>",
                 "TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD5,CryptoPP::RSA,CryptoPP::TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD5,CryptoPP::RSA,int>>",
-                "WriteErr",
                 "__is_arithmetic<CryptoPP::BaseAndExponent<CryptoPP::EC2NPoint,CryptoPP::Integer>>",
                 "__is_arithmetic<CryptoPP::BaseAndExponent<CryptoPP::ECPPoint,CryptoPP::Integer>>",
                 "__is_arithmetic<CryptoPP::BaseAndExponent<CryptoPP::Integer,CryptoPP::Integer>>",
@@ -1050,22 +1038,18 @@
             "max": 38
         },
         "struct-longer-than-stab": {
-            "min": 2,
-            "max": 2,
+            "min": 1,
+            "max": 1,
             "degrades": [
-                "/asn.cpp/multi/sentry",
-                "/cryptlib.cpp/multi/Err"
+                "/asn.cpp/multi/sentry"
             ]
         },
         "struct-mostly-undefined": {
-            "min": 5,
-            "max": 5,
+            "min": 2,
+            "max": 2,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
-                "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
-                "/dll.cpp/OpenErr",
-                "/dll.cpp/ReadErr",
-                "/dll.cpp/WriteErr"
+                "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>"
             ]
         },
         "text-boundaries-out-of-order": {
@@ -1101,16 +1085,16 @@
             "max": 12
         },
         "vfptr-inherited-from-base": {
-            "min": 198,
-            "max": 198
+            "min": 195,
+            "max": 195
         },
         "vfptr-normalized": {
             "min": 57,
             "max": 57
         },
         "vfptr-split-from-base": {
-            "min": 457,
-            "max": 457
+            "min": 461,
+            "max": 461
         },
         "vtable-construction": {
             "min": 241,
@@ -1698,8 +1682,8 @@
             "max": 603
         },
         "vtable-skipped": {
-            "min": 712,
-            "max": 712
+            "min": 713,
+            "max": 713
         },
         "xref-undefined": {
             "min": 47,

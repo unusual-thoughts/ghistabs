@@ -97,8 +97,8 @@
             "max": 5
         },
         "canonical-key-merged": {
-            "min": 389,
-            "max": 389
+            "min": 386,
+            "max": 386
         },
         "canonical-key-multi-hash": {
             "min": 23,
@@ -587,8 +587,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 41157,
-            "max": 41157
+            "min": 41154,
+            "max": 41154
         },
         "placeholder-undefined-fields": {
             "min": 207,
@@ -616,8 +616,8 @@
             "max": 36
         },
         "scope-from-twin": {
-            "min": 478,
-            "max": 478
+            "min": 490,
+            "max": 490
         },
         "sourcemap-duplicate-entries": {
             "min": 959,
