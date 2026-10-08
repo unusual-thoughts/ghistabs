@@ -142,13 +142,6 @@
             "min": 1,
             "max": 1
         },
-        "field-dropped": {
-            "min": 1,
-            "max": 1,
-            "degrades": [
-                "/std/winbase/_LDT_ENTRY.HighWord"
-            ]
-        },
         "file-start": {
             "min": 121,
             "max": 121
@@ -584,8 +577,8 @@
             "max": 2
         },
         "struct-mostly-undefined": {
-            "min": 13,
-            "max": 13,
+            "min": 11,
+            "max": 11,
             "degrades": [
                 "/build/buildd/mingw32-runtime-3.12/build_dir/src/w32api/include/winnt.h/Anon_winnt_474_bed1a7c2",
                 "/std/fpos<mbstate_t>",
@@ -594,11 +587,9 @@
                 "/std/oaidl/Anon_oaidl_98_ed489352",
                 "/std/oaidl/_wireVARIANT",
                 "/std/objidl/tagPROPVARIANT",
-                "/std/winbase/_LDT_ENTRY",
                 "/std/winnt/Anon_winnt_461_bbacae17",
                 "/std/winnt/Anon_winnt_463_21ea8ac1",
                 "/std/winnt/Anon_winnt_464_527503ce",
-                "/std/winnt/_IMAGE_RESOURCE_DIRECTORY_ENTRY",
                 "/std/winnt/_TAPE_SET_POSITION"
             ]
         },
