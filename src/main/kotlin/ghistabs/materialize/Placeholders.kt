@@ -2,7 +2,9 @@ package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghistabs.harvest.Type
+import ghistabs.index.TypeGraph
 import ghistabs.parse.AggrKind
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
@@ -26,7 +28,7 @@ internal fun DataTypeRegistry.makePlaceholder(
         is TypeDecl.Aggregate -> {
             // A virtual base's bytes are the tail past the last own field, laid later by
             // [ghistabs.materialize.cpp.layClasses] and checked there against this size, so it is not overshoot.
-            val sz = if (types.hasVirtualBase(ast.body)) ast.body.sizeBytes else ast.body.usefulStructSize()
+            val sz = if (types.hasVirtualBase(ast.body)) ast.body.sizeBytes else ast.body.usefulStructSize(types)
             recordTruncation(ast, ast.body.sizeBytes, sz)
             StructureDataType(category, name, sz.toInt(), dtm)
         }
@@ -55,9 +57,10 @@ internal fun DataTypeRegistry.makePlaceholder(
  * bytes are gcc's allocation for a subobject only forward-declared in this CU).
  * Trusting sizeBytes silently overwrites a derived class's own fields when the
  * canonical-but-oversized winner is selected. Trim only when the gap > maxFieldSize
- * (upper bound on legitimate tail padding without knowing the struct's alignment).
+ * (upper bound on legitimate tail padding without knowing the struct's alignment), bases' fields
+ * included: `TiXmlText` pads its one `bool` to 48 for `TiXmlNode`'s pointers.
  */
-private fun TypeDecl.Aggregate<GlobalTypeId>.usefulStructSize(): Long {
+private fun TypeDecl.Aggregate<GlobalTypeId>.usefulStructSize(types: TypeGraph): Long {
     // Sized fields only: gdb's "unpacked" bitsize-0 field — gcc 2.x's C++ abbreviation vptr, whose
     // extent is its type's, not the stab's — claims no bytes, so it can neither end the struct nor
     // bound its legitimate tail padding. Counting it trims every gcc 2.x polymorphic class to 0.
@@ -67,8 +70,18 @@ private fun TypeDecl.Aggregate<GlobalTypeId>.usefulStructSize(): Long {
     // bytes with one bit used, and nothing here sizes the type to bound that tail.
     if (nonStatic.any { it.sizeBits % 8 != 0L || it.offsetBits % 8 != 0L }) return sizeBytes
     val fieldEnd = nonStatic.maxOf { ((it.offsetBits + it.sizeBits + 7) / 8) }
-    val maxFieldSize = nonStatic.maxOf { ((it.sizeBits + 7) / 8) }
+    val maxFieldSize = maxOf(nonStatic.widestField(), bases.maxOfOrNull { types.widestField(it.type) } ?: 0)
     return if (sizeBytes - fieldEnd > maxFieldSize) fieldEnd else sizeBytes
+}
+
+private fun List<TypeDecl.Aggregate.Field<GlobalTypeId>>.widestField() = maxOfOrNull { (it.sizeBits + 7) / 8 } ?: 0
+
+/** The widest sized field in [decl]'s struct and its bases; 0 for one that does not resolve. */
+private fun TypeGraph.widestField(decl: GlobalTypeDecl, seen: MutableSet<GlobalTypeDecl> = mutableSetOf()): Long {
+    if (!seen.add(decl)) return 0
+    val agg = resolveAgg(decl) ?: return 0
+    val own = agg.fields.filter { !it.isStatic && it.sizeBits > 0 }.widestField()
+    return maxOf(own, agg.bases.maxOfOrNull { widestField(it.type, seen) } ?: 0)
 }
 
 private fun DataTypeRegistry.recordTruncation(ast: Type, originalBytes: Long, truncatedBytes: Long) {
