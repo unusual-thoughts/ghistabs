@@ -2001,17 +2001,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * `LineNo` at +112, `Tok` at +168 spanning 24, `CurrentTok` at +192, `RecoverySet` at +236
      * spanning 40. Offsets are what make a layout usable at all, and once that test's fixture-named
      * assertions went, nothing checked them: a struct can be the right *length*
-     * ([classesAreTruncatedToTheirLastDescribedByte]) with every field inside it in the wrong place.
+     * ([classesAreNoShorterThanTheirStabSays]) with every field inside it in the wrong place.
      *
      * Excluded, because the two sides do not compare rather than because they are uninteresting:
      * bitfields (gcc numbers them in bits inside a storage unit, Ghidra as a component of the unit),
      * static members (no offset), and unions (every member at 0 by definition).
      *
-     * Offsets only, not widths. A field's *span* is its type's materialized size, and
-     * [classesAreTruncatedToTheirLastDescribedByte] deliberately truncates a class to its last
-     * described byte — so a field typed by such a class spans less than the stab's `sizeBits` by
-     * design (28 bytes against a declared 224 on cryptopp's policy holders). Asserting the declared
-     * width would be asserting the opposite of the truncate.
+     * Offsets only, not widths. A field's *span* is its type's materialized size, and a base whose
+     * tail padding the derived class reuses is embedded as its data part, shorter than its stab size.
      */
     @Test
     fun fieldsSitAtTheirDeclaredOffsets() {
@@ -2040,32 +2037,25 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
-     * A class is exactly as long as its layout describes. gcc's `s<size>` is routinely inconsistent
-     * with the fields that follow it — one class in the original report declares 328 bytes for a
-     * layout that ends at 192 — and the placeholder-truncate fix takes "last described byte" as the size. That
-     * removes the unexplained tail and, more importantly, makes a base fit its derived class's gap
-     * exactly, so the base placement needs no overwrite or synthesis.
-     *
-     * The truncate has to happen at placeholder-creation time for that to hold: a derived class's
-     * base loop must see the already-truncated placeholder, whatever order the two materialize in.
+     * No class is shorter than its stab's `s<size>`: that is gcc's sizeof for it, tail padding and
+     * virtual bases included, however far past the last field it ends. Longer is a different bug: two
+     * same-named types sharing one Structure (`basic_istream::sentry` holding `basic_ostream`'s 8 bytes).
      */
     @Test
-    fun classesAreTruncatedToTheirLastDescribedByte() {
+    fun classesAreNoShorterThanTheirStabSays() {
         val classes = artifacts.harvest.types.values.mapNotNull { it.asAgg() }
-            .mapNotNull { (ast, _) -> artifacts.registry.dataTypeFor(ast.id) as? Structure }
-            .filter { it.numComponents > 0 && !it.isZeroLength }
+            .filter { (_, body) -> body.kind != AggrKind.UNION }
+            .mapNotNull { (ast, body) -> (artifacts.registry.dataTypeFor(ast.id) as? Structure)?.let { body to it } }
+            .filter { (_, dt) -> dt.numComponents > 0 && !dt.isZeroLength }
         assumeTrue(classes.isNotEmpty(), "Skipping: no classes materialized in this fixture")
 
-        val padded = classes
-            .filterNot { it.length == it.components.last().endOffset + 1 }
-            .map { "${it.name}: length=${it.length}, layout ends at ${it.components.last().endOffset + 1}" }
-        padded.take(10).mustBeEmpty(
-            "${padded.size} of ${classes.size} classes carry bytes past their last described field",
-        )
+        val resized = classes
+            .filter { (body, dt) -> dt.length.toLong() < body.sizeBytes }
+            .map { (body, dt) -> "${dt.name}: length=${dt.length}, stab says ${body.sizeBytes}" }
+        resized.take(10).mustBeEmpty("${resized.size} of ${classes.size} classes are shorter than their stab says")
 
         // A single base at +0 is the *same* Structure instance as the base class, not a same-sized
-        // synthetic standing in for it — that is what the truncate-at-placeholder-creation ordering
-        // buys, and holding an ancestor instead means the base loop resolved the wrong link.
+        // synthetic standing in for it — holding an ancestor instead means the base loop resolved the wrong link.
         //
         val synthetic = builtClasses().mapNotNull { (body, dt) ->
             val base = body.bases.singleOrNull()

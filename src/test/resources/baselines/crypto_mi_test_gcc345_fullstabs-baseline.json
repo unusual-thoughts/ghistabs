@@ -1207,21 +1207,13 @@
             "max": 2
         },
         "struct-mostly-undefined": {
-            "min": 3,
-            "max": 3,
+            "min": 4,
+            "max": 4,
             "degrades": [
+                "//_Unwind_Exception",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<byte,16u,CryptoPP::NullAllocator<byte>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<byte,8u,CryptoPP::NullAllocator<byte>,false>",
                 "/des.cpp/multi/ClonableImpl<CryptoPP::BlockCipherFinal<ENCRYPTION,CryptoPP::DES::Base>,CryptoPP::DES::Base>"
-            ]
-        },
-        "struct-truncated": {
-            "min": 3,
-            "max": 3,
-            "degrades": [
-                "AlgorithmParametersTemplate<bool>",
-                "Store",
-                "_Unwind_Exception"
             ]
         },
         "text-boundaries-out-of-order": {

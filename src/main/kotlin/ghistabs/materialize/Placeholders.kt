@@ -3,7 +3,6 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghistabs.harvest.Type
 import ghistabs.parse.AggrKind
-import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
 /**
@@ -19,64 +18,27 @@ internal fun DataTypeRegistry.makePlaceholder(
     // its key name (the demangler's leaf) so the type materializes at the demangler's spelling
     // (`/std/string`, not `/std/basic_string<…>`), the slot Ghidra's this-param creator then reuses.
     name: String = ast.ghidraName,
-): DataType {
-    val dt = when (ast.body) {
-        is TypeDecl.Aggregate if (ast.body.kind == AggrKind.UNION) -> UnionDataType(category, name, dtm)
+): DataType = when (ast.body) {
+    is TypeDecl.Aggregate if (ast.body.kind == AggrKind.UNION) -> UnionDataType(category, name, dtm)
 
-        is TypeDecl.Aggregate -> {
-            // A virtual base's bytes are the tail past the last own field, laid later by
-            // [ghistabs.materialize.cpp.layClasses] and checked there against this size, so it is not overshoot.
-            val sz = if (types.hasVirtualBase(ast.body)) ast.body.sizeBytes else ast.body.usefulStructSize()
-            recordTruncation(ast, ast.body.sizeBytes, sz)
-            StructureDataType(category, name, sz.toInt(), dtm)
-        }
+    // gcc's `s<size>` is the class's sizeof in this CU, tail padding and virtual bases
+    // included, so it is the length; whatever it covers that the fields do not, the class
+    // layout fills (bases, virtual bases, vptr) or the struct keeps as padding.
+    is TypeDecl.Aggregate -> StructureDataType(category, name, ast.body.sizeBytes.toInt(), dtm)
 
-        // Enum placeholder MUST be an EnumDataType, correctly sized: materializeEnum fills this
-        // same registered object in place (like structs), so a wrong kind/size would leave a
-        // colliding `.conflict` second type. Size per gdb's stabsread.c::read_enum_type —
-        // sizeof(int) unless gcc emits an explicit `@s<bits>` (`-fshort-enums`).
-        is TypeDecl.Enum -> EnumDataType(category, name, (ast.body.sizeBits / 8).toInt(), dtm)
+    // Enum placeholder MUST be an EnumDataType, correctly sized: materializeEnum fills this
+    // same registered object in place (like structs), so a wrong kind/size would leave a
+    // colliding `.conflict` second type. Size per gdb's stabsread.c::read_enum_type —
+    // sizeof(int) unless gcc emits an explicit `@s<bits>` (`-fshort-enums`).
+    is TypeDecl.Enum -> EnumDataType(category, name, (ast.body.sizeBits / 8).toInt(), dtm)
 
-        // An unresolved enum XRef (gcc only forward-referenced it, e.g. `vm_image_type`) must
-        // stub as an Enum, not a Structure: a struct stub is a Composite, so StructReturnAnalyzer
-        // (§13) would force an enum-returning method through the hidden-pointer ABI
-        // (`vm_image_type *__return_storage_ptr__`) and render its values as pointer compares.
-        is TypeDecl.XRef if ast.body.kind == AggrKind.ENUM -> EnumDataType(category, name, 4, dtm)
+    // An unresolved enum XRef (gcc only forward-referenced it, e.g. `vm_image_type`) must
+    // stub as an Enum, not a Structure: a struct stub is a Composite, so StructReturnAnalyzer
+    // (§13) would force an enum-returning method through the hidden-pointer ABI
+    // (`vm_image_type *__return_storage_ptr__`) and render its values as pointer compares.
+    is TypeDecl.XRef if ast.body.kind == AggrKind.ENUM -> EnumDataType(category, name, 4, dtm)
 
-        else -> StructureDataType(category, name, 0, dtm)
-    }
+    else -> StructureDataType(category, name, 0, dtm)
+}.also {
     debug("placeholder-created", "name=$name category=$category reason=$reason")
-    return dt
-}
-
-/**
- * Last-described-byte size for a Struct, since stab `sizeBytes` often overshoots
- * (bouniaf s328 but own fields end at 192; bouniaf s416 vs 276 — trailing
- * bytes are gcc's allocation for a subobject only forward-declared in this CU).
- * Trusting sizeBytes silently overwrites a derived class's own fields when the
- * canonical-but-oversized winner is selected. Trim only when the gap > maxFieldSize
- * (upper bound on legitimate tail padding without knowing the struct's alignment).
- */
-private fun TypeDecl.Aggregate<GlobalTypeId>.usefulStructSize(): Long {
-    // Sized fields only: gdb's "unpacked" bitsize-0 field — gcc 2.x's C++ abbreviation vptr, whose
-    // extent is its type's, not the stab's — claims no bytes, so it can neither end the struct nor
-    // bound its legitimate tail padding. Counting it trims every gcc 2.x polymorphic class to 0.
-    val nonStatic = fields.filter { !it.isStatic && it.sizeBits > 0 }
-    if (nonStatic.isEmpty()) return sizeBytes
-    // A bitfield's storage unit is its type, which can end past its last bit: `unsigned ro:1;` is 4
-    // bytes with one bit used, and nothing here sizes the type to bound that tail.
-    if (nonStatic.any { it.sizeBits % 8 != 0L || it.offsetBits % 8 != 0L }) return sizeBytes
-    val fieldEnd = nonStatic.maxOf { ((it.offsetBits + it.sizeBits + 7) / 8) }
-    val maxFieldSize = nonStatic.maxOf { ((it.sizeBits + 7) / 8) }
-    return if (sizeBytes - fieldEnd > maxFieldSize) fieldEnd else sizeBytes
-}
-
-private fun DataTypeRegistry.recordTruncation(ast: Type, originalBytes: Long, truncatedBytes: Long) {
-    if (originalBytes <= truncatedBytes) return
-    degradation(
-        "struct-truncated",
-        ast.ghidraName,
-        "stab claims $originalBytes bytes, last described byte $truncatedBytes; " +
-            "trimmed ${originalBytes - truncatedBytes}",
-    )
 }

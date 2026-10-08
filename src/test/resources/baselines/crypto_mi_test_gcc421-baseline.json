@@ -1064,15 +1064,6 @@
                 "/dll.cpp/WriteErr"
             ]
         },
-        "struct-truncated": {
-            "min": 4,
-            "max": 4,
-            "degrades": [
-                "AlgorithmParametersTemplate<bool>",
-                "AlgorithmParametersTemplate<unsigned_char>",
-                "Store"
-            ]
-        },
         "text-boundaries-out-of-order": {
             "min": 1,
             "max": 1

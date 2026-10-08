@@ -1323,8 +1323,8 @@
             "max": 242
         },
         "struct-mostly-undefined": {
-            "min": 7,
-            "max": 7,
+            "min": 8,
+            "max": 8,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
@@ -1332,17 +1332,8 @@
                 "/dll.cpp/GCM_Base",
                 "/dll.cpp/OpenErr",
                 "/dll.cpp/ReadErr",
-                "/dll.cpp/WriteErr"
-            ]
-        },
-        "struct-truncated": {
-            "min": 5,
-            "max": 5,
-            "degrades": [
-                "AlgorithmParametersTemplate<bool>",
-                "AlgorithmParametersTemplate<unsigned_char>",
-                "Store",
-                "_Unwind_Exception"
+                "/dll.cpp/WriteErr",
+                "/libsupc++/eh_alloc.cc/multi/_Unwind_Exception"
             ]
         },
         "text-boundaries-out-of-order": {

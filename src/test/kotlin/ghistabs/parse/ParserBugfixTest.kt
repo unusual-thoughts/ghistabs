@@ -226,7 +226,7 @@ class ParserBugfixTest {
      * gcc 2.x writes the vtable pointer as a C++ *abbreviation* field: no size after the bitpos, and
      * the member name implied by the context type rather than spelled. The two things that must hold
      * are that the field is recognised as the vptr downstream and that its zero size is a
-     * "no claim", not a zero-width field — `usefulStructSize` trims the class to nothing otherwise.
+     * "no claim", not a zero-width field.
      */
     @Test
     fun `a gcc 2 x abbreviation field is the vptr and claims no size`() {

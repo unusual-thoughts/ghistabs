@@ -559,13 +559,6 @@
                 "/tinyxml2/XMLDocument/DepthTracker"
             ]
         },
-        "struct-truncated": {
-            "min": 1,
-            "max": 1,
-            "degrades": [
-                "XMLText"
-            ]
-        },
         "template-args-restored": {
             "min": 3,
             "max": 3
