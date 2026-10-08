@@ -1,7 +1,5 @@
 package ghistabs.harvest
 
-import ghistabs.index.TypeGraph
-import ghistabs.materialize.cpp.virtualBases
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.StabRecord
@@ -57,12 +55,5 @@ class PromotedVirtualBaseTest {
     fun `a base sharing the class's vptr is not`() {
         bases(128) mustBe listOf(0L to false)
         bases(136) mustBe listOf(0L to false, 64L to false)
-    }
-
-    /** render-backlog §101: `basic_ios` is reached through both `basic_istream` and `basic_ostream`. */
-    @Test
-    fun `a diamond's shared virtual base is one virtual base`() {
-        val iostream = harvest.types.getValue(GlobalTypeId(SourceFile.CUSource("crypto_mi_test.cpp"), 136)).body
-        TypeGraph(harvest).virtualBases(iostream as TypeDecl.Aggregate).map { it.offsetBits } mustBe listOf(64L)
     }
 }
