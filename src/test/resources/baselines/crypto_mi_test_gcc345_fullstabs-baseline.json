@@ -52,8 +52,8 @@
             "max": 3
         },
         "canonical-key-merged": {
-            "min": 1430,
-            "max": 1430
+            "min": 1425,
+            "max": 1425
         },
         "canonical-key-multi-hash": {
             "min": 80,
@@ -72,12 +72,12 @@
             "max": 213
         },
         "demangle-applied": {
-            "min": 28544,
-            "max": 28544
+            "min": 28541,
+            "max": 28541
         },
         "demangle-attempted": {
-            "min": 28544,
-            "max": 28544
+            "min": 28541,
+            "max": 28541
         },
         "demangle-displaced-function-renamed": {
             "min": 0,
@@ -489,8 +489,8 @@
             "max": 806
         },
         "method-implicit-not-emitted": {
-            "min": 809,
-            "max": 809
+            "min": 812,
+            "max": 812
         },
         "method-static-no-this": {
             "min": 66,
@@ -1004,8 +1004,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 25837,
-            "max": 25837
+            "min": 25833,
+            "max": 25833
         },
         "placeholder-undefined-fields": {
             "min": 202,
@@ -1155,16 +1155,16 @@
             "max": 820
         },
         "resolve-ambiguous": {
-            "min": 1204,
-            "max": 1204
+            "min": 1207,
+            "max": 1207
         },
         "rtti-pseudo-substituted": {
             "min": 152,
             "max": 152
         },
         "scope-from-twin": {
-            "min": 271,
-            "max": 271
+            "min": 281,
+            "max": 281
         },
         "sourcemap-duplicate-entries": {
             "min": 9744,
@@ -1207,10 +1207,9 @@
             "max": 2
         },
         "struct-longer-than-stab": {
-            "min": 2,
-            "max": 2,
+            "min": 1,
+            "max": 1,
             "degrades": [
-                "/std/istream/sentry",
                 "/std/winnt/_REPARSE_DATA_BUFFER"
             ]
         },
