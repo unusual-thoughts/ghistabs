@@ -54,20 +54,16 @@
             ]
         },
         "canonical-content-merged": {
-            "min": 2,
-            "max": 2
+            "min": 10,
+            "max": 10
         },
         "canonical-key-merged": {
-            "min": 1921,
-            "max": 1921
+            "min": 1976,
+            "max": 1976
         },
         "canonical-key-multi-hash": {
-            "min": 192,
-            "max": 192
-        },
-        "canonical-key-multi-kind": {
-            "min": 20,
-            "max": 20
+            "min": 79,
+            "max": 79
         },
         "canonical-scope-collision": {
             "min": 33,
@@ -167,24 +163,6 @@
         "empty-scope": {
             "min": 11,
             "max": 11
-        },
-        "field-dropped": {
-            "min": 12,
-            "max": 12,
-            "degrades": [
-                "/hrtimer.cpp/multi/$_166.",
-                "/hrtimer.cpp/multi/_FULL_PTR_XLAT_TABLES.XlatSide",
-                "/hrtimer.cpp/multi/_IMAGE_FUNCTION_ENTRY64.",
-                "/hrtimer.cpp/multi/_IMAGE_RESOURCE_DIRECTORY_ENTRY.",
-                "/hrtimer.cpp/multi/_KEY_EVENT_RECORD.uChar",
-                "/hrtimer.cpp/multi/_LDT_ENTRY.HighWord",
-                "/hrtimer.cpp/multi/_NT_TIB.",
-                "/hrtimer.cpp/multi/_PROCESS_HEAP_ENTRY.",
-                "/hrtimer.cpp/multi/_REPARSE_GUID_DATA_BUFFER.GenericReparseBuffer",
-                "/hrtimer.cpp/multi/mmtime_tag.u",
-                "/hrtimer.cpp/multi/tagELEMDESC.",
-                "/hrtimer.cpp/multi/tagPROPSPEC."
-            ]
         },
         "file-start": {
             "min": 66,
@@ -844,8 +822,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 12298,
-            "max": 12298
+            "min": 13398,
+            "max": 13398
         },
         "placeholder-undefined-fields": {
             "min": 761,
@@ -1065,12 +1043,11 @@
             "max": 98
         },
         "struct-mostly-undefined": {
-            "min": 29,
-            "max": 29,
+            "min": 16,
+            "max": 16,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
-                "/algparam.cpp/multi/$_2",
                 "/algparam.cpp/multi/_stati64",
                 "/algparam.cpp/multi/basic_iostream<char,std::char_traits<char>>",
                 "/algparam.cpp/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
@@ -1079,24 +1056,12 @@
                 "/dll.cpp/OpenErr",
                 "/dll.cpp/ReadErr",
                 "/dll.cpp/WriteErr",
-                "/dll.cpp/multi/$_50",
-                "/hrtimer.cpp/multi/$_166",
-                "/hrtimer.cpp/multi/$_52",
-                "/hrtimer.cpp/multi/_CHAR_INFO",
-                "/hrtimer.cpp/multi/_IMAGE_FUNCTION_ENTRY64",
-                "/hrtimer.cpp/multi/_IMAGE_LINENUMBER",
-                "/hrtimer.cpp/multi/_IMAGE_RESOURCE_DIRECTORY_ENTRY",
-                "/hrtimer.cpp/multi/_IMAGE_SYMBOL",
-                "/hrtimer.cpp/multi/_LDT_ENTRY",
-                "/hrtimer.cpp/multi/_PROCESS_HEAP_ENTRY",
                 "/hrtimer.cpp/multi/_SHQUERYRBINFO",
                 "/hrtimer.cpp/multi/_TAPE_SET_POSITION",
                 "/hrtimer.cpp/multi/_wireVARIANT",
-                "/hrtimer.cpp/multi/mmtime_tag",
-                "/hrtimer.cpp/multi/sockaddr_in",
-                "/hrtimer.cpp/multi/tagELEMDESC",
-                "/hrtimer.cpp/multi/tagPROPSPEC",
-                "/hrtimer.cpp/multi/tagPROPVARIANT"
+                "/hrtimer.cpp/multi/tagPROPVARIANT",
+                "/hrtimer.cpp/multi/tagVARIANT",
+                "/sha.cpp/anon/$_2"
             ]
         },
         "struct-truncated": {

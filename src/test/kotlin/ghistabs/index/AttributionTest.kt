@@ -2,8 +2,13 @@ package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.harvest.Type
+import ghistabs.harvest.binding
+import ghistabs.parse.AggrKind
+import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.HeaderFile
 import ghistabs.parse.SourceFile
+import ghistabs.parse.TypeDecl
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
@@ -285,5 +290,26 @@ class AttributionTest {
         // Two intermediate dirs after /usr/ (local + myproj) — outside the regex's allowance.
         val cat = attr.keyFor("Foo", srcs("/usr/local/myproj/c++_helpers/foo.cpp"))
         cat.category mustBe CategoryPath("/usr/local/myproj/c++_helpers/foo.cpp")
+    }
+
+    // --- CU-local anonymous names (render-backlog §102) ----------------------
+
+    private val winnt = srcs("/proj/include/winnt.h")
+
+    private fun anonCategory(cu: String, name: String, size: Long = 8): CategoryPath {
+        val body = TypeDecl.Aggregate<GlobalTypeId>(AggrKind.UNION, size, emptyList(), emptyList(), emptyList(), null)
+        val source = SourceFile.CUSource(cu)
+        return attr.keyForAst(Type(source, GlobalTypeId(source, 70), binding(name, body), body), winnt).category
+    }
+
+    /** `crypto_mi_test_gcc421.exe`'s `$_70`: a 16-byte union in one CU, an 8-byte one in another, both winnt.h's. */
+    @Test
+    fun gccAnonymousAggregateNamesStayInTheirCu() {
+        anonCategory("/proj/a.cpp", "\$_70", 16) mustBe CategoryPath("/proj/a.cpp/anon")
+        anonCategory("/proj/b.cpp", "\$_70") mustBe CategoryPath("/proj/b.cpp/anon")
+        for (name in listOf("._0", "._anon_3", "\$_anon_3", "__anon_3")) {
+            anonCategory("/proj/a.cpp", name) mustBe CategoryPath("/proj/a.cpp/anon")
+        }
+        anonCategory("/proj/a.cpp", "_70") mustBe CategoryPath("/proj/include/winnt.h")
     }
 }

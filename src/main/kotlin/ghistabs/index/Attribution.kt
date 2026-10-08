@@ -61,7 +61,13 @@ fun includeSpelling(source: GhidraSourceFile): String {
     return "<${spelled.joinToString("/")}>"
 }
 
-private val CU_LOCAL_NAME = Regex("""\.?_anon_\d+""")
+/**
+ * gcc C++'s name for an anonymous aggregate, from a counter each compilation starts at 0
+ * (`make_anon_name`): up to gcc 4.2 at least, `ANON_AGGRNAME_FORMAT` is `$_%d` where the target's
+ * labels take `$` (MinGW, `crypto_mi_test_gcc421`), `._%d` where they take only `.` (`hello_elf_gcc41`),
+ * `__anon_%d` where neither; gcc 12 writes `._anon_%d`, `$_anon_%d` or `__anon_%d`, `.` first.
+ */
+private val CU_LOCAL_NAME = Regex("[.\$]_\\d+|[.\$_]?_anon_\\d+")
 
 /**
  * Real-header extensions (`.tcc` is libstdc++'s template-impl convention). A `.cpp`/`.cc`/`.c`
@@ -171,7 +177,7 @@ fun commonProjectPrefix(sources: Collection<SourceFile>): String {
  * Routes a harvested type to its canonical `(category, name)` slot in the DTM.
  *
  * Resolution order:
- *  1. CU-local anonymous name (`._anon_NN`, empty) → `<ast.cu>/anon`.
+ *  1. CU-local anonymous name (`$_NN`, `._anon_NN`, …) → `<ast.cu>/anon`.
  *  2. Stdlib path → `/std/<post-marker-path>`.
  *  3. Real-header preference (`.h/.hpp/.hh/.hxx/.tcc`) — gcc's BINCL/EINCL surfaces
  *     sibling `.cpp` files as HeaderSource; those must lose to actual headers.
