@@ -58,12 +58,12 @@
             "max": 10
         },
         "canonical-key-merged": {
-            "min": 1976,
-            "max": 1976
+            "min": 1975,
+            "max": 1975
         },
         "canonical-key-multi-hash": {
-            "min": 79,
-            "max": 79
+            "min": 81,
+            "max": 81
         },
         "canonical-scope-collision": {
             "min": 33,
@@ -837,8 +837,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 13398,
-            "max": 13398
+            "min": 13391,
+            "max": 13391
         },
         "placeholder-undefined-fields": {
             "min": 761,

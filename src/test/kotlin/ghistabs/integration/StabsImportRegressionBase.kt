@@ -900,6 +900,33 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
+     * Every struct, union or enum id the harvest produced is a member of exactly one located group.
+     * [everyDeclaredSlotIsFilledWhereItWasDeclared] checks the slots that exist; this checks that no
+     * type fell between them. An id in no group has no slot of its own, so its Refs resolve to an
+     * empty `/stabs` cycle-break stub (`basic_ios.conflict` on xmltest_gcc421_fullstabs, before
+     * locateTypes keyed every type before grouping). An id in two groups is materialized
+     * twice under two names.
+     */
+    @Test
+    fun everyAggregateIsLocatedOnce() {
+        val groups = artifacts.registry.byLocation.values
+        val aggregates = artifacts.types.allTypes.filter { it.body.canBeXRefTarget }
+        assumeTrue(aggregates.isNotEmpty(), "Skipping: no struct, union or enum in this fixture")
+
+        val located = groups.flatMap { g -> g.members.map { it to g.location } }
+            .groupBy({ it.first }, { it.second })
+        val unlocated = aggregates.filter { it.id !in located }.map { "${it.id} ${it.ghidraName}" }
+        val twice = located.filterValues { it.size > 1 }
+            .map { (id, at) -> "$id in ${at.map { it.toString() }.sorted()}" }
+
+        fun report(of: List<String>) = of.sorted().take(10)
+        assertAll(
+            { report(unlocated).mustBeEmpty("${unlocated.size} aggregates are in no located group") },
+            { report(twice).mustBeEmpty("${twice.size} aggregates are in more than one located group") },
+        )
+    }
+
+    /**
      * A derived class carries its base subobject. Either shape counts:
      *  - a named `_base_…` / `_vbase_…` component, when the base type resolved;
      *  - the struct's first own field at offset > 0, the base bytes left as bare Undefined1 — the
