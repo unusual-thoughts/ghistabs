@@ -344,16 +344,11 @@
             "max": 4
         },
         "struct-mostly-undefined": {
-            "min": 7,
-            "max": 7,
+            "min": 2,
+            "max": 2,
             "degrades": [
-                "/tinyxml.cpp/anon/$_5",
-                "/tinyxml.cpp/multi/_stati64",
                 "/tinyxml.cpp/multi/basic_iostream<char,std::char_traits<char>>",
-                "/tinyxml.cpp/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
-                "/tinyxmlerror.cpp/anon/$_2",
-                "/tinyxmlparser.cpp/anon/$_2",
-                "/xmltest_min.cpp/anon/$_2"
+                "/tinyxml.cpp/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>"
             ]
         },
         "struct-truncated": {

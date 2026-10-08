@@ -47,6 +47,9 @@ class Parser(src: String) {
         const val BITS_PER_BYTE = 8L
         val BOOL_ENUM_MEMBERS = listOf("False" to 0L, "True" to 1L)
 
+        // A range's lower bound as gcc 4.2 prints a 64-bit signed minimum; see parseRange.
+        const val TRUNCATED_LOWER_BOUND = "-0;"
+
         // Symbol chars that may follow `operator` in a method name (arithmetic, logical,
         // comparison, shift). Brackets/parens/comma are excluded — they carry no `<>` and
         // need no protection from template-depth tracking.
@@ -650,10 +653,19 @@ class Parser(src: String) {
         // sizetype): parseType reads either, as gdb re-reads it with read_type.
         val inner = parseType()
         consume(';')
+        val truncated = src.startsWith(TRUNCATED_LOWER_BOUND, pos)
         var lower = readRangeBound()
         consume(';')
-        val upper = readRangeBound()
+        var upper = readRangeBound()
         consume(';')
+        if (truncated) {
+            // gcc 4.2's stabstr_D prints a bound through an `unsigned int`, keeping its low 32 bits; with a
+            // 64-bit HOST_WIDE_INT and no GNU extensions (so no octal), `long long int` comes out as
+            // `-0;4294967295;`. A bound of 0 prints without a sign, so `-0` is only ever a negative bound
+            // whose low 32 bits are zero: a 64-bit signed minimum.
+            lower = -BigInteger.ONE.shiftLeft(63)
+            upper = BigInteger.ONE.shiftLeft(63) - BigInteger.ONE
+        }
         if (upper.signum() == 0 && lower.signum() > 0) {
             return TypeDecl.Float(lower.toLong())
         }
