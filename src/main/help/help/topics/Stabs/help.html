@@ -27,7 +27,7 @@
     gcc 12 and removed outright in gcc 13, so 12 is a hard ceiling.)</P>
 
     <P>Everything is driven by the <A href="#Stabs_Importer_Analyzer">Stabs Importer</A>
-    analyzer. Three <A href="#Stabs_Supporting_Analyzers">supporting analyzers</A> clean up
+    analyzer. Seven <A href="#Stabs_Supporting_Analyzers">supporting analyzers</A> clean up
     code and ABI details around it, <A href="#Stabs_Tools_Menu">Tools &rarr; Stabs</A> re-runs
     the import, and two <A href="#Stabs_Export_Decompilation">exporters</A> write out the
     reconstructed sources.</P>
@@ -209,9 +209,110 @@
       both modes, with the same render options exposed as flags. See the project README.</P>
     </BLOCKQUOTE>
 
+    <H2><A name="Stabs_Class_Hierarchy"></A>Window &rarr; Class Hierarchy</H2>
+
+    <P>A read-only tree of the program's C++ classes, after the <I>ClassTypeInfo Tree</I> of
+    astrelsky's Ghidra-Cpp-Class-Analyzer.</P>
+
+    <CENTER>
+      <IMG src="images/ClassHierarchy.png" border="0" alt="Class Hierarchy window">
+    </CENTER>
+
+    <H3>What it shows</H3>
+
+    <P>The root is the program. Under it each class sits in its namespace, and expands into, in
+    order:</P>
+
+    <UL>
+      <LI>its direct bases, spelled as the base clause would (<CODE>virtual Base</CODE>,
+      <CODE>private Impl</CODE>), each expanding into its own bases;</LI>
+
+      <LI>its vtables (a table icon): the <CODE>vtable</CODE> record, its <CODE>vftable</CODE>,
+      the <CODE>internal_vtable</CODE>/<CODE>internal_vftable</CODE> of each secondary, the
+      <CODE>VTT</CODE>. A class with more than one vftable has each named for the base it serves,
+      <CODE>vftable_for_Left</CODE>, as Ghidra's RTTI scripts name them;</LI>
+
+      <LI>its other ABI objects (an information icon): <CODE>typeinfo</CODE> and
+      <CODE>typeinfo-name</CODE>;</LI>
+
+      <LI>its functions and labels, by name. An overloaded function is spelled with its parameter
+      types (<CODE>Circle(double)</CODE>). A constructor or destructor gcc emitted once per variant
+      is listed per variant, the variant in brackets (<CODE>~Circle() [deleting]</CODE>,
+      <CODE>[complete]</CODE>, <CODE>[base]</CODE>), several when gcc aliased them to one body. A
+      thunk has the thunk icon;</LI>
+
+      <LI>its nested classes.</LI>
+    </UL>
+
+    <P>A class's members are listed where the class is filed in its namespace, not again under
+    every class that derives from it.</P>
+
+    <P>The icon's colour gives a class's kind, as upstream: red for an abstract class, blue for a
+    virtual base, purple for both, yellow for a nested class, and grey for a class only the vtable
+    sweep found (when it is none of the others). A member's icon and text are coloured by what is
+    known of it: magenta for a plain member, blue for a virtual one, green for a static one,
+    darker when private and paler when protected, with a <CODE>c</CODE> or <CODE>v</CODE> badge for
+    a <CODE>const</CODE> or <CODE>volatile</CODE> member function. Grey means nothing records its
+    virtuality. Tooltips spell it out: for a class, its full name, where its bases came from, its
+    kind and its vftable or typeinfo address, and its struct's shorter name when typedef shortening
+    renamed it; for a member, its signature, attributes and address.</P>
+
+    <P>Inverted, the tree runs the other way: the basal classes (no base the program has a class
+    for) sit at the root, each expanding into the classes derived from it, and every class lists
+    its members. A class with several bases shows under each of them, and carries its clause's
+    virtuality and access after its name (<CODE>Left (virtual)</CODE>).</P>
+
+    <P>A class with nothing to show (no member, vtable, typeinfo, base or derived class) is hidden
+    by default: g++ makes a class of every struct a C++ file sees, C headers' included, and of the
+    SGI STL's tag types (<CODE>tm</CODE>, <CODE>__type_traits&lt;bool&gt;</CODE>), and emits none of
+    their implicit members. The status line counts the classes from stabs, the swept ones and the
+    hidden empty ones.</P>
+
+    <H3>Where it comes from</H3>
+
+    <UL>
+      <LI><B>Classes and bases from the stabs.</B> Exactly as gcc stated them, virtuality and
+      access included, gcc 2.x too. The import records them in the program, in the
+      <CODE>Stabs Classes</CODE> property map, with each class's struct. A program imported before
+      this window existed shows its stabs classes only after
+      <A href="#Stabs_Reimport">Re-import</A>; the status line says so.</LI>
+
+      <LI><B>Classes the vtable sweep found.</B> A class with a vtable or typeinfo and no stabs
+      (libstdc++ and libsupc++ classes, or a binary with no stabs at all) takes its bases from its
+      Itanium typeinfo where the binary has one, and is a root otherwise. A base the program built
+      no class for, such as a plain struct, is a leaf.</LI>
+
+      <LI><B>Members</B> are the class namespace's symbols. Their access, virtuality, static-ness
+      and cv-qualifiers come from the stabs' method lists (recorded in the
+      <CODE>Stabs Member Attributes</CODE> property map); with no stabs, virtuality is read off the
+      vtable's slots and <CODE>const</CODE>/<CODE>volatile</CODE> off the mangled name. Constructor
+      and destructor variants come from the Itanium mangled names (<CODE>C1</CODE>,
+      <CODE>C2</CODE>, <CODE>D0</CODE>&hellip;).</LI>
+
+      <LI><B>Abstract</B> means one of the class's vtable slots holds
+      <CODE>__cxa_pure_virtual</CODE> (gcc 2.x: <CODE>__pure_virtual</CODE>).</LI>
+    </UL>
+
+    <H3>Using it</H3>
+
+    <P>The toolbar buttons, left to right: <B>Refresh</B> rebuilds the tree from the program (it
+    also rebuilds itself as the program changes); <B>Show Class Members</B> (the function icon)
+    toggles the members, leaving only the classes; <B>Show Empty Classes</B> (the class icon)
+    shows the hidden empty classes; <B>Expand All Classes</B> expands every node and keeps the tree
+    expanded through rebuilds until it is turned off; <B>Show Derived Classes</B> inverts the tree,
+    its arrow pointing up while each class expands into its bases and down once inverted;
+    <B>Navigate on Incoming</B>, as in the Symbol Tree, selects the node for each location the tool
+    moves to: the member there or the function the location is in, under the class that lists it,
+    else the class whose vtable or typeinfo is there. The filter field below the tree narrows it
+    by name.</P>
+
+    <P>Double-click a member (or press Enter) to go to it. Double-click a class to open its struct
+    in the structure editor, or, for a class with no struct, to go to its vtable, else its
+    typeinfo. A class's popup menu offers <B>Edit class struct</B> and <B>Edit vtable struct</B>.</P>
+
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
 
-    <P>Three analyzers ship with the extension that do not read stabs at all. They are enabled
+    <P>Seven analyzers ship with the extension that do not read stabs at all. They are enabled
     by default, can be re-run, and are each available as one-shot analysis.</P>
 
     <BLOCKQUOTE>
@@ -250,6 +351,46 @@
           the jump-over-fill form GAS emits for <CODE>.p2align</CODE> &mdash; into
           <CODE>Alignment</CODE> data, so it is not mistaken for undescribed data. Real data
           following the padding is left alone.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>GCC C++ vftables</B></TD>
+          <TD>Lays a <CODE>&lt;Class&gt;_vftable</CODE> at every gcc vtable symbol, Itanium
+          <CODE>_ZTV&hellip;</CODE> (gcc 3 and later) or gcc 2.x <CODE>_vt&hellip;</CODE>, each slot
+          typed off the function it points at, under the class namespace with the labels
+          Ghidra's RTTI scripts use (<CODE>vftable</CODE>, <CODE>internal_vftable</CODE>,
+          <CODE>vftable_for_&lt;Base&gt;</CODE>, <CODE>construction-vftable</CODE>), so virtual
+          calls resolve to named slots even with no stabs. On a program with stabs the importer
+          runs this sweep itself once its class pass has laid the classes the stabs describe, and
+          the sweep leaves those alone.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Itanium typeinfo</B></TD>
+          <TD>Lays a typed struct at every gcc 3 and later typeinfo symbol
+          (<CODE>_ZTI&hellip;</CODE>): the <CODE>__class_type_info</CODE>,
+          <CODE>__si_class_type_info</CODE> or <CODE>__vmi_class_type_info</CODE> layout its vtable
+          pointer names, a vmi one's base array sized to its base count. A typeinfo that already
+          carries a struct is left alone.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Class-method this-pointer</B></TD>
+          <TD>Gives class methods back the automatic <CODE>this</CODE> that
+          <I>Decompiler Parameter ID</I> freezes out when it commits a signature in custom storage:
+          the parameters are re-applied with dynamic storage, and Ghidra derives
+          <CODE>this</CODE> from the class structure again. Can be re-run alone after Decompiler
+          Parameter ID.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Non-returning functions (reachability)</B></TD>
+          <TD>Marks a function non-returning when every path through it ends in a call to a
+          non-returning function, such as a project <CODE>error()</CODE> that calls
+          <CODE>exit</CODE>. Ghidra's own walk examines a function only when its call sites look
+          damaged, which such a function's never do. Anything the control-flow graph cannot resolve
+          counts as returning. Runs after the importer, which creates most of the functions on a
+          stripped program.</TD>
         </TR>
       </TABLE>
     </BLOCKQUOTE>

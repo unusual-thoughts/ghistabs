@@ -78,13 +78,13 @@ internal class SharedOptions : OptionGroup(TITLE) {
     val degradationLog by option("--degradation-log", help = "Write grouped materialization degradations here")
         .file(canBeDir = false)
 
-    fun dumpRecords(records: List<StabRecord>) = recordsJson?.writeDump { dumpJson.encodeToString(records) }
+    val dumps get() = listOfNotNull(recordsJson, harvestJson, registryJson, degradationLog)
 
-    fun dumpHarvest(harvest: Harvest) = harvestJson?.writeDump { dumpJson.encodeToString(harvest) }
+    fun dumpRecords(records: List<StabRecord>) = recordsJson?.writeDump(records)
 
-    fun dumpSymbols(symbols: List<Symbol<SymbolDecl<GlobalTypeId>>>) = symbolsJson?.writeDump {
-        dumpJson.encodeToString(symbols)
-    }
+    fun dumpHarvest(harvest: Harvest) = harvestJson?.writeDump(harvest)
+
+    fun dumpSymbols(symbols: List<Symbol<SymbolDecl<GlobalTypeId>>>) = symbolsJson?.writeDump(symbols)
 
     fun dumpRegistry(artifacts: ImportArtifacts) = registryJson?.let(artifacts::writeRegistryDump)
 
@@ -100,11 +100,6 @@ internal class SharedOptions : OptionGroup(TITLE) {
                 list.forEach { appendLine("  $it") }
             }
         }
-    }
-
-    private fun File.writeDump(text: () -> String) {
-        parentFile?.mkdirs()
-        writeText(text())
     }
 
     companion object {
@@ -197,8 +192,7 @@ internal abstract class StabsCommand(name: String) : CliktCommand(name = name) {
 
     private val binary by argument(
         help = "ELF/PE binary carrying .stab/.stabstr debug info (gcc 3.2–12), or a .gzf saved by --save-db",
-    )
-        .file(mustExist = true, canBeDir = false, mustBeReadable = true)
+    ).file(mustExist = true, canBeDir = false, mustBeReadable = true)
 
     /** What this subcommand runs against the loaded program, dumps included. */
     protected abstract fun ImportContext<*>.execute()
