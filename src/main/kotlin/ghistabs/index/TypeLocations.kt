@@ -118,10 +118,15 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
      * but it still spells what the copy inherits (`ec2n.cpp`'s `MultiplicativeGroupT` derives from
      * `AbstractGroup<PolynomialMod2>`, `integer.cpp`'s from `AbstractGroup<Integer>`), and [content] is
      * blind to exactly that — it drops names, and the two bases are themselves layout-equal.
+     *
+     * The name is the leaf: gcc spells a nested class qualified where it emits the class's members
+     * (`basic_istream<char,…>::sentry` in libstdc++'s CUs) and bare where it does not (`sentry` in
+     * xmltest_gcc345's own), and the bare copy is the one that needs its twin.
      */
     private data class Shape(val name: String, val bases: List<String?>?, val layout: ContentIndex.LayoutContent)
 
-    private fun shapeOf(ast: Type) = Shape(ast.ghidraName, baseNames(ast), index.content(ast.body))
+    private fun shapeOf(ast: Type) =
+        Shape(ast.name?.leafName ?: ast.ghidraName, baseNames(ast), index.content(ast.body))
 
     private fun baseNames(ast: Type) = (ast.body as? TypeDecl.Aggregate)?.bases?.map { base ->
         index.resolveWith(base.type) {
@@ -233,8 +238,13 @@ fun TypeGraph.locateTypes(hints: SourceHints) = locateTypesWith(
 )
 
 private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
-    val byGhidraName = allTypes.groupBy { it.ghidraName }
-    fun Type.headerKey() = attribution.keyForAst(this, byGhidraName.getValue(ghidraName).map { it.id.source }.toSet())
+    // A header key is voted by every copy of a type, so the copies land in one slot. Copies of one class
+    // are one size; name alone also polls same-named classes of another, which then share the slot and its
+    // one body: crypto_mi_test_gcc345's bare 8-byte `sentry` from ostream.tcc voted with istream.tcc's 1-byte
+    // one and was filed under `/std/istream`. Size, not layout: copies whose layouts differ only in what
+    // their CU knew of a referenced class are still one class, and splitting them forks `.conflict`s.
+    val sourcesOfCopies = allTypes.groupBy({ it.ghidraName to it.body.sizeBytes }, { it.id.source })
+    fun Type.headerKey() = attribution.keyForAst(this, sourcesOfCopies.getValue(ghidraName to body.sizeBytes).toSet())
     val nesting = ScopeLocator(this@locateTypesWith)
 
     // Scope→header→hash ladder. A type whose enclosing C++ scope is derivable (any member's

@@ -102,26 +102,17 @@
             "min": 268,
             "max": 268
         },
-        "base-synthesized": {
-            "min": 3,
-            "max": 3,
-            "degrades": [
-                "/dll.cpp/OpenErr@+0",
-                "/dll.cpp/ReadErr@+0",
-                "/dll.cpp/WriteErr@+0"
-            ]
-        },
         "canonical-content-merged": {
             "min": 6,
             "max": 6
         },
         "canonical-key-merged": {
-            "min": 2153,
-            "max": 2153
+            "min": 2152,
+            "max": 2152
         },
         "canonical-key-multi-hash": {
-            "min": 94,
-            "max": 94
+            "min": 93,
+            "max": 93
         },
         "canonical-scope-collision": {
             "min": 55,
@@ -398,8 +389,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 881,
-            "max": 881
+            "min": 885,
+            "max": 885
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -1082,12 +1073,12 @@
             ]
         },
         "placeholder-created": {
-            "min": 53832,
-            "max": 53832
+            "min": 53830,
+            "max": 53830
         },
         "placeholder-undefined-fields": {
-            "min": 948,
-            "max": 948,
+            "min": 944,
+            "max": 944,
             "degrades": [
                 "AllocatorWithCleanup<char,false>",
                 "AllocatorWithCleanup<unsigned_char,false>",
@@ -1149,7 +1140,6 @@
                 "NullAllocator<unsigned_int>",
                 "OFB_Mode<CryptoPP::DES>",
                 "OFB_Mode_ExternalCipher",
-                "OpenErr",
                 "P1363_EMSA2",
                 "PKCS1v15",
                 "PSS",
@@ -1159,7 +1149,6 @@
                 "RSASS<CryptoPP::PKCS1v15,CryptoPP::SHA>",
                 "RSASS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD2>",
                 "RSASS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD5>",
-                "ReadErr",
                 "Rijndael",
                 "Rijndael_Info",
                 "SKIPJACK",
@@ -1169,7 +1158,6 @@
                 "TF_SS<CryptoPP::PKCS1v15,CryptoPP::SHA,CryptoPP::RSA,CryptoPP::TF_SS<CryptoPP::PKCS1v15,CryptoPP::SHA,CryptoPP::RSA,int>>",
                 "TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD2,CryptoPP::RSA,CryptoPP::TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD2,CryptoPP::RSA,int>>",
                 "TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD5,CryptoPP::RSA,CryptoPP::TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD5,CryptoPP::RSA,int>>",
-                "WriteErr",
                 "__is_arithmetic<CryptoPP::BaseAndExponent<CryptoPP::EC2NPoint,CryptoPP::Integer>>",
                 "__is_arithmetic<CryptoPP::BaseAndExponent<CryptoPP::ECPPoint,CryptoPP::Integer>>",
                 "__is_arithmetic<CryptoPP::BaseAndExponent<CryptoPP::Integer,CryptoPP::Integer>>",
@@ -1277,8 +1265,8 @@
             "max": 37
         },
         "scope-from-twin": {
-            "min": 4915,
-            "max": 4915
+            "min": 4930,
+            "max": 4930
         },
         "sourcemap-duplicate-entries": {
             "min": 11780,
@@ -1321,22 +1309,18 @@
             "max": 242
         },
         "struct-longer-than-stab": {
-            "min": 2,
-            "max": 2,
+            "min": 1,
+            "max": 1,
             "degrades": [
-                "/asn.cpp/multi/sentry",
-                "/cryptlib.cpp/multi/Err"
+                "/asn.cpp/multi/sentry"
             ]
         },
         "struct-mostly-undefined": {
-            "min": 6,
-            "max": 6,
+            "min": 3,
+            "max": 3,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<unsigned_char,8u,CryptoPP::NullAllocator<unsigned_char>,false>",
-                "/dll.cpp/OpenErr",
-                "/dll.cpp/ReadErr",
-                "/dll.cpp/WriteErr",
                 "/libsupc++/eh_alloc.cc/multi/_Unwind_Exception"
             ]
         },
@@ -1385,16 +1369,16 @@
             "max": 18
         },
         "vfptr-inherited-from-base": {
-            "min": 209,
-            "max": 209
+            "min": 206,
+            "max": 206
         },
         "vfptr-normalized": {
             "min": 62,
             "max": 62
         },
         "vfptr-split-from-base": {
-            "min": 538,
-            "max": 538
+            "min": 542,
+            "max": 542
         },
         "vftable-slot-name-collision": {
             "min": 8,
@@ -1538,8 +1522,8 @@
             "max": 121
         },
         "vtable-skipped": {
-            "min": 688,
-            "max": 688
+            "min": 689,
+            "max": 689
         },
         "xref-base-tag-resolved": {
             "min": 2,

@@ -10,12 +10,12 @@
             ]
         },
         "canonical-key-merged": {
-            "min": 8,
-            "max": 8
+            "min": 10,
+            "max": 10
         },
         "canonical-key-multi-hash": {
-            "min": 5,
-            "max": 5
+            "min": 3,
+            "max": 3
         },
         "code-cleared-for-data": {
             "min": 1,
@@ -204,8 +204,8 @@
             "max": 2
         },
         "placeholder-created": {
-            "min": 283,
-            "max": 283
+            "min": 288,
+            "max": 288
         },
         "pointee-typed": {
             "min": 4,
@@ -250,16 +250,6 @@
         "static-local-plate": {
             "min": 2,
             "max": 2
-        },
-        "struct-longer-than-stab": {
-            "min": 4,
-            "max": 4,
-            "degrades": [
-                "/adler32.c/multi/internal_state",
-                "/deflate.c/multi/static_tree_desc_s",
-                "/infblock.c/multi/inflate_blocks_state",
-                "/infblock.c/multi/inflate_codes_state"
-            ]
         },
         "text-data-no-coverage": {
             "min": 8,

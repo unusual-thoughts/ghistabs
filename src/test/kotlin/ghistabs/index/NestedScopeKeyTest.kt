@@ -139,4 +139,37 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         slot.type mustBe ostream
         diag.degradationTargets()["struct-longer-than-stab"].orEmpty() mustBe listOf(slot.location.toString())
     }
+
+    /**
+     * The same two sentries, each in its own header, as crypto_mi_test_gcc345 has them: a header key is voted
+     * only by copies of one size, so istream.tcc's 1-byte copy does not pull ostream.tcc's 8-byte one under
+     * `/std/istream`.
+     */
+    @Test fun sameNamedClassesOfAnotherSizeDoNotVoteOnTheHeader() {
+        fun header(name: String) = SourceFile.HeaderSource(
+            HeaderFile("/usr/include/c++/3.4.5/bits/$name", checksum = 0, originatingCu = cu),
+        )
+        val ok = field("_M_ok", TypeDecl.Builtin(0))
+        val istream = ast(GlobalTypeId(header("istream.tcc"), 1), "sentry", struct(fields = listOf(ok), sizeBytes = 1))
+        val ostream = ast(
+            GlobalTypeId(header("ostream.tcc"), 1),
+            "sentry",
+            struct(fields = listOf(ok, field("_M_os", TypeDecl.Builtin(0))), sizeBytes = 8),
+        )
+
+        val slots = locatedTypesOf(istream, ostream).values
+        slots.single { istream.id in it.members }.type mustBe istream
+        slots.single { ostream.id in it.members }.type mustBe ostream
+    }
+
+    /** A bare `sentry` (xmltest_gcc345's own CUs) shares the slot of its qualified, layout-equal twin. */
+    @Test fun bareNestedClassTakesItsQualifiedTwinsScope() {
+        val ostream = "basic_ostream<char, std::char_traits<char> >"
+        val ok = field("_M_ok", TypeDecl.Builtin(0))
+        val qualified = ast(id(), "$ostream::sentry", struct(listOf(method("_ZNSo6sentryD1Ev")), listOf(ok)))
+        val bare = ast(id(), "sentry", struct(fields = listOf(ok)))
+
+        val slot = locatedTypesOf(qualified, bare).values.single { qualified.id in it.members }
+        bare.id mustBeIn slot.members
+    }
 }

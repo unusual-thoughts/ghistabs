@@ -36,12 +36,12 @@
             "max": 1
         },
         "canonical-key-merged": {
-            "min": 1184,
-            "max": 1184
+            "min": 1185,
+            "max": 1185
         },
         "canonical-key-multi-hash": {
-            "min": 6,
-            "max": 6
+            "min": 5,
+            "max": 5
         },
         "canonical-scope-collision": {
             "min": 2,
@@ -467,8 +467,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 17812,
-            "max": 17812
+            "min": 17813,
+            "max": 17813
         },
         "placeholder-undefined-fields": {
             "min": 16,
@@ -556,13 +556,6 @@
         "static-skipped": {
             "min": 2,
             "max": 2
-        },
-        "struct-longer-than-stab": {
-            "min": 1,
-            "max": 1,
-            "degrades": [
-                "/std/winnt/_REPARSE_DATA_BUFFER"
-            ]
         },
         "struct-mostly-undefined": {
             "min": 1,

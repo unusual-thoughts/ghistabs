@@ -35,20 +35,20 @@
             ]
         },
         "base-empty-ebo": {
-            "min": 28,
-            "max": 28
+            "min": 27,
+            "max": 27
         },
         "canonical-content-merged": {
             "min": 1,
             "max": 1
         },
         "canonical-key-merged": {
-            "min": 1122,
-            "max": 1122
+            "min": 1117,
+            "max": 1117
         },
         "canonical-key-multi-hash": {
-            "min": 6,
-            "max": 6
+            "min": 5,
+            "max": 5
         },
         "canonical-scope-collision": {
             "min": 1,
@@ -63,12 +63,12 @@
             "max": 63
         },
         "demangle-applied": {
-            "min": 3755,
-            "max": 3755
+            "min": 3752,
+            "max": 3752
         },
         "demangle-attempted": {
-            "min": 3755,
-            "max": 3755
+            "min": 3752,
+            "max": 3752
         },
         "demangle-displaced-function-renamed": {
             "min": 0,
@@ -351,8 +351,8 @@
             "max": 909
         },
         "method-implicit-not-emitted": {
-            "min": 833,
-            "max": 833
+            "min": 836,
+            "max": 836
         },
         "method-static-no-this": {
             "min": 36,
@@ -448,8 +448,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 16651,
-            "max": 16651
+            "min": 16646,
+            "max": 16646
         },
         "placeholder-undefined-fields": {
             "min": 15,
@@ -503,16 +503,16 @@
             "max": 100
         },
         "resolve-ambiguous": {
-            "min": 980,
-            "max": 980
+            "min": 983,
+            "max": 983
         },
         "rtti-pseudo-substituted": {
             "min": 49,
             "max": 49
         },
         "scope-from-twin": {
-            "min": 105,
-            "max": 105
+            "min": 117,
+            "max": 117
         },
         "sourcemap-duplicate-entries": {
             "min": 125,
@@ -553,14 +553,6 @@
         "static-skipped": {
             "min": 2,
             "max": 2
-        },
-        "struct-longer-than-stab": {
-            "min": 2,
-            "max": 2,
-            "degrades": [
-                "/std/istream/sentry",
-                "/std/winnt/_REPARSE_DATA_BUFFER"
-            ]
         },
         "struct-mostly-undefined": {
             "min": 1,

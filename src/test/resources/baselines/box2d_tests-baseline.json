@@ -5,12 +5,12 @@
             "max": 70
         },
         "canonical-key-merged": {
-            "min": 273,
-            "max": 273
+            "min": 274,
+            "max": 274
         },
         "canonical-key-multi-hash": {
-            "min": 5,
-            "max": 5
+            "min": 4,
+            "max": 4
         },
         "data-no-coverage": {
             "min": 40,
@@ -201,8 +201,8 @@
             "max": 1
         },
         "placeholder-created": {
-            "min": 3721,
-            "max": 3721
+            "min": 3722,
+            "max": 3722
         },
         "sourcemap-duplicate-entries": {
             "min": 0,
@@ -231,13 +231,6 @@
         "static-local-plate": {
             "min": 32,
             "max": 32
-        },
-        "struct-longer-than-stab": {
-            "min": 1,
-            "max": 1,
-            "degrades": [
-                "/src/contact.h/b2ContactSim"
-            ]
         },
         "struct-mostly-undefined": {
             "min": 1,
