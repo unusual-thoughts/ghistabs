@@ -38,13 +38,17 @@
                 "/tinyxml.cpp/multi/basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>@+0"
             ]
         },
+        "canonical-content-merged": {
+            "min": 10,
+            "max": 10
+        },
         "canonical-key-merged": {
-            "min": 240,
-            "max": 240
+            "min": 211,
+            "max": 211
         },
         "canonical-key-multi-hash": {
-            "min": 8,
-            "max": 8
+            "min": 2,
+            "max": 2
         },
         "class-scope-from-vtable": {
             "min": 60,
@@ -317,8 +321,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 667,
-            "max": 667
+            "min": 742,
+            "max": 742
         },
         "placeholder-undefined-fields": {
             "min": 20,
@@ -372,13 +376,16 @@
             "max": 2
         },
         "struct-mostly-undefined": {
-            "min": 4,
-            "max": 4,
+            "min": 7,
+            "max": 7,
             "degrades": [
-                "/tinyxml.cpp/multi/$_2",
+                "/tinyxml.cpp/anon/$_5",
                 "/tinyxml.cpp/multi/_stati64",
                 "/tinyxml.cpp/multi/basic_iostream<char,std::char_traits<char>>",
-                "/tinyxml.cpp/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>"
+                "/tinyxml.cpp/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
+                "/tinyxmlerror.cpp/anon/$_2",
+                "/tinyxmlparser.cpp/anon/$_2",
+                "/xmltest_min.cpp/anon/$_2"
             ]
         },
         "struct-truncated": {
