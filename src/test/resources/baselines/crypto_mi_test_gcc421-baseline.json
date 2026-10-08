@@ -1051,6 +1051,14 @@
             "min": 38,
             "max": 38
         },
+        "struct-longer-than-stab": {
+            "min": 2,
+            "max": 2,
+            "degrades": [
+                "/asn.cpp/multi/sentry",
+                "/cryptlib.cpp/multi/Err"
+            ]
+        },
         "struct-mostly-undefined": {
             "min": 7,
             "max": 7,
