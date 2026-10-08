@@ -251,14 +251,6 @@
             "min": 2,
             "max": 2
         },
-        "struct-mostly-undefined": {
-            "min": 2,
-            "max": 2,
-            "degrades": [
-                "/infblock.c/multi/inflate_blocks_state",
-                "/infblock.c/multi/inflate_codes_state"
-            ]
-        },
         "text-data-no-coverage": {
             "min": 8,
             "max": 8
