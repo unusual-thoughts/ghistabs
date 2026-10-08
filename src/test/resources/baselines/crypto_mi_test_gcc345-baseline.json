@@ -1730,14 +1730,6 @@
             "min": 424,
             "max": 424
         },
-        "vtable-vbase-count-mismatch": {
-            "min": 2,
-            "max": 2,
-            "degrades": [
-                "fstream",
-                "iostream"
-            ]
-        },
         "vtable-virtual-no-impl": {
             "min": 19,
             "max": 19
