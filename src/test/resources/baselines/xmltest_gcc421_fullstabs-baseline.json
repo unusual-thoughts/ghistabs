@@ -809,16 +809,6 @@
             "min": 75,
             "max": 75
         },
-        "vtable-vbase-count-mismatch": {
-            "min": 4,
-            "max": 4,
-            "degrades": [
-                "basic_fstream<char,std::char_traits<char>>",
-                "basic_fstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_iostream<char,std::char_traits<char>>",
-                "basic_iostream<wchar_t,std::char_traits<wchar_t>>"
-            ]
-        },
         "vtable-virtual-no-impl": {
             "min": 38,
             "max": 38

@@ -638,15 +638,6 @@
             "min": 26,
             "max": 26
         },
-        "vtable-vbase-count-mismatch": {
-            "min": 3,
-            "max": 3,
-            "degrades": [
-                "fstream",
-                "iostream",
-                "stringstream"
-            ]
-        },
         "vtable-virtual-no-impl": {
             "min": 19,
             "max": 19
