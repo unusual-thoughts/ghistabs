@@ -371,12 +371,11 @@ class ClassApplier(
      * from the class under `__thiscall` anyway.
      */
     private fun stubParams(mangled: String, at: String): List<DataType?> = (Demangler.of(mangled) as? DemangledFunction)
-        ?.parameters
-        ?.filterNot { it.type.isVoid && it.type.pointerLevels == 0 && !it.type.isReference }
-        ?.map { p ->
-            runCatching { p.type.getDataType(dtm) }.getOrNull()
+        ?.formals
+        ?.map { t ->
+            runCatching { t.getDataType(dtm) }.getOrNull()
                 ?: Undefined4DataType.dataType.also {
-                    degradation("method-stub-param-untyped", at, "demangler gave no type for ${p.type}")
+                    degradation("method-stub-param-untyped", at, "demangler gave no type for $t")
                 }
         }
         .orEmpty()
