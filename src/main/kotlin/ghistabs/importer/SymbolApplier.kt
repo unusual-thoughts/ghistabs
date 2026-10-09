@@ -85,7 +85,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     private fun signatureTypes(mangled: String): List<DemangledDataType>? =
         (Demangler.of(mangled) as? DemangledFunction)?.parameters
             ?.map { it.type }
-            ?.filterNot { (it.isVoid && it.pointerLevels == 0 && !it.isReference && !it.isArray) || it.isVarArgs }
+            ?.filterNot { it.isVarArgs }
 
     internal fun applyAllFunctions(): Int {
         ctx.monitor.initialize(harvest.functions.size.toLong(), "Stabs: applying functions")
