@@ -103,20 +103,20 @@
             "max": 268
         },
         "canonical-content-merged": {
-            "min": 6,
-            "max": 6
+            "min": 4,
+            "max": 4
         },
         "canonical-key-merged": {
-            "min": 2152,
-            "max": 2152
+            "min": 2150,
+            "max": 2150
         },
         "canonical-key-multi-hash": {
-            "min": 93,
-            "max": 93
+            "min": 91,
+            "max": 91
         },
         "canonical-scope-collision": {
-            "min": 55,
-            "max": 55
+            "min": 54,
+            "max": 54
         },
         "class-scope-from-vtable": {
             "min": 60,
@@ -1081,8 +1081,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 53830,
-            "max": 53830
+            "min": 53829,
+            "max": 53829
         },
         "placeholder-undefined-fields": {
             "min": 944,
@@ -1277,8 +1277,8 @@
             "max": 37
         },
         "scope-from-twin": {
-            "min": 4930,
-            "max": 4930
+            "min": 4939,
+            "max": 4939
         },
         "sourcemap-duplicate-entries": {
             "min": 11780,
