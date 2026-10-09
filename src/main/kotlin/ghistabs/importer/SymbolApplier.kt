@@ -3,6 +3,7 @@ package ghistabs.importer
 import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
+import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
@@ -71,6 +72,21 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             }
     }
 
+    /**
+     * The formal types [mangled] declares, `...` aside, for parameters whose stab type is a dangling
+     * id. An ELF link drops the stabs of a discarded COMDAT function, `N_LSYM` type definitions
+     * included, and gcc defines a type at its first use, often in such an inline: on gcc 12
+     * `xmltest`, `tinyxml2.cpp` still references 51 ids its stabs never define, among them
+     * `XMLText::XMLText(XMLDocument*)`'s `doc:p(0,23)`. Only a list as long as the N_PSYMs lines up
+     * with them: an unnamed parameter has no N_PSYM and may sit anywhere, as `operator new(size_t,
+     * void* __p)`'s does at the head. A class or enum taken by value stays untyped: the demangler's
+     * stand-in for it is an empty `/Demangler` struct, and a zero-length parameter has no storage.
+     */
+    private fun signatureTypes(mangled: String): List<DemangledDataType>? =
+        (Demangler.of(mangled) as? DemangledFunction)?.parameters
+            ?.map { it.type }
+            ?.filterNot { (it.isVoid && it.pointerLevels == 0 && !it.isReference && !it.isArray) || it.isVarArgs }
+
     internal fun applyAllFunctions(): Int {
         ctx.monitor.initialize(harvest.functions.size.toLong(), "Stabs: applying functions")
         var functions = 0
@@ -117,10 +133,13 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // instead of `<Class>*`); ClassApplier.reparentMethod sets __thiscall and
                 // synthesises a typed `this` from the class struct, which is authoritative.
                 // Keeping the N_PSYM one produces duplicate-`this` signatures Ghidra can't evict.
-                val params = open.params
-                    .filterNot { it.body.name == "this" }
-                    .map { p ->
+                val stabParams = open.params.filterNot { it.body.name == "this" }
+                val signature = signatureTypes(open.name)?.takeIf { it.size == stabParams.size }
+                val params = stabParams
+                    .mapIndexed { i, p ->
                         val pdt = registry.resolveRef(p.body.type)?.let { open.passedByAddress(p, it) ?: it }
+                            ?: signature?.get(i)?.takeIf { it.isPrimitive || it.pointerLevels > 0 || it.isReference }
+                                ?.let { runCatching { it.getDataType(ctx.program.dataTypeManager) }.getOrNull() }
                         if (pdt == null) {
                             degradation(
                                 "param-untyped",
