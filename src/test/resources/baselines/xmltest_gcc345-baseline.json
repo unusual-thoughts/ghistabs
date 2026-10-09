@@ -47,12 +47,8 @@
             "max": 1117
         },
         "canonical-key-multi-hash": {
-            "min": 5,
-            "max": 5
-        },
-        "canonical-scope-collision": {
-            "min": 1,
-            "max": 1
+            "min": 3,
+            "max": 3
         },
         "class-not-struct": {
             "min": 4,
@@ -279,8 +275,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 82,
-            "max": 82
+            "min": 81,
+            "max": 81
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -448,8 +444,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 16646,
-            "max": 16646
+            "min": 16641,
+            "max": 16641
         },
         "placeholder-undefined-fields": {
             "min": 15,
@@ -511,8 +507,8 @@
             "max": 49
         },
         "scope-from-twin": {
-            "min": 117,
-            "max": 117
+            "min": 121,
+            "max": 121
         },
         "sourcemap-duplicate-entries": {
             "min": 125,
@@ -661,8 +657,8 @@
             "max": 19
         },
         "xref-base-tag-resolved": {
-            "min": 4,
-            "max": 4
+            "min": 1,
+            "max": 1
         },
         "xref-undefined": {
             "min": 35,

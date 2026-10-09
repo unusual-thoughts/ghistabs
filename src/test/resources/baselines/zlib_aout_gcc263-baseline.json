@@ -10,12 +10,8 @@
             ]
         },
         "canonical-key-merged": {
-            "min": 10,
-            "max": 10
-        },
-        "canonical-key-multi-hash": {
-            "min": 3,
-            "max": 3
+            "min": 13,
+            "max": 13
         },
         "code-cleared-for-data": {
             "min": 1,

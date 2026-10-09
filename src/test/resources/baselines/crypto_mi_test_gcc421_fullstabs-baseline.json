@@ -99,28 +99,24 @@
             ]
         },
         "base-empty-ebo": {
-            "min": 268,
-            "max": 268
+            "min": 256,
+            "max": 256
         },
         "canonical-content-merged": {
             "min": 4,
             "max": 4
         },
         "canonical-key-merged": {
-            "min": 2150,
-            "max": 2150
+            "min": 2177,
+            "max": 2177
         },
         "canonical-key-multi-hash": {
-            "min": 91,
-            "max": 91
-        },
-        "canonical-scope-collision": {
-            "min": 54,
-            "max": 54
+            "min": 22,
+            "max": 22
         },
         "class-scope-from-vtable": {
-            "min": 60,
-            "max": 60
+            "min": 2,
+            "max": 2
         },
         "data-no-coverage": {
             "min": 175,
@@ -142,29 +138,25 @@
             "min": 9947,
             "max": 9947
         },
-        "demangler-ambiguous": {
-            "min": 9,
-            "max": 9
-        },
         "demangler-exact-match": {
-            "min": 764,
-            "max": 764
+            "min": 766,
+            "max": 766
         },
         "demangler-retarget-bound": {
-            "min": 137,
-            "max": 137
+            "min": 144,
+            "max": 144
         },
         "demangler-retarget-no-type": {
-            "min": 70,
-            "max": 70
+            "min": 63,
+            "max": 63
         },
         "demangler-retargeted-stub-site": {
-            "min": 137,
-            "max": 137
+            "min": 144,
+            "max": 144
         },
         "demangler-reverse-demangle-match": {
-            "min": 96,
-            "max": 96
+            "min": 94,
+            "max": 94
         },
         "demangler-shortened-name-match": {
             "min": 17,
@@ -187,16 +179,16 @@
             "max": 80
         },
         "demangler-unbound-stub-in-signature": {
-            "min": 6,
-            "max": 6
+            "min": 2,
+            "max": 2
         },
         "demangler-unbound-stub-signature-site": {
-            "min": 73,
-            "max": 73
+            "min": 66,
+            "max": 66
         },
         "demangler-unbound-stub-site-origin": {
-            "min": 73,
-            "max": 73
+            "min": 66,
+            "max": 66
         },
         "drop-record-bnsym": {
             "min": 2841,
@@ -397,8 +389,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 885,
-            "max": 885
+            "min": 822,
+            "max": 822
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -1081,8 +1073,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 53829,
-            "max": 53829
+            "min": 53744,
+            "max": 53744
         },
         "placeholder-undefined-fields": {
             "min": 944,
@@ -1277,8 +1269,8 @@
             "max": 37
         },
         "scope-from-twin": {
-            "min": 4939,
-            "max": 4939
+            "min": 5384,
+            "max": 5384
         },
         "sourcemap-duplicate-entries": {
             "min": 11780,
@@ -1385,16 +1377,16 @@
             "max": 18
         },
         "vfptr-inherited-from-base": {
-            "min": 206,
-            "max": 206
+            "min": 199,
+            "max": 199
         },
         "vfptr-normalized": {
-            "min": 62,
-            "max": 62
+            "min": 59,
+            "max": 59
         },
         "vfptr-split-from-base": {
-            "min": 542,
-            "max": 542
+            "min": 488,
+            "max": 488
         },
         "vftable-slot-name-collision": {
             "min": 8,
@@ -1905,8 +1897,8 @@
             "max": 603
         },
         "vtable-skipped": {
-            "min": 689,
-            "max": 689
+            "min": 625,
+            "max": 625
         },
         "vtable-virtual-no-impl": {
             "min": 38,
