@@ -73,7 +73,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     /**
      * The one type a single-layer node wraps: [Pointer], [Reference], [Const], [Volatile] and [InlineDef].
-     * Nothing reads it but the default [children], which it spares those five an override of.
+     * The default [children] reads it, which spares those five an override of.
      */
     val wrapped: TypeDecl<Id>? get() = null
 
@@ -377,8 +377,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
     /** Cross-reference: `xs<name>:` / `xu<name>:` / `xc<name>:` — incomplete tag. */
     @Serializable
     data class XRef<Id : IdInterface>(val kind: AggrKind, val tagName: String) : TypeDecl<Id> {
-        // By leaf: plain `-gstabs` spells a nested class bare (`_Callback_list`), GNU extensions qualify it.
-        override val layoutData get() = listOf(kind, tagName.leafName)
+        override val layoutData get() = listOf(kind, tagName)
     }
 
     /**

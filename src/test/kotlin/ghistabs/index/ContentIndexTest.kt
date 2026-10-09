@@ -593,9 +593,8 @@ class ContentIndexTest {
     )
 
     /**
-     * `basic_ios::_M_tie` points at `basic_ostream`, whose virtual base is `basic_ios` again. On
-     * xmltest_gcc421_fullstabs the cycle was cut wherever a CU's walk entered it, and 10 identical
-     * libstdc++ copies of `basic_istream` keyed as two.
+     * `basic_ios::_M_tie` points at `basic_ostream`, whose virtual base is `basic_ios` again: a CU that
+     * enters the cycle at either class keys both alike.
      */
     @Test
     fun pointerCycleContentDoesNotDependOnWalkOrder() {

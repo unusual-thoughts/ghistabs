@@ -123,13 +123,13 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
      * (`basic_istream<char,…>::sentry` in libstdc++'s CUs) and bare where it does not (`sentry` in
      * xmltest_gcc345's own), and the bare copy is the one that needs its twin.
      */
-    private data class Shape(val name: String, val bases: List<List<Any>?>?, val layout: ContentIndex.LayoutContent)
+    private data class Shape(val name: String, val bases: List<String?>?, val layout: ContentIndex.LayoutContent)
 
     private fun shapeOf(ast: Type) =
         Shape(ast.name?.leafName ?: ast.ghidraName, baseNames(ast), index.content(ast.body))
 
     private fun baseNames(ast: Type) =
-        (ast.body as? TypeDecl.Aggregate)?.bases?.map { index.targetXRef(it.type)?.layoutData }
+        (ast.body as? TypeDecl.Aggregate)?.bases?.map { index.targetXRef(it.type)?.tagName?.leafName }
 
     // Where an unbound copy goes: the slot a stated sibling of the same shape already occupies. This
     // only ever repeats a location, never picks one — a shape two stated locations claim is dropped,
