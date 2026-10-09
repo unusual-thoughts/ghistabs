@@ -48,8 +48,8 @@
             ]
         },
         "canonical-content-merged": {
-            "min": 3,
-            "max": 3
+            "min": 2,
+            "max": 2
         },
         "canonical-key-merged": {
             "min": 1425,
@@ -60,8 +60,8 @@
             "max": 80
         },
         "canonical-scope-collision": {
-            "min": 6,
-            "max": 6
+            "min": 5,
+            "max": 5
         },
         "class-not-struct": {
             "min": 4,
@@ -88,8 +88,8 @@
             "max": 8775
         },
         "demangler-exact-match": {
-            "min": 712,
-            "max": 712
+            "min": 714,
+            "max": 714
         },
         "demangler-retarget-bound": {
             "min": 25,
@@ -104,8 +104,8 @@
             "max": 25
         },
         "demangler-reverse-demangle-match": {
-            "min": 87,
-            "max": 87
+            "min": 85,
+            "max": 85
         },
         "demangler-shortened-name-match": {
             "min": 2,
@@ -1163,8 +1163,8 @@
             "max": 150
         },
         "scope-from-twin": {
-            "min": 281,
-            "max": 281
+            "min": 282,
+            "max": 282
         },
         "sourcemap-duplicate-entries": {
             "min": 9323,

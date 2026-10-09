@@ -37,20 +37,20 @@
             "max": 239
         },
         "canonical-content-merged": {
-            "min": 10,
-            "max": 10
+            "min": 8,
+            "max": 8
         },
         "canonical-key-merged": {
-            "min": 1977,
-            "max": 1977
+            "min": 1975,
+            "max": 1975
         },
         "canonical-key-multi-hash": {
-            "min": 80,
-            "max": 80
+            "min": 78,
+            "max": 78
         },
         "canonical-scope-collision": {
-            "min": 33,
-            "max": 33
+            "min": 32,
+            "max": 32
         },
         "data-no-coverage": {
             "min": 1809,
@@ -805,8 +805,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 13392,
-            "max": 13392
+            "min": 13391,
+            "max": 13391
         },
         "placeholder-undefined-fields": {
             "min": 757,
@@ -987,8 +987,8 @@
             "max": 10
         },
         "scope-from-twin": {
-            "min": 3776,
-            "max": 3776
+            "min": 3785,
+            "max": 3785
         },
         "sourcemap-duplicate-entries": {
             "min": 10927,
