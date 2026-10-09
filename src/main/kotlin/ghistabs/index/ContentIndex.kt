@@ -38,11 +38,48 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
     }
 
     /**
+     * walks [decl] through `Ref`/`XRef`/`InlineDef` indirection and cv-wrappers to the first body
+     * [pick] accepts, or null. `Pointer`/`Reference` are terminals: `Foo *` does not name a `Foo`.
+     *
+     * An `InlineDef` tries the ast registered at its id before the body spliced in at the use site,
+     * which is frequently itself a forward `XRef` — without the preference, polymorphism detection
+     * misses inherited vfptrs (`Cat` → `InlineDef(Animal id, XRef body)`) — and falls back to that
+     * body when the id leads nowhere, without which a base whose id no CU defined reads as no base.
+     */
+    fun <R : Any> resolveWith(
+        decl: GlobalTypeDecl,
+        visited: MutableSet<GlobalTypeId> = mutableSetOf(),
+        pick: (GlobalTypeDecl) -> R?,
+    ): R? {
+        pick(decl)?.let { return it }
+        fun step(next: GlobalTypeDecl?) = next?.let { resolveWith(it, visited, pick) }
+        fun stepId(id: GlobalTypeId) = if (visited.add(id)) step(byId(id)?.body) else null
+        return when (decl) {
+            is TypeDecl.Ref -> stepId(decl.id)
+            is TypeDecl.XRef -> byXRef(decl)?.takeIf { visited.add(it.id) }?.let { step(it.body) }
+            is TypeDecl.InlineDef -> stepId(decl.id) ?: step(decl.inner)
+            is TypeDecl.Const -> step(decl.inner)
+            is TypeDecl.Volatile -> step(decl.inner)
+            else -> null
+        }
+    }
+
+    /**
+     * [targetSpelling]'s counterpart for a whole tag: the class, union or enum [decl] names through
+     * typedefs and cv-qualifiers, as a cross-reference to it; null for an unnamed or CU-local one.
+     */
+    fun targetXRef(decl: GlobalTypeDecl): TypeDecl.XRef<GlobalTypeId>? = resolveWith(decl) { d ->
+        d as? TypeDecl.XRef ?: d.id?.let(::byId)?.takeUnless(Type::isCuLocalName)?.let { t ->
+            t.name?.let { name -> t.body.xrefKind?.let { TypeDecl.XRef(it, name) } }
+        }
+    }
+
+    /**
      * Canonical layout of a [TypeDecl] tree, as a value: equal [LayoutContent] ⇔ layout-equivalent
      * types. One traversal serves both grouping and equality, so the two cannot drift apart.
      *
      * Differences from `data class equals()` on the TypeDecl itself:
-     *  - Id-bearing nodes (`Ref`, `Struct.vptrBasetype`, `InlineDef.id`) resolve to the referenced
+     *  - Id-bearing nodes (`Ref`, `InlineDef.id`) resolve to the referenced
      *    body, so `Ref(id)` and inline `InlineDef(id, body)` forms (gcc emits either depending on
      *    per-CU history) collapse to the same content.
      *  - `Ref`/`InlineDef` wrappers contribute no node — they reduce to their wrapped content.
@@ -59,8 +96,19 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
     private fun GlobalTypeDecl.describe(visited: Set<GlobalTypeId> = emptySet()): LayoutContent = when (this) {
         is TypeDecl.Ref -> refKey(id, visited)
 
+        // A pointer's layout is its own width, so a named pointee is keyed by its name. That also cuts
+        // every cycle a class graph has (by value nothing contains itself, and methods and static fields
+        // are dropped below), which otherwise fell wherever a CU's walk entered: through `_M_tie`,
+        // `basic_ios` reaches itself again, and 10 identical libstdc++ `basic_istream` copies on
+        // xmltest_gcc421_fullstabs keyed as two.
+        is TypeDecl.Pointer, is TypeDecl.Reference -> targetXRef(wrapped!!)
+            ?.let { LayoutContent(javaClass, children = listOf(listOf(it.layoutContent(visited)))) }
+            ?: layoutContent(visited)
+
+        // Plain `-gstabs` drops const and volatile (dbxout.c), and neither changes a layout.
+        is TypeDecl.Const, is TypeDecl.Volatile -> wrapped!!.describe(visited)
+
         TypeDecl.Void, is TypeDecl.Float, is TypeDecl.Complex, is TypeDecl.Enum, // no children
-        is TypeDecl.Pointer, is TypeDecl.Reference, is TypeDecl.Const, is TypeDecl.Volatile, // one child
         is TypeDecl.Array, is TypeDecl.FreeFunction, is TypeDecl.Member, // two children
         is TypeDecl.Method, // three children
         -> layoutContent(visited)
@@ -77,14 +125,14 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
         // including them makes the traversal-order back-edge land on different nodes per CU, forking
         // `.conflict` on layout-identical types. gcc also emits a virtual as VIRTUAL (vtoff set) in its
         // defining CU and NORMAL elsewhere, reordering methods per CU. So static fields and methods are
-        // dropped: a layout-identical class is one value everywhere.
+        // dropped: a layout-identical class is one value everywhere. So is the `~%` vptr owner, which
+        // plain `-gstabs` never emits.
         is TypeDecl.Aggregate -> LayoutContent(
             javaClass,
             layoutData,
             listOf(
                 bases.map { it.layoutContent(visited) },
                 fields.filter { !it.isStatic }.map { it.layoutContent(visited) },
-                listOfNotNull(vptrBasetype?.describe(visited)),
             ),
         )
 
@@ -172,12 +220,14 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
         listOf(listOf(type.describe(visited))),
     )
 
+    // A virtual base's offset is the vtable's vbase slot with GNU extensions (`!1,12-96`) and the base's
+    // position in the complete object with plain `-gstabs` (`basic_ios<…>:(0,114),64,…`): no layout of its own.
     private fun Base<GlobalTypeId>.layoutContent(visited: Set<GlobalTypeId>) = LayoutContent(
         javaClass,
-        listOf(
+        listOfNotNull(
             isVirtual,
             access,
-            offsetBits,
+            offsetBits.takeUnless { isVirtual },
         ),
         listOf(listOf(type.describe(visited))),
     )

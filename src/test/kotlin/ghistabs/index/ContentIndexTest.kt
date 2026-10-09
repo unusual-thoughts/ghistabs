@@ -575,4 +575,56 @@ class ContentIndexTest {
         // Same layout built twice ⇒ one value, so grouping puts them in one class.
         oracle.content(cls(TypeDecl.Ref(intInCU1.id))) mustBe oracle.content(a)
     }
+
+    private fun agg(size: Long, vararg fields: GlobalTypeDecl, vbase: GlobalTypeId? = null, vbaseOffset: Long = 0) =
+        TypeDecl.Aggregate(
+            AggrKind.STRUCT,
+            size,
+            listOfNotNull(vbase?.let { TypeDecl.Aggregate.Base(TypeDecl.Ref(it), true, Access.PUBLIC, vbaseOffset) }),
+            fields.mapIndexed { i, t -> Field("f$i", t, 32L * i, 32L, false, Access.PUBLIC, null) },
+            methods = emptyList(),
+            vptrBasetype = null,
+        )
+
+    private fun index(vararg types: Triple<GlobalTypeId, String, GlobalTypeDecl>) = TestContentIndex(
+        types.associate { (id, name, body) ->
+            id to Type(id.source as SourceFile.CUSource, id, binding(name, body), body)
+        },
+    )
+
+    /**
+     * `basic_ios::_M_tie` points at `basic_ostream`, whose virtual base is `basic_ios` again. On
+     * xmltest_gcc421_fullstabs the cycle was cut wherever a CU's walk entered it, and 10 identical
+     * libstdc++ copies of `basic_istream` keyed as two.
+     */
+    @Test
+    fun pointerCycleContentDoesNotDependOnWalkOrder() {
+        val (a, b) = SourceFile.CUSource("a.cpp") to SourceFile.CUSource("b.cpp")
+        fun pair(cu: SourceFile.CUSource) = listOf(
+            Triple(GlobalTypeId(cu, 1), "basic_ios", agg(8, TypeDecl.Pointer(TypeDecl.Ref(GlobalTypeId(cu, 2))))),
+            Triple(GlobalTypeId(cu, 2), "basic_ostream", agg(12, TypeDecl.Builtin(-1), vbase = GlobalTypeId(cu, 1))),
+        )
+        val o = index(*(pair(a) + pair(b)).toTypedArray())
+        o.content(TypeDecl.Ref(GlobalTypeId(a, 1))) // a.cpp enters at basic_ios, b.cpp at basic_ostream
+        o.content(TypeDecl.Ref(GlobalTypeId(b, 2))) mustBe o.content(TypeDecl.Ref(GlobalTypeId(a, 2)))
+        o.content(TypeDecl.Ref(GlobalTypeId(b, 1))) mustBe o.content(TypeDecl.Ref(GlobalTypeId(a, 1)))
+    }
+
+    /**
+     * One class as GNU extensions spell it (`!1,12-96`, `const ios_base::_Callback_list*`) and as plain
+     * `-gstabs` does (the virtual base at its position, no const, the nested name bare): one layout.
+     */
+    @Test
+    fun gstabsAndExtensionSpellingsOfOneClassAreOneLayout() {
+        val cu = SourceFile.CUSource("a.cpp")
+        val (ios, list, bareList) = Triple(GlobalTypeId(cu, 1), GlobalTypeId(cu, 2), GlobalTypeId(cu, 3))
+        val o = index(
+            Triple(ios, "basic_ios", agg(136)),
+            Triple(list, "ios_base::_Callback_list", agg(16)),
+            Triple(bareList, "_Callback_list", agg(16)),
+        )
+        val extensions = agg(144, TypeDecl.Pointer(TypeDecl.Const(TypeDecl.Ref(list))), vbase = ios, vbaseOffset = -96)
+        val gstabs = agg(144, TypeDecl.Pointer(TypeDecl.Ref(bareList)), vbase = ios, vbaseOffset = 64)
+        o.content(gstabs) mustBe o.content(extensions)
+    }
 }

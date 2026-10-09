@@ -377,7 +377,8 @@ sealed interface TypeDecl<out Id : IdInterface> {
     /** Cross-reference: `xs<name>:` / `xu<name>:` / `xc<name>:` — incomplete tag. */
     @Serializable
     data class XRef<Id : IdInterface>(val kind: AggrKind, val tagName: String) : TypeDecl<Id> {
-        override val layoutData get() = listOf(kind, tagName)
+        // By leaf: plain `-gstabs` spells a nested class bare (`_Callback_list`), GNU extensions qualify it.
+        override val layoutData get() = listOf(kind, tagName.leafName)
     }
 
     /**
@@ -407,7 +408,14 @@ sealed interface TypeDecl<out Id : IdInterface> {
      * carry a self-`Ref`, a forward declaration with no definition to resolve to. So neither implies
      * the other, and an index of what an xref can reach has to ask this rather than [TypeNameKind].
      */
-    val canBeXRefTarget get() = this is Aggregate || this is Enum
+    val canBeXRefTarget get() = xrefKind != null
+
+    /** The kind an `xs`/`xu`/`xe` naming this body spells: an [Aggregate]'s own, [AggrKind.ENUM] for an [Enum]. */
+    val xrefKind: AggrKind? get() = when (this) {
+        is Aggregate -> kind
+        is Enum -> AggrKind.ENUM
+        else -> null
+    }
 
     /** Bodies that materialize their own named DataType (own their ghidraName), as opposed to
      *  wrappers/refs/aliases whose byId entry points at another type's dt. Only these are classified. */
@@ -416,12 +424,6 @@ sealed interface TypeDecl<out Id : IdInterface> {
     val isComplete get() = when (this) {
         is Aggregate -> sizeBytes > 0
         is Enum -> members.isNotEmpty()
-        else -> false
-    }
-
-    fun matchesXRefKind(xref: AggrKind) = when (this) {
-        is Aggregate -> kind == xref
-        is Enum -> xref == AggrKind.ENUM
         else -> false
     }
 }

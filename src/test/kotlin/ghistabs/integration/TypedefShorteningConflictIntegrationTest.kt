@@ -97,11 +97,13 @@ class TypedefShorteningConflictIntegrationTest : AbstractGhidraHeadlessIntegrati
                 }
                 .sorted()
                 .mustBeEmpty("import forked a `/stabs` conflict on a typedef alias (shortenTypedefs=$shorten)")
-            // `ostream` stays a typedef onto its (empty, fillable) target in both modes: resolution
-            // hands references the typedef rather than renaming anything, and the rename half only
-            // rewrites template *arguments*, never a whole name a typedef already carries.
-            stabs.single { it.name == "ostream" }
-                .must("/stabs/ostream should stay a typedef onto its target") { this is TypeDef }
+            // `ostream` is never an empty struct wearing the alias, in either mode: resolution hands
+            // references the typedef rather than renaming anything, and the rename half only rewrites
+            // template *arguments*, never a whole name a typedef already carries. Since the -gstabs and
+            // GNU-extension copies of `basic_ostream<char>` share one content key, the class is filled at
+            // the demangler's own `/std/ostream` and no `/stabs` placeholder is left for the typedef.
+            stabs.filter { it.name == "ostream" }
+                .forEach { it.must("/stabs/ostream should stay a typedef onto its target") { this is TypeDef } }
         }
     }
 
