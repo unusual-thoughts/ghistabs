@@ -30,6 +30,22 @@ class AlignToDeclaredTest {
     }
 
     @Test
+    fun aNarrowIntegerAgreesWithTheIntItIsPassedAs() {
+        // ctype(__c_locale, const mask* __table, bool __del, size_t __refs), gcc 3.4.5 libstdc++
+        val mask = TypedefDataType("mask", UnsignedShortDataType.dataType)
+        val maskPtr = PointerDataType(mask, 4)
+        val locale = PointerDataType(int, 4)
+        align(
+            listOf(maskPtr, int, uint),
+            listOf(locale, PointerDataType(UnsignedShortDataType.dataType, 4), BooleanDataType.dataType, uint),
+        ) mustBe
+            listOf(null, 0, 1, 2)
+        // IsAlpha(unsigned char anyByte, TiXmlEncoding), the encoding an enum as wide as int
+        val encoding = EnumDataType("TiXmlEncoding", 4)
+        align(listOf(int), listOf(UnsignedCharDataType.dataType, encoding)) mustBe listOf(0, null)
+    }
+
+    @Test
     fun aTypedefAgreesWithWhatItNames() {
         val sizeT = TypedefDataType("size_t", uint)
         align(listOf(double, sizeT), listOf(sizeT, double, uint)) mustBe listOf(null, 0, 1)

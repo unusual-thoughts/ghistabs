@@ -1,6 +1,8 @@
 package ghistabs.importer
 
 import ghidra.app.util.demangler.DemangledDataType
+import ghidra.program.model.data.AbstractIntegerDataType
+import ghidra.program.model.data.BooleanDataType
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.Pointer
@@ -70,7 +72,7 @@ internal fun alignToDeclared(stabs: List<DataType?>, declared: List<Lazy<DataTyp
         val stab = stabs[i] ?: return 0
         val decl = declared[j].value ?: return 0
         return when {
-            stab.agreesWith(decl) -> 2
+            stab.agreesWith(decl) || decl.isPromotedTo(stab) -> 2
             stab.length == decl.length -> 1
             else -> 0
         }
@@ -89,6 +91,18 @@ internal fun alignToDeclared(stabs: List<DataType?>, declared: List<Lazy<DataTyp
         j--
     }
     return slots.toList()
+}
+
+/**
+ * gcc's stabs give a narrow integer parameter the type it is passed as: `IsAlpha(unsigned char anyByte,
+ * TiXmlEncoding)`'s `anyByte` and `ctype(__c_locale, const mask*, bool __del, size_t)`'s `__del` are
+ * both `int`. Read as their own size, each sat in the next slot as wide as `int`.
+ */
+private fun DataType.isPromotedTo(stab: DataType): Boolean {
+    val declared = withoutTypedefs()
+    val passed = stab.withoutTypedefs()
+    return (declared is AbstractIntegerDataType || declared is BooleanDataType) &&
+        passed is AbstractIntegerDataType && declared.length < passed.length
 }
 
 /** The same type up to typedefs, at the top and under pointers. */
