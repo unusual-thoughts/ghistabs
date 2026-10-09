@@ -242,8 +242,7 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
 
     // A demoted class keeps its namespace under the header category, so Ghidra's class-struct
     // lookup, which matches the category's tail against the namespace path, still finds it.
-    fun TypeLocation.within(scope: CategoryPath) =
-        TypeLocation(scope.pathElements.fold(category) { c, e -> CategoryPath(c, e) }, name)
+    fun TypeLocation.within(scope: CategoryPath) = TypeLocation(category.extend(*scope.pathElements), name)
     val nesting = ScopeLocator(this@locateTypesWith)
 
     // Scope→header→hash ladder. A type whose enclosing C++ scope is derivable (any member's
@@ -266,7 +265,9 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
         .filter { it.body.canBeXRefTarget }
         .groupBy(nesting::scopeKey)
         .flatMap { (scopeKey, members) ->
-            if (scopeKey != null) {
+            when (scopeKey) {
+                null -> members.map { it.headerKey() to Slot(it) }
+
                 // Divergence is decided by the scope-owning (method-bearing) members alone. A
                 // method-less nested type recovered into this slot is the same type as its qualified
                 // sibling — layout-identical, differing only in emitted methods, which never enter the
@@ -277,19 +278,18 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
                 // Counting the bound-but-method-less copies as owners put every CU's stub declaration of
                 // `std::type_info` in the vote, they diverge, and the demotion emptied `/std/type_info` —
                 // the slot Ghidra's demangler had already forged and was waiting for us to fill.
-                when (val owners = members.filter { it.demangledClassPath() != null }.ifEmpty { members }) {
+                else -> when (val owners = members.filter { it.demangledClassPath() != null }.ifEmpty { members }) {
                     // Layout-only: owners diverge only in per-CU method flags/order (gcc VIRTUAL vs NORMAL,
                     // reordering), which never enter the DTM struct — don't let that noise demote the group.
                     else if owners.distinctBy { content(it.body) }.size == 1 ->
-                        return@flatMap listOf(scopeKey to Slot(owners, members))
+                        listOf(scopeKey to Slot(owners, members))
 
                     else -> {
                         debug("canonical-scope-collision", "$scopeKey: divergent bodies → demoted to header keys")
-                        return@flatMap members.map { it.headerKey().within(scopeKey.category) to Slot(it) }
+                        members.map { it.headerKey().within(scopeKey.category) to Slot(it) }
                     }
                 }
             }
-            members.map { it.headerKey() to Slot(it) }
         }.groupBy({ it.first }, { it.second }).map { (key, slots) ->
             nesting.classifyGroup(key, slots.flatMap { it.voters }).copy(members = slots.flatMap { it.ids })
                 .also { nesting.reportSmallerBodies(key, it.type, slots.flatMap { slot -> slot.members }) }
