@@ -3,12 +3,10 @@ package ghistabs.importer
 import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
-import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.data.*
-import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
@@ -47,43 +45,49 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     }
 
     /**
-     * The N_PSYM list extended to the arity the mangled name declares. gcc emits no N_PSYM for an
-     * *unnamed* parameter, so `void f(const NameValuePairs &)` leaves a stab list one short — and
-     * applying a short list under DYNAMIC_STORAGE re-lays every slot: cryptopp's
-     * `HMAC_Base::UncheckedSetKey(const byte*, unsigned int, const NameValuePairs&)` lost its third
-     * argument, slid `userKey` into the `this` register, and decompiled to a body full of
-     * `in_stack_` reads. The mangled name is the only place the true arity survives.
+     * [func]'s parameters: the N_PSYMs, then what the mangled name adds. Two things there only the
+     * mangled name keeps.
      *
-     * Padding goes on the tail, where C++ puts unnamed parameters in practice; an unnamed one in the
-     * middle would shift the names after it, but the storage — the part that breaks decompilation —
-     * comes out right either way. `this` is not among the demangled parameters; ClassApplier owns it.
+     * The arity: gcc emits no N_PSYM for an *unnamed* parameter, so `void f(const NameValuePairs &)`
+     * leaves a stab list one short, and applying a short list under DYNAMIC_STORAGE re-lays every slot:
+     * cryptopp's `HMAC_Base::UncheckedSetKey(const byte*, unsigned int, const NameValuePairs&)` lost its
+     * third argument, slid `userKey` into the `this` register, and decompiled to a body full of
+     * `in_stack_` reads. [alignToDeclared] places the N_PSYMs among the declared slots, and each slot
+     * left over becomes a `param_N` of its declared type.
+     *
+     * The type of a parameter whose stab type is a dangling id. An ELF link drops the stabs of a
+     * discarded COMDAT function, `N_LSYM` type definitions included, and gcc defines a type at its first
+     * use, often in such an inline: on gcc 12 `xmltest`, `tinyxml2.cpp` still references 51 ids its
+     * stabs never define, among them `XMLText::XMLText(XMLDocument*)`'s `doc:p(0,23)`.
+     *
+     * `this` is not among either list: the demangler lists a member's formals only.
      */
-    private fun List<ParameterImpl>.padToMangledArity(mangled: String): List<ParameterImpl> {
-        val declared = (Demangler.of(mangled) as? DemangledFunction)?.formals ?: return this
-        if (declared.size <= size) return this
-        degradation("param-unnamed-padded", mangled, "stabs=$size mangled=${declared.size}")
-        return this +
-            declared.drop(size).mapIndexed { i, t ->
-                val dt = runCatching { t.getDataType(ctx.program.dataTypeManager) }.getOrNull()
-                    ?: Undefined4DataType.dataType.also {
-                        degradation("param-unnamed-untyped", mangled, "demangler gave no type for $t")
-                    }
-                ParameterImpl("param_${size + i + 1}", dt, ctx.program, source)
+    private fun Func.parameters(): List<ParameterImpl> {
+        val dtm = ctx.program.dataTypeManager
+        // gcc 3.x often mistypes the `this` N_PSYM (seen `int` instead of `<Class>*`), and keeping it
+        // beside the one the convention injects makes a duplicate-`this` signature Ghidra can't evict.
+        // ClassApplier.reparentMethod types it from the class struct.
+        val stabParams = params.filterNot { it.body.name == "this" }
+        val stabTypes = stabParams.map { p -> registry.resolveRef(p.body.type)?.let { passedByAddress(p, it) ?: it } }
+        val formals = (Demangler.of(name) as? DemangledFunction)?.formals.orEmpty()
+        val declared = formals.map { lazy { it.parameterType(dtm) } }
+        val slots = alignToDeclared(stabTypes, declared) ?: stabParams.indices.toList()
+        val unnamed = slots.count { it == null }
+        if (unnamed > 0) degradation("param-unnamed-padded", name, "stabs=${stabParams.size} mangled=${slots.size}")
+        return slots.mapIndexed { slot, i ->
+            if (i == null) {
+                val dt = parameterTypeOrUndefined(formals[slot], dtm, "param-unnamed-untyped", name)
+                return@mapIndexed ParameterImpl("param_${slot + 1}", dt, ctx.program, source)
             }
+            val p = stabParams[i]
+            val pdt = stabTypes[i] ?: declared.getOrNull(slot)?.value
+            if (pdt == null) degradation("param-untyped", "$name.${p.body.name}", address = addr)
+            registry.reasonFor(pdt)?.let { reason ->
+                degradation("param-typed-$reason", "$name.${p.body.name}", "type=${pdt?.pathName}", addr)
+            }
+            ParameterImpl(p.body.name, pdt ?: Undefined4DataType.dataType, ctx.program, source)
+        }
     }
-
-    /**
-     * The formal types [mangled] declares, for parameters whose stab type is a dangling
-     * id. An ELF link drops the stabs of a discarded COMDAT function, `N_LSYM` type definitions
-     * included, and gcc defines a type at its first use, often in such an inline: on gcc 12
-     * `xmltest`, `tinyxml2.cpp` still references 51 ids its stabs never define, among them
-     * `XMLText::XMLText(XMLDocument*)`'s `doc:p(0,23)`. Only a list as long as the N_PSYMs lines up
-     * with them: an unnamed parameter has no N_PSYM and may sit anywhere, as `operator new(size_t,
-     * void* __p)`'s does at the head. A class or enum taken by value stays untyped: the demangler's
-     * stand-in for it is an empty `/Demangler` struct, and a zero-length parameter has no storage.
-     */
-    private fun signatureTypes(mangled: String): List<DemangledDataType>? =
-        (Demangler.of(mangled) as? DemangledFunction)?.formals
 
     internal fun applyAllFunctions(): Int {
         ctx.monitor.initialize(harvest.functions.size.toLong(), "Stabs: applying functions")
@@ -126,49 +130,10 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // Resolve return type from the parsed signature; applied with the params below.
                 val retDt = registry.resolveRef(open.decl.type)
 
-                // Build params from N_PSYM/N_RSYM. Filter out any N_PSYM literally named
-                // `this`: gcc 3.x emits it for members but often mistypes (seen `int`
-                // instead of `<Class>*`); ClassApplier.reparentMethod sets __thiscall and
-                // synthesises a typed `this` from the class struct, which is authoritative.
-                // Keeping the N_PSYM one produces duplicate-`this` signatures Ghidra can't evict.
-                val stabParams = open.params.filterNot { it.body.name == "this" }
-                val signature = signatureTypes(open.name)?.takeIf { it.size == stabParams.size }
-                val params = stabParams
-                    .mapIndexed { i, p ->
-                        val pdt = registry.resolveRef(p.body.type)?.let { open.passedByAddress(p, it) ?: it }
-                            ?: signature?.get(i)?.takeIf { it.isPrimitive || it.isPointer || it.isReference }
-                                ?.let { runCatching { it.getDataType(ctx.program.dataTypeManager) }.getOrNull() }
-                        if (pdt == null) {
-                            degradation(
-                                "param-untyped",
-                                "${open.name}.${p.body.name}",
-                                address = open.addr,
-                            )
-                        }
-                        registry.reasonFor(pdt)?.let { reason ->
-                            degradation(
-                                "param-typed-$reason",
-                                "${open.name}.${p.body.name}",
-                                "type=${pdt?.pathName}",
-                                open.addr,
-                            )
-                        }
-                        ParameterImpl(
-                            p.body.name,
-                            pdt ?: Undefined4DataType.dataType,
-                            ctx.program,
-                            source,
-                        )
-                    }
-                    .padToMangledArity(open.name)
-                // A stab `this` makes it a member that takes one. Ghidra's demangler gives a variadic
-                // member MSVC's convention, which passes none: `XMLDocument::SetError(XMLError, int,
-                // const char*, ...)` came out `__stdcall`, and every caller's `this` landed in `error`.
-                val convention = CompilerSpec.CALLING_CONVENTION_thiscall.takeIf {
-                    open.params.any { p -> p.body.name == "this" } &&
-                        func.callingConvention?.hasThisPointer() != true &&
-                        ctx.program.compilerSpec.getCallingConvention(it) != null
-                }
+                // The `this` N_PSYM is there exactly for an instance member, which the mangled name
+                // can't tell from a static one.
+                val params = open.parameters()
+                val convention = func.conventionFor(takesThis = open.params.any { it.body.name == "this" })
                 // The stabs never say: a function's `F` type lists no parameters.
                 if ((Demangler.of(open.name) as? DemangledFunction)?.isVarArgs == true) func.setVarArgs(true)
                 // Set return + params in one dynamic-storage update so Ghidra recomputes storage from

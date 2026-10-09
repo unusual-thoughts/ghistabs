@@ -185,6 +185,17 @@ class ClassApplier(
         }
     }
 
+    /**
+     * Move member [m]'s function into this class and type it from the class: rename and reparent it
+     * through Ghidra's demangler, then apply the method list's signature with `this` as a pointer to
+     * [structDt], which only exists once the class is laid. Under the shared convention rule
+     * ([conventionFor]) a static member keeps its N_PSYM parameters. Records where [m] lives in
+     * [memberAddresses] for the vtable.
+     *
+     * gcc 12 emits no method list, so it never gets here: SymbolApplier.applyAllFunctions has
+     * already set each member's convention and parameters, and DemanglerReplacer names and reparents
+     * it.
+     */
     private fun LocatedClass.reparentMethod(m: Method<GlobalTypeId>) {
         val at = name.member(m.name)
         val (mangled, addr) = resolveMember(m) ?: run {
@@ -247,36 +258,24 @@ class ClassApplier(
                 func.entryPoint,
             )
 
-        // A static member takes no `this`, so it keeps the default convention and the params
-        // applyAllFunctions already read off its N_PSYMs. Falling through forced __thiscall
-        // (a phantom `FileSystemImage *this`) and then replaced the real params with the empty
-        // list its `f(ret)` signature carries. Returning is not enough: Itanium mangling cannot
-        // distinguish a static member from an instance one, so Ghidra's own demangler pass already
-        // gave it __thiscall, and Ghidra auto-injects `this` for any this-bearing convention on a
-        // GhidraClass member. The stabs `?` flag is the only thing that knows better.
-        if (m.virt == VirtKind.STATIC) {
+        // SymbolApplier.applyAllFunctions has already chosen this from the `this` N_PSYM for every
+        // member its stabs define; the method list covers the rest, such as one defined in a CU
+        // built without stabs. A static member
+        // then keeps the params it read off its N_PSYMs; replacing them below with the empty list
+        // its `f(ret)` signature carries would leave none.
+        val takesThis = m.virt != VirtKind.STATIC
+        func.conventionFor(takesThis)?.let { cc ->
+            runCatching { func.setCallingConvention(cc) }
+                .onFailure { degradation("method-calling-convention", at, it.message, func.entryPoint) }
+        }
+        if (!takesThis) {
             debug("method-static-no-this")
-            if (func.callingConvention?.hasThisPointer() == true) {
-                runCatching {
-                    func.setCallingConvention(program.compilerSpec.defaultCallingConvention.name)
-                }.onFailure {
-                    degradation("method-calling-convention", at, it.message, func.entryPoint)
-                }
-            }
             return
         }
-
-        // Mark __thiscall. The x86gcc cspec routes `this` as the first stack argument
-        // (MSVC's x86win routes it via ECX); either way, accepted __thiscall + GhidraClass
-        // namespace = Ghidra auto-injects hidden `this: Class*` at render time. Don't probe
-        // func.getParameter(0)?.name to detect — for force-created functions the param list
-        // isn't populated yet.
-        val thiscallAccepted = runCatching { func.setCallingConvention(CompilerSpec.CALLING_CONVENTION_thiscall) }
-            .onFailure {
-                degradation("method-calling-convention", at, it.message, func.entryPoint)
-            }
-            .isSuccess
-        val ghidraInjectsThis = thiscallAccepted && func.isMethod
+        // The x86gcc cspec routes `this` as the first stack argument (MSVC's x86win routes it via
+        // ECX); either way, __thiscall in a GhidraClass namespace has Ghidra inject a hidden
+        // `this: Class*` at render time.
+        val ghidraInjectsThis = func.callingConvention?.hasThisPointer() == true && func.isMethod
 
         val paramDecls = when (sig) {
             is TypeDecl.Method -> if (ghidraInjectsThis) sig.params.drop(1) else sig.params
@@ -367,17 +366,11 @@ class ClassApplier(
 
     /**
      * The parameter types [mangled] carries, for a stub method whose stab states none. `this` is not
-     * among them — the demangler reports a member's formals only, and Ghidra injects the receiver
-     * from the class under `__thiscall` anyway.
+     * among them: the demangler reports a member's formals only.
      */
-    private fun stubParams(mangled: String, at: String): List<DataType?> = (Demangler.of(mangled) as? DemangledFunction)
+    private fun stubParams(mangled: String, at: String): List<DataType> = (Demangler.of(mangled) as? DemangledFunction)
         ?.formals
-        ?.map { t ->
-            runCatching { t.getDataType(dtm) }.getOrNull()
-                ?: Undefined4DataType.dataType.also {
-                    degradation("method-stub-param-untyped", at, "demangler gave no type for $t")
-                }
-        }
+        ?.map { parameterTypeOrUndefined(it, dtm, "method-stub-param-untyped", at) }
         .orEmpty()
         .also { if (it.isNotEmpty()) debug("method-stub-params-recovered", "$at: ${it.size} from $mangled") }
 

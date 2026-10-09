@@ -177,8 +177,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     /**
      * gcc 12 `xmltest`'s `tinyxml2.cpp` references type ids whose `N_LSYM`s ld deleted with a
      * discarded COMDAT inline: `_ZN8tinyxml27XMLTextC2EPNS_11XMLDocumentE` has `doc:p(0,23)` and
-     * nothing defines `(0,23)`. The mangled name still declares each type. `operator new(size_t,
-     * void* __p)` names one of its two: which slot `__p:p(0,27)` takes the mangled name can't say.
+     * nothing defines `(0,23)`. The mangled name still declares each type.
      */
     @Test
     fun danglingParamTypesComeFromTheMangledName() {
@@ -191,9 +190,6 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             StabRecord(3, StabType.N_PSYM, 0, 0, 8, "value:p(0,107)"),
             StabRecord(4, StabType.N_PSYM, 0, 0, 16, "s:p(0,12)"),
             StabRecord(5, StabType.N_FUN, 0, 0, 0x10, ""),
-            StabRecord(6, StabType.N_FUN, 0, 0, 0x400020, "_ZnwjPv:F(0,27)"),
-            StabRecord(7, StabType.N_PSYM, 0, 0, 8, "__p:p(0,27)"),
-            StabRecord(8, StabType.N_FUN, 0, 0, 0x10, ""),
         )
 
         StabsImporter(program.defaultContext()).runOnRecords(
@@ -203,7 +199,31 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         fun params(at: Long) = checkNotNull(program.functionManager.getFunctionAt(addr(at))) { "no function at $at" }
             .parameters.map { "${it.name}: ${it.dataType.name}" }
         params(0x400000) mustBe listOf("value: double", "s: char *")
-        params(0x400020) mustBe listOf("__p: undefined4", "param_2: void *")
+    }
+
+    /**
+     * gcc emits no `N_PSYM` for an unnamed parameter, wherever it sits: placement `operator new(size_t,
+     * void* __p)` has only `__p`, at the tail. The mangled name declares both, and `__p`'s type says
+     * which slot is its own.
+     */
+    @Test
+    fun anUnnamedParameterKeepsItsDeclaredSlot() {
+        val program = builder.program
+        program.runTransaction("exec") { program.memory.getBlock(".text").isExecute = true }
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "tinyxml2.cpp"),
+            StabRecord(1, StabType.N_LSYM, 0, 0, 0, "void:t(0,1)=(0,1)"),
+            StabRecord(2, StabType.N_FUN, 0, 0, 0x400000, "_ZnwjPv:F(0,2)=*(0,1)"),
+            StabRecord(3, StabType.N_PSYM, 0, 0, 12, "__p:p(0,2)"),
+            StabRecord(4, StabType.N_FUN, 0, 0, 0x10, ""),
+        )
+
+        StabsImporter(program.defaultContext()).runOnRecords(
+            StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0),
+        )
+
+        checkNotNull(program.functionManager.getFunctionAt(addr(0x400000)))
+            .parameters.map { "${it.name}: ${it.dataType.name}" } mustBe listOf("param_1: uint", "__p: void *32")
     }
 
     /**
