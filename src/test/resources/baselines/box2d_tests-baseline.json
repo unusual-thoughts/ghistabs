@@ -5,12 +5,8 @@
             "max": 70
         },
         "canonical-key-merged": {
-            "min": 274,
-            "max": 274
-        },
-        "canonical-key-multi-hash": {
-            "min": 4,
-            "max": 4
+            "min": 278,
+            "max": 278
         },
         "data-no-coverage": {
             "min": 40,

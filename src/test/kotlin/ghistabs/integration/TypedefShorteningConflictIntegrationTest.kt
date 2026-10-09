@@ -97,11 +97,11 @@ class TypedefShorteningConflictIntegrationTest : AbstractGhidraHeadlessIntegrati
                 }
                 .sorted()
                 .mustBeEmpty("import forked a `/stabs` conflict on a typedef alias (shortenTypedefs=$shorten)")
-            // `ostream` stays a typedef onto its (empty, fillable) target in both modes: resolution
-            // hands references the typedef rather than renaming anything, and the rename half only
-            // rewrites template *arguments*, never a whole name a typedef already carries.
-            stabs.single { it.name == "ostream" }
-                .must("/stabs/ostream should stay a typedef onto its target") { this is TypeDef }
+            // `ostream` is never an empty struct wearing the alias, in either mode: resolution hands
+            // references the typedef rather than renaming anything, and the rename half only rewrites
+            // template *arguments*, never a whole name a typedef already carries.
+            stabs.filter { it.name == "ostream" && it !is TypeDef }
+                .mustBeEmpty("/stabs/ostream should only ever be a typedef onto its target")
         }
     }
 

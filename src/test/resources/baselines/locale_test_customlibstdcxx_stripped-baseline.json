@@ -93,16 +93,8 @@
             "max": 2
         },
         "canonical-key-merged": {
-            "min": 300,
-            "max": 300
-        },
-        "canonical-key-multi-hash": {
-            "min": 27,
-            "max": 27
-        },
-        "canonical-scope-collision": {
-            "min": 27,
-            "max": 27
+            "min": 327,
+            "max": 327
         },
         "data-no-coverage": {
             "min": 295,
@@ -733,26 +725,6 @@
                 "bad_cast",
                 "bad_exception",
                 "bad_typeid",
-                "basic_fstream<char,std::char_traits<char>>",
-                "basic_fstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ifstream<char,std::char_traits<char>>",
-                "basic_ifstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ios<char,std::char_traits<char>>",
-                "basic_ios<wchar_t,std::char_traits<wchar_t>>",
-                "basic_iostream<char,std::char_traits<char>>",
-                "basic_iostream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_istream<char,std::char_traits<char>>",
-                "basic_istream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_istringstream<char,std::char_traits<char>,std::allocator<char>>",
-                "basic_istringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
-                "basic_ofstream<char,std::char_traits<char>>",
-                "basic_ofstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ostream<char,std::char_traits<char>>",
-                "basic_ostream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ostringstream<char,std::char_traits<char>,std::allocator<char>>",
-                "basic_ostringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
-                "basic_stringstream<char,std::char_traits<char>,std::allocator<char>>",
-                "basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
                 "char_producer<char>",
                 "char_producer<wchar_t>",
                 "codecvt<char,char,int>",
@@ -772,8 +744,14 @@
                 "facet",
                 "failure",
                 "filebuf",
+                "fstream",
+                "ifstream",
                 "invalid_argument",
+                "ios",
                 "ios_base",
+                "iostream",
+                "istream",
+                "istringstream",
                 "length_error",
                 "logic_error",
                 "messages<char>",
@@ -800,6 +778,9 @@
                 "numpunct<wchar_t>",
                 "numpunct_byname<char>",
                 "numpunct_byname<wchar_t>",
+                "ofstream",
+                "ostream",
+                "ostringstream",
                 "out_of_range",
                 "overflow_error",
                 "range_error",
@@ -811,6 +792,7 @@
                 "stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>",
                 "streambuf",
                 "stringbuf",
+                "stringstream",
                 "time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
                 "time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
                 "time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
@@ -822,8 +804,18 @@
                 "type_info",
                 "underflow_error",
                 "wfilebuf",
+                "wfstream",
+                "wifstream",
+                "wios",
+                "wiostream",
+                "wistream",
+                "wistringstream",
+                "wofstream",
+                "wostream",
+                "wostringstream",
                 "wstreambuf",
-                "wstringbuf"
+                "wstringbuf",
+                "wstringstream"
             ]
         },
         "vtable-failed-truly-missing": {
@@ -831,8 +823,8 @@
             "max": 122
         },
         "xref-base-tag-resolved": {
-            "min": 4,
-            "max": 4
+            "min": 2,
+            "max": 2
         },
         "xref-undefined": {
             "min": 19,

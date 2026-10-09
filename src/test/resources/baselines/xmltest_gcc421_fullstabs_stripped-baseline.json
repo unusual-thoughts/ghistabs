@@ -89,24 +89,20 @@
             ]
         },
         "base-empty-ebo": {
-            "min": 47,
-            "max": 47
+            "min": 35,
+            "max": 35
         },
         "canonical-content-merged": {
             "min": 5,
             "max": 5
         },
         "canonical-key-merged": {
-            "min": 386,
-            "max": 386
+            "min": 343,
+            "max": 343
         },
         "canonical-key-multi-hash": {
-            "min": 23,
-            "max": 23
-        },
-        "canonical-scope-collision": {
-            "min": 22,
-            "max": 22
+            "min": 1,
+            "max": 1
         },
         "data-no-coverage": {
             "min": 291,
@@ -367,8 +363,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 203,
-            "max": 203
+            "min": 145,
+            "max": 145
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -587,8 +583,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 41154,
-            "max": 41154
+            "min": 41084,
+            "max": 41084
         },
         "placeholder-undefined-fields": {
             "min": 207,
@@ -616,8 +612,8 @@
             "max": 36
         },
         "scope-from-twin": {
-            "min": 490,
-            "max": 490
+            "min": 806,
+            "max": 806
         },
         "sourcemap-duplicate-entries": {
             "min": 959,
@@ -714,20 +710,20 @@
             "max": 2806
         },
         "vbase-applied": {
-            "min": 24,
-            "max": 24
+            "min": 18,
+            "max": 18
         },
         "vfptr-inherited-from-base": {
-            "min": 22,
-            "max": 22
+            "min": 15,
+            "max": 15
         },
         "vfptr-normalized": {
-            "min": 20,
-            "max": 20
+            "min": 14,
+            "max": 14
         },
         "vfptr-split-from-base": {
-            "min": 154,
-            "max": 154
+            "min": 103,
+            "max": 103
         },
         "vftable-slot-name-collision": {
             "min": 8,
@@ -773,20 +769,6 @@
                 "bad_cast",
                 "bad_exception",
                 "bad_typeid",
-                "basic_fstream<char,std::char_traits<char>>",
-                "basic_fstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ifstream<char,std::char_traits<char>>",
-                "basic_ifstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ios<char,std::char_traits<char>>",
-                "basic_ios<wchar_t,std::char_traits<wchar_t>>",
-                "basic_iostream<char,std::char_traits<char>>",
-                "basic_iostream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_istream<char,std::char_traits<char>>",
-                "basic_istream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ofstream<char,std::char_traits<char>>",
-                "basic_ofstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ostream<char,std::char_traits<char>>",
-                "basic_ostream<wchar_t,std::char_traits<wchar_t>>",
                 "char_producer<char>",
                 "char_producer<wchar_t>",
                 "codecvt<char,char,int>",
@@ -806,8 +788,13 @@
                 "facet",
                 "failure",
                 "filebuf",
+                "fstream",
+                "ifstream",
                 "invalid_argument",
+                "ios",
                 "ios_base",
+                "iostream",
+                "istream",
                 "istringstream",
                 "length_error",
                 "logic_error",
@@ -835,6 +822,8 @@
                 "numpunct<wchar_t>",
                 "numpunct_byname<char>",
                 "numpunct_byname<wchar_t>",
+                "ofstream",
+                "ostream",
                 "ostringstream",
                 "out_of_range",
                 "overflow_error",
@@ -859,7 +848,14 @@
                 "type_info",
                 "underflow_error",
                 "wfilebuf",
+                "wfstream",
+                "wifstream",
+                "wios",
+                "wiostream",
+                "wistream",
                 "wistringstream",
+                "wofstream",
+                "wostream",
                 "wostringstream",
                 "wstreambuf",
                 "wstringbuf",
@@ -871,8 +867,8 @@
             "max": 121
         },
         "vtable-skipped": {
-            "min": 75,
-            "max": 75
+            "min": 11,
+            "max": 11
         },
         "xref-base-tag-resolved": {
             "min": 2,

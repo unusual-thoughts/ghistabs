@@ -128,14 +128,8 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
     private fun shapeOf(ast: Type) =
         Shape(ast.name?.leafName ?: ast.ghidraName, baseNames(ast), index.content(ast.body))
 
-    private fun baseNames(ast: Type) = (ast.body as? TypeDecl.Aggregate)?.bases?.map { base ->
-        index.resolveWith(base.type) {
-            when (it) {
-                is TypeDecl.XRef -> it.tagName
-                else -> it.id?.let(index::byId)?.name
-            }
-        }
-    }
+    private fun baseNames(ast: Type) =
+        (ast.body as? TypeDecl.Aggregate)?.bases?.map { index.targetXRef(it.type)?.tagName?.leafName }
 
     // Where an unbound copy goes: the slot a stated sibling of the same shape already occupies. This
     // only ever repeats a location, never picks one — a shape two stated locations claim is dropped,
