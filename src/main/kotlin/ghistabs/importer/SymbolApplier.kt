@@ -8,6 +8,7 @@ import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.data.*
+import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
@@ -21,6 +22,7 @@ import ghistabs.forceCreateData
 import ghistabs.formals
 import ghistabs.fullName
 import ghistabs.harvest.*
+import ghistabs.isVarArgs
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.cpp.abi.Itanium.isInlineStdMember
 import ghistabs.materialize.reasonFor
@@ -71,7 +73,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     }
 
     /**
-     * The formal types [mangled] declares, `...` aside, for parameters whose stab type is a dangling
+     * The formal types [mangled] declares, for parameters whose stab type is a dangling
      * id. An ELF link drops the stabs of a discarded COMDAT function, `N_LSYM` type definitions
      * included, and gcc defines a type at its first use, often in such an inline: on gcc 12
      * `xmltest`, `tinyxml2.cpp` still references 51 ids its stabs never define, among them
@@ -81,7 +83,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
      * stand-in for it is an empty `/Demangler` struct, and a zero-length parameter has no storage.
      */
     private fun signatureTypes(mangled: String): List<DemangledDataType>? =
-        (Demangler.of(mangled) as? DemangledFunction)?.formals?.filterNot { it.isVarArgs }
+        (Demangler.of(mangled) as? DemangledFunction)?.formals
 
     internal fun applyAllFunctions(): Int {
         ctx.monitor.initialize(harvest.functions.size.toLong(), "Stabs: applying functions")
@@ -163,8 +165,18 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // the calling convention. Critical for by-value struct returns >8 bytes (hidden return
                 // pointer): setReturnType alone keeps the 4-byte EAX register slot and throws "Storage
                 // can't be expanded to N bytes: EAX:4".
+                // A stab `this` makes it a member that takes one. Ghidra's demangler gives a variadic
+                // member MSVC's convention, which passes none: `XMLDocument::SetError(XMLError, int,
+                // const char*, ...)` came out `__stdcall`, and every caller's `this` landed in `error`.
+                val convention = CompilerSpec.CALLING_CONVENTION_thiscall.takeIf {
+                    open.params.any { p -> p.body.name == "this" } &&
+                        func.callingConvention?.hasThisPointer() != true &&
+                        ctx.program.compilerSpec.getCallingConvention(it) != null
+                }
+                // The stabs never say: a function's `F` type lists no parameters.
+                if ((Demangler.of(open.name) as? DemangledFunction)?.isVarArgs == true) func.setVarArgs(true)
                 func.updateFunction(
-                    null,
+                    convention,
                     retDt?.let { ReturnParameterImpl(it, ctx.program) } ?: func.getReturn(),
                     params,
                     Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,

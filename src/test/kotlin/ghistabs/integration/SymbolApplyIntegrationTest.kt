@@ -206,6 +206,35 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         params(0x400020) mustBe listOf("__p: undefined4", "param_2: void *")
     }
 
+    /**
+     * `_ZN8tinyxml210XMLPrinter5PrintEPKcz`, `XMLPrinter::Print(const char*, ...)`: no stab says it is
+     * variadic, and Ghidra's demangler gives a variadic member a convention without `this`, so callers
+     * passed theirs as `format`. The `...` is no parameter, and the stab's `this` says it has one.
+     */
+    @Test
+    fun aVariadicMemberKeepsItsThisAndTakesNoParameterForTheEllipsis() {
+        val program = builder.program
+        program.runTransaction("exec") { program.memory.getBlock(".text").isExecute = true }
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "tinyxml2.cpp"),
+            StabRecord(1, StabType.N_LSYM, 0, 0, 0, "void:t(0,1)=(0,1)"),
+            StabRecord(2, StabType.N_LSYM, 0, 0, 0, "char:t(0,2)=r(0,2);0;127;"),
+            StabRecord(3, StabType.N_FUN, 0, 0, 0x400000, "_ZN8tinyxml210XMLPrinter5PrintEPKcz:F(0,1)"),
+            StabRecord(4, StabType.N_PSYM, 0, 0, 8, "this:p(0,3)=*(0,1)"),
+            StabRecord(5, StabType.N_PSYM, 0, 0, 12, "format:p(0,4)=*(0,2)"),
+            StabRecord(6, StabType.N_FUN, 0, 0, 0x10, ""),
+        )
+
+        StabsImporter(program.defaultContext()).runOnRecords(
+            StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0),
+        )
+
+        val func = checkNotNull(program.functionManager.getFunctionAt(addr(0x400000))) { "Print not applied" }
+        func.hasVarArgs() mustBe true
+        func.callingConventionName mustBe "__thiscall"
+        func.parameters.map { it.name } mustBe listOf("this", "format")
+    }
+
     private fun addr(off: Long): Address = builder.program.addressFactory.defaultAddressSpace.getAddress(off)
 
     /**
