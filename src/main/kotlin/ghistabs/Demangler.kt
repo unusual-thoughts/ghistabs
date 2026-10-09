@@ -2,6 +2,8 @@ package ghistabs
 
 import ghidra.app.cmd.label.DemanglerCmd
 import ghidra.app.util.demangler.Demangled
+import ghidra.app.util.demangler.DemangledDataType
+import ghidra.app.util.demangler.DemangledFunction
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.app.util.demangler.MangledContext
 import ghidra.app.util.demangler.gnu.GnuDemangler
@@ -146,3 +148,10 @@ val Demangled.fullName get() = generateSequence(this) { it.namespace }.map { it.
 
 /** [this]'s enclosing scopes, outermost first. Doesn't include name */
 val DemangledObject.namespaces get() = namespace?.fullName.orEmpty()
+
+/**
+ * The parameter types [this] declares, `this` never among them. Ghidra reports `f()` as one bare
+ * `void` parameter, which is none; a trailing `...` comes back as one more, with `isVarArgs` set.
+ */
+val DemangledFunction.formals: List<DemangledDataType>
+    get() = parameters.map { it.type }.takeUnless { it.singleOrNull()?.run { isVoid && !isPointer } == true }.orEmpty()

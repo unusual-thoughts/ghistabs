@@ -449,10 +449,7 @@ open class VtableSweeper(
             (Demangler.of(linkage) as? DemangledFunction)?.let { df ->
                 df.returnType?.let { returnType = it.dt() }
                 setArguments(
-                    *df.parameters
-                        .filterNot { it.type.isVoid && it.type.pointerLevels == 0 && !it.type.isReference }
-                        .mapIndexed { i, p -> ParameterDefinitionImpl("arg$i", p.type.dt(), null) }
-                        .toTypedArray(),
+                    *df.formals.mapIndexed { i, t -> ParameterDefinitionImpl("arg$i", t.dt(), null) }.toTypedArray(),
                 )
             }
         }

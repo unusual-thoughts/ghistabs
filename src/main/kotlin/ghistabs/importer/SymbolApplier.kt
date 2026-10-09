@@ -18,6 +18,7 @@ import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.forceCreateData
+import ghistabs.formals
 import ghistabs.fullName
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
@@ -56,10 +57,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
      * comes out right either way. `this` is not among the demangled parameters; ClassApplier owns it.
      */
     private fun List<ParameterImpl>.padToMangledArity(mangled: String): List<ParameterImpl> {
-        val declared = (Demangler.of(mangled) as? DemangledFunction)?.parameters
-            ?.map { it.type }
-            ?.filterNot { it.isVoid && it.pointerLevels == 0 && !it.isReference && !it.isArray }
-            ?: return this
+        val declared = (Demangler.of(mangled) as? DemangledFunction)?.formals ?: return this
         if (declared.size <= size) return this
         degradation("param-unnamed-padded", mangled, "stabs=$size mangled=${declared.size}")
         return this +
@@ -83,9 +81,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
      * stand-in for it is an empty `/Demangler` struct, and a zero-length parameter has no storage.
      */
     private fun signatureTypes(mangled: String): List<DemangledDataType>? =
-        (Demangler.of(mangled) as? DemangledFunction)?.parameters
-            ?.map { it.type }
-            ?.filterNot { it.isVarArgs }
+        (Demangler.of(mangled) as? DemangledFunction)?.formals?.filterNot { it.isVarArgs }
 
     internal fun applyAllFunctions(): Int {
         ctx.monitor.initialize(harvest.functions.size.toLong(), "Stabs: applying functions")
