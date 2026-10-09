@@ -4,6 +4,7 @@ import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.app.util.demangler.DemangledFunction
+import ghidra.app.util.demangler.DemangledThunk
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.data.*
@@ -131,9 +132,14 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 val retDt = registry.resolveRef(open.decl.type)
 
                 // The `this` N_PSYM is there exactly for an instance member, which the mangled name
-                // can't tell from a static one.
+                // can't tell from a static one. A thunk is the exception: gcc lists none of its
+                // parameters, so its stabs say nothing either way.
                 val params = open.parameters()
-                val convention = func.conventionFor(takesThis = open.params.any { it.body.name == "this" })
+                val convention = when {
+                    open.params.any { it.body.name == "this" } -> func.conventionFor(takesThis = true)
+                    Demangler.of(open.name) is DemangledThunk -> null
+                    else -> func.conventionFor(takesThis = false)
+                }
                 // The stabs never say: a function's `F` type lists no parameters.
                 if ((Demangler.of(open.name) as? DemangledFunction)?.isVarArgs == true) func.setVarArgs(true)
                 // Set return + params in one dynamic-storage update so Ghidra recomputes storage from
