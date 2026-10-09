@@ -104,7 +104,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
 
     private fun lookupXRef(xref: TypeDecl.XRef<GlobalTypeId>): Type? {
         definitionsByTag[xref.tagName]
-            ?.firstOrNull { it.body.matchesXRefKind(xref.kind) }
+            ?.firstOrNull { it.body.xrefKind == xref.kind }
             ?.let { return it }
 
         val tag = xref.tagName.templateLeaf
@@ -112,7 +112,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
         val instantiation = xref.tagName.takeIf { it.isTemplated }?.let(::canonTemplateName)
         val sameTagAnyKind = tag.takeIf { it.isNotEmpty() }?.let { definitionsByTemplateLeaf[it] }.orEmpty()
             .filter { instantiation == null || it.name?.let(::canonTemplateName) == instantiation }
-        val sameKind = sameTagAnyKind.filter { it.body.matchesXRefKind(xref.kind) }
+        val sameKind = sameTagAnyKind.filter { it.body.xrefKind == xref.kind }
         val distinctSizes = sameKind.map { it.body.sizeBytes }.toSet()
 
         if (sameKind.isNotEmpty() && distinctSizes.size == 1) {
@@ -167,33 +167,6 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
             byName.mapValues { (_, types) ->
                 types.groupBy(::content).values.map { it.first() }.toSet()
             }
-        }
-    }
-
-    /**
-     * walks [decl] through `Ref`/`XRef`/`InlineDef` indirection and cv-wrappers to the first body
-     * [pick] accepts, or null. `Pointer`/`Reference` are terminals: `Foo *` does not name a `Foo`.
-     *
-     * An `InlineDef` tries the ast registered at its id before the body spliced in at the use site,
-     * which is frequently itself a forward `XRef` — without the preference, polymorphism detection
-     * misses inherited vfptrs (`Cat` → `InlineDef(Animal id, XRef body)`) — and falls back to that
-     * body when the id leads nowhere, without which a base whose id no CU defined reads as no base.
-     */
-    fun <R : Any> resolveWith(
-        decl: GlobalTypeDecl,
-        visited: MutableSet<GlobalTypeId> = mutableSetOf(),
-        pick: (GlobalTypeDecl) -> R?,
-    ): R? {
-        pick(decl)?.let { return it }
-        fun step(next: GlobalTypeDecl?) = next?.let { resolveWith(it, visited, pick) }
-        fun stepId(id: GlobalTypeId) = if (visited.add(id)) step(byId(id)?.body) else null
-        return when (decl) {
-            is TypeDecl.Ref -> stepId(decl.id)
-            is TypeDecl.XRef -> byXRef(decl)?.takeIf { visited.add(it.id) }?.let { step(it.body) }
-            is TypeDecl.InlineDef -> stepId(decl.id) ?: step(decl.inner)
-            is TypeDecl.Const -> step(decl.inner)
-            is TypeDecl.Volatile -> step(decl.inner)
-            else -> null
         }
     }
 

@@ -41,20 +41,16 @@
             "max": 8
         },
         "canonical-key-merged": {
-            "min": 1975,
-            "max": 1975
+            "min": 2041,
+            "max": 2041
         },
         "canonical-key-multi-hash": {
-            "min": 78,
-            "max": 78
-        },
-        "canonical-scope-collision": {
-            "min": 32,
-            "max": 32
+            "min": 23,
+            "max": 23
         },
         "class-scope-from-vtable": {
-            "min": 66,
-            "max": 66
+            "min": 58,
+            "max": 58
         },
         "data-no-coverage": {
             "min": 177,
@@ -77,28 +73,28 @@
             "max": 7586
         },
         "demangler-ambiguous": {
-            "min": 12,
-            "max": 12
+            "min": 5,
+            "max": 5
         },
         "demangler-exact-match": {
             "min": 710,
             "max": 710
         },
         "demangler-retarget-bound": {
-            "min": 212,
-            "max": 212
+            "min": 219,
+            "max": 219
         },
         "demangler-retarget-no-namespace": {
             "min": 5,
             "max": 5
         },
         "demangler-retarget-no-type": {
-            "min": 232,
-            "max": 232
+            "min": 225,
+            "max": 225
         },
         "demangler-retargeted-stub-site": {
-            "min": 214,
-            "max": 214
+            "min": 221,
+            "max": 221
         },
         "demangler-reverse-demangle-match": {
             "min": 91,
@@ -129,16 +125,16 @@
             "max": 109
         },
         "demangler-unbound-stub-in-signature": {
-            "min": 51,
-            "max": 51
+            "min": 47,
+            "max": 47
         },
         "demangler-unbound-stub-signature-site": {
-            "min": 242,
-            "max": 242
+            "min": 235,
+            "max": 235
         },
         "demangler-unbound-stub-site-origin": {
-            "min": 242,
-            "max": 242
+            "min": 235,
+            "max": 235
         },
         "drop-record-opt": {
             "min": 33,
@@ -310,8 +306,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 769,
-            "max": 769
+            "min": 757,
+            "max": 757
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -820,8 +816,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 13391,
-            "max": 13391
+            "min": 13373,
+            "max": 13373
         },
         "placeholder-undefined-fields": {
             "min": 757,
@@ -1006,8 +1002,8 @@
             "max": 57
         },
         "scope-from-twin": {
-            "min": 3785,
-            "max": 3785
+            "min": 3802,
+            "max": 3802
         },
         "sourcemap-duplicate-entries": {
             "min": 10927,
@@ -1085,16 +1081,16 @@
             "max": 12
         },
         "vfptr-inherited-from-base": {
-            "min": 195,
-            "max": 195
+            "min": 192,
+            "max": 192
         },
         "vfptr-normalized": {
             "min": 57,
             "max": 57
         },
         "vfptr-split-from-base": {
-            "min": 461,
-            "max": 461
+            "min": 454,
+            "max": 454
         },
         "vtable-construction": {
             "min": 241,
@@ -1682,8 +1678,8 @@
             "max": 603
         },
         "vtable-skipped": {
-            "min": 713,
-            "max": 713
+            "min": 703,
+            "max": 703
         },
         "xref-undefined": {
             "min": 47,

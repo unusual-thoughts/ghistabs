@@ -52,16 +52,16 @@
             "max": 2
         },
         "canonical-key-merged": {
-            "min": 1425,
-            "max": 1425
+            "min": 1494,
+            "max": 1494
         },
         "canonical-key-multi-hash": {
-            "min": 80,
-            "max": 80
+            "min": 10,
+            "max": 10
         },
         "canonical-scope-collision": {
-            "min": 5,
-            "max": 5
+            "min": 2,
+            "max": 2
         },
         "class-not-struct": {
             "min": 4,
@@ -88,8 +88,8 @@
             "max": 8980
         },
         "demangler-exact-match": {
-            "min": 732,
-            "max": 732
+            "min": 733,
+            "max": 733
         },
         "demangler-retarget-bound": {
             "min": 25,
@@ -104,8 +104,8 @@
             "max": 25
         },
         "demangler-reverse-demangle-match": {
-            "min": 86,
-            "max": 86
+            "min": 85,
+            "max": 85
         },
         "demangler-shortened-name-match": {
             "min": 2,
@@ -420,8 +420,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 615,
-            "max": 615
+            "min": 614,
+            "max": 614
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -1004,8 +1004,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 25833,
-            "max": 25833
+            "min": 25828,
+            "max": 25828
         },
         "placeholder-undefined-fields": {
             "min": 202,
@@ -1163,8 +1163,8 @@
             "max": 152
         },
         "scope-from-twin": {
-            "min": 282,
-            "max": 282
+            "min": 285,
+            "max": 285
         },
         "sourcemap-duplicate-entries": {
             "min": 9744,
@@ -1742,8 +1742,8 @@
             "max": 19
         },
         "xref-base-tag-resolved": {
-            "min": 5,
-            "max": 5
+            "min": 1,
+            "max": 1
         },
         "xref-undefined": {
             "min": 67,
