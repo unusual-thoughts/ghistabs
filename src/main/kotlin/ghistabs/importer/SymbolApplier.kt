@@ -136,7 +136,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 val params = stabParams
                     .mapIndexed { i, p ->
                         val pdt = registry.resolveRef(p.body.type)?.let { open.passedByAddress(p, it) ?: it }
-                            ?: signature?.get(i)?.takeIf { it.isPrimitive || it.pointerLevels > 0 || it.isReference }
+                            ?: signature?.get(i)?.takeIf { it.isPrimitive || it.isPointer || it.isReference }
                                 ?.let { runCatching { it.getDataType(ctx.program.dataTypeManager) }.getOrNull() }
                         if (pdt == null) {
                             degradation(
