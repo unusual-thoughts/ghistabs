@@ -7,6 +7,7 @@ import ghidra.app.util.demangler.MangledContext
 import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.demangler.gnu.GnuDemanglerFormat
 import ghidra.app.util.demangler.gnu.GnuDemanglerOptions
+import ghidra.app.util.demangler.gnu.GnuDemanglerParser
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.listing.Program
@@ -84,22 +85,20 @@ object Demangler {
     /** Human-readable name for [mangled], falling back to [mangled] */
     fun name(mangled: String): String = of(mangled)?.demangledName ?: mangled
 
-    /** Parent-namespace chain, root-first, for [mangled]. Empty for a name that does not demangle
-     *  *and* for one with no enclosing namespace — callers have never told those apart. */
-    fun namespaces(mangled: String): List<String> = of(mangled)?.namespaces.orEmpty()
-
     /**
-     * The class a member named [mangled] belongs to, root-first and class-last, or empty when the name
-     * does not state it. Unlike [namespaces], a conversion operator inside a template is no evidence:
-     * Ghidra's `ConversionOperatorHandler` strips the template arguments off the namespace it builds,
-     * so `GetValueHelperClass<A,B>::operator bool()` lands in plain `GetValueHelperClass`, and all
-     * 22 instantiations would claim that one scope.
+     * The scopes a member named [mangled] is declared in, root-first, so a method's class comes last.
+     * Empty for a name that does not demangle and for one with no enclosing namespace.
+     *
+     * Ghidra's `ConversionOperatorHandler` strips the template arguments off the namespace it builds, so
+     * `GetValueHelperClass<A,B>::operator bool()` lands in plain `GetValueHelperClass`. Its scope is read
+     * again from the demangled text, as an ordinary member of that scope, by Ghidra's own parser.
      */
-    fun classPath(mangled: String): List<String> {
+    fun namespaces(mangled: String): List<String> {
         val obj = of(mangled) ?: return emptyList()
-        val strippedScope = obj.name.startsWith(CONVERSION_OPERATOR) &&
-            '<' in obj.originalDemangled.orEmpty().substringBefore("::operator ")
-        return if (strippedScope) emptyList() else obj.namespaces
+        val scope = obj.originalDemangled.orEmpty().substringBeforeLast("::operator ", "")
+        if (!obj.name.startsWith(CONVERSION_OPERATOR) || '<' !in scope) return obj.namespaces
+        return runCatching { GnuDemanglerParser().parse(mangled, "$scope::member()") }
+            .getOrNull()?.namespaces.orEmpty()
     }
 
     /** The name Ghidra gives a conversion operator: `operator.cast.to.bool`. */
