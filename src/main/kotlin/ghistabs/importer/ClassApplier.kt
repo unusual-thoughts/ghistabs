@@ -20,6 +20,7 @@ import ghistabs.materialize.cpp.*
 import ghistabs.materialize.cpp.abi.*
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.resolveRef
+import ghistabs.materialize.signatureParams
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
@@ -282,40 +283,10 @@ class ClassApplier(
             is TypeDecl.FreeFunction -> sig.params
         }
 
-        // Always replace the formal-param list, falling back to Undefined4 for
-        // unresolved types. Early-returning left Ghidra's auto-guessed signature in
-        // place; combined with newly-applied __thiscall (which prepends its own `this`)
-        // that produced double-`this` like `void Foo::Dump(Foo *this, ushort this, ...)`.
-        val resolvedParams = paramDecls.map { registry.resolveRef(it) }
-        for ((decl, dt) in paramDecls.zip(resolvedParams)) {
-            if (dt == null) {
-                degradation(
-                    "method-param-unresolved",
-                    at,
-                    decl.toString(),
-                    func.entryPoint,
-                )
-            }
-        }
-
-        // Drop the void sentinel — only on Method-shape signatures.
-        val paramTypes = if (sig is TypeDecl.Method) {
-            resolvedParams.dropLastWhile { it is VoidDataType }
-        } else {
-            resolvedParams
-        }.mapIndexed { i, dt ->
-            if (dt is VoidDataType) {
-                degradation(
-                    "method-param-void",
-                    at,
-                    "void at [$i]; substituted Undefined4 to keep arity",
-                    func.entryPoint,
-                )
-                Undefined4DataType.dataType
-            } else {
-                dt
-            }
-        }
+        // Always replace the formal-param list. Early-returning left Ghidra's auto-guessed signature
+        // in place; combined with newly-applied __thiscall (which prepends its own `this`) that
+        // produced double-`this` like `void Foo::Dump(Foo *this, ushort this, ...)`.
+        val paramTypes = registry.signatureParams(paramDecls, at)
 
         // Explicit `this` + formals, under DYNAMIC_STORAGE_ALL_PARAMS: FORMAL_PARAMS + __thiscall
         // varies by Ghidra version on whether it auto-prepends `this`, and would rename our `arg0`
@@ -349,12 +320,7 @@ class ClassApplier(
         // member demangles to no parameters either.
         val formals = paramTypes.ifEmpty { stubParams(mangled, at) }
             .mapIndexed { i, pdt ->
-                ParameterImpl(
-                    priorNames.getOrNull(i) ?: "arg$i",
-                    pdt ?: Undefined4DataType.dataType,
-                    program,
-                    source,
-                )
+                ParameterImpl(priorNames.getOrNull(i) ?: "arg$i", pdt, program, source)
             }
         func.replaceParameters(
             explicitThis + formals,

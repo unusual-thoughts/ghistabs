@@ -442,12 +442,11 @@ open class VtableSweeper(
      *  target that has a linkage name and nothing else. Names but does not type an unmangled one. */
     private fun demangledDefinition(category: CategoryPath, name: String, linkage: String) =
         FunctionDefinitionDataType(category, name, dtm).apply {
-            fun DemangledDataType.dt() = runCatching { getDataType(dtm) }.getOrNull()
-                ?: Undefined4DataType.dataType.also {
-                    degradation("vftable-demangled-untyped", "$category/$name", "demangler gave no type for $this")
-                }
+            fun DemangledDataType.dt() =
+                parameterTypeOrUndefined(this, dtm, "vftable-demangled-untyped", "$category/$name")
             (Demangler.of(linkage) as? DemangledFunction)?.let { df ->
-                df.returnType?.let { returnType = it.dt() }
+                // The return's own type even where a parameter's would be refused: `void` has no size either.
+                df.returnType?.let { t -> returnType = runCatching { t.getDataType(dtm) }.getOrNull() ?: t.dt() }
                 setArguments(
                     *df.formals.mapIndexed { i, t -> ParameterDefinitionImpl("arg$i", t.dt(), null) }.toTypedArray(),
                 )
