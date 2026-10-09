@@ -161,10 +161,6 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                         )
                     }
                     .padToMangledArity(open.name)
-                // Set return + params in one dynamic-storage update so Ghidra recomputes storage from
-                // the calling convention. Critical for by-value struct returns >8 bytes (hidden return
-                // pointer): setReturnType alone keeps the 4-byte EAX register slot and throws "Storage
-                // can't be expanded to N bytes: EAX:4".
                 // A stab `this` makes it a member that takes one. Ghidra's demangler gives a variadic
                 // member MSVC's convention, which passes none: `XMLDocument::SetError(XMLError, int,
                 // const char*, ...)` came out `__stdcall`, and every caller's `this` landed in `error`.
@@ -175,6 +171,10 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 }
                 // The stabs never say: a function's `F` type lists no parameters.
                 if ((Demangler.of(open.name) as? DemangledFunction)?.isVarArgs == true) func.setVarArgs(true)
+                // Set return + params in one dynamic-storage update so Ghidra recomputes storage from
+                // the calling convention. Critical for by-value struct returns >8 bytes (hidden return
+                // pointer): setReturnType alone keeps the 4-byte EAX register slot and throws "Storage
+                // can't be expanded to N bytes: EAX:4".
                 func.updateFunction(
                     convention,
                     retDt?.let { ReturnParameterImpl(it, ctx.program) } ?: func.getReturn(),
