@@ -116,17 +116,41 @@
             "min": 0,
             "max": 0
         },
+        "demangler-retarget-bound": {
+            "min": 1,
+            "max": 1
+        },
+        "demangler-retarget-no-type": {
+            "min": 4,
+            "max": 4
+        },
+        "demangler-retargeted-stub-site": {
+            "min": 1,
+            "max": 1
+        },
         "demangler-skip-no-replacement": {
-            "min": 2,
-            "max": 2
+            "min": 4,
+            "max": 4
         },
         "demangler-sole-instantiation-declined": {
             "min": 7,
             "max": 7
         },
         "demangler-unbound-stub": {
+            "min": 4,
+            "max": 4
+        },
+        "demangler-unbound-stub-in-signature": {
             "min": 2,
             "max": 2
+        },
+        "demangler-unbound-stub-signature-site": {
+            "min": 6,
+            "max": 6
+        },
+        "demangler-unbound-stub-site-origin": {
+            "min": 6,
+            "max": 6
         },
         "drop-record-bnsym": {
             "min": 2971,
@@ -537,6 +561,36 @@
                 "_ZdlPvS_",
                 "_ZnajPv",
                 "_ZnwjPv"
+            ]
+        },
+        "param-unnamed-untyped": {
+            "min": 28,
+            "max": 28,
+            "degrades": [
+                "_ZN9__gnu_cxx18stdio_sync_filebufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZN9__gnu_cxx18stdio_sync_filebufIwSt11char_traitsIwEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSbIwSt11char_traitsIwESaIwEE16_S_construct_auxIN9__gnu_cxx17__normal_iteratorIPwS2_EEEES6_T_S8_RKS1_St12__false_type",
+                "_ZNSbIwSt11char_traitsIwESaIwEE16_S_construct_auxIPKwEEPwT_S7_RKS1_St12__false_type",
+                "_ZNSbIwSt11char_traitsIwESaIwEE16_S_construct_auxIPwEES4_T_S5_RKS1_St12__false_type",
+                "_ZNSs16_S_construct_auxIN9__gnu_cxx17__normal_iteratorIPcSsEEEES2_T_S4_RKSaIcESt12__false_type",
+                "_ZNSs16_S_construct_auxIPKcEEPcT_S3_RKSaIcESt12__false_type",
+                "_ZNSs16_S_construct_auxIPcEES0_T_S1_RKSaIcESt12__false_type",
+                "_ZNSt12__basic_fileIcE4openEPKcSt13_Ios_Openmodei",
+                "_ZNSt12__basic_fileIcE8sys_openEP6_iobufSt13_Ios_Openmode",
+                "_ZNSt13basic_filebufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt13basic_filebufIcSt11char_traitsIcEE7seekposESt4fposIiESt13_Ios_Openmode",
+                "_ZNSt13basic_filebufIwSt11char_traitsIwEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt13basic_filebufIwSt11char_traitsIwEE7seekposESt4fposIiESt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE7seekposESt4fposIiESt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIwSt11char_traitsIwEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIwSt11char_traitsIwEE7seekposESt4fposIiESt13_Ios_Openmode",
+                "_ZSt13__destroy_auxIPtEvT_S1_St11__true_type",
+                "_ZSt17__is_null_pointerIN9__gnu_cxx17__normal_iteratorIPcSsEEEbT_",
+                "_ZSt17__is_null_pointerIN9__gnu_cxx17__normal_iteratorIPwSbIwSt11char_traitsIwESaIwEEEEEbT_",
+                "_ZSt24__uninitialized_fill_n_aIPtjttEvT_T0_RKT1_SaIT2_E",
+                "_ZSt26__uninitialized_fill_n_auxIPtjtEvT_T0_RKT1_St11__true_type",
+                "_ZSt8_DestroyIPttEvT_S1_SaIT0_E"
             ]
         },
         "placeholder-created": {

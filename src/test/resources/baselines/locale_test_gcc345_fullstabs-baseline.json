@@ -72,8 +72,8 @@
             "max": 114
         },
         "demangler-retarget-no-type": {
-            "min": 3,
-            "max": 3
+            "min": 2,
+            "max": 2
         },
         "demangler-reverse-demangle-match": {
             "min": 1,
@@ -100,12 +100,12 @@
             "max": 2
         },
         "demangler-unbound-stub-signature-site": {
-            "min": 4,
-            "max": 4
+            "min": 3,
+            "max": 3
         },
         "demangler-unbound-stub-site-origin": {
-            "min": 4,
-            "max": 4
+            "min": 3,
+            "max": 3
         },
         "drop-record-opt": {
             "min": 57,
@@ -460,6 +460,20 @@
                 "_ZdlPvS_",
                 "_ZnajPv",
                 "_ZnwjPv"
+            ]
+        },
+        "param-unnamed-untyped": {
+            "min": 10,
+            "max": 10,
+            "degrades": [
+                "_ZN9__gnu_cxx18stdio_sync_filebufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt12__basic_fileIcE4openEPKcSt13_Ios_Openmodei",
+                "_ZNSt12__basic_fileIcE8sys_openEP6_iobufSt13_Ios_Openmode",
+                "_ZNSt13basic_filebufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt13basic_filebufIcSt11char_traitsIcEE7seekposESt4fposIiESt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE7seekposESt4fposIiESt13_Ios_Openmode",
+                "_ZSt17__is_null_pointerIN9__gnu_cxx17__normal_iteratorIPcSsEEEbT_"
             ]
         },
         "placeholder-created": {
