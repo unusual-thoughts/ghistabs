@@ -5,12 +5,13 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 # A newer push to the same PR supersedes the in-flight run. On main, only a force push
 # cancels the in-flight run; ordinary pushes wait their turn.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event.forced }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event.forced || false }}
 
 jobs:
   build:
