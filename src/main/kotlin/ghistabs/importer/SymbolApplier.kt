@@ -20,7 +20,12 @@ import ghistabs.forceCreateData
 import ghistabs.fullName
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.cpp.abi.Itanium.isInlineStdMember
+import ghistabs.materialize.cpp.classBody
+import ghistabs.materialize.cpp.className
+import ghistabs.materialize.cpp.classesBasesFirst
+import ghistabs.materialize.cpp.statedClassPath
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
 import ghistabs.parse.*
@@ -587,6 +592,24 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     }
 
     /**
+     * Record each member function's [MemberAttrs] at its address, for the Class Hierarchy window: what
+     * the stabs say of its access, virtuality and cv-qualifiers is gone once the import ends, whether
+     * or not the class pass runs. Resolved as the class pass resolves it, through the prevailing ABI.
+     */
+    internal fun recordMemberFunctions(): Int {
+        val abi = symtab.prevailingAbi() ?: return 0
+        val seen = mutableSetOf<Address>()
+        for (located in registry.classesBasesFirst()) {
+            val className = located.statedClassPath(registry.types)?.qualifiedName ?: located.className
+            for (m in located.classBody.methods) {
+                val addr = abi.physnameCandidates(m, className).firstNotNullOfOrNull(ctx.resolver::resolve)
+                if (addr != null && seen.add(addr)) ClassHierarchyRecord.writeMember(ctx.program, addr, MemberAttrs(m))
+            }
+        }
+        return seen.size
+    }
+
+    /**
      * Apply C++ static data members (`alnum:/2(5,44):_ZNSt10ctype_base5alnumE;`). They carry no
      * `G`/`S` address stab, so [applyStatic] never sees them and this linkage name is their
      * only link to the emitted symbol. Symbol-table-bound: a stripped binary resolves none.
@@ -612,6 +635,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 }
                 // Names it `Class::member` when the demangler hasn't already; typed below regardless.
                 ensureStabLabel(addr, mangled)
+                ClassHierarchyRecord.writeMember(ctx.program, addr, MemberAttrs(field))
                 try {
                     ctx.program.forceCreateData(addr, dt) { debug("code-cleared-for-data", mangled, address = addr) }
                     applied++

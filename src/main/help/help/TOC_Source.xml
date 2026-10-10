@@ -57,6 +57,8 @@
 			         target="help/topics/Stabs/help.html#Stabs_Tools_Menu" />
 			<tocdef id="Stabs_Export_Decompilation" text="Export &#x2192; reconstructed sources"
 			         target="help/topics/Stabs/help.html#Stabs_Export_Decompilation" />
+			<tocdef id="Stabs_Class_Hierarchy" text="Window &#x2192; Class Hierarchy"
+			         target="help/topics/Stabs/help.html#Stabs_Class_Hierarchy" />
 			<tocdef id="Stabs_Supporting_Analyzers" text="Supporting Analyzers"
 			         target="help/topics/Stabs/help.html#Stabs_Supporting_Analyzers" />
 		</tocdef>
