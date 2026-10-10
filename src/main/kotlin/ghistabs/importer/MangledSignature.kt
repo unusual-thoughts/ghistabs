@@ -9,6 +9,7 @@ import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.lang.CompilerSpec
+import ghidra.program.model.lang.PrototypeModel
 import ghidra.program.model.listing.Function
 import ghistabs.diagnose.DiagnosticSink
 
@@ -21,15 +22,12 @@ import ghistabs.diagnose.DiagnosticSink
  * can't tell: Itanium mangling spells a static member like an instance one, so both come out
  * `__thiscall`, and a variadic member gets MSVC's `__stdcall`, which passes no `this` at all.
  */
-fun Function.conventionFor(takesThis: Boolean): String? {
+fun Function.conventionFor(takesThis: Boolean): PrototypeModel? {
     val passesThis = callingConvention?.hasThisPointer() == true
     val cspec = program.compilerSpec
     return when {
-        takesThis && !passesThis ->
-            CompilerSpec.CALLING_CONVENTION_thiscall.takeIf { cspec.getCallingConvention(it) != null }
-
-        !takesThis && passesThis -> cspec.defaultCallingConvention.name
-
+        takesThis && !passesThis -> cspec.getCallingConvention(CompilerSpec.CALLING_CONVENTION_thiscall)
+        !takesThis && passesThis -> cspec.defaultCallingConvention
         else -> null
     }
 }
@@ -42,8 +40,7 @@ fun Function.conventionFor(takesThis: Boolean): String? {
  * `xmltest`'s `XMLDocument::SetError(XMLError error, int, const char* format, ...)`'s `error` so
  * cost `format` its `char*`.
  */
-fun DemangledDataType.parameterType(dtm: DataTypeManager): DataType? = runCatching { getDataType(dtm) }
-    .getOrNull()
+fun DemangledDataType.parameterType(dtm: DataTypeManager): DataType? = runCatching { getDataType(dtm) }.getOrNull()
     ?.takeUnless { it.isNotYetDefined || it.isZeroLength || it.withoutTypedefs() == DataType.DEFAULT }
 
 /** [t]'s [parameterType], or `undefined4` with a [category] degradation against [degrades]. */
@@ -52,8 +49,8 @@ fun DiagnosticSink.parameterTypeOrUndefined(
     dtm: DataTypeManager,
     category: String,
     degrades: String,
-): DataType = t.parameterType(dtm)
-    ?: Undefined4DataType.dataType.also { degradation(category, degrades, "demangler gave no type for $t") }
+): DataType = t.parameterType(dtm) ?: Undefined4DataType.dataType
+    .also { degradation(category, degrades, "demangler gave no type for $t") }
 
 /**
  * Which of [declared] slots each of [stabs] fills, as the stab index per slot (null for a slot no stab

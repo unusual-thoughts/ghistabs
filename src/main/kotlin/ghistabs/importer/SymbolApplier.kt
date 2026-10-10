@@ -147,7 +147,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // pointer): setReturnType alone keeps the 4-byte EAX register slot and throws "Storage
                 // can't be expanded to N bytes: EAX:4".
                 func.updateFunction(
-                    convention,
+                    convention?.name,
                     retDt?.let { ReturnParameterImpl(it, ctx.program) } ?: func.getReturn(),
                     params,
                     Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,

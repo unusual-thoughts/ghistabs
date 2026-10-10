@@ -214,10 +214,11 @@ internal fun DataTypeRegistry.reportHoles(struct: Structure, qualifiedName: Stri
 internal fun DataTypeRegistry.undef(
     category: String,
     at: String,
-    decl: GlobalTypeDecl?,
+    decl: GlobalTypeDecl? = null,
     fallback: DataType = Undefined4DataType.dataType,
+    detail: String? = decl?.toString() ?: "no domain stated",
 ): DataType {
-    degradation(category, at, decl?.toString() ?: "no domain stated")
+    degradation(category, at, detail)
     return fallback
 }
 
@@ -315,24 +316,20 @@ internal fun DataTypeRegistry.buildArray(decl: TypeDecl.Array<*>, elem: DataType
  * the `#` states, under `__thiscall`.
  */
 internal fun DataTypeRegistry.functionDefinition(
-    sig: GlobalTypeDecl,
+    sig: TypeDecl.Callable<GlobalTypeId>,
     category: CategoryPath,
     name: String,
     at: String = name,
 ): FunctionDefinitionDataType = when (sig) {
-    is TypeDecl.FreeFunction -> buildFunctionDefinition(category, name, sig.ret, sig.params, at = at)
+    is TypeDecl.FreeFunction -> buildFunctionDefinition(category, name, sig, at = at)
 
     is TypeDecl.Method -> buildFunctionDefinition(
-        category = category,
-        name = name,
-        ret = sig.ret,
-        params = sig.params,
+        category,
+        name,
+        sig,
         thisType = thisTypeFor(sig, at),
-        callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
         at = at,
     )
-
-    else -> error("not a function signature: $sig")
 }
 
 /**
@@ -344,12 +341,8 @@ fun DataTypeRegistry.signatureParams(params: List<GlobalTypeDecl>, at: String): 
     val resolved = params.map { resolveRef(it) }
     return resolved.dropLast(if (resolved.lastOrNull() is VoidDataType) 1 else 0).mapIndexed { i, dt ->
         when (dt) {
-            null -> undef("function-param", "$at[$i]", params[i])
-
-            is VoidDataType -> Undefined4DataType.dataType.also {
-                degradation("function-param-void", "$at[$i]", "void mid-list; substituted Undefined4 to keep arity")
-            }
-
+            null -> undef("function-param", "$at[$i]", detail = "void mid-list; substituted Undefined4 to keep arity")
+            is VoidDataType -> undef("function-param-void", "$at[$i]", params[i])
             else -> dt
         }
     }
@@ -363,23 +356,19 @@ fun DataTypeRegistry.signatureParams(params: List<GlobalTypeDecl>, at: String): 
 fun DataTypeRegistry.buildFunctionDefinition(
     category: CategoryPath,
     name: String,
-    ret: GlobalTypeDecl,
-    params: List<GlobalTypeDecl>,
+    sig: TypeDecl.Callable<GlobalTypeId>,
     thisType: DataType? = null,
-    callingConvention: String? = null,
     at: String = name,
-): FunctionDefinitionDataType {
-    val fd = FunctionDefinitionDataType(category, name, dtm)
-    fd.returnType = resolveRef(ret) ?: run {
-        degradation("function-ret-untyped", at, ret.toString())
+) = FunctionDefinitionDataType(category, name, dtm).apply {
+    returnType = resolveRef(sig.ret) ?: run {
+        degradation("function-ret-untyped", at, sig.ret.toString())
         VoidDataType()
     }
     // gcc `#` method form puts `this` AS THE FIRST PARAM (gdb stabsread.c::read_args:
     // "We should read at least the `this` parameter here."). When [thisType] is set we
     // just name the first param `this`.
-    val argDefs = signatureParams(params, at).mapIndexed { i, dt ->
-        val argName = if (i == 0 && thisType != null) "this" else "arg$i"
-        ParameterDefinitionImpl(argName, dt, null)
+    val argDefs = signatureParams(sig.params, at).mapIndexed { i, dt ->
+        ParameterDefinitionImpl(if (i == 0 && thisType != null) "this" else "arg$i", dt, null)
     }.toMutableList()
     // Broken-emitter guard: gdb's read_args has the same complaint for stabs that
     // omit the `this` param. Without this, a __thiscall FD with arity 0 silently
@@ -389,14 +378,13 @@ fun DataTypeRegistry.buildFunctionDefinition(
         argDefs += ParameterDefinitionImpl("this", safe, null)
         degradation("function-this-synthesized", at, "method signature carried no `this` param")
     }
-    fd.setArguments(*argDefs.toTypedArray())
+    setArguments(*argDefs.toTypedArray())
     // Skip unsupported conventions (e.g. __thiscall on x86-64 ELF would throw
     // when the FD attaches to the DTM).
-    if (callingConvention != null && callingConvention in dtm.knownCallingConventionNames) {
-        runCatching { fd.setCallingConvention(callingConvention) }
+    if (thisType != null && CompilerSpec.CALLING_CONVENTION_thiscall in dtm.knownCallingConventionNames) {
+        runCatching { setCallingConvention(CompilerSpec.CALLING_CONVENTION_thiscall) }
             .onFailure { degradation("function-calling-convention", at, "$callingConvention rejected: ${it.message}") }
     }
-    return fd
 }
 
 fun DataTypeRegistry.materializeAll(): Int {

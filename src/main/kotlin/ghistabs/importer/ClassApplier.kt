@@ -200,12 +200,11 @@ class ClassApplier(
     private fun LocatedClass.reparentMethod(m: Method<GlobalTypeId>) {
         val at = name.member(m.name)
         val (mangled, addr) = resolveMember(m) ?: run {
-            if (abi.isImplicitMember(m, qualifiedClassName)) {
+            return if (abi.isImplicitMember(m, qualifiedClassName)) {
                 debug("method-implicit-not-emitted")
             } else {
                 debug("unresolved-symbol", "method ${m.mangled ?: m.name} (in $name)")
             }
-            return
         }
         memberAddresses[m] = addr
         val func = program.functionManager.getFunctionAt(addr) ?: run {
@@ -214,8 +213,7 @@ class ClassApplier(
             } else {
                 "unresolved-symbol" to Level.WARN
             }
-            log(tag, "no Function at $addr for $mangled", level, addr)
-            return
+            return log(tag, "no Function at $addr for $mangled", level, addr)
         }
 
         // Re-parent + rename via Ghidra's demangler (reuses the GhidraClass leaf
@@ -234,30 +232,33 @@ class ClassApplier(
             )
         }
 
+        // The x86gcc cspec routes `this` as the first stack argument (MSVC's x86win routes it via
+        // ECX); either way, __thiscall in a GhidraClass namespace has Ghidra inject a hidden
+        // `this: Class*` at render time.
+        val ghidraInjectsThis = func.callingConvention?.hasThisPointer() == true && func.isMethod
+
         // gcc 3.x Method signatures: `[this, p1..pN, void_sentinel]`. FunctionT carries no inline
         // params — free functions and `?`-flagged statics alike get theirs from N_PSYM. Walk
         // Ref/InlineDef wrappers before pattern-matching.
-        val sig = unwrapSignature(m.signature)
-        val retDecl = when (sig) {
-            is TypeDecl.Method -> sig.ret
+        val (paramDecls, retDecl) = when (val sig = unwrapSignature(m.signature)) {
+            is TypeDecl.Method if ghidraInjectsThis -> sig.params.drop(1) to sig.ret
 
-            is TypeDecl.FreeFunction -> sig.ret
-
-            else -> return degradation(
+            null -> return degradation(
                 "method-signature-unwrap-failed",
                 at,
                 "${m.signature}",
                 func.entryPoint,
             )
+
+            else -> sig.params to sig.ret
         }
 
-        registry.resolveRef(retDecl)?.let { func.setReturnType(it, source) }
-            ?: degradation(
-                "method-ret-unresolved",
-                at,
-                retDecl.toString(),
-                func.entryPoint,
-            )
+        registry.resolveRef(retDecl)?.let { func.setReturnType(it, source) } ?: degradation(
+            "method-ret-unresolved",
+            at,
+            retDecl.toString(),
+            func.entryPoint,
+        )
 
         // SymbolApplier.applyAllFunctions has already chosen this from the `this` N_PSYM for every
         // member its stabs define; the method list covers the rest, such as one defined in a CU
@@ -266,27 +267,11 @@ class ClassApplier(
         // its `f(ret)` signature carries would leave none.
         val takesThis = m.virt != VirtKind.STATIC
         func.conventionFor(takesThis)?.let { cc ->
-            runCatching { func.setCallingConvention(cc) }
-                .onFailure { degradation("method-calling-convention", at, it.message, func.entryPoint) }
+            runCatching { func.setCallingConvention(cc.name) }.onFailure {
+                degradation("method-calling-convention", at, it.message, func.entryPoint)
+            }
         }
-        if (!takesThis) {
-            debug("method-static-no-this")
-            return
-        }
-        // The x86gcc cspec routes `this` as the first stack argument (MSVC's x86win routes it via
-        // ECX); either way, __thiscall in a GhidraClass namespace has Ghidra inject a hidden
-        // `this: Class*` at render time.
-        val ghidraInjectsThis = func.callingConvention?.hasThisPointer() == true && func.isMethod
-
-        val paramDecls = when (sig) {
-            is TypeDecl.Method -> if (ghidraInjectsThis) sig.params.drop(1) else sig.params
-            is TypeDecl.FreeFunction -> sig.params
-        }
-
-        // Always replace the formal-param list. Early-returning left Ghidra's auto-guessed signature
-        // in place; combined with newly-applied __thiscall (which prepends its own `this`) that
-        // produced double-`this` like `void Foo::Dump(Foo *this, ushort this, ...)`.
-        val paramTypes = registry.signatureParams(paramDecls, at)
+        if (!takesThis) return debug("method-static-no-this")
 
         // Explicit `this` + formals, under DYNAMIC_STORAGE_ALL_PARAMS: FORMAL_PARAMS + __thiscall
         // varies by Ghidra version on whether it auto-prepends `this`, and would rename our `arg0`
@@ -294,36 +279,30 @@ class ClassApplier(
         // The parameter is then stripped and re-derived from the DTM's class structure, not from
         // [classPtr] — but passing it is what keeps ALL_PARAMS from taking a formal for an
         // "inferred unnamed this".
-        val classPtr = PointerDataType(structDt, dtm)
-        val explicitThis = if (ghidraInjectsThis) {
-            listOf(
-                ParameterImpl(
-                    Function.THIS_PARAM_NAME,
-                    classPtr,
-                    program,
-                    source,
-                ),
-            )
-        } else {
-            emptyList()
-        }
+        val explicitThis = ParameterImpl(Function.THIS_PARAM_NAME, dtm.getPointer(structDt), program, source)
+            .takeIf { ghidraInjectsThis }
+
         // Preserve N_PSYM-derived names set in StabsImporter.passB — the only source-level
         // names we have. Index them by their own position, not func.parameters', which by now
         // also holds injected `this` and (for by-value struct returns) StructReturnAnalyzer's
         // `__return_storage_ptr__` — a fixed offset misaligns and stamps `this` onto formal 0.
-        val priorNames = func.parameters
-            .filterNot { it.isInjected }
-            .map { it.name }
+        val priorNames = func.parameters.filterNot { it.isInjected }.map { it.name }
+
+        // Always replace the formal-param list. Early-returning left Ghidra's auto-guessed signature
+        // in place; combined with newly-applied __thiscall (which prepends its own `this`) that
+        // produced double-`this` like `void Foo::Dump(Foo *this, ushort this, ...)`.
         // gdb's `check_stub_method`: a gcc 2.x stub (`##<ret>;`) states a return type and nothing
         // else, so its parameters survive only in the mangled name. Demangling recovers them.
         // Guarded on emptiness rather than on stub-ness, which costs nothing — a genuinely nil-ary
         // member demangles to no parameters either.
-        val formals = paramTypes.ifEmpty { stubParams(mangled, at) }
-            .mapIndexed { i, pdt ->
-                ParameterImpl(priorNames.getOrNull(i) ?: "arg$i", pdt, program, source)
-            }
+        val formals = registry.signatureParams(paramDecls, at).ifEmpty {
+            stubParams(mangled, at)
+        }.mapIndexed { i, pdt ->
+            ParameterImpl(priorNames.getOrNull(i) ?: "arg$i", pdt, program, source)
+        }
+
         func.replaceParameters(
-            explicitThis + formals,
+            listOfNotNull(explicitThis) + formals,
             Function.FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS,
             true,
             source,
@@ -465,8 +444,7 @@ class ClassApplier(
     }
 
     /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
-    private fun unwrapSignature(sig: GlobalTypeDecl) =
-        types.resolveWith(sig) { it.takeIf { d -> d is TypeDecl.Method || d is TypeDecl.FreeFunction } }
+    private fun unwrapSignature(sig: GlobalTypeDecl) = types.resolveWith(sig) { it as? TypeDecl.Callable }
 
     /**
      * Build the typed function-pointer slot for [m]: `Pointer→FunctionDefinition(<sig>)`, under the
@@ -489,8 +467,7 @@ class ClassApplier(
         val funcDef = registry.buildFunctionDefinition(
             category = vftableCategory,
             name = fieldName,
-            ret = method.ret,
-            params = method.params,
+            method,
             // A stub method (gcc 2.8's `##`) states no domain — but a vtable slot belongs to a known
             // class, and that class *is* the domain gdb would recover from the mangled name. Only a
             // stated-but-unresolvable `cls` is a real loss.
@@ -499,7 +476,6 @@ class ClassApplier(
                 ?: PointerDataType(VoidDataType(), dtm).also {
                     degradation("vftable-slot-this-untyped", at, "${method.cls}; used void*")
                 },
-            callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
             at = at,
         )
         val resolved = registry.registerAgain(funcDef) as FunctionDefinition
