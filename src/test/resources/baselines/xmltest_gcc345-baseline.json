@@ -443,6 +443,19 @@
                 "_ZSt16__convert_from_vIeEiPciPKcT_RKPii"
             ]
         },
+        "param-unnamed-untyped": {
+            "min": 9,
+            "max": 9,
+            "degrades": [
+                "_ZN9__gnu_cxx18stdio_sync_filebufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt12__basic_fileIcE4openEPKcSt13_Ios_Openmodei",
+                "_ZNSt12__basic_fileIcE8sys_openEP6_iobufSt13_Ios_Openmode",
+                "_ZNSt13basic_filebufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt13basic_filebufIcSt11char_traitsIcEE7seekposESt4fposIiESt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE7seekposESt4fposIiESt13_Ios_Openmode"
+            ]
+        },
         "placeholder-created": {
             "min": 16641,
             "max": 16641
