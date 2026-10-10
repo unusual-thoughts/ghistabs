@@ -570,6 +570,13 @@
             "min": 1,
             "max": 1
         },
+        "method-stub-param-untyped": {
+            "min": 1,
+            "max": 1,
+            "degrades": [
+                "TiXmlNode::TiXmlNode"
+            ]
+        },
         "method-stub-params-recovered": {
             "min": 123,
             "max": 123

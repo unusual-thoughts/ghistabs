@@ -342,7 +342,14 @@ sealed interface TypeDecl<out Id : IdInterface> {
     }
 
     @Serializable
-    data class FreeFunction<Id : IdInterface>(val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) : TypeDecl<Id> {
+    sealed interface Callable<out Id : IdInterface> : TypeDecl<Id> {
+        val ret: TypeDecl<Id>
+        val params: List<TypeDecl<Id>>
+    }
+
+    @Serializable
+    data class FreeFunction<Id : IdInterface>(override val ret: TypeDecl<Id>, override val params: List<TypeDecl<Id>>) :
+        Callable<Id> {
         override val children get() = listOf(listOf(ret) + params)
     }
 
@@ -351,9 +358,9 @@ sealed interface TypeDecl<out Id : IdInterface> {
     data class Method<Id : IdInterface>(
         /** Null for gdb's *stub* method (`##<ret>;`), which states no domain — see `Parser.parseMethod`. */
         val cls: TypeDecl<Id>?,
-        val ret: TypeDecl<Id>,
-        val params: List<TypeDecl<Id>>,
-    ) : TypeDecl<Id> {
+        override val ret: TypeDecl<Id>,
+        override val params: List<TypeDecl<Id>>,
+    ) : Callable<Id> {
         override val children get() = listOf(listOfNotNull(cls) + ret, params)
     }
 
@@ -418,7 +425,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     /** Bodies that materialize their own named DataType (own their ghidraName), as opposed to
      *  wrappers/refs/aliases whose byId entry points at another type's dt. Only these are classified. */
-    val ownsMaterializedType get() = canBeXRefTarget || this is FreeFunction || this is Method
+    val ownsMaterializedType get() = canBeXRefTarget || this is Callable
 
     val isComplete get() = when (this) {
         is Aggregate -> sizeBytes > 0
