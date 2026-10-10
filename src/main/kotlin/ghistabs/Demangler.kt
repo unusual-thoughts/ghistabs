@@ -153,10 +153,9 @@ val DemangledObject.namespaces get() = namespace?.fullName.orEmpty()
  * The parameter types [this] declares, `this` never among them. Ghidra reports `f()` as one bare
  * `void` parameter, which is none, and a trailing `...` as one more, which [isVarArgs] answers for.
  */
-val DemangledFunction.formals: List<DemangledDataType>
-    get() = parameters.map { it.type }
-        .takeUnless { it.singleOrNull()?.run { isVoid && !isPointer } == true }.orEmpty()
-        .filterNot { it.isVarArgs }
+val DemangledFunction.formals: List<DemangledDataType> get() = paramTypes
+    .takeUnless { it.singleOrNull()?.run { isVoid && !isPointer } == true }.orEmpty()
+    .filterNot { it.isVarArgs }
 
 /** Whether [this] ends in `...`. */
-val DemangledFunction.isVarArgs get() = parameters.lastOrNull()?.type?.isVarArgs == true
+val DemangledFunction.isVarArgs get() = paramTypes.lastOrNull()?.isVarArgs == true
