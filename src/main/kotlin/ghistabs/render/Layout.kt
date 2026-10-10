@@ -69,6 +69,8 @@ data class Fragment(
     val code: String? = null,
     val note: String? = null,
     val shape: NoteShape = NoteShape.DECLARATION,
+    /** Written ahead of the row's decompiled code, as a [Claim.hosted] class is. */
+    val ahead: Boolean = false,
 ) {
     /**
      * The trailing comment for a fragment carrying [note] at [line], shaped by [shape]. A [NoteShape.DECLARATION]
@@ -134,7 +136,10 @@ class TargetLine(val line: Int) {
             mark?.let { "/* ⇐ $it */ " }.orEmpty() + f.code
         }
         val rest = fragments.filterNot { it.shape == NoteShape.PROVENANCE && it.code != null }
-        val code = spliceInlineMarkers((decomp + rest.mapNotNull { it.code }).joinToString("   "))
+        val (ahead, behind) = rest.partition { it.ahead }
+        val code = spliceInlineMarkers(
+            (ahead.mapNotNull { it.code } + decomp + behind.mapNotNull { it.code }).joinToString("   "),
+        )
         // Deduped: every fragment on a row restates that row's line, so two typedefs sharing source
         // line 139 produced `typedef unsigned char _Value_type;   typedef Exclusion _Value_type;
         // // L 139 // L 139`. Only exact repeats collapse — `// L 139` and `// L 139 (param)` say
