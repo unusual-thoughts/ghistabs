@@ -88,6 +88,9 @@ fun Program.stringLiteralAt(addr: Address): String? =
     resolvePointee(addr)?.takeIf { it.isDefined && it.value is String }?.render(this)
 
 fun Program.initializerAt(addr: Address): List<String>? {
+    // `.bss` has no bytes in the file, and the source wrote no initializer. Ghidra's loaders leave it
+    // uninitialized (a pointer there renders `NaP`) or zero-fill it (gcc 3.3 and 4.1 ELF: `= 0`).
+    if (memory.getBlock(addr)?.sourceInfos?.none { it.contains(addr) && it.fileBytes.isPresent } == true) return null
     val data = listing.getDataAt(addr) ?: return null
     // A real aggregate (struct / non-char array) spreads one element per component; a
     // pointer, scalar, or string-like value is a single element.
