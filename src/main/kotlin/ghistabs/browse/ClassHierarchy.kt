@@ -1,4 +1,4 @@
-package ghistabs.hierarchy
+package ghistabs.browse
 
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address

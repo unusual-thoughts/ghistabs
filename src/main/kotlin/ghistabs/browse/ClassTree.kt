@@ -1,4 +1,4 @@
-package ghistabs.hierarchy
+package ghistabs.browse
 
 import docking.ActionContext
 import docking.action.DockingAction

@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * What the stabs say of classes and their members that nothing else in the program keeps, recorded for
- * the Class Hierarchy window ([ghistabs.hierarchy.ClassHierarchy]), which runs long after the stabs are
+ * the Class Hierarchy window ([ghistabs.browse.ClassHierarchy]), which runs long after the stabs are
  * gone from memory. Ghidra stores, versions and undoes both:
  *
  * - [MEMBERS]: a user property map of each member function's and static data member's [MemberAttrs], at

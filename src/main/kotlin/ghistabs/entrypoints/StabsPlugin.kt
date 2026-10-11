@@ -15,7 +15,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.util.ProgramLocation
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
-import ghistabs.hierarchy.ClassTree
+import ghistabs.browse.ClassTree
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.parse.StabReader
 

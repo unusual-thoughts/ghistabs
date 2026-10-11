@@ -1,4 +1,4 @@
-package ghistabs.hierarchy
+package ghistabs.browse
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
@@ -8,13 +8,16 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
+import ghistabs.browse.ClassHierarchy.Origin
 import ghistabs.entrypoints.GccVftableAnalyzer
-import ghistabs.hierarchy.ClassHierarchy.Origin
 import ghistabs.importer.MemberAttrs
 import ghistabs.parse.Access
 import ghistabs.parse.VirtKind
 import ghistabs.runTransaction
-import ghistabs.test.*
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeEmpty
+import ghistabs.test.mustBeFalse
+import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
@@ -115,7 +118,7 @@ class SweptClassHierarchyIntegrationTest : AbstractGhidraHeadlessIntegrationTest
                 "0x402050" to "_ZNVK3Qux1hEv",
             )) {
                 val fn = program.functionManager.getFunctionAt(builder.addr(at))
-                fn.setParentNamespace(qux)
+                fn.parentNamespace = qux
                 fn.setName(Demangler.name(mangled).substringAfterLast("::"), SourceType.ANALYSIS)
                 program.symbolTable.createLabel(fn.entryPoint, mangled, SourceType.IMPORTED)
             }

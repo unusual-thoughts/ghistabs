@@ -1,19 +1,15 @@
-package ghistabs.hierarchy
+package ghistabs.browse
 
 import docking.widgets.tree.GTreeLazyNode
 import docking.widgets.tree.GTreeNode
 import docking.widgets.tree.support.GTreeRenderer
 import generic.theme.GColor
 import generic.theme.GIcon
-import ghistabs.hierarchy.ClassHierarchy.*
+import ghistabs.browse.ClassHierarchy.*
 import ghistabs.importer.MemberAttrs
 import ghistabs.parse.Access
 import ghistabs.parse.VirtKind
-import java.awt.BasicStroke
-import java.awt.Color
-import java.awt.Component
-import java.awt.Font
-import java.awt.RenderingHints
+import java.awt.*
 import java.awt.image.BufferedImage
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.Icon

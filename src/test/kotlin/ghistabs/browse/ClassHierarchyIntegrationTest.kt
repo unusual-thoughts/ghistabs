@@ -1,16 +1,19 @@
-package ghistabs.hierarchy
+package ghistabs.browse
 
 import docking.widgets.tree.GTreeNode
 import ghidra.program.model.symbol.SourceType
-import ghistabs.hierarchy.ClassHierarchy.MemberKind
-import ghistabs.hierarchy.ClassHierarchy.Origin
+import ghistabs.browse.ClassHierarchy.MemberKind
+import ghistabs.browse.ClassHierarchy.Origin
 import ghistabs.importer.ClassHierarchyRecord
 import ghistabs.importer.MemberAttrs
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.parse.Access
 import ghistabs.parse.VirtKind
 import ghistabs.runTransaction
-import ghistabs.test.*
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeFalse
+import ghistabs.test.mustBeIn
+import ghistabs.test.mustBeTrue
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Assumptions.assumeTrue
