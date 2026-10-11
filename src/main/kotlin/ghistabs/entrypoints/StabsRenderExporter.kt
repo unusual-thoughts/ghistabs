@@ -44,6 +44,8 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: O
     private val outputDir by OUTPUT_DIR
     private val showStorage by SHOW_STORAGE
     private val lineAligned by LINE_ALIGNED
+    private val showDisplaced by SHOW_DISPLACED
+    private val provenance by PROVENANCE
 
     private val sink = MessageLogSink(log)
 
@@ -77,7 +79,9 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: O
             ctx,
             SourceHints(harvest, TypeGraph(harvest, ctx), SourceIndex(harvest, ctx.options.foldSources, ctx), ctx),
             showStorage = showStorage,
+            provenance = provenance,
             lineAligned = lineAligned,
+            showDisplaced = showDisplaced,
         ).use { it.renderAll(dir, monitor) }
         sink.log("export", "Wrote $written files to $dir")
         return true
@@ -105,10 +109,20 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: O
             "Mark each local with the storage gcc gave it, (stack) or (reg)",
             false,
         )
+        val PROVENANCE = BoolOption(
+            "Show original line number of each decompiled statement",
+            "Put a `/* ⇐ L n */` in front of each decompiled statement naming the line its code came from.",
+            true,
+        )
         val LINE_ALIGNED = BoolOption(
             "Render source line n at output line n",
             "Keep blank runs instead of collapsing them, so the render diffs against the real source.",
             false,
+        )
+        val SHOW_DISPLACED = BoolOption(
+            "Show displaced declarations",
+            "Put a trailing block on each file for declarations that have no line.",
+            true,
         )
     }
 }
