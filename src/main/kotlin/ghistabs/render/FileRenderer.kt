@@ -251,7 +251,9 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
      *   `finish_struct`, at the class's closing `};`, where it dates the class too.
      * - gcc 3.3 and 3.4 `synthesize_method` date it where it was first needed (`input_location`), so
      *   it lands inside the body of the function that needed it: `Circle(const Circle&)` at L87,
-     *   inside `probe`, which throws a `Circle` by value.
+     *   inside `probe`, which throws a `Circle` by value. A one-line body has no inside: `Diamond() :
+     *   d(0) {}` at L46 is where `Base`, `Left`, `Right` and `Named` got their constructors, all dated
+     *   L46 beside it. There the tell is the user: a function of a class not built from this one.
      *
      * A written member can sit on its class's line too: `struct Named { virtual ~Named() {} … };`.
      * A destructor is caught there by C++'s own rule: an implicit one is virtual only when a base's
@@ -273,9 +275,34 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             line == cls.line -> true
 
             else -> spans.ranges.any { r ->
-                with(spans) { r.interior }?.let { line in it && cls.line !in it } == true
+                with(spans) { r.interior }?.let { line in it && cls.line !in it } == true ||
+                    (r.start == line && r.func.usesFromOutside(scope, body))
             }
         }
+    }
+
+    /**
+     * Whether this function, opening on an implicit member's line, could be the use gcc 3.x dated it at:
+     * it belongs to no class [cls] is built from. `Diamond::Diamond` and the `Base::Base` it needed share
+     * L46, and only one reading holds: `Base` is part of `Diamond`. Another instantiation of the
+     * template [scope] instantiates is no user either: `Stack<Point,2>::Stack` and `Stack<int,4>::Stack`
+     * share L54 as written.
+     */
+    private fun Func.usesFromOutside(scope: String, cls: TypeDecl.Aggregate<GlobalTypeId>): Boolean {
+        val own = Demangler.namespaces(name).qualifiedName
+        if (own.templateName == scope.templateName) return false
+        val user = typeDecls.firstOrNull { it.body is TypeDecl.Aggregate && it.name == own }?.body
+        return user == null || user !in cls.parts()
+    }
+
+    /** The classes an object of this one is built from: its bases and fields, all the way down. */
+    private fun TypeDecl.Aggregate<GlobalTypeId>.parts(
+        seen: MutableSet<TypeDecl.Aggregate<GlobalTypeId>> = mutableSetOf(),
+    ): Set<TypeDecl.Aggregate<GlobalTypeId>> {
+        for (t in bases.map { it.type } + fields.map { it.type }) {
+            types.resolveAgg(t)?.takeIf { seen.add(it) }?.parts(seen)
+        }
+        return seen
     }
 
     /**

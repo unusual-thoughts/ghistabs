@@ -52,6 +52,21 @@ class CompilerGeneratedIntegrationTest : FeatureFixtureTest() {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = ["hello_elf_gcc33", "hello_elf_gcc34", "hello_gcc345.exe"])
+    fun `an implicit member gcc 3 dated at a one-line user is listed`(fixture: String) {
+        val (written, generated) = decomp(fixture)
+        // `Diamond() : d(0) {}` at L46 is where its bases got their constructors.
+        for (ctor in listOf("Base::Base(", "Left::Left(", "Right::Right(", "Named::Named(")) {
+            written.mustNot("$ctor rendered as written") { Regex(Regex.escape(ctor) + "[^()]*\\) \\{") in this }
+            generated.lines().filter { it.startsWith(ctor) && "// L 46 (implicit member)" in it }
+                .mustNotBe(emptyList<String>())
+        }
+        written.must("Diamond's written constructor left the canvas") {
+            lines().any { "Diamond::Diamond() {" in it && "(implicit member)" !in it }
+        }
+    }
+
+    @ParameterizedTest
     @ValueSource(
         strings = ["hello_elf_gcc12", "hello_elf_gcc41", "hello_elf_gcc33", "hello_elf_gcc295", "hello_gcc345.exe"],
     )
