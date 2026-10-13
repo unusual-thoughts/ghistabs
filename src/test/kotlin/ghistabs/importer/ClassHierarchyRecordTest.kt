@@ -1,5 +1,6 @@
 package ghistabs.importer
 
+import ghidra.framework.options.GProperties
 import ghidra.util.Saveable
 import ghidra.util.datastruct.DataTable
 import ghidra.util.map.ObjectStorageAdapter
@@ -17,16 +18,22 @@ class ClassHierarchyRecordTest {
         it.restore(ObjectStorageAdapter(table, 0))
     }
 
+    /** Through the XML a custom program option is stored as. */
+    private fun ClassRecords.roundTrip(): ClassRecords {
+        val props = GProperties("test").also(::writeState)
+        return ClassRecords().also { it.readState(GProperties(props.saveToXml())) }
+    }
+
     @Test
-    fun `classes read back as saved, several in one entry, unresolved bases and template names included`() {
+    fun `classes read back as saved, unresolved bases and template names included`() {
         val bases = listOf(
             Base(7, null, false, Access.PUBLIC),
             Base(9, null, true, Access.PROTECTED),
             Base(null, "std::iterator<std::input_iterator_tag, char, long>", true, Access.PRIVATE),
         )
         val classes = mapOf(12L to Entry(40, bases), 13L to Entry(null, emptyList()), 14L to Entry(41, bases.take(1)))
-        ClassRecords(classes).roundTrip(ClassRecords()).classes mustBe classes
-        ClassRecords(emptyMap()).roundTrip(ClassRecords()).classes mustBe emptyMap()
+        ClassRecords(classes).roundTrip().classes mustBe classes
+        ClassRecords(emptyMap()).roundTrip().classes mustBe emptyMap()
     }
 
     @Test
