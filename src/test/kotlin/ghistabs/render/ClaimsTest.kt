@@ -48,13 +48,13 @@ class ClaimsTest {
     }
 
     @Test
-    fun `a hosted class rides the row its member's body opens on, not one the body slid into`() {
+    fun `a hosted class rides the row its member's body holds, and only a hosted one does`() {
         // `struct Named { virtual ~Named() {} … };`: class and destructor both at L43, its statements
-        // too, so they slide to 44 and 45. A class dated at 44 is no host of that body.
+        // too, so they slide to 44 and 45. A class at 44 with no member there is no host of that body.
         val head = Claim(Owner.FUNCTION_BODY, 43, listOf(Row("Named::~Named() {")), anchoring = Anchoring.AFTER)
         val stmts = Claim(Owner.FUNCTION_BODY, 43, listOf(Row("s"), Row("}")), anchoring = Anchoring.AFTER)
         val named = claim(Owner.TYPE_BODY, 43, rows = 3, fit = Fit.ELASTIC).copy(hosted = true)
-        val other = claim(Owner.TYPE_BODY, 44, rows = 3, fit = Fit.ELASTIC).copy(hosted = true)
+        val other = claim(Owner.TYPE_BODY, 44, rows = 3, fit = Fit.ELASTIC)
         val out = allocate(listOf(head, stmts, named, other), range = 1..60)
         out.placed.single { it.claim === named }.range mustBe 43..43
         out.dropped.map { it.claim } mustBe listOf(other)
