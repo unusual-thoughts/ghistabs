@@ -905,7 +905,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     /**
      * Every non-static data member a struct's stab declares is a component of the struct it materialized
      * as, under its own name at the byte its bitpos gives. The vptr is left out: where it goes is
-     * [declaredVptrsBecomeTheClassVfptr]'s to say, and an inherited one is dropped on purpose.
+     * [declaredVptrsBecomeTheClassVfptr]'s to say, and an inherited one is dropped on purpose. So are
+     * fields the stab itself overlaps, which no struct can hold both of: gcc 2.x flattens the union in
+     * its vtable entry, `__vtbl_ptr_type:T18=s8__delta:8,0,16;__index:8,16,16;__pfn:19=*16,32,32;
+     * __delta2:8,32,16;;`.
      *
      * Every struct's components go to `struct-fields/<fixture>.<mode>.txt` alongside, each stab field
      * missing from it listed under its struct, so a layout can be read without opening Ghidra.
@@ -917,9 +920,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
         val missing = structs.flatMap { (body, dt) ->
             val components = dt.definedComponents.groupBy({ it.offset }, { it.fieldName })
-            body.fields
-                .filter { !it.isStatic && it.name.isNotEmpty() && !isVptrFieldName(it.name) }
-                .filter { components[(it.offsetBits / 8).toInt()]?.contains(it.name) != true }
+            val data = body.fields.filter { !it.isStatic && it.name.isNotEmpty() && !isVptrFieldName(it.name) }
+            data.filter { components[(it.offsetBits / 8).toInt()]?.contains(it.name) != true }
+                .filterNot { field -> data.any { it !== field && it.overlaps(field) } }
                 .map { dt to it }
         }
         val missingBy = missing.groupBy({ it.first }, { it.second })
@@ -2346,6 +2349,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     /** Whether a base contributes bytes. An empty class is `sizeof == 1` and the empty-base
      *  optimization drops it from the layout entirely; member *functions* do not make it occupy
      *  space, so [TypeDecl.Aggregate.hasMembers] is the wrong question here. */
+
+    private fun TypeDecl.Aggregate.Field<GlobalTypeId>.overlaps(other: TypeDecl.Aggregate.Field<GlobalTypeId>) =
+        offsetBits < other.offsetBits + other.sizeBits && other.offsetBits < offsetBits + sizeBits
 
     private fun occupiesSpace(base: GlobalTypeDecl) =
         (resolve(base) as? TypeDecl.Aggregate)?.let { it.sizeBytes > 1 } == true
