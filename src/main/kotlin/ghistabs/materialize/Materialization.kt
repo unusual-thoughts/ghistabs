@@ -140,13 +140,13 @@ internal fun DataTypeRegistry.fillComposite(
             when (placeholder) {
                 is Structure if isBitfield -> placeholder.insertBitField(offsetBits, sizeBits, ft, name)
 
-                is Structure -> placeholder.replaceAtOffset(
-                    (offsetBits / 8).toInt(),
-                    ft,
-                    len,
-                    name,
-                    null,
-                )
+                is Structure -> {
+                    val at = (offsetBits / 8).toInt()
+                    placeholder.ownFieldsOverlapping(body, at, len).forEach {
+                        degradation("field-overlapped", "$qualifiedName.${it.fieldName}", "cleared by $name at +$at")
+                    }
+                    placeholder.replaceAtOffset(at, ft, len, name, null)
+                }
 
                 is Union if isBitfield -> placeholder.addBitField(ft, sizeBits.toInt(), name, null)
 
@@ -174,6 +174,16 @@ internal fun DataTypeRegistry.fillComposite(
 
     return placeholder
 }
+
+/**
+ * The own fields [replaceAtOffset][Structure.replaceAtOffset] would silently clear to place [length] bytes
+ * at [offset]: the stab itself can overlap two, as gcc 2.x's flattened vtable-entry union
+ * `__pfn:19=*16,32,32;__delta2:8,32,16;;` does.
+ */
+private fun Structure.ownFieldsOverlapping(body: TypeDecl.Aggregate<GlobalTypeId>, offset: Int, length: Int) =
+    definedComponents.filter { c ->
+        c.offset < offset + length && offset < c.offset + c.length && body.fields.any { it.name == c.fieldName }
+    }
 
 /**
  * The stab's bitpos counts from the first byte in memory order: from its least significant bit on a
