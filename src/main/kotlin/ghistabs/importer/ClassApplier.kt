@@ -616,11 +616,16 @@ internal fun Program.rehomeOntoShortenedClasses(shortener: TemplateNameShortener
     var moved = 0
     for (long in symbolTable.classNamespaces.asSequence().toList()) {
         val short = shortener.shortenedNestedOrNull(long.name) ?: continue
+        val longPath = long.getPathList(true).toList()
         val target = symbolTable.getNamespace(short, long.parentNamespace) as? GhidraClass
         if (target == null) {
-            if (renameUnplacedClass(long, short)) moved++
+            if (renameUnplacedClass(long, short)) {
+                moved++
+                refileClassDataTypes(longPath, short)
+            }
             continue
         }
+        refileClassDataTypes(longPath, short)
         for (sym in symbolTable.getSymbols(long).filter { it.isPrimary }) {
             if (moveOnto(
                     sym,
@@ -646,6 +651,25 @@ private fun Program.renameUnplacedClass(long: GhidraClass, short: String) =
     VariableUtilities.findExistingClassStruct(long, dataTypeManager) == null &&
         dataTypeManager.hasStructNamed(short) &&
         runCatching { long.symbol.setName(short, SourceType.IMPORTED) }.isSuccess
+
+/**
+ * shift-D reads a vftable's class back off its `/ClassDataTypes/<ns…>/<Class>/` category, so the tables a
+ * sweep laid under the long namespace follow it to the short one: category and `<Class>_vftable…` names.
+ */
+private fun Program.refileClassDataTypes(longPath: List<String>, short: String) {
+    val from = dataTypeManager.getCategory(ClassNaming.vftableCategory(longPath)) ?: return
+    val to = ClassNaming.vftableCategory(longPath.dropLast(1) + short)
+    val leaf = longPath.last()
+    if (dataTypeManager.getCategory(to) == null) runCatching { from.setName(short) }
+    val category = dataTypeManager.getCategory(to) ?: return
+    for (dt in from.dataTypes.toList() + category.dataTypes.toList()) {
+        runCatching { if (dt.categoryPath != to) dt.categoryPath = to }
+        if (dt.name.startsWith("${leaf}_")) runCatching { dt.name = short + dt.name.removePrefix(leaf) }
+    }
+    if (from.categoryPath != to && from.dataTypes.isEmpty() && from.categories.isEmpty()) {
+        runCatching { from.parent?.removeEmptyCategory(from.name, TaskMonitor.DUMMY) }
+    }
+}
 
 /** Move primary [sym] into [target]; a label already there under the same name is made primary instead. */
 private fun Program.moveOnto(sym: Symbol, target: GhidraClass) = when (val obj = sym.`object`) {
