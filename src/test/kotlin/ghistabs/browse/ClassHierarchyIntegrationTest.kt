@@ -4,8 +4,8 @@ import docking.widgets.tree.GTreeNode
 import ghidra.program.model.symbol.SourceType
 import ghistabs.browse.ClassHierarchy.MemberKind
 import ghistabs.browse.ClassHierarchy.Origin
-import ghistabs.importer.MemberAttrs.Companion.memberAttrs
 import ghistabs.importer.MemberAttrs
+import ghistabs.importer.MemberAttrs.Companion.memberAttrs
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.parse.Access
 import ghistabs.parse.VirtKind
