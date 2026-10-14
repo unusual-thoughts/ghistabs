@@ -591,17 +591,16 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
      * the stabs say of its access, virtuality and cv-qualifiers is gone once the import ends, whether
      * or not the class pass runs. Resolved as the class pass resolves it, through the prevailing ABI.
      */
-    internal fun recordMemberFunctions(): Int {
-        val abi = symtab.prevailingAbi() ?: return 0
-        val seen = mutableSetOf<Address>()
-        for (located in registry.classesBasesFirst()) {
-            val className = located.statedClassPath(registry.types)?.qualifiedName ?: located.className
-            for (m in located.classBody.methods) {
-                val addr = abi.physnameCandidates(m, className).firstNotNullOfOrNull(ctx.resolver::resolve)
-                if (addr != null && seen.add(addr)) ctx.program.writeMember(addr, MemberAttrs(m))
+    internal fun recordMemberFunctions() = symtab.prevailingAbi()?.let { abi ->
+        buildSet {
+            for (located in registry.classesBasesFirst()) {
+                val className = located.statedClassPath(registry.types)?.qualifiedName ?: located.className
+                for (m in located.classBody.methods) {
+                    val addr = abi.physnameCandidates(m, className).firstNotNullOfOrNull(ctx.resolver::resolve)
+                    if (addr != null && add(addr)) ctx.program.writeMember(addr, MemberAttrs(m))
+                }
             }
         }
-        return seen.size
     }
 
     /**

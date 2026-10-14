@@ -17,17 +17,12 @@ import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
-import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.TemplateNameShortener
-import ghistabs.materialize.buildFunctionDefinition
+import ghistabs.materialize.*
 import ghistabs.materialize.cpp.*
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.cpp.abi.ResolvedVtable
 import ghistabs.materialize.cpp.abi.vtableRecord
-import ghistabs.materialize.resolveRef
-import ghistabs.materialize.signatureParams
-import ghistabs.materialize.typedefAliases
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
@@ -280,9 +275,10 @@ class ClassApplier(
             )
         } else if (shortener != null && func.parentNamespace != ns) {
             // The demangler files the method under its mangled (long) scope; [ns] is the shortened one.
-            val long = func.parentNamespace as? GhidraClass
+            func.parentNamespace.takeIf { it is GhidraClass }?.let { long ->
+                if (symtab.getSymbols(long).none()) long.symbol.delete()
+            }
             func.parentNamespace = ns
-            if (long != null && symtab.getSymbols(long).none()) long.symbol.delete()
         }
 
         // The x86gcc cspec routes `this` as the first stack argument (MSVC's x86win routes it via
@@ -681,7 +677,7 @@ private fun Program.refileClassDataTypes(longPath: List<String>, short: String) 
     val from = dataTypeManager.getCategory(ClassNaming.vftableCategory(longPath)) ?: return
     val to = ClassNaming.vftableCategory(longPath.dropLast(1) + short)
     val leaf = longPath.last()
-    if (dataTypeManager.getCategory(to) == null) runCatching { from.setName(short) }
+    if (dataTypeManager.getCategory(to) == null) runCatching { from.name = short }
     val category = dataTypeManager.getCategory(to) ?: return
     for (dt in from.dataTypes.toList() + category.dataTypes.toList()) {
         runCatching { if (dt.categoryPath != to) dt.categoryPath = to }
