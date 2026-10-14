@@ -136,6 +136,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     private val degradationFile get() = File(
         "$OUTPUT_ROOT/degradations/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt",
     )
+    private val structFieldsFile get() = File(
+        "$OUTPUT_ROOT/struct-fields/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt",
+    )
     private val logFile get() = File("$OUTPUT_ROOT/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
     private val analysisTimesFile get() = File(
         "$OUTPUT_ROOT/analysis-times/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt",
@@ -897,6 +900,53 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 ).mustBeEmpty("${flatEnums.size} declared enums materialized without their values")
             },
         )
+    }
+
+    /**
+     * Every non-static data member a struct's stab declares is a component of the struct it materialized
+     * as, under its own name at the byte its bitpos gives. The vptr is left out: where it goes is
+     * [declaredVptrsBecomeTheClassVfptr]'s to say, and an inherited one is dropped on purpose.
+     *
+     * Every struct's components go to `struct-fields/<fixture>.<mode>.txt` alongside, each stab field
+     * missing from it listed under its struct, so a layout can be read without opening Ghidra.
+     */
+    @Test
+    fun everyStabFieldIsAStructComponent() {
+        val structs = builtClasses().sortedBy { (_, dt) -> dt.pathName }
+        assumeTrue(structs.isNotEmpty(), "Skipping: no struct materialized in this fixture")
+
+        val missing = structs.flatMap { (body, dt) ->
+            val components = dt.definedComponents.groupBy({ it.offset }, { it.fieldName })
+            body.fields
+                .filter { !it.isStatic && it.name.isNotEmpty() && !isVptrFieldName(it.name) }
+                .filter { components[(it.offsetBits / 8).toInt()]?.contains(it.name) != true }
+                .map { dt to it }
+        }
+        val missingBy = missing.groupBy({ it.first }, { it.second })
+
+        structFieldsFile.parentFile.mkdirs()
+        structFieldsFile.writeText(
+            buildString {
+                appendLine("fixture: $binaryName ($mode)")
+                appendLine("${structs.size} structs, ${missing.size} stab fields missing\n")
+                for ((_, dt) in structs) {
+                    appendLine("${dt.pathName} (${dt.length} bytes)")
+                    dt.definedComponents.forEach {
+                        appendLine("  +0x%x %4d  %s %s".format(it.offset, it.length, it.dataType.name, it.fieldName))
+                    }
+                    missingBy[dt]?.forEach {
+                        appendLine("  MISSING +0x%x %s (%d bits)".format(it.offsetBits / 8, it.name, it.sizeBits))
+                    }
+                }
+            },
+        )
+
+        missing.map { (dt, field) -> "${dt.pathName}.${field.name} @ +${field.offsetBits / 8}" }
+            .sorted().take(10)
+            .mustBeEmpty(
+                "${missing.size} stab fields have no component of their name at their offset " +
+                    "(all of them in ${structFieldsFile.path})",
+            )
     }
 
     /**
