@@ -12,8 +12,10 @@ import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.harvest.AddressResolver
+import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.buildFunctionDefinition
 import ghistabs.materialize.cpp.*
 import ghistabs.materialize.cpp.abi.CxxAbi
@@ -22,6 +24,7 @@ import ghistabs.materialize.cpp.abi.ResolvedVtable
 import ghistabs.materialize.cpp.abi.vtableRecord
 import ghistabs.materialize.resolveRef
 import ghistabs.materialize.signatureParams
+import ghistabs.materialize.typedefAliases
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
@@ -173,7 +176,18 @@ class ClassApplier(
         val parts = mangled?.let { Demangler.namespaces(it) }.orEmpty()
             .filter { it.isNotEmpty() }
             .ifEmpty { qualifiedClassName.nameSegments }
-        return symtab.buildClassNamespaces(parts)
+        return symtab.buildClassNamespaces(parts) { shortener?.shortenedNestedOrNull(it) }
+    }
+
+    /**
+     * With typedef shortening on, the class struct is `vector<string>` while the demangler named its
+     * namespace `vector<std::basic_string<…>,…>`. Ghidra's auto-`this` finds the class struct by the
+     * namespace's name, so a namespace left long types every method's `this` with an empty placeholder:
+     * the namespace is shortened the same way the struct was. A later demangler run recreates the long
+     * namespace, but only for secondary labels; the functions stay here.
+     */
+    private val shortener by lazy {
+        if (program.stabsTypedefsShortened) TemplateNameShortener(registry.typedefAliases()) else null
     }
 
     /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
@@ -231,6 +245,12 @@ class ClassApplier(
                 "demangler did not apply to $mangled",
                 func.entryPoint,
             )
+        } else if (shortener != null && func.parentNamespace != ns) {
+            // The demangler files the method under its mangled (long) scope; [ns] is the shortened one.
+            func.parentNamespace.takeIf { it is GhidraClass }.let { long ->
+                func.parentNamespace = ns
+                if (long != null && symtab.getSymbols(long).none()) long.symbol.delete()
+            }
         }
 
         // The x86gcc cspec routes `this` as the first stack argument (MSVC's x86win routes it via
@@ -581,3 +601,48 @@ class ClassApplier(
         return slots.associate { it.key - bias to it.value }
     }
 }
+
+/**
+ * Put the primary symbols of every class whose namespace typedef shortening renamed back under the
+ * short name. Demangling a member after [ClassApplier] has shortened its class (our own
+ * [DemanglerReplacer] pass, or Ghidra's) re-creates the mangled, long-named scope and makes the
+ * demangled symbol there primary, which is what the decompiler then prints and what auto-`this`
+ * resolves against. The long namespace may keep its secondary labels: they are what the mangled
+ * names say. Returns the number of symbols moved.
+ */
+internal fun Program.rehomeOntoShortenedClasses(shortener: TemplateNameShortener, sink: DiagnosticSink): Int {
+    if (shortener.isEmpty) return 0
+    var moved = 0
+    val classes = symbolTable.classNamespaces.asSequence().toList()
+    for (long in classes) {
+        val short = shortener.shortenedNestedOrNull(long.name) ?: continue
+        val target = symbolTable.getNamespace(short, long.parentNamespace) as? GhidraClass ?: run {
+            // A class no stab method list placed (inline-only members: `GetBlock<…>`, `member_ptr<…>`)
+            // never went through [ClassApplier]: rename it whole, if the shortened struct is there to bind.
+            if (VariableUtilities.findExistingClassStruct(long, dataTypeManager) == null &&
+                dataTypeManager.hasStructNamed(short) &&
+                runCatching { long.symbol.setName(short, SourceType.IMPORTED) }.isSuccess
+            ) {
+                moved++
+            }
+            continue
+        }
+        for (sym in symbolTable.getSymbols(long).toList()) {
+            if (!sym.isPrimary) continue
+            val ok = when (val obj = sym.`object`) {
+                is Function -> runCatching { obj.parentNamespace = target }.isSuccess
+
+                else -> symbolTable.getSymbol(sym.name, sym.address, target)
+                    ?.let { twin -> runCatching { twin.setPrimary() }.isSuccess }
+                    ?: runCatching { sym.setNamespace(target) }.isSuccess
+            }
+            if (ok) moved++ else sink.debug("typedef-shorten-rehome-skip", "${sym.getName(true)} -> $short")
+        }
+        if (symbolTable.getSymbols(long).none()) long.symbol.delete()
+    }
+    if (moved > 0) sink.debug("typedef-shorten-rehomed", count = moved.toLong())
+    return moved
+}
+
+private fun DataTypeManager.hasStructNamed(name: String) =
+    mutableListOf<DataType>().also { findDataTypes(name, it) }.any { it is Structure }
