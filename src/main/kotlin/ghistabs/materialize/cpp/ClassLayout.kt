@@ -70,7 +70,7 @@ internal fun DataTypeRegistry.fillStructBases(
     for ((base, gap) in baseGaps(body)) {
         if (base in laidLater) continue
         val offsetBytes = (base.offsetBits / 8).toInt()
-        val raw = resolveRef(base.type)
+        val raw = resolveRef(base.type)?.let { sizedXRefStub(it, gap, qualifiedName) ?: it }
         // Empty placeholders report length=1 (Ghidra's enforced minimum); isZeroLength gives the
         // logical truth. `dtm.contains` rejects a cycle-break stub, which [seedPlaceholder]
         // deliberately keeps out of the DTM: splicing one in makes `replaceAtOffset` resolve it on
@@ -117,6 +117,24 @@ internal fun DataTypeRegistry.fillStructBases(
         placeholder.description =
             if (placeholder.description.isNullOrEmpty()) lines else "${placeholder.description}\n$lines"
     }
+}
+
+/**
+ * A base class no CU defines, only forward-references (`!1,020,(51,22)` naming an
+ * `xsbasic_ifstream<char,std:…` everywhere), has no size of its own; the [gap] its deriving class leaves
+ * before its next base or own field is the only evidence there is. The empty stub is grown to that
+ * many undefined bytes, in the DTM, the first time a deriving class lays it, so the base is named
+ * rather than left as bare Undefined1. A later deriving class with a smaller gap gets nothing laid.
+ */
+private fun DataTypeRegistry.sizedXRefStub(stub: DataType, gap: Int, qualifiedName: String): DataType? {
+    if (stub !in xrefStubs || stub !is Structure || gap <= 0) return null
+    if (stub.isZeroLength) {
+        stub.growStructure(gap)
+        stub.description = "Only forward-declared; size guessed from the $gap bytes $qualifiedName leaves it"
+        degradation("base-size-guessed", qualifiedName.member(stub.name), "$gap bytes from the deriving class")
+    }
+    // An empty copy a pointer to it already put in the DTM is replaced by this one, not forked.
+    return register(stub)
 }
 
 /**
