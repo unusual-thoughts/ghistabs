@@ -4,7 +4,7 @@ import docking.widgets.tree.GTreeNode
 import ghidra.program.model.symbol.SourceType
 import ghistabs.browse.ClassHierarchy.MemberKind
 import ghistabs.browse.ClassHierarchy.Origin
-import ghistabs.importer.ClassHierarchyRecord
+import ghistabs.importer.MemberAttrs.Companion.memberAttrs
 import ghistabs.importer.MemberAttrs
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.parse.Access
@@ -153,11 +153,10 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
     @MethodSource("hellos")
     fun `member attributes are recorded with the class pass off`(fixture: String) {
         load(fixture) { buildClasses = false }
-        val attrsAt = ClassHierarchyRecord.memberAttrs(program)
         // Circle::name, by whichever symbol spells it: `_ZNK6Circle4nameEv`, `name__C6Circle`, demangled.
         val name = program.symbolTable.getAllSymbols(true).iterator().asSequence()
             .filter { it.getName(true).let { n -> "Circle" in n && "name" in n } }
-            .firstNotNullOfOrNull { attrsAt(it.address) }
+            .firstNotNullOfOrNull { program.memberAttrs(it.address) }
         name mustBe MemberAttrs(Access.PUBLIC, VirtKind.VIRTUAL, isConst = true)
     }
 

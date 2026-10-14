@@ -24,7 +24,7 @@ import kotlinx.serialization.Serializable
 /**
  * Every class the program knows, with its direct bases, as the Class Hierarchy window shows them.
  *
- * Two sources, never mixed for one class: the stabs import's [ClassHierarchyRecord], exact down to
+ * Two sources, never mixed for one class: the stabs import's [ghistabs.importer.ClassHierarchyRecords], exact down to
  * virtuality and access, gcc 2.x included; and, for a class the stabs never described but the vtable
  * sweep laid a `vftable` for, its Itanium typeinfo, when the program has one. A class with neither is
  * still listed, as a root, so the sweep's finds all show.

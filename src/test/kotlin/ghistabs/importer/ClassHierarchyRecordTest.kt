@@ -4,8 +4,8 @@ import ghidra.framework.options.GProperties
 import ghidra.util.Saveable
 import ghidra.util.datastruct.DataTable
 import ghidra.util.map.ObjectStorageAdapter
-import ghistabs.importer.ClassHierarchyRecord.Base
-import ghistabs.importer.ClassHierarchyRecord.Entry
+import ghistabs.importer.ClassHierarchyRecords.Base
+import ghistabs.importer.ClassHierarchyRecords.Entry
 import ghistabs.parse.Access
 import ghistabs.parse.VirtKind
 import ghistabs.test.*
