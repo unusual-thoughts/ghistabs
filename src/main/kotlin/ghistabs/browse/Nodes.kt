@@ -175,9 +175,9 @@ class ClassNode private constructor(
         // The typedef shortening pass renamed its struct; the namespace keeps the long spelling.
         info?.structName?.takeIf { it != info.name }?.let { append("<br>shortened: ").append(escape(it)) }
         val origin = when (info?.origin) {
-            Origin.STABS -> "bases from the stabs"
-            Origin.SWEPT_RTTI -> "no stabs: bases from its typeinfo"
-            Origin.SWEPT -> "no stabs: bases unknown"
+            Origin.STABS -> "from the stabs"
+            Origin.SWEPT_RTTI -> "from its typeinfo"
+            Origin.SWEPT -> "from its vtable: bases unknown"
             null -> "no class built for it: a plain struct, or only declared"
         }
         append("<br>").append(origin)
@@ -242,7 +242,8 @@ private val MEMBER_ICONS: Map<MemberKind, Icon> = mapOf(
 
 /**
  * Upstream's icon per kind of class: its green class icon with two colour channels swapped, so the
- * shape stays and the hue says the kind. A swept class with nothing more to say is the same in grey.
+ * shape stays and the hue says the kind. A class the stabs don't describe, with nothing more to say,
+ * is the same in grey.
  */
 private enum class Kind(
     val label: String,
@@ -255,7 +256,7 @@ private enum class Kind(
     VIRTUAL("virtual base class", "derives virtually", { r, g, b -> Triple(r, b, g) }),
     VIRTUAL_ABSTRACT("virtual abstract base class", "abstract, derives virtually", { r, g, _ -> Triple(g, r, g) }),
     NESTED("nested class", "nested class", { _, g, b -> Triple(g, g, b) }),
-    SWEPT("class without stabs", "class without stabs", ::greyscale),
+    SWEPT("class from typeinfo or vtable", "class from typeinfo or vtable", ::greyscale),
     ;
 
     // Lazy: painting a themed icon needs the theme up, which a headless test that never draws skips.

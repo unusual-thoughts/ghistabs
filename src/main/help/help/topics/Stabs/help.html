@@ -249,12 +249,12 @@
     every class that derives from it.</P>
 
     <P>The icon's colour gives a class's kind, as upstream: red for an abstract class, blue for a
-    virtual base, purple for both, yellow for a nested class, and grey for a class the stabs don't
-    describe (when it is none of the others). A member's icon and text are coloured by what is
+    virtual base, purple for both, yellow for a nested class, and grey for a class known only from its
+    typeinfo or vtable (when it is none of the others). A member's icon and text are coloured by what is
     known of it: magenta for a plain member, blue for a virtual one, green for a static one,
     darker when private and paler when protected, with a <CODE>c</CODE> or <CODE>v</CODE> badge for
     a <CODE>const</CODE> or <CODE>volatile</CODE> member function. Grey means nothing records its
-    virtuality. Tooltips spell it out: for a class, its full name, where its bases came from, its
+    virtuality. Tooltips spell it out: for a class, its full name, where it came from, its
     kind and its vftable or typeinfo address, and its struct's shorter name when typedef shortening
     renamed it; for a member, its signature, attributes and address.</P>
 
@@ -266,8 +266,8 @@
     <P>A class with nothing to show (no member, vtable, typeinfo, base or derived class) is hidden
     by default: g++ makes a class of every struct a C++ file sees, C headers' included, and of the
     SGI STL's tag types (<CODE>tm</CODE>, <CODE>__type_traits&lt;bool&gt;</CODE>), and emits none of
-    their implicit members. The status line counts the classes from stabs, the ones without
-    stabs and the hidden empty ones.</P>
+    their implicit members. The status line counts the classes by source (stabs, typeinfo,
+    vtables) and the hidden empty ones.</P>
 
     <H3>Where it comes from</H3>
 
@@ -278,7 +278,7 @@
       this window existed shows its stabs classes only after
       <A href="#Stabs_Reimport">Re-import</A>; the status line says so.</LI>
 
-      <LI><B>Classes without stabs.</B> A class with a vtable or typeinfo and no stabs
+      <LI><B>Classes from typeinfo and vtables.</B> A class with a vtable or typeinfo and no stabs
       (libstdc++ and libsupc++ classes, or a binary with no stabs at all) takes its bases from its
       Itanium typeinfo where the binary has one, and is a root otherwise. A base the program built
       no class for, such as a plain struct, is a leaf.</LI>

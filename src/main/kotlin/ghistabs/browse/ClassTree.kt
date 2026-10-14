@@ -370,13 +370,20 @@ class ClassTree(private val plugin: Plugin) :
         shown = hierarchy
         reshow()
         val counts = hierarchy.classes.groupingBy { it.origin }.eachCount()
-        val stabs = counts[ClassHierarchy.Origin.STABS] ?: 0
-        val others = hierarchy.classes.size - stabs
         status.text = buildString {
-            append("$stabs from stabs, $others without stabs")
+            // By source: the stabs, else what the class's typeinfo or, failing that, its vtable shows.
+            append(
+                listOf(
+                    ClassHierarchy.Origin.STABS to "from stabs",
+                    ClassHierarchy.Origin.SWEPT_RTTI to "from typeinfo",
+                    ClassHierarchy.Origin.SWEPT to "from vtables",
+                ).mapNotNull { (origin, from) -> counts[origin]?.let { "$it $from" } }
+                    .ifEmpty { listOf("no classes") }.joinToString(", "),
+            )
             val empty = hierarchy.classes.count(hierarchy::isEmpty)
             if (empty > 0) append(", $empty empty")
-            // Imported before the record existed: the stabs classes count as without stabs until a re-import.
+            // Imported before the record existed: the stabs classes count as from typeinfo or vtables
+            // until a re-import.
             if (p.isStabsDone && !p.areClassesRecorded()) {
                 append(" (no stabs record: Tools > Stabs > Re-import to add it)")
             }
