@@ -1485,10 +1485,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "crypto_mi_test_gcc421_stripped.exe", "xmltest_gcc421_stripped.exe",
             // a.out: these fixtures are plain C, so there are no classes and no vtables at all.
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
-            // Own-code-only libg++ driver: its two classes derive from streambuf and iostream,
-            // which reach the CU as `xs` cross-references, so the {vfptr} stays in the base and
-            // neither vftable gets a back-edge. The _fullstabs twin is the contrast.
-            "iostream_test_aout_gcc263.o",
         ],
         reason = "no _ZTV symbol and no method stab section, so nothing can locate or fill a vftable",
     )
@@ -1925,10 +1921,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @ExpectedToFail(
         fixtures = [
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
-            // C++, but every base it names is a libg++ class the CU only cross-references.
-            "iostream_test_aout_gcc263.o",
         ],
-        reason = "no inheritance edge is materializable: plain C, or bases that are `xs` cross-refs",
+        reason = "no inheritance edge is materializable: plain C",
     )
     fun inheritanceWasApplied() {
         val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
