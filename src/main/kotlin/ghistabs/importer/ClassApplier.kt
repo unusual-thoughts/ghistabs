@@ -248,10 +248,9 @@ class ClassApplier(
             )
         } else if (shortener != null && func.parentNamespace != ns) {
             // The demangler files the method under its mangled (long) scope; [ns] is the shortened one.
-            func.parentNamespace.takeIf { it is GhidraClass }.let { long ->
-                func.parentNamespace = ns
-                if (long != null && symtab.getSymbols(long).none()) long.symbol.delete()
-            }
+            val long = func.parentNamespace as? GhidraClass
+            func.parentNamespace = ns
+            if (long != null && symtab.getSymbols(long).none()) long.symbol.delete()
         }
 
         // The x86gcc cspec routes `this` as the first stack argument (MSVC's x86win routes it via
@@ -609,38 +608,28 @@ class ClassApplier(
  * [DemanglerReplacer] pass, or Ghidra's) re-creates the mangled, long-named scope and makes the
  * demangled symbol there primary, which is what the decompiler then prints and what auto-`this`
  * resolves against. The long namespace may keep its secondary labels: they are what the mangled
- * names say. Returns the number of symbols moved.
+ * names say.
  */
-internal fun Program.rehomeOntoShortenedClasses(shortener: TemplateNameShortener, sink: DiagnosticSink): Int {
-    if (shortener.isEmpty) return 0
-    var moved = 0
+internal fun Program.rehomeOntoShortenedClasses(shortener: TemplateNameShortener, sink: DiagnosticSink) {
+    if (shortener.isEmpty) return
     for (long in symbolTable.classNamespaces.asSequence().toList()) {
         val short = shortener.shortenedNestedOrNull(long.name) ?: continue
         val longPath = long.getPathList(true).toList()
         val target = symbolTable.getNamespace(short, long.parentNamespace) as? GhidraClass
         if (target == null) {
             if (renameUnplacedClass(long, short)) {
-                moved++
+                sink.debug("typedef-shorten-rehomed", "${longPath.joinToString("::")} -> $short")
                 refileClassDataTypes(longPath, short)
             }
             continue
         }
         refileClassDataTypes(longPath, short)
         for (sym in symbolTable.getSymbols(long).filter { it.isPrimary }) {
-            if (moveOnto(
-                    sym,
-                    target,
-                )
-            ) {
-                moved++
-            } else {
-                sink.debug("typedef-shorten-rehome-skip", "${sym.getName(true)} -> $short")
-            }
+            val category = if (moveOnto(sym, target)) "typedef-shorten-rehomed" else "typedef-shorten-rehome-skip"
+            sink.debug(category, "${sym.getName(true)} -> $short")
         }
         if (symbolTable.getSymbols(long).none()) long.symbol.delete()
     }
-    if (moved > 0) sink.debug("typedef-shorten-rehomed", count = moved.toLong())
-    return moved
 }
 
 /**

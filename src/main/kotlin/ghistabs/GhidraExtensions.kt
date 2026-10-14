@@ -128,9 +128,7 @@ fun SymbolTable.buildClassNamespaces(
         val isLast = i == parts.lastIndex
         val part = rename(long) ?: long
         val existing = getNamespace(part, ns)
-            ?: getNamespace(long, ns)?.takeIf { part != long }
-                ?.also { runCatching { it.symbol.setName(part, sourceType) } }
-            ?: getNamespace(long, ns)
+            ?: getNamespace(long, ns)?.also { if (part != long) runCatching { it.symbol.setName(part, sourceType) } }
         ns = when (existing) {
             null if isLast -> createClass(ns, part, sourceType)
             null -> createNameSpace(ns, part, sourceType)
