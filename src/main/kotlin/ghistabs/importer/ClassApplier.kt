@@ -6,6 +6,7 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
@@ -613,35 +614,46 @@ class ClassApplier(
 internal fun Program.rehomeOntoShortenedClasses(shortener: TemplateNameShortener, sink: DiagnosticSink): Int {
     if (shortener.isEmpty) return 0
     var moved = 0
-    val classes = symbolTable.classNamespaces.asSequence().toList()
-    for (long in classes) {
+    for (long in symbolTable.classNamespaces.asSequence().toList()) {
         val short = shortener.shortenedNestedOrNull(long.name) ?: continue
-        val target = symbolTable.getNamespace(short, long.parentNamespace) as? GhidraClass ?: run {
-            // A class no stab method list placed (inline-only members: `GetBlock<…>`, `member_ptr<…>`)
-            // never went through [ClassApplier]: rename it whole, if the shortened struct is there to bind.
-            if (VariableUtilities.findExistingClassStruct(long, dataTypeManager) == null &&
-                dataTypeManager.hasStructNamed(short) &&
-                runCatching { long.symbol.setName(short, SourceType.IMPORTED) }.isSuccess
-            ) {
-                moved++
-            }
+        val target = symbolTable.getNamespace(short, long.parentNamespace) as? GhidraClass
+        if (target == null) {
+            if (renameUnplacedClass(long, short)) moved++
             continue
         }
-        for (sym in symbolTable.getSymbols(long).toList()) {
-            if (!sym.isPrimary) continue
-            val ok = when (val obj = sym.`object`) {
-                is Function -> runCatching { obj.parentNamespace = target }.isSuccess
-
-                else -> symbolTable.getSymbol(sym.name, sym.address, target)
-                    ?.let { twin -> runCatching { twin.setPrimary() }.isSuccess }
-                    ?: runCatching { sym.setNamespace(target) }.isSuccess
+        for (sym in symbolTable.getSymbols(long).filter { it.isPrimary }) {
+            if (moveOnto(
+                    sym,
+                    target,
+                )
+            ) {
+                moved++
+            } else {
+                sink.debug("typedef-shorten-rehome-skip", "${sym.getName(true)} -> $short")
             }
-            if (ok) moved++ else sink.debug("typedef-shorten-rehome-skip", "${sym.getName(true)} -> $short")
         }
         if (symbolTable.getSymbols(long).none()) long.symbol.delete()
     }
     if (moved > 0) sink.debug("typedef-shorten-rehomed", count = moved.toLong())
     return moved
+}
+
+/**
+ * A class no stab method list placed (inline-only members: `GetBlock<…>`, `member_ptr<…>`) never went
+ * through [ClassApplier]: rename it whole, if the shortened struct is there to bind and the long name binds none.
+ */
+private fun Program.renameUnplacedClass(long: GhidraClass, short: String) =
+    VariableUtilities.findExistingClassStruct(long, dataTypeManager) == null &&
+        dataTypeManager.hasStructNamed(short) &&
+        runCatching { long.symbol.setName(short, SourceType.IMPORTED) }.isSuccess
+
+/** Move primary [sym] into [target]; a label already there under the same name is made primary instead. */
+private fun Program.moveOnto(sym: Symbol, target: GhidraClass) = when (val obj = sym.`object`) {
+    is Function -> runCatching { obj.parentNamespace = target }.isSuccess
+
+    else -> symbolTable.getSymbol(sym.name, sym.address, target)
+        ?.let { twin -> runCatching { twin.setPrimary() }.isSuccess }
+        ?: runCatching { sym.setNamespace(target) }.isSuccess
 }
 
 private fun DataTypeManager.hasStructNamed(name: String) =
