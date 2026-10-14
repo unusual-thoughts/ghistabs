@@ -9,11 +9,11 @@ import docking.widgets.tree.GTree
 import docking.widgets.tree.GTreeNode
 import docking.widgets.tree.support.GTreeSelectionEvent.EventOrigin
 import generic.theme.GIcon
+import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.app.context.ProgramSymbolActionContext
 import ghidra.app.plugin.core.navigation.locationreferences.LocationReferencesService
 import ghidra.app.plugin.core.symboltree.actions.ClearPinSymbolAction
 import ghidra.app.plugin.core.symboltree.actions.PinSymbolAction
-import ghidra.app.plugin.core.symboltree.actions.SetSymbolPrimaryAction
 import ghidra.app.services.CodeViewerService
 import ghidra.app.services.DataTypeManagerService
 import ghidra.app.services.GoToService
@@ -297,7 +297,19 @@ class ClassTree(private val plugin: Plugin) :
                 }
             },
         )
-        addLocalAction(SetSymbolPrimaryAction())
+        // Ghidra's own SetSymbolPrimaryAction is 12.0's.
+        addLocalAction(
+            object : DockingAction("Set Class Member Primary", plugin.name) {
+                override fun actionPerformed(context: ActionContext) {
+                    val symbol = memberSymbols(context).single()
+                    val cmd = SetLabelPrimaryCmd(symbol.address, symbol.name, symbol.parentNamespace)
+                    if (!tool.execute(cmd, symbol.program)) Msg.showError(this, component, "Set Primary", cmd.statusMsg)
+                }
+            }.apply {
+                popupMenuData = MenuData(arrayOf("Set Primary"), "2")
+                popupWhen { memberSymbols(it).singleOrNull()?.isPrimary == false }
+            },
+        )
         addLocalAction(PinSymbolAction(plugin.name, "2"))
         addLocalAction(ClearPinSymbolAction(plugin.name, "2"))
     }

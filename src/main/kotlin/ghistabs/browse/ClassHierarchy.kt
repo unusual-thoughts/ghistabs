@@ -15,6 +15,7 @@ import ghistabs.importer.MemberAttrs.Companion.memberAttrs
 import ghistabs.isInjected
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.*
+import ghistabs.paramTypes
 import ghistabs.parse.Access
 import ghistabs.parse.VirtKind
 import ghistabs.parse.nameSegments
@@ -284,7 +285,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         val Function.params: String get() = (
             symtab.takeIf { signatureSource == SourceType.DEFAULT && parameterCount == 0 }
                 ?.getSymbols(entryPoint)?.firstNotNullOfOrNull { Demangler.of(it.name) as? DemangledFunction }
-                ?.parameters?.map { it.type }
+                ?.paramTypes
                 ?.filterNot { it.isVoid && it.pointerLevels == 0 && !it.isReference }
                 ?.map { it.signature }
                 ?: parameters.filterNot { it.isInjected || it.name == Gcc2.IN_CHARGE }.map { it.dataType.displayName }

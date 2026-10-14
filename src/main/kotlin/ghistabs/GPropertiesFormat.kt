@@ -144,7 +144,8 @@ object GPropertiesFormat {
         /** The map key this element is, when it is one. */
         private fun key(): String? = if (keyNext) names[index / 2].also { keyNext = false } else null
 
-        private fun missing() = SerializationException("No '$tag' in ${props.name}")
+        // Not props.name: 10.4's GProperties has no getName.
+        private fun missing() = SerializationException("No '$tag' in ${level?.serialName}")
 
         override fun decodeBoolean() = key()?.toBooleanStrict() ?: props.getBoolean(tag, false)
         override fun decodeByte() = key()?.toByte() ?: props.getByte(tag, 0)
