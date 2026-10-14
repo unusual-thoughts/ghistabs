@@ -304,12 +304,15 @@
     its arrow pointing up while each class expands into its bases and down once inverted;
     <B>Navigate on Incoming</B>, as in the Symbol Tree, selects the node for each location the tool
     moves to: the member there or the function the location is in, under the class that lists it,
-    else the class whose vtable or typeinfo is there. The filter field below the tree narrows it
+    else the class whose vtable or typeinfo is there; <B>Navigate on Outgoing</B>, on by default as
+    in the Symbol Tree, goes to each node selected. The filter field below the tree narrows it
     by name.</P>
 
-    <P>Double-click a member (or press Enter) to go to it. Double-click a class to open its struct
-    in the structure editor, or, for a class with no struct, to go to its vtable, else its
-    typeinfo. A class's popup menu offers <B>Edit class struct</B> and <B>Edit vtable struct</B>.</P>
+    <P>Double-click a member (or press Enter) to go to it, and a class to go to its vtable, else its
+    typeinfo. A class's popup menu offers <B>Edit class struct</B> and <B>Edit vtable struct</B>.
+    A member's offers the Symbol Tree's <B>Rename</B>, <B>Delete</B>, <B>Show References to</B>,
+    <B>Set Primary</B> and <B>Set Pinned</B>; the tool's own symbol actions, such as <B>Edit
+    Function</B>, act on the selected members and classes too.</P>
 
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
 

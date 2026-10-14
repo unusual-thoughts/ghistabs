@@ -181,6 +181,24 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         left.children.map { it.name } mustBe listOf("Diamond")
     }
 
+    /** What the window's action context hands the symbol actions: a member's symbol, a class's namespace's. */
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `each member and class finds its symbol again`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        val symtab = program.symbolTable
+        for (cls in hierarchy.classes) {
+            symtab.getSymbol(cls.id)?.name mustBe cls.name
+            for (m in cls.members) {
+                val sym = symtab.getSymbol(m.symbolId ?: fail("no symbol id for ${cls.qualifiedName}::${m.name}"))
+                    ?: fail("no symbol for ${cls.qualifiedName}::${m.name}")
+                (sym.name to sym.address.toString()) mustBe (m.name to m.address)
+                sym.parentNamespace.id mustBe cls.id
+            }
+        }
+    }
+
     @ParameterizedTest
     @MethodSource("hellos")
     fun `the hierarchy serializes and reads back equal`(fixture: String) {

@@ -65,6 +65,8 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         val attrs: MemberAttrs? = null,
         /** Which of its constructor's or destructor's variants it is: several when gcc aliased them. */
         val variants: List<StructorVariant> = emptyList(),
+        /** Its symbol's id, for the symbol actions on it. */
+        val symbolId: Long? = null,
     ) {
         val label: String get() = (if (isOverloaded && parameters != null) name + parameters else name) +
             variants.takeIf { it.isNotEmpty() }?.joinToString(", ", " [", "]") { it.label }.orEmpty()
@@ -247,13 +249,14 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                             attrs = program.memberAttrs(sym.address) ?: fn.derivedAttrs(virtuals),
                             variants = symtab.getSymbols(sym.address).mapNotNull { StructorVariant.of(it.name) }
                                 .distinct().sorted(),
+                            symbolId = sym.id,
                         )
                     }
 
                     SymbolType.LABEL -> sym.labelKind().let { kind ->
                         val attrs = program.memberAttrs(sym.address)
                             ?: MemberAttrs(virt = VirtKind.STATIC).takeIf { kind == MemberKind.LABEL }
-                        Member(sym.name, sym.address.toString(), kind, attrs = attrs)
+                        Member(sym.name, sym.address.toString(), kind, attrs = attrs, symbolId = sym.id)
                     }
 
                     else -> null

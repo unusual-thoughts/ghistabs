@@ -7,15 +7,26 @@ import docking.action.ToggleDockingAction
 import docking.action.ToolBarData
 import docking.widgets.tree.GTree
 import docking.widgets.tree.GTreeNode
+import docking.widgets.tree.support.GTreeSelectionEvent.EventOrigin
 import generic.theme.GIcon
+import ghidra.app.context.ProgramSymbolActionContext
+import ghidra.app.plugin.core.navigation.locationreferences.LocationReferencesService
+import ghidra.app.plugin.core.symboltree.actions.ClearPinSymbolAction
+import ghidra.app.plugin.core.symboltree.actions.PinSymbolAction
+import ghidra.app.plugin.core.symboltree.actions.SetSymbolPrimaryAction
+import ghidra.app.services.CodeViewerService
 import ghidra.app.services.DataTypeManagerService
 import ghidra.app.services.GoToService
+import ghidra.app.util.AddEditDialog
 import ghidra.framework.model.DomainObjectChangedEvent
 import ghidra.framework.model.DomainObjectListener
 import ghidra.framework.plugintool.ComponentProviderAdapter
 import ghidra.framework.plugintool.Plugin
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.Symbol
+import ghidra.program.model.symbol.SymbolType
+import ghidra.program.util.FunctionSignatureFieldLocation
 import ghidra.program.util.ProgramLocation
 import ghidra.util.HTMLUtilities
 import ghidra.util.HelpLocation
@@ -23,6 +34,7 @@ import ghidra.util.Msg
 import ghidra.util.task.SwingUpdateManager
 import ghistabs.importer.ClassHierarchyRecords.Companion.areClassesRecorded
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
+import ghistabs.runTransaction
 import resources.Icons
 import java.awt.BorderLayout
 import java.awt.event.KeyAdapter
@@ -39,7 +51,11 @@ import javax.swing.SwingUtilities
 /**
  * The docked Class Hierarchy window: [ClassHierarchyRootNode] over the current program, rebuilt off the
  * Swing thread when the program changes while the window shows. Double-click (or Enter) on a member
- * goes to it; on a class, opens its struct in the structure editor, else goes to its vtable or typeinfo.
+ * goes to it; on a class, to its vtable or typeinfo. With Navigate on Outgoing on, selecting does too.
+ *
+ * Its action context is the selected nodes' symbols (a member's, a class's namespace's), so the tool's
+ * symbol actions (Edit Function, …) work on them, and the Symbol Tree's own that suit a member are
+ * here: Rename, Delete, Show References to, Set Primary, Pin.
  */
 class ClassTree(private val plugin: Plugin) :
     ComponentProviderAdapter(plugin.tool, NAME, plugin.name),
@@ -67,6 +83,7 @@ class ClassTree(private val plugin: Plugin) :
     private var expandAll = false
     private var showEmpty = false
     private var navigateIncoming: ToggleDockingAction
+    private var navigateOutgoing: ToggleDockingAction
     private var lastLocation: ProgramLocation? = null
     private val builder = Executors.newSingleThreadExecutor {
         Thread(it, "Stabs class hierarchy").apply {
@@ -83,10 +100,19 @@ class ClassTree(private val plugin: Plugin) :
         helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
         addToToolbar()
         tool.addComponentProvider(this, false)
+        tree.addGTreeSelectionListener { e ->
+            // Not when Navigate on Incoming selected it: that's where the listing already is.
+            if (e.eventOrigin == EventOrigin.USER_GENERATED && navigateOutgoing.isSelected) openSelected()
+            contextChanged()
+        }
         tree.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
-                if (!e.isConsumed && SwingUtilities.isLeftMouseButton(e) && e.clickCount == 2) {
+                if (e.isConsumed || !SwingUtilities.isLeftMouseButton(e)) return
+                if (e.clickCount == 2) {
                     e.consume()
+                    openSelected()
+                } else if (navigateOutgoing.isSelected && tree.getNodeForLocation(e.x, e.y) === selectedNode) {
+                    // A click on the node already selected changes no selection, and goes there all the same.
                     openSelected()
                 }
             }
@@ -187,6 +213,20 @@ class ClassTree(private val plugin: Plugin) :
             }.also { navigateIncoming = it },
         )
         addLocalAction(
+            object : ToggleDockingAction("Navigate on Outgoing", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    if (isSelected) openSelected()
+                }
+            }.apply {
+                toolBarData = ToolBarData(Icons.NAVIGATE_ON_OUTGOING_EVENT_ICON, null)
+                description = HTMLUtilities.toHTML(
+                    "Toggle <b>On</b> means to go to the selected member\nor class in the program",
+                )
+                isSelected = true
+                helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+            }.also { navigateOutgoing = it },
+        )
+        addLocalAction(
             object : DockingAction("Edit class struct", plugin.name) {
                 override fun actionPerformed(context: ActionContext?) {
                     selectedClass?.structId?.let { openStruct(it) }
@@ -206,6 +246,78 @@ class ClassTree(private val plugin: Plugin) :
                 popupWhen { selectedClass?.vftableStructId != null }
             },
         )
+        addSymbolActions()
+    }
+
+    /**
+     * The Symbol Tree's actions on a member's symbol. Not on a class's: renaming or deleting its namespace
+     * would part it from its struct and the stabs record.
+     */
+    private fun addSymbolActions() {
+        val group = "1"
+        addLocalAction(
+            object : DockingAction("Rename Class Member", plugin.name) {
+                override fun actionPerformed(context: ActionContext) {
+                    val symbol = memberSymbols(context).single()
+                    AddEditDialog("Rename", tool).editLabel(symbol, symbol.program, this@ClassTree)
+                }
+            }.apply {
+                popupMenuData = MenuData(arrayOf("Rename"), group)
+                popupWhen { memberSymbols(it).size == 1 }
+            },
+        )
+        addLocalAction(
+            object : DockingAction("Delete Class Members", plugin.name) {
+                override fun actionPerformed(context: ActionContext) {
+                    val symbols = memberSymbols(context)
+                    symbols.first().program.runTransaction("Delete Symbol(s)") { symbols.forEach(Symbol::delete) }
+                }
+            }.apply {
+                popupMenuData = MenuData(arrayOf("Delete"), Icons.DELETE_ICON, group)
+                popupWhen { memberSymbols(it).isNotEmpty() }
+            },
+        )
+        addLocalAction(
+            object : DockingAction("Show References to Class Member", plugin.name) {
+                override fun actionPerformed(context: ActionContext) {
+                    val symbol = memberSymbols(context).single()
+                    // A function's, at its signature, as the Symbol Tree has them: else only its entry's.
+                    val at = if (symbol.symbolType == SymbolType.FUNCTION) {
+                        FunctionSignatureFieldLocation(symbol.program, symbol.address)
+                    } else {
+                        symbol.programLocation
+                    }
+                    tool.getService(LocationReferencesService::class.java)
+                        ?.showReferencesToLocation(at, tool.getService(CodeViewerService::class.java)?.navigatable)
+                }
+            }.apply {
+                popupMenuData = MenuData(arrayOf("Show References to"), "2")
+                popupWhen {
+                    memberSymbols(it).size == 1 && tool.getService(LocationReferencesService::class.java) != null
+                }
+            },
+        )
+        addLocalAction(SetSymbolPrimaryAction())
+        addLocalAction(PinSymbolAction(plugin.name, "2"))
+        addLocalAction(ClearPinSymbolAction(plugin.name, "2"))
+    }
+
+    /** The context's symbols, when they are all members': none else. */
+    private fun memberSymbols(context: ActionContext): List<Symbol> =
+        (context as? ProgramSymbolActionContext)?.symbols?.toList().orEmpty()
+            .takeIf { all -> all.all { it.symbolType == SymbolType.FUNCTION || it.symbolType == SymbolType.LABEL } }
+            .orEmpty()
+
+    override fun getActionContext(event: MouseEvent?): ActionContext {
+        val p = program ?: return super.getActionContext(event)
+        val symbols = tree.selectionPaths.orEmpty().mapNotNull { path ->
+            when (val node = path.lastPathComponent) {
+                is MemberNode -> node.member.symbolId?.let(p.symbolTable::getSymbol)
+                is ClassNode -> node.info?.id?.let(p.symbolTable::getSymbol)
+                else -> null
+            }
+        }
+        return ProgramSymbolActionContext(this, p, symbols.distinct(), tree)
     }
 
     override fun getComponent(): JComponent = panel
@@ -279,18 +391,24 @@ class ClassTree(private val plugin: Plugin) :
         val addr = loc.address ?: return
         val root = tree.modelRoot as? ClassHierarchyRootNode ?: return
         val at = listOfNotNull(addr, p.functionManager.getFunctionContaining(addr)?.entryPoint).map(Address::toString)
+        // Already there: a click on a class goes to its vtable, which mustn't then select the vtable.
+        if (selectedNode?.let(::addressOf) in at) return
         root.nodeAt(at.distinct())?.let(tree::setSelectedNode)
     }
 
     private fun Program.goTo(at: String?) = at?.let(addressFactory::getAddress)
         ?.let { tool.getService(GoToService::class.java)?.goTo(it) }
 
-    private fun openSelected() = program?.apply {
-        when (val selected = tree.selectionPath?.lastPathComponent) {
-            is MemberNode -> goTo(selected.member.address)
-            is ClassNode -> selected.info?.let { info -> goTo(info.address) }
-        }
+    private val selectedNode get() = tree.selectionPath?.lastPathComponent as? GTreeNode
+
+    /** Where going to [node] goes. */
+    private fun addressOf(node: GTreeNode): String? = when (node) {
+        is MemberNode -> node.member.address
+        is ClassNode -> node.info?.address
+        else -> null
     }
+
+    private fun openSelected() = program?.apply { selectedNode?.let(::addressOf)?.let { goTo(it) } }
 
     private val selectedClass get() = (tree.selectionPath?.lastPathComponent as? ClassNode)?.info
 
