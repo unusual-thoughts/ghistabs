@@ -15,8 +15,11 @@ import ghistabs.parse.leafName
  * otherwise own it. See [VfptrModel] for what the choice costs a virtual call. [ClassLayout]'s, which
  * runs it on each class in its turn.
  */
-internal class VfptrPlacement(private val registry: DataTypeRegistry, private val model: VfptrModel) :
-    DiagnosticSink by registry {
+internal class VfptrPlacement(
+    private val registry: DataTypeRegistry,
+    private val model: VfptrModel,
+    private val layoutsOf: (Structure) -> List<Structure>,
+) : DiagnosticSink by registry {
     private val dtm = registry.dtm
 
     /**
@@ -147,6 +150,16 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
         val baseOff = baseComp.offset
         val tailFrom = vptrInBase + ptr
 
+        // The base's own fields first, so the runs below hold them by reference rather than a copy.
+        val layouts = layoutsOf(baseDt)
+        listOfNotNull(split.head, split.tail)
+            .mapNotNull { ownSpan(baseDt, it) }
+            .forEachIndexed { i, own ->
+                val name = if (i == 0) ClassNaming.FIELDS else "${ClassNaming.FIELDS}_tail"
+                val run = baseFieldsRun(baseDt, own.from, own.until) ?: return@forEachIndexed
+                layouts.forEach { embed(it, own, run, name) }
+            }
+
         val head = split.head?.let { baseFieldsRun(baseDt, it.from, it.until) }
         val tail = split.tail?.let { baseFieldsRun(baseDt, it.from, it.until) }
         if (head == null && tail == null) return false
@@ -165,9 +178,48 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
     }
 
     /**
+     * The span of [run] holding [baseDt]'s own data members: everything in it but `{vfptr}` and the
+     * base subobjects, which stay where the class's inheritance is read off. The whole run when it
+     * holds no base subobject, so the base and its deriving classes hold one struct. Null when there
+     * are no own members, or when a base subobject sits between two of them and no one struct can
+     * hold them alone.
+     */
+    private fun ownSpan(baseDt: Structure, run: Run): Run? {
+        val inRun = baseDt.definedComponents.filter(run::contains)
+        val own = inRun.filterNot { it.isBaseField() || it.fieldName == ClassUtils.VFPTR }.ifEmpty { return null }
+        if (inRun.none { it.isBaseField() }) return run
+        val span = Run(own.minOf { it.offset }, own.maxOf { it.offset + it.length })
+        return span.takeUnless { inRun.any { it.isBaseField() && span.overlaps(it) } }
+    }
+
+    /**
+     * Put [run] in [layout] over [span], in place of the fields it copies: the base then reads its own
+     * fields through the struct every deriving class embeds, so an edit to one is an edit to all of
+     * them and they cannot drift. A span whose edge falls inside a component of [layout] is left alone,
+     * since embedding over it would drop that component.
+     */
+    private fun embed(layout: Structure, span: Run, run: Structure, name: String) {
+        if (layout.getComponentAt(span.from)?.dataType?.dataTypePath == run.dataTypePath) return
+        val (inside, crossing) = layout.definedComponents.filter(span::overlaps).partition(span::contains)
+        if (crossing.isNotEmpty()) {
+            degradation(
+                "fields-run-unshared",
+                layout.name,
+                "${run.name}: ${crossing.first().fieldName} crosses its edge",
+            )
+            return
+        }
+        runCatching {
+            inside.forEach { layout.clearAtOffset(it.offset) }
+            layout.replaceAtOffset(span.from, run, run.length, name, "own fields, shared with deriving classes")
+        }.onFailure { degradation("fields-run-unshared", layout.name, "${run.name}: ${it.message}") }
+    }
+
+    /**
      * One contiguous run of [baseDt]'s bytes, `[from, until)`, as a struct: the base subobject's
      * fields with the vptr word taken out. Null when empty. Shared by every class deriving from
-     * that base, so one extra type per polymorphic class rather than one per inheritance edge.
+     * that base, so one extra type per polymorphic class rather than one per inheritance edge. A run
+     * that is exactly the base's own fields is also the struct the base holds them in ([embed]).
      *
      * The bounds are in the name: the registry caches on (category, name) alone, so two runs of one
      * base differing only in extent would collide.
@@ -248,6 +300,9 @@ internal fun Structure.vfptrOffsetOfBase(base: String): Int? = definedComponents
 /** A half-open byte range `[from, until)` of a base subobject. */
 data class Run(val from: Int, val until: Int) {
     val length get() = until - from
+
+    fun contains(c: DataTypeComponent) = c.offset >= from && c.offset + c.length <= until
+    fun overlaps(c: DataTypeComponent) = c.offset < until && c.offset + c.length > from
 }
 
 /** What a vptr leaves of a base subobject: the fields before it and the fields after it. */

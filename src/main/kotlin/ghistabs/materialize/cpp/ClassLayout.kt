@@ -248,21 +248,28 @@ fun virtualBaseOffsets(nvEnd: Int, nvAlign: Int, vbases: List<Pair<Int, Int>>, c
  * laid once, in the complete object, after the non-virtual data, and a class embedded as a base
  * contributes only its non-virtual part. With a [VfptrModel], a polymorphic class then gets its `{vfptr}`.
  *
- * A class is final once its turn is over: nothing later writes into a base, so the non-virtual part a
- * derived class embeds is copied from a finished class. Runs after typedef shortening: the vftables,
+ * A class is final once its turn is over, so the non-virtual part a derived class embeds is copied from
+ * a finished class. The one later write into a base is SPLIT_BASE's: it swaps the base's fields for
+ * the `_fields_` structs it cut from them, the same bytes. Runs after typedef shortening: the vftables,
  * self-bases and `_fields_` structs it creates are looked up again by name.
  */
-internal fun DataTypeRegistry.layClasses(vfptrModel: VfptrModel?) =
-    ClassLayout(this, vfptrModel?.let { VfptrPlacement(this, it) }).layAll()
+internal fun DataTypeRegistry.layClasses(vfptrModel: VfptrModel?) = ClassLayout(this, vfptrModel).layAll()
 
-private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlacement?) : DiagnosticSink by registry {
+private class ClassLayout(val registry: DataTypeRegistry, vfptrModel: VfptrModel?) : DiagnosticSink by registry {
     private val types = registry.types
+    private val vfptrs = vfptrModel?.let { VfptrPlacement(registry, it, ::layoutsOf) }
 
     /** The non-virtual size of each class laid here with virtual bases. */
     private val nonVirtualSizes = mutableMapOf<DataTypePath, Int>()
 
     /** Each embedded class's non-virtual part, as a struct of its own. */
     private val selfBases = mutableMapOf<DataTypePath, Structure>()
+
+    /** The class each of [selfBases] copies, by the self-base's path. */
+    private val selfBaseOwners = mutableMapOf<DataTypePath, Structure>()
+
+    /** [base] and, when it is a self-base, the class it copies: every struct that holds its fields. */
+    private fun layoutsOf(base: Structure) = listOfNotNull(base, selfBaseOwners[base.dataTypePath])
 
     fun layAll() = buildSet {
         for (located in registry.classesBasesFirst()) {
@@ -392,7 +399,10 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
             StructureDataType(path.categoryPath, path.dataTypeName, size, registry.dtm).apply {
                 description = "${cls.name} as a base subobject"
             }
-        }.also { copyNonVirtualPart(cls, it) }
+        }.also {
+            copyNonVirtualPart(cls, it)
+            selfBaseOwners[it.dataTypePath] = cls
+        }
     }
 
     private fun copyNonVirtualPart(from: Structure, into: Structure) {
