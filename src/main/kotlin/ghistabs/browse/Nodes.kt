@@ -176,8 +176,8 @@ class ClassNode private constructor(
         info?.structName?.takeIf { it != info.name }?.let { append("<br>shortened: ").append(escape(it)) }
         val origin = when (info?.origin) {
             Origin.STABS -> "bases from the stabs"
-            Origin.SWEPT_RTTI -> "no stabs: vtable swept, bases from its typeinfo"
-            Origin.SWEPT -> "no stabs: vtable swept, bases unknown"
+            Origin.SWEPT_RTTI -> "no stabs: bases from its typeinfo"
+            Origin.SWEPT -> "no stabs: bases unknown"
             null -> "no class built for it: a plain struct, or only declared"
         }
         append("<br>").append(origin)
@@ -192,9 +192,12 @@ class ClassNode private constructor(
         (if (inverted) info?.let(hierarchy::derivedOf).isNullOrEmpty() else info?.bases.isNullOrEmpty()) &&
             membersOf().isEmpty() && nested.isEmpty()
 
-    // Two bases of one class can share a name (a direct and an indirect `Base`); never merge them.
-    override fun equals(other: Any?) = this === other
-    override fun hashCode() = System.identityHashCode(this)
+    // Two bases of one class can share a name (a direct and an indirect `Base`); never merge them. But
+    // a node is its filtered clone, which the tree finds again by equals to keep it selected once the
+    // filter is cleared.
+    private val identity = Any()
+    override fun equals(other: Any?) = other is ClassNode && other.identity === identity
+    override fun hashCode() = identity.hashCode()
 }
 
 /**
@@ -222,9 +225,10 @@ class MemberNode(val member: Member) : GTreeNode() {
 
     override fun isLeaf() = true
 
-    // Overloads share a name.
-    override fun equals(other: Any?) = this === other
-    override fun hashCode() = System.identityHashCode(this)
+    // Overloads share a name: equal only to its own filtered clone, as a [ClassNode].
+    private val identity = Any()
+    override fun equals(other: Any?) = other is MemberNode && other.identity === identity
+    override fun hashCode() = identity.hashCode()
 }
 
 // The Symbol Tree's own icons, but for the ABI's objects: a table for a vtable, an info sign for the rest.

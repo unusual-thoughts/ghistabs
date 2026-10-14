@@ -32,7 +32,7 @@ import ghistabs.parse.StabReader
     description = "Adds 'Tools > Stabs > Re-import', which clears the 'Stabs Imported' flag and " +
         "re-runs auto-analysis so the StabsAnalyzer executes again, and a 'Class Hierarchy' window: " +
         "each C++ class under its namespace, expanding into its direct bases (from the stabs, or " +
-        "from the typeinfo of a class only the vtable sweep found).",
+        "from the typeinfo of a class the stabs don't describe).",
     servicesRequired = [GoToService::class],
 )
 class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {

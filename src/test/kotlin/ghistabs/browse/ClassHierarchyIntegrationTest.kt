@@ -1,7 +1,9 @@
 package ghistabs.browse
 
 import docking.widgets.tree.GTreeNode
+import docking.widgets.tree.support.GTreeFilter
 import ghidra.program.model.symbol.SourceType
+import ghidra.util.task.TaskMonitor
 import ghistabs.browse.ClassHierarchy.MemberKind
 import ghistabs.browse.ClassHierarchy.Origin
 import ghistabs.importer.MemberAttrs
@@ -231,6 +233,26 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         rebuilt.children.map { it.name }.let { names ->
             ("label" in names).mustBeTrue("$names")
             ("name" in names).mustBeFalse()
+        }
+    }
+
+    /** What keeps a selection through the filter: the tree finds a filtered node again by equals. */
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a node equals its filtered clone and nothing else`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        val root = ClassHierarchyRootNode(program.name, hierarchy).apply { loadAll(TaskMonitor.DUMMY) }
+        val all = object : GTreeFilter {
+            override fun acceptsNode(node: GTreeNode) = true
+            override fun showFilterMatches() = true
+        }
+        val filtered = root.filter(all, TaskMonitor.DUMMY)
+        val left = steps(root.children.single { it.name == "Diamond" }.children.first())
+        val member = steps(root.children.single { it.name == "Circle" }.children.first { it is MemberNode })
+        for (path in listOf(left, member)) {
+            filtered.find(path) mustBe root.find(path)
+            (ClassHierarchyRootNode(program.name, hierarchy).find(path) == root.find(path)).mustBeFalse()
         }
     }
 

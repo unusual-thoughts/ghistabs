@@ -371,12 +371,12 @@ class ClassTree(private val plugin: Plugin) :
         reshow()
         val counts = hierarchy.classes.groupingBy { it.origin }.eachCount()
         val stabs = counts[ClassHierarchy.Origin.STABS] ?: 0
-        val swept = hierarchy.classes.size - stabs
+        val others = hierarchy.classes.size - stabs
         status.text = buildString {
-            append("$stabs from stabs, $swept swept")
+            append("$stabs from stabs, $others without stabs")
             val empty = hierarchy.classes.count(hierarchy::isEmpty)
             if (empty > 0) append(", $empty empty")
-            // Imported before the record existed: the stabs classes read as swept until a re-import.
+            // Imported before the record existed: the stabs classes count as without stabs until a re-import.
             if (p.isStabsDone && !p.areClassesRecorded()) {
                 append(" (no stabs record: Tools > Stabs > Re-import to add it)")
             }

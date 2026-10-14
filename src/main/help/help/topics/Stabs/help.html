@@ -249,8 +249,8 @@
     every class that derives from it.</P>
 
     <P>The icon's colour gives a class's kind, as upstream: red for an abstract class, blue for a
-    virtual base, purple for both, yellow for a nested class, and grey for a class only the vtable
-    sweep found (when it is none of the others). A member's icon and text are coloured by what is
+    virtual base, purple for both, yellow for a nested class, and grey for a class the stabs don't
+    describe (when it is none of the others). A member's icon and text are coloured by what is
     known of it: magenta for a plain member, blue for a virtual one, green for a static one,
     darker when private and paler when protected, with a <CODE>c</CODE> or <CODE>v</CODE> badge for
     a <CODE>const</CODE> or <CODE>volatile</CODE> member function. Grey means nothing records its
@@ -266,8 +266,8 @@
     <P>A class with nothing to show (no member, vtable, typeinfo, base or derived class) is hidden
     by default: g++ makes a class of every struct a C++ file sees, C headers' included, and of the
     SGI STL's tag types (<CODE>tm</CODE>, <CODE>__type_traits&lt;bool&gt;</CODE>), and emits none of
-    their implicit members. The status line counts the classes from stabs, the swept ones and the
-    hidden empty ones.</P>
+    their implicit members. The status line counts the classes from stabs, the ones without
+    stabs and the hidden empty ones.</P>
 
     <H3>Where it comes from</H3>
 
@@ -278,7 +278,7 @@
       this window existed shows its stabs classes only after
       <A href="#Stabs_Reimport">Re-import</A>; the status line says so.</LI>
 
-      <LI><B>Classes the vtable sweep found.</B> A class with a vtable or typeinfo and no stabs
+      <LI><B>Classes without stabs.</B> A class with a vtable or typeinfo and no stabs
       (libstdc++ and libsupc++ classes, or a binary with no stabs at all) takes its bases from its
       Itanium typeinfo where the binary has one, and is a root otherwise. A base the program built
       no class for, such as a plain struct, is a leaf.</LI>
@@ -378,8 +378,8 @@
           Ghidra's RTTI scripts use (<CODE>vftable</CODE>, <CODE>internal_vftable</CODE>,
           <CODE>vftable_for_&lt;Base&gt;</CODE>, <CODE>construction-vftable</CODE>), so virtual
           calls resolve to named slots even with no stabs. On a program with stabs the importer
-          runs this sweep itself once its class pass has laid the classes the stabs describe, and
-          the sweep leaves those alone.</TD>
+          does this itself once it has laid the classes the stabs describe, and leaves those
+          alone.</TD>
         </TR>
 
         <TR>
