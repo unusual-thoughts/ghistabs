@@ -156,12 +156,12 @@ internal class VfptrPlacement(
             .mapNotNull { ownSpan(baseDt, it) }
             .forEachIndexed { i, own ->
                 val name = if (i == 0) ClassNaming.FIELDS else "${ClassNaming.FIELDS}_tail"
-                val run = baseFieldsRun(baseDt, own.from, own.until) ?: return@forEachIndexed
+                val run = baseFieldsRun(baseDt, own) ?: return@forEachIndexed
                 layouts.forEach { embed(it, own, run, name) }
             }
 
-        val head = split.head?.let { baseFieldsRun(baseDt, it.from, it.until) }
-        val tail = split.tail?.let { baseFieldsRun(baseDt, it.from, it.until) }
+        val head = split.head?.let { baseFieldsRun(baseDt, it) }
+        val tail = split.tail?.let { baseFieldsRun(baseDt, it) }
         if (head == null && tail == null) return false
 
         val vfptr = ownVfptr(classPath)
@@ -184,11 +184,11 @@ internal class VfptrPlacement(
      * are no own members, or when a base subobject sits between two of them and no one struct can
      * hold them alone.
      */
-    private fun ownSpan(baseDt: Structure, run: Run): Run? {
-        val inRun = baseDt.definedComponents.filter(run::contains)
+    private fun ownSpan(baseDt: Structure, run: IntRange): IntRange? {
+        val inRun = baseDt.definedComponents.filter(run::holds)
         val own = inRun.filterNot { it.isBaseField() || it.fieldName == ClassUtils.VFPTR }.ifEmpty { return null }
         if (inRun.none { it.isBaseField() }) return run
-        val span = Run(own.minOf { it.offset }, own.maxOf { it.offset + it.length })
+        val span = own.minOf { it.offset }..<own.maxOf { it.offset + it.length }
         return span.takeUnless { inRun.any { it.isBaseField() && span.overlaps(it) } }
     }
 
@@ -198,9 +198,9 @@ internal class VfptrPlacement(
      * them and they cannot drift. A span whose edge falls inside a component of [layout] is left alone,
      * since embedding over it would drop that component.
      */
-    private fun embed(layout: Structure, span: Run, run: Structure, name: String) {
-        if (layout.getComponentAt(span.from)?.dataType?.dataTypePath == run.dataTypePath) return
-        val (inside, crossing) = layout.definedComponents.filter(span::overlaps).partition(span::contains)
+    private fun embed(layout: Structure, span: IntRange, run: Structure, name: String) {
+        if (layout.getComponentAt(span.first)?.dataType?.dataTypePath == run.dataTypePath) return
+        val (inside, crossing) = layout.definedComponents.filter(span::overlaps).partition(span::holds)
         if (crossing.isNotEmpty()) {
             degradation(
                 "fields-run-unshared",
@@ -211,12 +211,12 @@ internal class VfptrPlacement(
         }
         runCatching {
             inside.forEach { layout.clearAtOffset(it.offset) }
-            layout.replaceAtOffset(span.from, run, run.length, name, "own fields, shared with deriving classes")
+            layout.replaceAtOffset(span.first, run, run.length, name, "own fields, shared with deriving classes")
         }.onFailure { degradation("fields-run-unshared", layout.name, "${run.name}: ${it.message}") }
     }
 
     /**
-     * One contiguous run of [baseDt]'s bytes, `[from, until)`, as a struct: the base subobject's
+     * One contiguous run of [baseDt]'s bytes, [bytes], as a struct: the base subobject's
      * fields with the vptr word taken out. Null when empty. Shared by every class deriving from
      * that base, so one extra type per polymorphic class rather than one per inheritance edge. A run
      * that is exactly the base's own fields is also the struct the base holds them in ([embed]).
@@ -224,15 +224,17 @@ internal class VfptrPlacement(
      * The bounds are in the name: the registry caches on (category, name) alone, so two runs of one
      * base differing only in extent would collide.
      */
-    private fun baseFieldsRun(baseDt: Structure, from: Int, until: Int): Structure? {
-        if (until <= from) return null
+    private fun baseFieldsRun(baseDt: Structure, bytes: IntRange): Structure? {
+        if (bytes.isEmpty()) return null
+        val from = bytes.first
+        val until = bytes.endExclusive
         val name = "${baseDt.name}_fields_${from}_$until"
         return registry.getOrRegister<Structure>(baseDt.categoryPath.at(name)) {
             StructureDataType(baseDt.categoryPath, name, until - from, dtm).apply {
                 description = "${baseDt.name} as a base subobject (+$from..$until): its fields " +
                     "without the vptr the deriving class now owns"
                 baseDt.definedComponents
-                    .filter { it.offset >= from && it.offset + it.length <= until }
+                    .filter(bytes::holds)
                     .forEach {
                         runCatching {
                             replaceAtOffset(it.offset - from, it.dataType, it.length, it.fieldName, it.comment)
@@ -297,16 +299,14 @@ internal fun Structure.vfptrOffsetOfBase(base: String): Int? = definedComponents
     }
 }
 
-/** A half-open byte range `[from, until)` of a base subobject. */
-data class Run(val from: Int, val until: Int) {
-    val length get() = until - from
+/** Whether [c] lies wholly within these bytes. */
+private fun IntRange.holds(c: DataTypeComponent) = c.offset >= first && c.offset + c.length <= endExclusive
 
-    fun contains(c: DataTypeComponent) = c.offset >= from && c.offset + c.length <= until
-    fun overlaps(c: DataTypeComponent) = c.offset < until && c.offset + c.length > from
-}
+/** Whether [c] shares a byte with these. */
+private fun IntRange.overlaps(c: DataTypeComponent) = c.offset < endExclusive && c.offset + c.length > first
 
 /** What a vptr leaves of a base subobject: the fields before it and the fields after it. */
-data class BaseSplit(val head: Run?, val tail: Run?)
+data class BaseSplit(val head: IntRange?, val tail: IntRange?)
 
 /**
  * The runs a vptr at [vptrInBase] leaves of a [baseLength]-byte base. Null when the pointer does not
@@ -318,8 +318,8 @@ data class BaseSplit(val head: Run?, val tail: Run?)
  */
 fun splitAround(baseLength: Int, vptrInBase: Int, ptrSize: Int): BaseSplit? {
     if (vptrInBase < 0 || vptrInBase + ptrSize > baseLength) return null
-    val head = Run(0, vptrInBase).takeIf { it.length > 0 }
-    val tail = Run(vptrInBase + ptrSize, baseLength).takeIf { it.length > 0 }
+    val head = (0..<vptrInBase).takeUnless { it.isEmpty() }
+    val tail = (vptrInBase + ptrSize..<baseLength).takeUnless { it.isEmpty() }
     return if (head == null && tail == null) null else BaseSplit(head, tail)
 }
 
