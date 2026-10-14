@@ -229,7 +229,7 @@ internal class VfptrPlacement(
     private fun baseFieldsRun(baseDt: Structure, bytes: IntRange): Structure? {
         if (bytes.isEmpty()) return null
         val from = bytes.first
-        val until = bytes.endExclusive
+        val until = bytes.last + 1
         val name = "${baseDt.name}_fields_${from}_$until"
         return registry.getOrRegister<Structure>(baseDt.categoryPath.at(name)) {
             StructureDataType(baseDt.categoryPath, name, until - from, dtm).apply {
@@ -302,10 +302,10 @@ internal fun Structure.vfptrOffsetOfBase(base: String): Int? = definedComponents
 }
 
 /** Whether [c] lies wholly within these bytes. */
-private fun IntRange.holds(c: DataTypeComponent) = c.offset >= first && c.offset + c.length <= endExclusive
+private fun IntRange.holds(c: DataTypeComponent) = c.offset >= first && c.offset + c.length <= last + 1
 
 /** Whether [c] shares a byte with these. */
-private fun IntRange.overlaps(c: DataTypeComponent) = c.offset < endExclusive && c.offset + c.length > first
+private fun IntRange.overlaps(c: DataTypeComponent) = c.offset <= last && c.offset + c.length > first
 
 /** What a vptr leaves of a base subobject: the fields before it and the fields after it. */
 data class BaseSplit(val head: IntRange?, val tail: IntRange?)
