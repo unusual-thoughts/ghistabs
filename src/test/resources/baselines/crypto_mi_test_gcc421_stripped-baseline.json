@@ -80,6 +80,10 @@
             "min": 140,
             "max": 140
         },
+        "demangler-reverse-demangle-match": {
+            "min": 61,
+            "max": 61
+        },
         "demangler-shortened-name-match": {
             "min": 17,
             "max": 17
@@ -1098,6 +1102,10 @@
             "min": 3,
             "max": 3
         },
+        "replaced-demangler": {
+            "min": 61,
+            "max": 61
+        },
         "scope-from-twin": {
             "min": 3802,
             "max": 3802
@@ -1168,6 +1176,10 @@
         "typedef-shorten": {
             "min": 1,
             "max": 1
+        },
+        "typedef-shorten-rehomed": {
+            "min": 535,
+            "max": 535
         },
         "unresolved-symbol": {
             "min": 98,
