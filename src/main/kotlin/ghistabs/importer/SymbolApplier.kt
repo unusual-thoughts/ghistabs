@@ -13,15 +13,12 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
-import ghistabs.Demangler
+import ghistabs.*
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
-import ghistabs.forceCreateData
-import ghistabs.formals
-import ghistabs.fullName
 import ghistabs.harvest.*
-import ghistabs.isVarArgs
+import ghistabs.importer.MemberAttrs.Companion.writeMember
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.cpp.abi.Itanium.isInlineStdMember
@@ -601,7 +598,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             val className = located.statedClassPath(registry.types)?.qualifiedName ?: located.className
             for (m in located.classBody.methods) {
                 val addr = abi.physnameCandidates(m, className).firstNotNullOfOrNull(ctx.resolver::resolve)
-                if (addr != null && seen.add(addr)) ClassHierarchyRecord.writeMember(ctx.program, addr, MemberAttrs(m))
+                if (addr != null && seen.add(addr)) ctx.program.writeMember(addr, MemberAttrs(m))
             }
         }
         return seen.size
@@ -633,7 +630,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 }
                 // Names it `Class::member` when the demangler hasn't already; typed below regardless.
                 ensureStabLabel(addr, mangled)
-                ClassHierarchyRecord.writeMember(ctx.program, addr, MemberAttrs(field))
+                ctx.program.writeMember(addr, MemberAttrs(field))
                 try {
                     ctx.program.forceCreateData(addr, dt) { debug("code-cleared-for-data", mangled, address = addr) }
                     applied++

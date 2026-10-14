@@ -13,28 +13,22 @@ import ghistabs.parse.TypeDecl
 import ghistabs.parse.VirtKind
 import kotlinx.serialization.Serializable
 
-/**
- * What the stabs say of classes and their members that nothing else in the program keeps, recorded for
- * the Class Hierarchy window ([ghistabs.browse.ClassHierarchy]), which runs long after the stabs are
- * gone from memory. Ghidra stores, versions and undoes both:
- *
- * - [MEMBERS]: a user property map of each member function's and static data member's [MemberAttrs], at
- *   its address.
- * - [CLASSES]: a program option ([ClassRecords]) of each class's struct and direct bases ([Entry]), by
- *   the namespace id of the [GhidraClass] the class pass built for it. A class struct holds only the base
- *   subobjects it could lay (an empty base takes no bytes, a virtual one sits wherever the most-derived
- *   class puts it), and its description names each base by its leaf, which five `…::Base` classes on
- *   crypto_mi share. The struct goes by id: typedef shortening may rename it, and a class the CUs define
- *   differently is filed under a CU's category (`/dll.cpp/multi/ECP`), so neither is found by the
- *   class's name and scope. A base is named by namespace id too: the very class built for it, whatever
- *   its name spells.
- */
-object ClassHierarchyRecord {
-    /** The program options category, so the record doesn't crowd Program Information. */
-    const val CATEGORY = "Stabs"
-    const val CLASSES = "Classes"
-    const val MEMBERS = "Stabs Member Attributes"
+// What the stabs say of classes and their members that nothing else in the program keeps, recorded for
+// the Class Hierarchy window ([ghistabs.browse.ClassHierarchy]), which runs long after the stabs are
+// gone from memory.
 
+/**
+ * A map of each class's struct and direct bases ([Entry]) stored to program option [CLASSES], by
+ * the namespace id of the [GhidraClass] the class pass built for it. A class struct holds only the base
+ * subobjects it could lay (an empty base takes no bytes, a virtual one sits wherever the most-derived
+ * class puts it), and its description names each base by its leaf, which five `…::Base` classes on
+ * crypto_mi share. The struct goes by id: typedef shortening may rename it, and a class the CUs define
+ * differently is filed under a CU's category (`/dll.cpp/multi/ECP`), so neither is found by the
+ * class's name and scope. A base is named by namespace id too: the very class built for it, whatever
+ * its name spells. Laid out in its [GProperties] by [GPropertiesFormat].
+ */
+@Serializable
+data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : CustomOption {
     /** A direct base: the class built for it ([namespaceId]), or only its [name] when none was. */
     @Serializable
     data class Base(val namespaceId: Long?, val name: String?, val isVirtual: Boolean, val access: Access)
@@ -43,24 +37,27 @@ object ClassHierarchyRecord {
     @Serializable
     data class Entry(val structId: Long?, val bases: List<Base>)
 
-    /** Replaces every class's entry with [record]'s, by namespace id. */
-    fun write(program: Program, record: Map<Long, Entry>) =
-        program.getOptions(CATEGORY).setCustomOption(CLASSES, ClassRecords(record))
-
-    /** Null when no stabs import recorded them: a program imported before the record existed, or with none. */
-    fun read(program: Program): Map<Long, Entry>? =
-        (program.getOptions(CATEGORY).getCustomOption(CLASSES, null) as? ClassRecords)?.classes
-
-    fun isRecorded(program: Program) = program.getOptions(CATEGORY).contains(CLASSES)
-
-    /** On the code unit at [at], which creates [MEMBERS] the first time. None there (mid-instruction): not kept. */
-    fun writeMember(program: Program, at: Address, attrs: MemberAttrs) {
-        program.listing.getCodeUnitAt(at)?.setProperty(MEMBERS, attrs)
+    override fun readState(properties: GProperties) {
+        classes = GPropertiesFormat.decode<ClassHierarchyRecords>(properties).classes
     }
 
-    /** The attributes the stabs gave the member at an address, if any. */
-    fun memberAttrs(program: Program): (Address) -> MemberAttrs? =
-        { at -> program.listing.getCodeUnitAt(at)?.getObjectProperty(MEMBERS) as? MemberAttrs }
+    override fun writeState(properties: GProperties) = GPropertiesFormat.encode(this, properties)
+
+    companion object {
+        /** The program options category, so the record doesn't crowd Program Information. */
+        const val CATEGORY = "Stabs"
+        const val CLASSES = "Classes"
+
+        /** Replaces every class's entry with [record]'s, by namespace id. */
+        fun Program.writeClassRecord(record: Map<Long, Entry>) =
+            getOptions(CATEGORY).setCustomOption(CLASSES, ClassHierarchyRecords(record))
+
+        /** Null when no stabs import recorded them: a program imported before the record existed, or with none. */
+        fun Program.readClassRecord(): Map<Long, Entry>? =
+            (getOptions(CATEGORY).getCustomOption(CLASSES, null) as? ClassHierarchyRecords)?.classes
+
+        fun Program.areClassesRecorded() = getOptions(CATEGORY).contains(CLASSES)
+    }
 }
 
 /**
@@ -101,23 +98,17 @@ data class MemberAttrs(
     override fun isUpgradeable(oldSchemaVersion: Int) = false
     override fun upgrade(oldObjStorage: ObjectStorage, oldSchemaVersion: Int, currentObjStorage: ObjectStorage) = false
     override fun isPrivate() = false
-}
+    companion object {
+        const val MEMBERS = "Stabs Member Attributes"
 
-/**
- * Every class's [ClassHierarchyRecord.Entry], by namespace id, as one custom program option. Laid out in
- * its [GProperties] by [GPropertiesFormat].
- */
-@Serializable
-class ClassRecords(var classes: Map<Long, ClassHierarchyRecord.Entry> = emptyMap()) : CustomOption {
-    override fun readState(properties: GProperties) {
-        classes = GPropertiesFormat.decode<ClassRecords>(properties).classes
+        /** On the code unit at [at], which creates [MEMBERS] the first time. None there (mid-instruction): not kept. */
+        fun Program.writeMember(at: Address, attrs: MemberAttrs) =
+            listing.getCodeUnitAt(at)?.setProperty(MEMBERS, attrs)
+
+        /** The attributes the stabs gave the member at an address, if any. */
+        fun Program.memberAttrs(at: Address): MemberAttrs? =
+            listing.getCodeUnitAt(at)?.getObjectProperty(MEMBERS) as? MemberAttrs
     }
-
-    override fun writeState(properties: GProperties) = GPropertiesFormat.encode(this, properties)
-
-    override fun equals(other: Any?) = other is ClassRecords && other.classes == classes
-    override fun hashCode() = classes.hashCode()
-    override fun toString() = "${classes.size} classes"
 }
 
 private val INT = Int::class.javaObjectType

@@ -19,9 +19,9 @@ class ClassHierarchyRecordTest {
     }
 
     /** Through the XML a custom program option is stored as. */
-    private fun ClassRecords.roundTrip(): ClassRecords {
+    private fun ClassHierarchyRecords.roundTrip(): ClassHierarchyRecords {
         val props = GProperties("test").also(::writeState)
-        return ClassRecords().also { it.readState(GProperties(props.saveToXml())) }
+        return ClassHierarchyRecords().also { it.readState(GProperties(props.saveToXml())) }
     }
 
     @Test
@@ -32,8 +32,8 @@ class ClassHierarchyRecordTest {
             Base(null, "std::iterator<std::input_iterator_tag, char, long>", true, Access.PRIVATE),
         )
         val classes = mapOf(12L to Entry(40, bases), 13L to Entry(null, emptyList()), 14L to Entry(41, bases.take(1)))
-        ClassRecords(classes).roundTrip().classes mustBe classes
-        ClassRecords(emptyMap()).roundTrip().classes mustBe emptyMap()
+        ClassHierarchyRecords(classes).roundTrip().classes mustBe classes
+        ClassHierarchyRecords(emptyMap()).roundTrip().classes mustBe emptyMap()
     }
 
     @Test

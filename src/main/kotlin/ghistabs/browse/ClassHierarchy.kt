@@ -9,8 +9,9 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.*
 import ghistabs.Demangler
-import ghistabs.importer.ClassHierarchyRecord
+import ghistabs.importer.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.importer.MemberAttrs
+import ghistabs.importer.MemberAttrs.Companion.memberAttrs
 import ghistabs.isInjected
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.*
@@ -152,8 +153,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
 
     private class Builder(val program: Program) {
         val symtab: SymbolTable = program.symbolTable
-        val record = ClassHierarchyRecord.read(program).orEmpty()
-        val attrsAt = ClassHierarchyRecord.memberAttrs(program)
+        val record = program.readClassRecord().orEmpty()
         val rtti = Rtti.Reader(program)
 
         // `_ZTI` objects by the class they describe, off the mangled label or, once Ghidra's demangler
@@ -244,14 +244,14 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                             kind,
                             fn.getPrototypeString(false, false),
                             fn.params,
-                            attrs = attrsAt(sym.address) ?: fn.derivedAttrs(virtuals),
+                            attrs = program.memberAttrs(sym.address) ?: fn.derivedAttrs(virtuals),
                             variants = symtab.getSymbols(sym.address).mapNotNull { StructorVariant.of(it.name) }
                                 .distinct().sorted(),
                         )
                     }
 
                     SymbolType.LABEL -> sym.labelKind().let { kind ->
-                        val attrs = attrsAt(sym.address)
+                        val attrs = program.memberAttrs(sym.address)
                             ?: MemberAttrs(virt = VirtKind.STATIC).takeIf { kind == MemberKind.LABEL }
                         Member(sym.name, sym.address.toString(), kind, attrs = attrs)
                     }

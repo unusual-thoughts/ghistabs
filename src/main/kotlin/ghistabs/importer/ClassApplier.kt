@@ -14,6 +14,7 @@ import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.harvest.AddressResolver
+import ghistabs.importer.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
 import ghistabs.materialize.DataTypeRegistry
@@ -150,17 +151,17 @@ class ClassApplier(
                 err("class-apply-error", "${group.location}: ${t.message}")
             }
         }
-        ClassHierarchyRecord.write(program, hierarchy)
+        program.writeClassRecord(hierarchy)
         return built
     }
 
     // The namespace each class struct was built under, for its derived classes' base entries: bases
     // come first ([classesBasesFirst]), so a base built at all is here by the time anything names it.
     private val namespaceByStruct = mutableMapOf<DataTypePath, GhidraClass>()
-    private val hierarchy = linkedMapOf<Long, ClassHierarchyRecord.Entry>()
+    private val hierarchy = linkedMapOf<Long, ClassHierarchyRecords.Entry>()
 
     /**
-     * [ClassHierarchyRecord]'s entry for this class. Two groups can build one namespace (a class the
+     * [ClassHierarchyRecords]'s entry for this class. Two groups can build one namespace (a class the
      * stabs spell two ways, refiled under the same demangled scope); their bases are merged, the first
      * one's struct kept.
      */
@@ -169,7 +170,7 @@ class ClassApplier(
         val bases = body.bases.map { base ->
             val dt = registry.resolveRef(base.type)?.let { DataTypeUtilities.getBaseDataType(it) }
             val baseNs = dt?.let { namespaceByStruct[it.dataTypePath] }
-            ClassHierarchyRecord.Base(
+            ClassHierarchyRecords.Base(
                 baseNs?.id,
                 if (baseNs == null) dt?.name ?: "?" else null,
                 base.isVirtual,
@@ -177,8 +178,8 @@ class ClassApplier(
             )
         }
         val structId = program.dataTypeManager.getID(structDt).takeIf { it >= 0 }
-        hierarchy.merge(ns.id, ClassHierarchyRecord.Entry(structId, bases)) { old, new ->
-            ClassHierarchyRecord.Entry(old.structId ?: new.structId, (old.bases + new.bases).distinct())
+        hierarchy.merge(ns.id, ClassHierarchyRecords.Entry(structId, bases)) { old, new ->
+            ClassHierarchyRecords.Entry(old.structId ?: new.structId, (old.bases + new.bases).distinct())
         }
     }
 

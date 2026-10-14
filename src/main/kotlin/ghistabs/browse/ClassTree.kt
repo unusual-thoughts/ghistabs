@@ -21,7 +21,7 @@ import ghidra.util.HTMLUtilities
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
 import ghidra.util.task.SwingUpdateManager
-import ghistabs.importer.ClassHierarchyRecord
+import ghistabs.importer.ClassHierarchyRecords.Companion.areClassesRecorded
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import resources.Icons
 import java.awt.BorderLayout
@@ -253,7 +253,7 @@ class ClassTree(private val plugin: Plugin) :
             val empty = hierarchy.classes.count(hierarchy::isEmpty)
             if (empty > 0) append(", $empty empty")
             // Imported before the record existed: the stabs classes read as swept until a re-import.
-            if (p.isStabsDone && !ClassHierarchyRecord.isRecorded(p)) {
+            if (p.isStabsDone && !p.areClassesRecorded()) {
                 append(" (no stabs record: Tools > Stabs > Re-import to add it)")
             }
         }
