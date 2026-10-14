@@ -196,9 +196,11 @@ internal class VfptrPlacement(
      * Put [run] in [layout] over [span], in place of the fields it copies: the base then reads its own
      * fields through the struct every deriving class embeds, so an edit to one is an edit to all of
      * them and they cannot drift. A span whose edge falls inside a component of [layout] is left alone,
-     * since embedding over it would drop that component.
+     * since embedding over it would drop that component, and so is a packed [layout], which clearing
+     * a component shrinks (Ghidra's own `ClassTypeInfoStructure`).
      */
     private fun embed(layout: Structure, span: IntRange, run: Structure, name: String) {
+        if (layout.isPackingEnabled) return
         if (layout.getComponentAt(span.first)?.dataType?.dataTypePath == run.dataTypePath) return
         val (inside, crossing) = layout.definedComponents.filter(span::overlaps).partition(span::holds)
         if (crossing.isNotEmpty()) {
