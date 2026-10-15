@@ -15,9 +15,9 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
 import ghistabs.forceCreateData
+import ghistabs.get
 import ghistabs.materialize.DtmRegistry
 import ghistabs.materialize.cpp.ClassNaming
-import ghistabs.readAs
 import ghistabs.readAt
 import ghistabs.readPointer
 import ghistabs.valueOf
@@ -87,11 +87,14 @@ fun Program.readHeader(record: VtableRecord): Data? = record.header?.let { readA
 
 /**
  * The vbase offset [record] keeps [vtableOffset] bytes from its address point (negative, as a virtual base's
- * `__offset_flags` gives it): where that virtual base sits in the class [record] is the primary vtable of.
+ * `__offset_flags` gives it), in its header's [VTABLE_OFFSETS]: where that virtual base sits in the class
+ * [record] is the primary vtable of. Null when that word is not one of them.
  */
-fun Program.vbaseOffset(record: VtableRecord, vtableOffset: Long): Long? = runCatching {
-    readAs<Scalar>(record.addressPoint.add(vtableOffset), Itanium.offsetToTopType(defaultPointerSize))
-}.getOrNull()?.signedValue
+fun Program.vbaseOffset(record: VtableRecord, vtableOffset: Long): Long? {
+    val offsets = readHeader(record)?.get(VTABLE_OFFSETS) ?: return null
+    val index = record.addressPoint.add(vtableOffset).subtract(offsets.address) / defaultPointerSize
+    return (offsets[index.toInt()]?.value as? Scalar)?.signedValue
+}
 
 /** The typeinfo [record]'s rtti word points at. */
 fun Program.rttiOf(record: VtableRecord): Address? = readHeader(record)?.valueOf<Address>(Itanium.RTTI)
