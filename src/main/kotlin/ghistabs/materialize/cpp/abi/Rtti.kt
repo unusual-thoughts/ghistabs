@@ -129,8 +129,16 @@ class Rtti(private val dtm: DataTypeManager) {
         /**
          * A direct base. [offset] is `__offset_flags`'s offset: where the base subobject sits in the class,
          * or for a virtual one where the vtable holds that, relative to the address point (negative).
+         * [typeinfo] is where the base's own typeinfo is, to read its bases in turn: the symbol that named
+         * it, which is in the EXTERNAL block for one a shared library defines.
          */
-        data class Base(val className: String, val isVirtual: Boolean, val access: Access, val offset: Long = 0)
+        data class Base(
+            val className: String,
+            val typeinfo: Address,
+            val isVirtual: Boolean,
+            val access: Access,
+            val offset: Long = 0,
+        )
 
         private val ptr = program.defaultPointerSize
         private val symtab = program.symbolTable
@@ -144,7 +152,7 @@ class Rtti(private val dtm: DataTypeManager) {
 
                 TypeinfoKind.SI -> program.readAt(zti, layouts.siClassTi)?.get(BASE_TYPE)
                     ?.let { classAt(it.address) }
-                    ?.let { listOf(Base(it, isVirtual = false, access = Access.PUBLIC)) }
+                    ?.let { (name, at) -> listOf(Base(name, at, isVirtual = false, access = Access.PUBLIC)) }
 
                 TypeinfoKind.VMI -> vmiBases(zti)
 
@@ -166,8 +174,10 @@ class Rtti(private val dtm: DataTypeManager) {
             val array = structFor(zti)?.let { program.readAt(zti, it)?.get(BASES) } ?: return null
             return (0 until array.numComponents).map { i ->
                 val entry = array[i] ?: return null
+                val (name, at) = entry[BASE_TYPE_IN_ENTRY]?.let { classAt(it.address) } ?: return null
                 Base(
-                    entry[BASE_TYPE_IN_ENTRY]?.let { classAt(it.address) } ?: return null,
+                    name,
+                    at,
                     isVirtual = entry.flag(IS_VIRTUAL),
                     access = if (entry.flag(IS_PUBLIC)) Access.PUBLIC else Access.PRIVATE,
                     offset = entry.getScalar(BASE_OFFSET)?.signedValue ?: return null,
@@ -179,8 +189,8 @@ class Rtti(private val dtm: DataTypeManager) {
         internal fun kindOf(zti: Address) =
             pointee(zti, Itanium.vtablePrefixBytes(ptr)) { it.vtableClass?.let(TypeinfoKind::ofVtableClass) }
 
-        /** The class whose typeinfo the pointer at [at] points at. */
-        private fun classAt(at: Address) = pointee(at, 0) { it.typeinfoClass }
+        /** The class whose typeinfo the pointer at [at] points at, and where that typeinfo's symbol is. */
+        private fun classAt(at: Address) = pointee(at, 0) { sym -> sym.typeinfoClass?.let { it to sym.address } }
 
         /**
          * [of] the first symbol the pointer at [at] refers to that it answers for: an external one by

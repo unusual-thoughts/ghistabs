@@ -13,7 +13,6 @@ import ghistabs.materialize.cpp.abi.ResolvedVtable
 import ghistabs.materialize.cpp.abi.Rtti
 import ghistabs.materialize.cpp.abi.VtableRecord
 import ghistabs.materialize.cpp.abi.rttiOf
-import ghistabs.materialize.cpp.abi.typeinfoClass
 import ghistabs.materialize.cpp.abi.vtableRecord
 import ghistabs.parse.leafName
 import ghistabs.parse.member
@@ -32,31 +31,20 @@ import ghistabs.readAs
  * after [layClasses], so a class embedded as a base was embedded without what this lays.
  */
 internal fun DataTypeRegistry.layVirtualBasesFromVtables(program: Program) {
-    val symbols = RttiSymbols.of(program)
-    if (symbols.vtables.isEmpty() || symbols.typeinfos.isEmpty()) return
-    VtableVirtualBases(this, program, symbols).layAll()
-}
-
-/** Each class's Itanium `_ZTV` and `_ZTI`, by the qualified name they demangle to. */
-private class RttiSymbols(val vtables: Map<String, Address>, val typeinfos: Map<String, Address>) {
-    companion object {
-        fun of(program: Program): RttiSymbols {
-            val vtables = mutableMapOf<String, Address>()
-            val typeinfos = mutableMapOf<String, Address>()
-            for (sym in program.symbolTable.getSymbolIterator(true)) {
-                ResolvedVtable.fromSymbol(sym)?.takeIf { it.abi == Itanium }
-                    ?.let { vtables.putIfAbsent(it.className, it.address) }
-                if (Itanium.looksLikeZti(sym.name) || sym.name == ClassNaming.TYPEINFO) {
-                    sym.typeinfoClass?.let { typeinfos.putIfAbsent(it, sym.address) }
-                }
-            }
-            return RttiSymbols(vtables, typeinfos)
+    val vtables = buildMap<String, Address> {
+        for (sym in program.symbolTable.getSymbolIterator(true)) {
+            ResolvedVtable.fromSymbol(sym)?.takeIf { it.abi == Itanium }?.let { putIfAbsent(it.className, it.address) }
         }
     }
+    if (vtables.isNotEmpty()) VtableVirtualBases(this, program, vtables).layAll()
 }
 
-private class VtableVirtualBases(val registry: DataTypeRegistry, val program: Program, val symbols: RttiSymbols) :
-    DiagnosticSink by registry {
+/** [vtables] is each class's Itanium `_ZTV`, by the qualified name it demangles to. */
+private class VtableVirtualBases(
+    val registry: DataTypeRegistry,
+    val program: Program,
+    val vtables: Map<String, Address>,
+) : DiagnosticSink by registry {
     private val reader = Rtti.Reader(program)
     private val word = Itanium.offsetToTopType(program.defaultPointerSize)
 
@@ -74,7 +62,7 @@ private class VtableVirtualBases(val registry: DataTypeRegistry, val program: Pr
             if (registry.types.hasVirtualBase(located.classBody)) continue
             val struct = registry.dataTypeFor(located.type.id) as? Structure ?: continue
             if (!done.add(struct)) continue
-            val record = symbols.vtables[located.qualifiedName()]
+            val record = vtables[located.qualifiedName()]
                 ?.let { runCatching { program.vtableRecord(it) }.getOrNull() } ?: continue
             val vbases = program.rttiOf(record)?.let(::virtualBases).orEmpty()
             val count = registry.baseSubobjects(located.classBody) + vbases.size
@@ -94,7 +82,7 @@ private class VtableVirtualBases(val registry: DataTypeRegistry, val program: Pr
         if (vbaseAt == null || vbaseAt < 0 || vbaseAt >= struct.length) {
             return degradation("vbase-offset-unreadable", at, "vtable word at ${vbase.offset} reads $vbaseAt")
         }
-        val (dt, within) = definedPart(vbase.className)
+        val (dt, within) = definedPart(vbase)
             ?: return degradation("vbase-undefined", at, "no CU defines it or a base of it")
         val offset = vbaseAt + within
         when {
@@ -129,23 +117,20 @@ private class VtableVirtualBases(val registry: DataTypeRegistry, val program: Pr
         reader.basesOf(zti).orEmpty().takeIf { depth < MAX_DEPTH }.orEmpty().flatMap { base ->
             when {
                 base.isVirtual -> listOf(base)
-                base.offset == 0L -> symbols.typeinfos[base.className]?.let { virtualBases(it, depth + 1) }.orEmpty()
+                base.offset == 0L -> virtualBases(base.typeinfo, depth + 1)
                 else -> emptyList()
             }
         }.distinctBy { it.className }
 
     /**
-     * [className], else the first class a CU defines down its chain of first non-virtual bases, with
-     * where that sits in [className]: `basic_ios` keeps its own vptr in front of `ios_base`, at +4.
+     * [base], else the first class a CU defines down its chain of first non-virtual bases, with where
+     * that sits in [base]: `basic_ios` keeps its own vptr in front of `ios_base`, at +4.
      */
-    private fun definedPart(className: String, depth: Int = 0): Pair<DataType, Int>? =
-        structFor(className)?.let { it to 0 }
-            ?: symbols.typeinfos[className]?.takeIf { depth < MAX_DEPTH }
-                ?.let { reader.basesOf(it) }
+    private fun definedPart(base: Rtti.Reader.Base, depth: Int = 0): Pair<DataType, Int>? =
+        structFor(base.className)?.let { it to 0 }
+            ?: base.typeinfo.takeIf { depth < MAX_DEPTH }?.let(reader::basesOf)
                 ?.filterNot { it.isVirtual }?.minByOrNull { it.offset }
-                ?.let { base ->
-                    definedPart(base.className, depth + 1)?.let { (dt, at) -> dt to at + base.offset.toInt() }
-                }
+                ?.let { next -> definedPart(next, depth + 1)?.let { (dt, at) -> dt to at + next.offset.toInt() } }
 
     /** The class as its typeinfo and vtable demangle: its stated namespace chain, else its name. */
     private fun LocatedType.qualifiedName() = statedClassPath(registry.types)?.joinToString("::") ?: className
