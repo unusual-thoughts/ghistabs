@@ -88,7 +88,10 @@ private class VtableVirtualBases(val registry: DataTypeRegistry, val program: Pr
     private fun lay(struct: Structure, record: VtableRecord, vbase: Rtti.Reader.Base, at: String, count: Int) {
         val vbaseAt = runCatching { program.readAs<Scalar>(record.addressPoint.add(vbase.offset), word) }
             .getOrNull()?.signedValue?.toInt()
-        if (vbaseAt == null || vbaseAt <= 0 || vbaseAt >= struct.length) {
+        // A nearly-empty virtual base can be the primary base, sharing the class's vptr at 0 (CryptoPP's
+        // CryptoMaterial under CryptoParameters): there is nothing of its own to lay.
+        if (vbaseAt == 0) return debug("vbase-primary-from-vtable")
+        if (vbaseAt == null || vbaseAt < 0 || vbaseAt >= struct.length) {
             return degradation("vbase-offset-unreadable", at, "vtable word at ${vbase.offset} reads $vbaseAt")
         }
         val (dt, within) = definedPart(vbase.className)
