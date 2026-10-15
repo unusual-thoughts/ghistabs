@@ -41,7 +41,7 @@ class VtableRecordIntegrationTest : FeatureFixtureTest() {
             ?.let { program.symbolTable.getSymbols(it) }
             .orEmpty().any { it.name == "_ZTI7Diamond" }
             .mustBeTrue("rtti word should point at _ZTI7Diamond")
-        program.listing.getDataAt(ztv)?.get(VTABLE_OFFSETS)?.get(0)?.defaultValueRepresentation
+        program.listing.getDataAt(ztv)?.get(vtableOffsetField(0))?.defaultValueRepresentation
             ?.endsWith("h").mustBe(false, "a laid vbase offset should render in decimal")
     }
 

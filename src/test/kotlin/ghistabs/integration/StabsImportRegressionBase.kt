@@ -746,12 +746,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     }
                 }
 
-            // The prefix words are named, `[i] what` a line, in one comment on the header they open.
-            val header = program.listing.getDataContaining(rttiHeader)?.address ?: continue
-            for (line in eol(header)?.lines().orEmpty().filter { it.startsWith("[") }) {
-                val comment = line.substringAfter("] ")
-                if (comment.startsWith("vcall")) vcallOnPrimary += "$header: $line"
+            // offset_to_top sits one word before rtti; the prefix runs backwards from there.
+            var word = runCatching { rttiHeader.subtract(ptr) }.getOrNull() ?: continue
+            while (true) {
+                val prev = runCatching { word.subtract(ptr) }.getOrNull() ?: break
+                val comment = eol(prev)?.takeIf { "offset" in it } ?: break
+                if (comment.startsWith("vcall")) vcallOnPrimary += "$prev: $comment"
                 if (comment.startsWith("vbase offset:")) namedVbases++
+                word = prev
             }
         }
 

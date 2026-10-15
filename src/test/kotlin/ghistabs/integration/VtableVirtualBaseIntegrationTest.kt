@@ -93,7 +93,7 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         core.fieldName mustBe "_vbase_Core"
         core.comment.must("names the virtual base") { contains("virtual Wrap") && contains("+0x10") }
         derived.getComponentAt(8).fieldName mustBe "x"
-        builder.program.listing.getComment(CommentType.EOL, builder.addr("0x4040a0")) mustBe "[0] vbase offset: Wrap"
+        builder.program.listing.getComment(CommentType.EOL, builder.addr("0x4040a0")) mustBe "vbase offset: Wrap"
     }
 
     @Test

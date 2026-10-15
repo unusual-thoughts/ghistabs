@@ -29,8 +29,8 @@ private const val MAX_VTABLE_PREFIX_WORDS = 64
  */
 private fun Program.codeTargetAt(a: Address) = readPointer(a)?.takeIf { memory.getBlock(it)?.isExecute == true }
 
-/** The header field holding an Itanium record's vbase/vcall-offset words, when it has any. */
-const val VTABLE_OFFSETS = "vcall_vbase_offsets"
+/** The header field holding an Itanium record's vbase/vcall-offset word [i], counted from the record start. */
+fun vtableOffsetField(i: Int) = "vcall_vbase_offset_$i"
 
 /**
  * The header of an Itanium vtable record with [prefixWords] vbase/vcall-offset words in front of
@@ -42,9 +42,9 @@ fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataTyp
     val word = Itanium.offsetToTopType(dtm.dataOrganization.pointerSize)
     val name = "VtableHeaderStructure${if (prefixWords > 0) prefixWords else ""}"
     return StructureDataType(ClassNaming.classDataTypesRoot, name, 0, dtm).apply {
-        if (prefixWords > 0) {
-            add(ArrayDataType(word, prefixWords, word.length, dtm), VTABLE_OFFSETS, null).showDecimal()
-        }
+        // One field a word, not an array: Ghidra shows no comment on a word inside an array inside a struct,
+        // and each word gets its own saying which base it is for.
+        repeat(prefixWords) { add(word, vtableOffsetField(it), null).showDecimal() }
         add(word, Itanium.OFFSET_TO_TOP, "to top of complete object").showDecimal()
         add(PointerDataType(dtm), Itanium.RTTI, null)
         isPackingEnabled = true
@@ -61,8 +61,8 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     /** Where the function array starts: past the header, or past gcc 2.x's reserved entry. */
     val addressPoint: Address get() = address.add(header?.length?.toLong() ?: abi.headerBytes(address.pointerSize))
 
-    /** The vbase/vcall-offset words in front of `offset_to_top`. */
-    val prefixWords get() = (header?.field(VTABLE_OFFSETS)?.dataType as? ArrayDataType)?.numElements ?: 0
+    /** The vbase/vcall-offset words in front of `offset_to_top` and the rtti pointer. */
+    val prefixWords get() = header?.let { it.numComponents - 2 } ?: 0
 
     /** What a `{vfptr}` pointing into this record holds, where the `vftable` label goes. */
     val vptrTarget get() = if (header == null) address else addressPoint
@@ -77,28 +77,16 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
 fun Program.readHeader(record: VtableRecord): Data? = record.header?.let { readAt(record.address, it) }
 
 /**
- * The vbase offset [record] keeps for virtual [base], in its header's [VTABLE_OFFSETS]: where [base] sits
- * in the class [record] is the primary vtable of. [base]'s offset is that word's position behind the
- * address point, which the typeinfo gives exactly, so the word is commented with [base]'s name over
- * [prefixKind]'s guess. Null when that word is not one of them.
+ * The vbase offset [record] keeps for virtual [base]: where [base] sits in the class [record] is the
+ * primary vtable of. [base]'s offset is that word's position behind the address point, which the typeinfo
+ * gives exactly, so the word is commented with [base]'s name over [prefixKind]'s guess. Null when that
+ * word is not one of the header's offset words.
  */
 fun Program.vbaseOffset(record: VtableRecord, base: Rtti.Reader.Base): Long? {
-    val offsets = readHeader(record)?.get(VTABLE_OFFSETS) ?: return null
-    val index = (record.addressPoint + base.offset - offsets.address) / defaultPointerSize
-    val word = offsets[index.toInt()] ?: return null
-    nameOffsetWord(record, index.toInt(), "vbase offset: ${base.className}")
-    return (word.value as? Scalar)?.signedValue
-}
-
-/**
- * Says what word [i] of [record]'s [VTABLE_OFFSETS] holds, as its `[i] what` line of the one comment on
- * the array: Ghidra shows no comment on a word inside an array inside a struct.
- */
-private fun Program.nameOffsetWord(record: VtableRecord, i: Int, kind: String) {
-    val at = record.fieldAddress(VTABLE_OFFSETS) ?: return
-    val lines = listing.getComment(CommentType.EOL, at)?.lines().orEmpty().filterNot { it.startsWith("[$i] ") }
-    val ordered = (lines + "[$i] $kind").sortedBy { it.substringAfter('[').substringBefore(']').toIntOrNull() }
-    listing.setComment(at, CommentType.EOL, ordered.joinToString("\n"))
+    val field = vtableOffsetField(((record.addressPoint + base.offset - record.address) / defaultPointerSize).toInt())
+    val value = readHeader(record)?.getScalar(field)?.signedValue ?: return null
+    record.fieldAddress(field)?.let { listing.setComment(it, CommentType.EOL, "vbase offset: ${base.className}") }
+    return value
 }
 
 /** The typeinfo [record]'s rtti word points at. */
@@ -276,9 +264,9 @@ fun Program.layVtable(
 
     labelVtable(record.address, ClassNaming.vtableLabel(internal, construction), ns, source)
     forceCreateData(record.address, registry.resolveLayout(header))
-    record.fieldAddress(VTABLE_OFFSETS)?.let { at ->
-        val words = (0 until record.prefixWords).map { "[$it] ${prefixKind(it, record.prefixWords, virtualBases)}" }
-        listing.setComment(at, CommentType.EOL, words.joinToString("\n"))
+    for (i in 0 until record.prefixWords) {
+        record.fieldAddress(vtableOffsetField(i))
+            ?.let { listing.setComment(it, CommentType.EOL, prefixKind(i, record.prefixWords, virtualBases)) }
     }
     record.fieldAddress(Itanium.RTTI)?.let { listing.setComment(it, CommentType.EOL, rttiComment(record, className)) }
     vftable?.let { forceCreateData(record.addressPoint, it) }
