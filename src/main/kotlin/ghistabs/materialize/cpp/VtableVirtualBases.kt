@@ -96,10 +96,11 @@ class VtableVirtualBases(
     }
 
     /**
-     * Undefined [vbase] as its own struct, built off its typeinfo where its labels' namespace files it, once
-     * the first class to need it does: its vptr at 0, typed after its own vftable when one is laid (a dynamic
-     * class with no base at 0 allocates one, Itanium ABI §2.4), then the [part] something defines [within]
-     * bytes in. Nothing says how long it is, so it takes the [room] the class leaves it.
+     * Undefined [vbase] as its own struct, built off its typeinfo once the first class to need it does: its
+     * vptr at 0, typed after its own vftable when one is laid (a dynamic class with no base at 0 allocates
+     * one, Itanium ABI §2.4), then the [part] something defines [within] bytes in. Nothing says how long it
+     * is, so it takes the [room] the class leaves it. Filled into the empty placeholder already standing for
+     * it (a stab's forward declaration), else added where its labels' namespace files it.
      */
     private fun synthesized(vbase: Rtti.Reader.Base, part: DataType, within: Int, room: Int, at: String): Structure? {
         val ptr = program.defaultPointerSize
@@ -108,16 +109,19 @@ class VtableVirtualBases(
         val vftable = dtm.getDataType(ClassNaming.vftablePath(ns))
         val category = ns.parentNamespace.getPathList(true)
             .fold(CategoryPath.ROOT) { path, seg -> CategoryPath(path, seg) }
-        val struct = StructureDataType(category, ns.name, room, dtm).apply {
+        val placeholder = lookup(vbase.className, ns).firstOrNull { it.isZeroLength }
+        val struct = (placeholder ?: StructureDataType(category, ns.name, 0, dtm)).apply {
+            growStructure(room)
             replaceAtOffset(0, PointerDataType(vftable, ptr, dtm), ptr, ClassUtils.VFPTR, "vtable pointer")
             replaceAtOffset(within, part, part.length, ClassNaming.baseFieldName(false, part.name, 1), "public base")
             description = "Defined nowhere: built off its typeinfo, its size guessed from the $room bytes $at leaves it"
         }
         degradation("vbase-size-guessed", at, "$room bytes from the deriving class")
-        return dtm.resolve(
-            struct,
-            DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER,
-        ) as? Structure
+        return struct.takeIf(dtm::contains)
+            ?: dtm.resolve(
+                struct,
+                DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER,
+            ) as? Structure
     }
 
     private fun Structure.takeAcceptable() = takeUnless { it.isZeroLength }
@@ -127,18 +131,25 @@ class VtableVirtualBases(
         (struct.definedComponents.map { it.offset }.filter { it > offset }.minOrNull() ?: struct.length) - offset
 
     /** [className]'s struct, by the namespace its demangled labels sit in, else by [fallback]. */
-    private fun structFor(className: String, namespace: Namespace?): Structure? = when (namespace) {
-        is GhidraClass -> DataTypeUtilities.findExistingClassStruct(dtm, namespace)
+    private fun structFor(className: String, namespace: Namespace?) =
+        lookup(className, namespace).firstNotNullOfOrNull { it.takeAcceptable() }
 
-        else if namespace?.isGlobal == false -> DataTypeUtilities.findDataType(
-            dtm,
-            namespace.parentNamespace,
-            namespace.name,
-            Structure::class.java,
-        )
+    /** What may be [className]'s struct, empty or not: by the namespace, then by [fallback]. */
+    private fun lookup(className: String, namespace: Namespace?) = listOfNotNull(
+        when (namespace) {
+            is GhidraClass -> DataTypeUtilities.findExistingClassStruct(dtm, namespace)
 
-        else -> null
-    }?.takeAcceptable() ?: fallback(className)?.takeAcceptable()
+            else if namespace?.isGlobal == false -> DataTypeUtilities.findDataType(
+                dtm,
+                namespace.parentNamespace,
+                namespace.name,
+                Structure::class.java,
+            )
+
+            else -> null
+        },
+        fallback(className),
+    )
 
     /** The namespace the demangled `typeinfo` label at [zti] sits in. */
     private fun namespaceOfTypeinfo(zti: Address) = program.symbolTable.getSymbols(zti)
