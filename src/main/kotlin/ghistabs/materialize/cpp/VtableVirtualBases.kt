@@ -9,13 +9,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.componentsOverlapping
-import ghistabs.materialize.cpp.abi.Rtti
-import ghistabs.materialize.cpp.abi.VtableRecord
-import ghistabs.materialize.cpp.abi.rttiOf
-import ghistabs.materialize.cpp.abi.typeinfoClass
-import ghistabs.materialize.cpp.abi.vbaseOffset
-import ghistabs.materialize.cpp.abi.vtableClass
-import ghistabs.materialize.cpp.abi.vtableRecord
+import ghistabs.materialize.cpp.abi.*
 import ghistabs.parse.leafName
 import ghistabs.parse.member
 
@@ -56,43 +50,59 @@ class VtableVirtualBases(
         val vbaseAt = program.vbaseOffset(record, vbase.offset)?.toInt()
         // A nearly-empty virtual base can be the primary base, sharing the class's vptr at 0 (CryptoPP's
         // CryptoMaterial under CryptoParameters): there is nothing of its own to lay.
-        if (vbaseAt == 0) return false.also { debug("vbase-primary-from-vtable") }
-        if (vbaseAt == null || vbaseAt < 0 || vbaseAt >= struct.length) {
-            degradation("vbase-offset-unreadable", at, "vtable word at ${vbase.offset} reads $vbaseAt")
-            return false
+        when {
+            vbaseAt == 0 -> return false.also { debug("vbase-primary-from-vtable") }
+
+            vbaseAt == null || vbaseAt < 0 || vbaseAt >= struct.length -> return false.also {
+                degradation("vbase-offset-unreadable", at, "vtable word at ${vbase.offset} reads $vbaseAt")
+            }
         }
-        val (dt, within) = definedPart(vbase) ?: run {
+
+        val (dt, within) = definedPart(vbase) ?: return false.also {
             degradation("vbase-undefined", at, "nothing defines it or a base of it")
-            return false
         }
         // Laid already, by the class layout off the stab's own inheritance line, or by an earlier run.
-        val laid = struct.getComponentAt(vbaseAt)?.takeIf { it.offset == vbaseAt }?.dataType?.name
-        if (laid == vbase.className.leafName || laid == dt.name) return false
+        struct.getComponentAt(vbaseAt)?.takeIf { it.offset == vbaseAt }?.dataType?.name?.let { laid ->
+            if (laid == vbase.className.leafName || laid == dt.name) return false
+        }
+
         val offset = vbaseAt + within
-        val problem = when {
+        when {
             offset + dt.length > struct.length -> "${dt.name} (${dt.length}b) at +$offset overruns ${struct.length}"
             struct.componentsOverlapping(offset, dt.length).isNotEmpty() -> "${dt.name} at +$offset covers laid fields"
             else -> null
-        }
-        if (problem != null) return false.also { degradation("vbase-layout-failed", at, problem) }
+        }?.let { problem -> return false.also { degradation("vbase-layout-failed", at, problem) } }
+
         val part = "; only its ${dt.name} at +$within is defined"
             .takeUnless { within == 0 && dt.name == vbase.className.leafName }.orEmpty()
-        val comment = "${vbase.access.name.lowercase()} virtual ${vbase.className} at " +
-            "+0x${vbaseAt.toString(16)}, by the vtable$part"
-        placeBase(struct, offset, dt, isVirtual = true, comment, ClassNaming.baseFieldName(true, dt.name, count), at)
+        placeBase(
+            struct,
+            offset,
+            dt,
+            isVirtual = true,
+            "${vbase.access.name.lowercase()} virtual ${vbase.className} at " +
+                "+0x${vbaseAt.toString(16)}, by the vtable$part",
+            ClassNaming.baseFieldName(true, dt.name, count),
+            at,
+        )
         return true
     }
+
+    private fun Structure.takeAcceptable() = takeIf { dtm.contains(it) }?.takeUnless { s -> s.isZeroLength }
 
     /** [className]'s struct, by the namespace its demangled labels sit in, else by [fallback]. */
     private fun structFor(className: String, namespace: Namespace?): Structure? = when (namespace) {
         is GhidraClass -> DataTypeUtilities.findExistingClassStruct(dtm, namespace)
 
-        null -> null
+        else if namespace?.isGlobal == false -> DataTypeUtilities.findDataType(
+            dtm,
+            namespace.parentNamespace,
+            namespace.name,
+            Structure::class.java,
+        )
 
-        else -> namespace.takeUnless { it.isGlobal }
-            ?.let { DataTypeUtilities.findDataType(dtm, it.parentNamespace, it.name, Structure::class.java) }
-    }.let { it?.takeUnless { s -> s.isZeroLength } ?: fallback(className) }
-        ?.takeIf { dtm.contains(it) && !it.isZeroLength }
+        else -> null
+    }?.takeAcceptable() ?: fallback(className)?.takeAcceptable()
 
     /** The namespace the demangled `typeinfo` label at [zti] sits in. */
     private fun namespaceOfTypeinfo(zti: Address) = program.symbolTable.getSymbols(zti)
