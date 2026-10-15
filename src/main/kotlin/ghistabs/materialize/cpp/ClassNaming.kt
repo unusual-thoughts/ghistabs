@@ -40,6 +40,9 @@ object ClassNaming {
     const val BASE_PREFIX = "_base_"
     const val VBASE_PREFIX = "_vbase_"
 
+    // A split base's own fields, embedded in it as the `<Base>_fields_<from>_<until>` its deriving classes hold.
+    const val FIELDS = "_fields"
+
     fun vtableLabel(internal: Boolean, construction: Boolean = false) = prefix(internal, construction) + VTABLE
 
     /**

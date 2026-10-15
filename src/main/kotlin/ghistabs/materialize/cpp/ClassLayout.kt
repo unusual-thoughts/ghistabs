@@ -270,8 +270,9 @@ fun virtualBaseOffsets(nvEnd: Int, nvAlign: Int, vbases: List<Pair<Int, Int>>, c
  * laid once, in the complete object, after the non-virtual data, and a class embedded as a base
  * contributes only its non-virtual part. With a [VfptrModel], a polymorphic class then gets its `{vfptr}`.
  *
- * A class is final once its turn is over: nothing later writes into a base, so the non-virtual part a
- * derived class embeds is copied from a finished class. Runs after typedef shortening: the vftables,
+ * A class is final once its turn is over, so the non-virtual part a derived class embeds is copied from
+ * a finished class. The one later write into a base is SPLIT_BASE's: it swaps the base's fields for
+ * the `_fields_` structs it cut from them, the same bytes. Runs after typedef shortening: the vftables,
  * self-bases and `_fields_` structs it creates are looked up again by name.
  */
 internal fun DataTypeRegistry.layClasses(vfptrModel: VfptrModel?) =
