@@ -7,13 +7,7 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
 import ghistabs.index.demangledClassPath
-import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.componentsOverlapping
-import ghistabs.materialize.dataSize
-import ghistabs.materialize.naturalAlignment
-import ghistabs.materialize.reportHoles
-import ghistabs.materialize.resolveRef
-import ghistabs.materialize.undef
+import ghistabs.materialize.*
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -207,8 +201,7 @@ internal fun DiagnosticSink.placeBase(
     val (applied, failed) = if (isVirtual) {
         "vbase-applied" to "vbase-layout-failed"
     } else {
-        "inheritance-applied" to
-            "base-layout-failed"
+        "inheritance-applied" to "base-layout-failed"
     }
     runCatching { struct.replaceAtOffset(offset, dt, dt.length, fieldName, comment) }
         .onSuccess { debug(applied) }
@@ -339,8 +332,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
                 )
                 continue
             }
-            val clash = struct.componentsOverlapping(offset, dt.length).firstOrNull()
-            if (clash != null) {
+            struct.componentsOverlapping(offset, dt.length).firstOrNull()?.let { clash ->
                 degradation(
                     "base-synthesized",
                     "$qualifiedName@+$offset",
@@ -406,10 +398,9 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         (cls as? Structure)?.let { nonVirtualSizes[it.dataTypePath]?.let { size -> selfBaseOf(cls, size) } }
 
     /** [selfBaseOf], else [cls]'s data, without the tail padding a deriving class's fields may reuse. */
-    private fun dataPartOf(cls: DataType): Structure? = selfBaseOf(cls)
-        ?: (cls as? Structure)?.let {
-            it.dataSize.takeIf { size -> size in 1..<it.length }?.let { size -> selfBaseOf(it, size) }
-        }
+    private fun dataPartOf(cls: DataType): Structure? = selfBaseOf(cls) ?: (cls as? Structure)?.let {
+        it.dataSize.takeIf { size -> size in 1..<it.length }?.let { size -> selfBaseOf(it, size) }
+    }
 
     /**
      * [cls]'s first [size] bytes as a struct of their own, filed where Ghidra's PDB importer files a
@@ -426,17 +417,12 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
 
     private fun copyNonVirtualPart(from: Structure, into: Structure) {
         into.definedComponents.map { it.offset }.forEach(into::clearAtOffset)
-        from.definedComponents
-            .filter {
-                it.offset + it.length <= into.length &&
-                    !it.fieldName.orEmpty().startsWith(ClassNaming.VBASE_PREFIX)
-            }
-            .forEach {
-                runCatching { into.replaceAtOffset(it.offset, it.dataType, it.length, it.fieldName, it.comment) }
-                    .onFailure { e ->
-                        degradation("self-base-field-dropped", "${into.name}.${it.fieldName}", e.message)
-                    }
-            }
+        from.definedComponents.filter {
+            it.offset + it.length <= into.length && !it.fieldName.orEmpty().startsWith(ClassNaming.VBASE_PREFIX)
+        }.forEach {
+            runCatching { into.replaceAtOffset(it.offset, it.dataType, it.length, it.fieldName, it.comment) }
+                .onFailure { e -> degradation("self-base-field-dropped", "${into.name}.${it.fieldName}", e.message) }
+        }
     }
 }
 
