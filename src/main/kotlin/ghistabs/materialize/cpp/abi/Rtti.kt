@@ -108,6 +108,9 @@ class Rtti(private val dtm: DataTypeManager) {
 
         // Arbitrary sanity bound: a garbage count must not read megabytes.
         const val MAX_BASES = 256
+
+        // Bound on base chains walked: a typeinfo cycle in garbage must not recurse forever.
+        const val MAX_BASE_DEPTH = 16
     }
 
     /**
@@ -159,6 +162,19 @@ class Rtti(private val dtm: DataTypeManager) {
                 null -> null
             }
         }.getOrNull()
+
+        /**
+         * [zti]'s virtual bases whose offsets its primary vtable keeps, each with its vtable offset: its own,
+         * and those of its primary chain (the non-virtual bases at 0, which share that vtable).
+         */
+        fun virtualBasesOf(zti: Address, depth: Int = 0): List<Base> =
+            basesOf(zti).orEmpty().takeIf { depth < MAX_BASE_DEPTH }.orEmpty().flatMap { base ->
+                when {
+                    base.isVirtual -> listOf(base)
+                    base.offset == 0L -> virtualBasesOf(base.typeinfo, depth + 1)
+                    else -> emptyList()
+                }
+            }.distinctBy { it.className }
 
         fun structFor(zti: Address) = when (kindOf(zti)) {
             TypeinfoKind.CLASS -> layouts.classTi

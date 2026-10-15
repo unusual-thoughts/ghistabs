@@ -325,9 +325,12 @@ open class VtableSweeper(
             }
         }
 
-    /** What [Rtti] says sits where in the class [primary] is the primary of: a direct base per subobject offset. */
+    /**
+     * What [Rtti] says sits where in the class [primary] is the primary of: a direct base, or a virtual one
+     * its primary chain inherits, per subobject offset.
+     */
     private fun baseSubobjects(primary: VtableRecord, rtti: Address): Map<Long, String> =
-        Rtti.Reader(program).basesOf(rtti).orEmpty().mapNotNull { base ->
+        Rtti.Reader(program).run { basesOf(rtti).orEmpty() + virtualBasesOf(rtti) }.mapNotNull { base ->
             // A virtual base's offset is where the vtable keeps its vbase offset, behind the address point.
             (if (base.isVirtual) program.vbaseOffset(primary, base) else base.offset)?.let {
                 it to base.className

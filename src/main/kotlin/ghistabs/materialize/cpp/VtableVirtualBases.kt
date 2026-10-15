@@ -43,7 +43,7 @@ class VtableVirtualBases(
         .sumOf { sym ->
             val struct = sym.vtableClass?.let { structFor(it, sym.parentNamespace) } ?: return@sumOf 0
             val record = runCatching { program.vtableRecord(sym.address) }.getOrNull() ?: return@sumOf 0
-            val vbases = program.rttiOf(record)?.let(::virtualBases).orEmpty()
+            val vbases = program.rttiOf(record)?.let(reader::virtualBasesOf).orEmpty()
             val count = struct.definedComponents.count { it.isBaseField() } + vbases.size
             vbases.count { lay(struct, record, it, struct.pathName.member(it.className), count) }
         }
@@ -129,27 +129,13 @@ class VtableVirtualBases(
     private fun namespaceOfTypeinfo(zti: Address) = program.symbolTable.getSymbols(zti)
         .firstOrNull { it.name == ClassNaming.TYPEINFO && it.typeinfoClass != null }?.parentNamespace
 
-    /** [zti]'s virtual bases, its own and those of its primary chain, each with its vtable offset. */
-    private fun virtualBases(zti: Address, depth: Int = 0): List<Rtti.Reader.Base> =
-        reader.basesOf(zti).orEmpty().takeIf { depth < MAX_DEPTH }.orEmpty().flatMap { base ->
-            when {
-                base.isVirtual -> listOf(base)
-                base.offset == 0L -> virtualBases(base.typeinfo, depth + 1)
-                else -> emptyList()
-            }
-        }.distinctBy { it.className }
-
     /**
      * [base]'s struct, else the first one down its chain of first non-virtual bases, with where that sits
      * in [base]: `basic_ios` keeps its own vptr in front of `ios_base`, at +4.
      */
     private fun definedPart(base: Rtti.Reader.Base, depth: Int = 0): Pair<DataType, Int>? =
         structFor(base.className, namespaceOfTypeinfo(base.typeinfo))?.let { it to 0 }
-            ?: base.typeinfo.takeIf { depth < MAX_DEPTH }?.let(reader::basesOf)
+            ?: base.typeinfo.takeIf { depth < Rtti.MAX_BASE_DEPTH }?.let(reader::basesOf)
                 ?.filterNot { it.isVirtual }?.minByOrNull { it.offset }
                 ?.let { next -> definedPart(next, depth + 1)?.let { (dt, at) -> dt to at + next.offset.toInt() } }
-
-    private companion object {
-        const val MAX_DEPTH = 16
-    }
 }
