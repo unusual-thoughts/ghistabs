@@ -1,11 +1,13 @@
 package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.*
+import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
-import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
@@ -36,7 +38,7 @@ fun vtableOffsetField(i: Int) = "vcall_vbase_offset_$i"
  * The header of an Itanium vtable record with [prefixWords] vbase/vcall-offset words in front of
  * `offset_to_top` and the rtti pointer (ABI §2.5.2), one layout per prefix length the way
  * [Rtti.vmiClassTypeInfo] has one per base count. Unresolved, like [Rtti]'s: [vtableRecord] reads a
- * record through it without writing to the DTM, and [layVtable] resolves it to lay one.
+ * record through it without writing to the DTM, and [VtableRecord.lay] resolves it to lay one.
  */
 fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataType {
     val word = Itanium.offsetToTopType(dtm.dataOrganization.pointerSize)
@@ -71,26 +73,136 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     fun fieldAddress(name: String): Address? = header?.field(name)?.let { address.add(it.offset.toLong()) }
 
     private fun StructureDataType.field(name: String) = components.firstOrNull { it.fieldName == name }
+
+    /** [header] as memory holds it, read through its layout; null for a gcc 2.x record. */
+    fun readHeader(program: Program): Data? = header?.let { program.readAt(address, it) }
+
+    /**
+     * The vbase offset `this` keeps for virtual [base]: where [base] sits in the class `this` is the
+     * primary vtable of. [base]'s offset is that word's position behind the address point, which the typeinfo
+     * gives exactly, so the word is commented with [base]'s name over [prefixKind]'s guess. Null when that
+     * word is not one of the header's offset words.
+     */
+    fun vbaseOffset(program: Program, base: Rtti.Reader.Base) = vtableOffsetField(
+        ((addressPoint + base.offset - address) / program.defaultPointerSize).toInt(),
+    ).let { field ->
+        fieldAddress(field)?.let { program.listing.setComment(it, CommentType.EOL, "vbase offset: ${base.className}") }
+        readHeader(program)?.getScalar(field)?.signedValue
+    }
+
+    /** The typeinfo the rtti word points at. */
+    fun rttiOf(program: Program): Address? = readHeader(program)?.valueOf<Address>(Itanium.RTTI)
+
+    /**
+     * What prefix word [i] of [total] is, given the class's [virtualBases]. The ABI orders the words
+     * before `offset_to_top` as vcall offsets then vbase offsets (§2.5.2), one vbase offset per virtual
+     * base — so knowing how many virtual bases the stab declares splits the run from the right-hand end,
+     * and names each vbase word. A vbase offset of 0 is normal, not a gap: an empty abstract base sits at
+     * offset 0 (CryptoPP's interface lattice gives eleven vtables twelve zeroed vbase offsets).
+     *
+     * Falls back to the undifferentiated label when the stab declares no virtual base — either the class
+     * genuinely has none and this is a swept class we know nothing about, or the count disagrees, which
+     * [ghistabs.importer.ClassApplier] reports separately.
+     */
+    private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
+        val vcalls = total - virtualBases.size
+        if (virtualBases.isEmpty() || vcalls < 0) return "vbase/vcall offset"
+        // Naming the word only when there is one virtual base to name. The ABI fixes the order of the
+        // vbase offsets, but nothing here has verified it against a class with several, and a confidently
+        // wrong base name in a comment is worse than none.
+        return when {
+            i < vcalls -> "vcall offset"
+            virtualBases.size == 1 -> "vbase offset: ${virtualBases.single()}"
+            else -> "vbase offset"
+        }
+    }
+
+    /** Whether a vtable group's own symbol sits on any word of [header]: the walk is past its group. */
+    fun opensGroup(program: Program): Boolean =
+        generateSequence(address) { it.add(program.defaultPointerSize.toLong()) }
+            .takeWhile { it < addressPoint }
+            .any { at -> program.symbolTable.getSymbols(at).any { startsVtableGroup(it.name) } }
+
+    /**
+     * Addresses the function-pointer array at [addressPoint], in slot order. Nothing records its
+     * length, so it ends where the entries stop pointing into executable memory — at the next record's
+     * `offset_to_top` (0) or rtti pointer (into .data). Walks by the record's ABI's entry stride and reads `pfn` at
+     * its offset within the entry, which is what separates a gcc 2.x table without thunks from one with.
+     */
+    fun vtableSlotTargets(program: Program): List<Address> =
+        generateSequence(addressPoint) { it.add(abi.stride(program.defaultPointerSize)) }
+            .map { program.codeTargetAt(it.add(abi.pfnOffset(program.defaultPointerSize))) }
+            .takeWhile { it != null }
+            .filterNotNull()
+            .toList()
+
+    /**
+     * The `rtti:` header comment, reporting the typeinfo symbol that is actually there. [Itanium.zti]
+     * builds a closed-form name, and for anything the shorthand or a template spells differently that
+     * name does not exist: `std::istream`'s record is `_ZTISi`, not `_ZTIN3std7istreamE`. Prefers the
+     * linkage name over Ghidra's own demangled label, which is also a symbol at that address and would
+     * render as "rtti: typeinfo typeinfo".
+     */
+    private fun rttiComment(program: Program, className: String): String {
+        val name = rttiOf(program)
+            ?.let { program.symbolTable.getSymbols(it).map { s -> s.name } }
+            ?.let { names -> names.firstOrNull(Itanium::looksLikeZti) ?: names.firstOrNull() }
+            ?: Itanium.zti(className)
+        return "${Itanium.RTTI}: $name typeinfo"
+    }
+
+    /**
+     * Lay this record, and return the address its `{vfptr}` holds — where the [vftable] struct, if any, and its
+     * label go, so a constructor's `this->vfptr = &<Class>::vftable` resolves to a symbol and a
+     * virtual call resolves to one of its fields. The labels are Ghidra's ([ClassNaming]): `internal_` on a
+     * secondary, `construction-` in a construction group (`_ZTC`), and the vftable's `vftable_for_<[base]>`
+     * once its class has several ([ClassNaming.vftableLabel]); the header's label never takes a base.
+     *
+     * Itanium points at the address point, and the record's header is laid in front of it as its
+     * [vtableHeaderLayout], resolved through [registry]; the rtti pointee stays an untyped `void*` until
+     * backlog §24 wires it. Each header word also gets an EOL comment saying what it holds for this class,
+     * which the shared layout cannot. gcc 2.x points at the record start, so its reserved header is *inside*
+     * the struct — laid as fields by the caller rather than here, because a header struct there would
+     * collide with the vftable covering the same bytes.
+     */
+    fun lay(
+        registry: DtmRegistry,
+        program: Program,
+        vftable: Structure?,
+        className: String,
+        ns: Namespace,
+        virtualBases: List<String> = emptyList(),
+        internal: Boolean = false,
+        source: SourceType = SourceType.IMPORTED,
+        construction: Boolean = false,
+        base: String? = null,
+    ): Address {
+        val vftableLabel = ClassNaming.vftableLabel(internal, construction, base)
+        // gcc 2.x labels the record start, because that is what a `{vfptr}` holds. The struct is *not*
+        // stamped over the bytes: gcc declares the record itself (`__vtbl_ptr_type __vt_9TiXmlNode[20]`),
+        // which is authoritative on length in a way nothing here is, and a virtual call resolves off the
+        // vfptr's pointee type rather than off whatever data is applied at the target.
+        if (header == null) {
+            program.listing.setComment(address, CommentType.EOL, "gcc 2.x vtable: reserved entry, then the slots")
+            program.labelVtable(address, vftableLabel, ns, source)
+            return address
+        }
+
+        program.labelVtable(address, ClassNaming.vtableLabel(internal, construction), ns, source)
+        program.forceCreateData(address, registry.resolveLayout(header))
+        for (i in 0 until prefixWords) {
+            fieldAddress(vtableOffsetField(i))?.let {
+                program.listing.setComment(it, CommentType.EOL, prefixKind(i, prefixWords, virtualBases))
+            }
+        }
+        fieldAddress(Itanium.RTTI)?.let {
+            program.listing.setComment(it, CommentType.EOL, rttiComment(program, className))
+        }
+        vftable?.let { program.forceCreateData(addressPoint, it) }
+        program.labelVtable(addressPoint, vftableLabel, ns, source)
+        return addressPoint
+    }
 }
-
-/** [record]'s header as memory holds it, read through its layout; null for a gcc 2.x record. */
-fun Program.readHeader(record: VtableRecord): Data? = record.header?.let { readAt(record.address, it) }
-
-/**
- * The vbase offset [record] keeps for virtual [base]: where [base] sits in the class [record] is the
- * primary vtable of. [base]'s offset is that word's position behind the address point, which the typeinfo
- * gives exactly, so the word is commented with [base]'s name over [prefixKind]'s guess. Null when that
- * word is not one of the header's offset words.
- */
-fun Program.vbaseOffset(record: VtableRecord, base: Rtti.Reader.Base): Long? {
-    val field = vtableOffsetField(((record.addressPoint + base.offset - record.address) / defaultPointerSize).toInt())
-    val value = readHeader(record)?.getScalar(field)?.signedValue ?: return null
-    record.fieldAddress(field)?.let { listing.setComment(it, CommentType.EOL, "vbase offset: ${base.className}") }
-    return value
-}
-
-/** The typeinfo [record]'s rtti word points at. */
-fun Program.rttiOf(record: VtableRecord): Address? = readHeader(record)?.valueOf<Address>(Itanium.RTTI)
 
 /** The Itanium record at [start] whose rtti word sits at [rttiSlot], or the canonical 2-word one if null. */
 private fun Program.recordAt(start: Address, rttiSlot: Address?, abi: CxxAbi): VtableRecord {
@@ -98,30 +210,6 @@ private fun Program.recordAt(start: Address, rttiSlot: Address?, abi: CxxAbi): V
     val prefixWords = rttiSlot?.let { ((it - start) / ptr - 1).toInt() } ?: 0
     val header = vtableHeaderLayout(dataTypeManager, prefixWords)
     return VtableRecord(start, header, abi)
-}
-
-/**
- * What prefix word [i] of [total] is, given the class's [virtualBases]. The ABI orders the words
- * before `offset_to_top` as vcall offsets then vbase offsets (§2.5.2), one vbase offset per virtual
- * base — so knowing how many virtual bases the stab declares splits the run from the right-hand end,
- * and names each vbase word. A vbase offset of 0 is normal, not a gap: an empty abstract base sits at
- * offset 0 (CryptoPP's interface lattice gives eleven vtables twelve zeroed vbase offsets).
- *
- * Falls back to the undifferentiated label when the stab declares no virtual base — either the class
- * genuinely has none and this is a swept class we know nothing about, or the count disagrees, which
- * [ghistabs.importer.ClassApplier] reports separately.
- */
-private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
-    val vcalls = total - virtualBases.size
-    if (virtualBases.isEmpty() || vcalls < 0) return "vbase/vcall offset"
-    // Naming the word only when there is one virtual base to name. The ABI fixes the order of the
-    // vbase offsets, but nothing here has verified it against a class with several, and a confidently
-    // wrong base name in a comment is worse than none.
-    return when {
-        i < vcalls -> "vcall offset"
-        virtualBases.size == 1 -> "vbase offset: ${virtualBases.single()}"
-        else -> "vbase offset"
-    }
 }
 
 /**
@@ -147,6 +235,7 @@ fun Program.vtableRecord(ztv: Address, abi: CxxAbi = Itanium): VtableRecord {
     val ptr = defaultPointerSize.toLong()
     fun holdsTypeinfo(slot: Address) =
         readPointer(slot)?.let { pointee -> symbolTable.getSymbols(pointee).any { it.isTypeinfo } } == true
+
     val rttiSlot = generateSequence(ztv) { it.add(ptr) }
         .take(MAX_VTABLE_PREFIX_WORDS)
         .takeWhile { holdsTypeinfo(it) || codeTargetAt(it) == null }
@@ -160,6 +249,21 @@ data class SubVtable(val record: VtableRecord, val targets: List<Address>) {
 }
 
 /**
+ * The sub-vtable beginning at [start], or null if what is there does not belong to [rtti]'s group. One
+ * with no slots is still a record: a base with no virtuals of its own keeps its vptr and header
+ * (`Right` in `Diamond`, ahead of `Named`'s), and stopping at it would lose every record after it.
+ */
+private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? =
+    generateSequence(start) { it.add(defaultPointerSize.toLong()) }
+        .take(MAX_VTABLE_PREFIX_WORDS)
+        .takeWhile { readPointer(it) == rtti || codeTargetAt(it) == null }
+        // offset_to_top precedes rtti, so a match on the first word would put the top slot back
+        // inside the primary's function array.
+        .firstOrNull { it > start && readPointer(it) == rtti }
+        ?.let { recordAt(start, it, Itanium) }
+        ?.let { record -> SubVtable(record, record.vtableSlotTargets(this)) }
+
+/**
  * The secondary sub-vtables following the primary record, whose slots end at [afterPrimary] — one per
  * virtual base, each its own `[vcall offsets…] offset_to_top rtti [thunks]` (ABI §2.5.2), none bearing
  * a symbol. Nothing delimits the group, so the walk is bounded by the one invariant that does: every
@@ -171,108 +275,7 @@ data class SubVtable(val record: VtableRecord, val targets: List<Address>) {
 fun Program.secondaryVtables(afterPrimary: Address, rtti: Address): List<SubVtable> =
     generateSequence(subVtableAt(afterPrimary, rtti)) {
         subVtableAt(it.endOfSlots(defaultPointerSize), rtti)
-    }.takeWhile { sub -> !opensGroup(sub.record) }.toList()
-
-/** Whether a vtable group's own symbol sits on any word of [record]'s header: the walk is past its group. */
-private fun Program.opensGroup(record: VtableRecord): Boolean =
-    generateSequence(record.address) { it.add(defaultPointerSize.toLong()) }
-        .takeWhile { it < record.addressPoint }
-        .any { at -> symbolTable.getSymbols(at).any { startsVtableGroup(it.name) } }
-
-/**
- * The sub-vtable beginning at [start], or null if what is there does not belong to [rtti]'s group. One
- * with no slots is still a record: a base with no virtuals of its own keeps its vptr and header
- * (`Right` in `Diamond`, ahead of `Named`'s), and stopping at it would lose every record after it.
- */
-private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? {
-    val ptr = defaultPointerSize.toLong()
-    val rttiSlot = generateSequence(start) { it.add(ptr) }
-        .take(MAX_VTABLE_PREFIX_WORDS)
-        .takeWhile { readPointer(it) == rtti || codeTargetAt(it) == null }
-        // offset_to_top precedes rtti, so a match on the first word would put the top slot back
-        // inside the primary's function array.
-        .firstOrNull { it > start && readPointer(it) == rtti }
-        ?: return null
-    val record = recordAt(start, rttiSlot, Itanium)
-    return SubVtable(record, vtableSlotTargets(record))
-}
-
-/**
- * Addresses the function-pointer array at [record]'s address point holds, in slot order. Nothing records its
- * length, so it ends where the entries stop pointing into executable memory — at the next record's
- * `offset_to_top` (0) or rtti pointer (into .data). Walks by the record's ABI's entry stride and reads `pfn` at
- * its offset within the entry, which is what separates a gcc 2.x table without thunks from one with.
- */
-fun Program.vtableSlotTargets(record: VtableRecord): List<Address> =
-    generateSequence(record.addressPoint) { it.add(record.abi.stride(defaultPointerSize)) }
-        .map { codeTargetAt(it.add(record.abi.pfnOffset(defaultPointerSize))) }
-        .takeWhile { it != null }
-        .filterNotNull()
-        .toList()
-
-/**
- * The `rtti:` header comment, reporting the typeinfo symbol that is actually there. [Itanium.zti]
- * builds a closed-form name, and for anything the shorthand or a template spells differently that
- * name does not exist: `std::istream`'s record is `_ZTISi`, not `_ZTIN3std7istreamE`. Prefers the
- * linkage name over Ghidra's own demangled label, which is also a symbol at that address and would
- * render as "rtti: typeinfo typeinfo".
- */
-private fun Program.rttiComment(record: VtableRecord, className: String): String {
-    val name = rttiOf(record)
-        ?.let { symbolTable.getSymbols(it).map { s -> s.name } }
-        ?.let { names -> names.firstOrNull(Itanium::looksLikeZti) ?: names.firstOrNull() }
-        ?: Itanium.zti(className)
-    return "${Itanium.RTTI}: $name typeinfo"
-}
-
-/**
- * Lay [record], and return the address its `{vfptr}` holds — where the [vftable] struct, if any, and its
- * label go, so a constructor's `this->vfptr = &<Class>::vftable` resolves to a symbol and a
- * virtual call resolves to one of its fields. The labels are Ghidra's ([ClassNaming]): `internal_` on a
- * secondary, `construction-` in a construction group (`_ZTC`), and the vftable's `vftable_for_<[base]>`
- * once its class has several ([ClassNaming.vftableLabel]); the header's label never takes a base.
- *
- * Itanium points at the address point, and the record's header is laid in front of it as its
- * [vtableHeaderLayout], resolved through [registry]; the rtti pointee stays an untyped `void*` until
- * backlog §24 wires it. Each header word also gets an EOL comment saying what it holds for this class,
- * which the shared layout cannot. gcc 2.x points at the record start, so its reserved header is *inside*
- * the struct — laid as fields by the caller rather than here, because a header struct there would
- * collide with the vftable covering the same bytes.
- */
-fun Program.layVtable(
-    registry: DtmRegistry,
-    record: VtableRecord,
-    vftable: Structure?,
-    className: String,
-    ns: Namespace,
-    virtualBases: List<String> = emptyList(),
-    internal: Boolean = false,
-    source: SourceType = SourceType.IMPORTED,
-    construction: Boolean = false,
-    base: String? = null,
-): Address {
-    val vftableLabel = ClassNaming.vftableLabel(internal, construction, base)
-    // gcc 2.x labels the record start, because that is what a `{vfptr}` holds. The struct is *not*
-    // stamped over the bytes: gcc declares the record itself (`__vtbl_ptr_type __vt_9TiXmlNode[20]`),
-    // which is authoritative on length in a way nothing here is, and a virtual call resolves off the
-    // vfptr's pointee type rather than off whatever data is applied at the target.
-    val header = record.header ?: run {
-        listing.setComment(record.address, CommentType.EOL, "gcc 2.x vtable: reserved entry, then the slots")
-        labelVtable(record.address, vftableLabel, ns, source)
-        return record.address
-    }
-
-    labelVtable(record.address, ClassNaming.vtableLabel(internal, construction), ns, source)
-    forceCreateData(record.address, registry.resolveLayout(header))
-    for (i in 0 until record.prefixWords) {
-        record.fieldAddress(vtableOffsetField(i))
-            ?.let { listing.setComment(it, CommentType.EOL, prefixKind(i, record.prefixWords, virtualBases)) }
-    }
-    record.fieldAddress(Itanium.RTTI)?.let { listing.setComment(it, CommentType.EOL, rttiComment(record, className)) }
-    vftable?.let { forceCreateData(record.addressPoint, it) }
-    labelVtable(record.addressPoint, vftableLabel, ns, source)
-    return record.addressPoint
-}
+    }.takeWhile { sub -> !sub.record.opensGroup(this) }.toList()
 
 /**
  * `createLabel` hands back a label already there as it stands, so a class laying a table an earlier
@@ -291,12 +294,13 @@ fun Program.renameVtableLabel(at: Address, from: String, to: String, ns: Namespa
     if (from == to) return
     val here = symbolTable.getSymbols(at).filter { it.parentNamespace == ns }
     val old = here.firstOrNull { it.name == from } ?: return
-    val existing = here.firstOrNull { it.name == to }
-    if (existing != null) {
-        if (old.source == SourceType.IMPORTED) existing.source = SourceType.IMPORTED
-        old.delete()
-    } else {
-        old.setName(to, old.source)
+    when (val existing = here.firstOrNull { it.name == to }) {
+        null -> old.setName(to, old.source)
+
+        else -> {
+            if (old.source == SourceType.IMPORTED) existing.source = SourceType.IMPORTED
+            old.delete()
+        }
     }
 }
 
@@ -311,14 +315,12 @@ fun Program.isPrimaryVftable(label: Symbol): Boolean = when (label.name) {
 
     ClassNaming.vftableLabel(internal = true) -> false
 
-    else -> {
-        val header = listing.getDataBefore(label.address)?.takeIf { it.maxAddress.next() == label.address }
-        val atHeader = header?.let { symbolTable.getSymbols(it.address) }.orEmpty()
-        atHeader.any { it.name == ClassNaming.VTABLE && it.parentNamespace == label.parentNamespace } ||
-            symbolTable.getSymbols(label.address).any {
-                CxxAbi.ofVtableSymbol(it.name)?.isPrimaryVtable(it.name) == true
-            }
-    }
+    else -> listing.getDataBefore(label.address)?.takeIf { it.maxAddress.next() == label.address }
+        ?.let { symbolTable.getSymbols(it.address) }.orEmpty()
+        .any { it.name == ClassNaming.VTABLE && it.parentNamespace == label.parentNamespace } ||
+        symbolTable.getSymbols(label.address).any {
+            CxxAbi.ofVtableSymbol(it.name)?.isPrimaryVtable(it.name) == true
+        }
 }
 
 /**
@@ -341,7 +343,7 @@ fun Program.vftableStructAt(label: Symbol): Structure? {
 }
 
 /**
- * Whether a class that describes [record] already laid it: [layVtable] with
+ * Whether a class that describes [record] already laid it: [VtableRecord.lay] with
  * [SourceType.IMPORTED] left one of its own vftable labels ([ClassNaming.isClassVftableLabel]) where
  * its `{vfptr}` points. This
  * is how a sweep tells what is left without the class pass's own bookkeeping. A swept table is

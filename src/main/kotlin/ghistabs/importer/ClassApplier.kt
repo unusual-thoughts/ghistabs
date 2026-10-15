@@ -3,7 +3,6 @@ package ghistabs.importer
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
-import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
@@ -17,8 +16,10 @@ import ghistabs.index.LocatedType
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.buildFunctionDefinition
 import ghistabs.materialize.cpp.*
-import ghistabs.materialize.cpp.abi.*
+import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.materialize.cpp.abi.ResolvedVtable
+import ghistabs.materialize.cpp.abi.vtableRecord
 import ghistabs.materialize.resolveRef
 import ghistabs.materialize.signatureParams
 import ghistabs.parse.*
@@ -327,7 +328,7 @@ class ClassApplier(
         }
 
         val record = vtable?.let { program.vtableRecord(it.address, abi) }
-        val targets = record?.let { program.vtableSlotTargets(it) }.orEmpty()
+        val targets = record?.vtableSlotTargets(program).orEmpty()
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)
         // Read off the laid struct, which records where gcc 2.x put the vptr (after the fields). Not
@@ -353,7 +354,7 @@ class ClassApplier(
             )
         }
 
-        val addressPoint = program.layVtable(registry, record, vftable, name, ns, virtualBases)
+        val addressPoint = record.lay(registry, program, vftable, name, ns, virtualBases)
         debug("vtable-applied", "class=$name abi=$abi", address = addressPoint)
         if (abi.hasRttiHeader) laySecondaryVtables(record, vftable, name, ns)
 

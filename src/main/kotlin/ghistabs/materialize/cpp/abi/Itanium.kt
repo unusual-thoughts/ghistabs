@@ -122,7 +122,7 @@ object Itanium : CxxAbi {
         if (ptrSize == 8) LongLongDataType.dataType else IntegerDataType.dataType
 
     override fun VtableRecord.vfptrOffset(program: Program): Long? =
-        program.readHeader(this)?.getScalar(OFFSET_TO_TOP)?.signedValue?.let { -it }
+        readHeader(program)?.getScalar(OFFSET_TO_TOP)?.signedValue?.let { -it }
 
     fun zti(className: String) = "$TYPEINFO_PREFIX${mangleClassName(className)}"
 

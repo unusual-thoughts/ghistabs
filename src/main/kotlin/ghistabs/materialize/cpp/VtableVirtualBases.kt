@@ -2,12 +2,7 @@ package ghistabs.materialize.cpp
 
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -46,13 +41,13 @@ class VtableVirtualBases(
         .sumOf { sym ->
             val struct = sym.vtableClass?.let { structFor(it, sym.parentNamespace) } ?: return@sumOf 0
             val record = runCatching { program.vtableRecord(sym.address) }.getOrNull() ?: return@sumOf 0
-            val vbases = program.rttiOf(record)?.let(reader::virtualBasesOf).orEmpty()
+            val vbases = record.rttiOf(program)?.let(reader::virtualBasesOf).orEmpty()
             val count = struct.definedComponents.count { it.isBaseField() } + vbases.size
             vbases.count { lay(struct, record, it, struct.pathName.member(it.className), count) }
         }
 
     private fun lay(struct: Structure, record: VtableRecord, vbase: Rtti.Reader.Base, at: String, count: Int): Boolean {
-        val vbaseAt = program.vbaseOffset(record, vbase)?.toInt()
+        val vbaseAt = record.vbaseOffset(program, vbase)?.toInt()
         // A nearly-empty virtual base can be the primary base, sharing the class's vptr at 0 (CryptoPP's
         // CryptoMaterial under CryptoParameters): there is nothing of its own to lay.
         when {
