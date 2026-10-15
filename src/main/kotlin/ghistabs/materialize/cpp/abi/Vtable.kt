@@ -1,11 +1,7 @@
 package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.ArrayDataType
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
@@ -13,14 +9,9 @@ import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
-import ghistabs.Demangler
-import ghistabs.forceCreateData
-import ghistabs.get
+import ghistabs.*
 import ghistabs.materialize.DtmRegistry
 import ghistabs.materialize.cpp.ClassNaming
-import ghistabs.readAt
-import ghistabs.readPointer
-import ghistabs.valueOf
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64
@@ -93,7 +84,7 @@ fun Program.readHeader(record: VtableRecord): Data? = record.header?.let { readA
  */
 fun Program.vbaseOffset(record: VtableRecord, base: Rtti.Reader.Base): Long? {
     val offsets = readHeader(record)?.get(VTABLE_OFFSETS) ?: return null
-    val index = record.addressPoint.add(base.offset).subtract(offsets.address) / defaultPointerSize
+    val index = (record.addressPoint + base.offset - offsets.address) / defaultPointerSize
     val word = offsets[index.toInt()] ?: return null
     listing.setComment(word.address, CommentType.EOL, "vbase offset: ${base.className}")
     return (word.value as? Scalar)?.signedValue
@@ -105,7 +96,7 @@ fun Program.rttiOf(record: VtableRecord): Address? = readHeader(record)?.valueOf
 /** The Itanium record at [start] whose rtti word sits at [rttiSlot], or the canonical 2-word one if null. */
 private fun Program.recordAt(start: Address, rttiSlot: Address?, abi: CxxAbi): VtableRecord {
     val ptr = defaultPointerSize.toLong()
-    val prefixWords = rttiSlot?.let { (it.subtract(start) / ptr - 1).toInt() } ?: 0
+    val prefixWords = rttiSlot?.let { ((it - start) / ptr - 1).toInt() } ?: 0
     val header = vtableHeaderLayout(dataTypeManager, prefixWords)
     return VtableRecord(start, header, abi)
 }
@@ -278,9 +269,6 @@ fun Program.layVtable(
     for (i in 0 until record.prefixWords) {
         val kind = prefixKind(i, record.prefixWords, virtualBases)
         listing.setComment(record.address.add(i * ptr), CommentType.EOL, kind)
-    }
-    record.fieldAddress(Itanium.OFFSET_TO_TOP)?.let {
-        listing.setComment(it, CommentType.EOL, "${Itanium.OFFSET_TO_TOP} (to top of complete object)")
     }
     record.fieldAddress(Itanium.RTTI)?.let { listing.setComment(it, CommentType.EOL, rttiComment(record, className)) }
     vftable?.let { forceCreateData(record.addressPoint, it) }
