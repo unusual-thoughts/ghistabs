@@ -919,7 +919,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         assumeTrue(structs.isNotEmpty(), "Skipping: no struct materialized in this fixture")
 
         val missing = structs.flatMap { (body, dt) ->
-            val components = dt.definedComponents.groupBy({ it.offset }, { it.fieldName })
+            val components = dt.ownFields().groupBy({ it.first }, { it.second })
             val data = body.fields.filter { !it.isStatic && it.name.isNotEmpty() && !isVptrFieldName(it.name) }
             data.filter { components[(it.offsetBits / 8).toInt()]?.contains(it.name) != true }
                 .filterNot { field -> data.any { it !== field && it.overlaps(field) } }
@@ -950,6 +950,17 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 "${missing.size} stab fields have no component of their name at their offset " +
                     "(all of them in ${structFieldsFile.path})",
             )
+    }
+
+    /**
+     * [this]'s components as (offset, name), a split base's own fields read through the
+     * [ClassNaming.FIELDS] struct that holds them.
+     */
+    private fun Structure.ownFields(at: Int = 0): List<Pair<Int, String?>> = definedComponents.flatMap {
+        when (val held = it.dataType) {
+            is Structure if it.fieldName?.startsWith(ClassNaming.FIELDS) == true -> held.ownFields(at + it.offset)
+            else -> listOf(at + it.offset to it.fieldName)
+        }
     }
 
     /**

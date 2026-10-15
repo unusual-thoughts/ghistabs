@@ -94,6 +94,29 @@ class VirtualInheritanceIntegrationTest : FeatureFixtureTest() {
         }
     }
 
+    /**
+     * The base `Diamond` splits for its own `{vfptr}` holds its fields as the same `_fields_` struct
+     * `Diamond` embeds, and so does the class a split self-base copies, or the two copies drift apart
+     * on the first edit. Itanium splits `Left`'s self-base, so `Left` and the self-base both hold
+     * it; gcc 2.x splits `Named`, which has no virtual base and is its own base part.
+     */
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a split base holds the fields struct its deriving class embeds`(fixture: String) {
+        load(fixture)
+        val runs = struct("Diamond").definedComponents.map { it.dataType }.filter { "_fields_" in it.name }
+        runs.mustNotBeEmpty("Diamond should embed a split base's fields")
+
+        for (run in runs) {
+            val cls = struct(run.name.substringBefore("_fields_"))
+            val selfBase = program.dataTypeManager.getDataType(ClassUtils.getBaseClassDataTypePath(cls)) as? Structure
+            for (holder in listOfNotNull(cls, selfBase)) {
+                holder.definedComponents.any { it.dataType.dataTypePath == run.dataTypePath }
+                    .mustBeTrue("${holder.pathName} should hold ${run.pathName}, not its own copy of the fields")
+            }
+        }
+    }
+
     /** The one struct the harvest's definition of [name] materialized. */
     private fun struct(name: String): Structure = artifacts.harvest.types.values
         .filter { it.name == name && it.body is TypeDecl.Aggregate }
