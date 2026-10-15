@@ -186,8 +186,8 @@ private fun Structure.ownFieldsOverlapping(
     name: String,
     offset: Int,
     length: Int,
-) = definedComponents.filter { c ->
-    c.fieldName != name && c.offset < offset + length && offset < c.offset + c.length &&
+) = componentsOverlapping(offset, length).filter { c ->
+    c.fieldName != name &&
         body.fields.any { it.name == c.fieldName }
 }
 

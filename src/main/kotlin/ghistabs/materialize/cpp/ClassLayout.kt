@@ -8,6 +8,7 @@ import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
 import ghistabs.index.demangledClassPath
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.componentsOverlapping
 import ghistabs.materialize.dataSize
 import ghistabs.materialize.naturalAlignment
 import ghistabs.materialize.reportHoles
@@ -101,7 +102,8 @@ internal fun DataTypeRegistry.fillStructBases(
             placeholder,
             offsetBytes,
             dt,
-            base,
+            base.isVirtual,
+            ClassNaming.baseComment(base),
             ClassNaming.baseFieldName(false, dt.name, baseCount),
             qualifiedName,
         )
@@ -192,30 +194,35 @@ internal fun DataTypeRegistry.baseSubobjects(body: TypeDecl.Aggregate<GlobalType
         else -> 0
     }
 
-private fun DataTypeRegistry.placeBase(
+/** Lays [dt] at [offset] in [struct] as a base subobject, and reports how that went. */
+internal fun DataTypeRegistry.placeBase(
     struct: Structure,
     offset: Int,
     dt: DataType,
-    base: TypeDecl.Aggregate.Base<GlobalTypeId>,
+    isVirtual: Boolean,
+    comment: String,
     fieldName: String,
     qualifiedName: String,
 ) {
-    val (applied, failed) = if (base.isVirtual) {
+    val (applied, failed) = if (isVirtual) {
         "vbase-applied" to "vbase-layout-failed"
     } else {
         "inheritance-applied" to
             "base-layout-failed"
     }
-    runCatching { struct.replaceAtOffset(offset, dt, dt.length, fieldName, ClassNaming.baseComment(base)) }
+    runCatching { struct.replaceAtOffset(offset, dt, dt.length, fieldName, comment) }
         .onSuccess { debug(applied) }
         .onFailure {
             degradation(failed, qualifiedName.member(dt.name), it.message)
-            if (!base.isVirtual) debug("inheritance-failed")
+            if (!isVirtual) debug("inheritance-failed")
         }
 }
 
 internal val LocatedType.classBody get() = type.body as TypeDecl.Aggregate<GlobalTypeId>
 internal val LocatedType.className get() = location.name
+
+/** How layout diagnostics name the class: its location's category and its own name. */
+internal val LocatedType.layoutName get() = "${location.category}/${type.ghidraName}"
 
 /**
  * The namespace chain gcc *stated* for this class, the class itself last: off a member's mangled name,
@@ -288,7 +295,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
             runCatching {
                 // Two locations can fill one struct (`/stabs/basic_ostream<…>` and `/std/basic_ostream<…>`),
                 // and a second pass would take the laid virtual base for own data.
-                val qualifiedName = "${located.location.category}/${located.type.ghidraName}"
+                val qualifiedName = located.layoutName
                 if (add(struct.dataTypePath)) layBases(located.classBody, struct, qualifiedName)
                 placeVfptr(located, struct)
             }.onFailure { err("class-layout-error", "${located.location}: ${it.message}") }
@@ -334,10 +341,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
                 )
                 continue
             }
-            val clash = struct.definedComponents.firstOrNull {
-                offset < it.offset + it.length &&
-                    it.offset < offset + dt.length
-            }
+            val clash = struct.componentsOverlapping(offset, dt.length).firstOrNull()
             if (clash != null) {
                 degradation(
                     "base-synthesized",
@@ -350,7 +354,8 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
                 struct,
                 offset,
                 dt,
-                base,
+                base.isVirtual,
+                ClassNaming.baseComment(base),
                 ClassNaming.baseFieldName(false, dt.name, count),
                 qualifiedName,
             )
@@ -383,7 +388,15 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         val count = registry.baseSubobjects(body)
         for ((vbase, offset) in vbases.zip(offsets)) {
             val (base, dt) = vbase
-            registry.placeBase(struct, offset, dt, base, ClassNaming.baseFieldName(true, dt.name, count), qualifiedName)
+            registry.placeBase(
+                struct,
+                offset,
+                dt,
+                base.isVirtual,
+                ClassNaming.baseComment(base),
+                ClassNaming.baseFieldName(true, dt.name, count),
+                qualifiedName,
+            )
         }
     }
 

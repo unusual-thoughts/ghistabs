@@ -76,7 +76,7 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
     @Test
     fun aVirtualBaseTheStabCannotShowIsLaidWhereTheVtableSays() {
         layRtti(vbaseOffset = 16)
-        val (derived, _) = import("Derived:T(0,3)=s32!1,020,(0,2);x:(0,1),64,32;;")
+        val (derived, _) = import(DERIVED)
 
         val core = derived.getComponentAt(20)
         core.dataType.must("Core at +20") { name == "Core" && length == 8 }
@@ -88,9 +88,15 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
     @Test
     fun aVirtualBaseOverOwnFieldsIsReportedNotLaid() {
         layRtti(vbaseOffset = 4)
-        val (derived, degradations) = import("Derived:T(0,3)=s32!1,020,(0,2);x:(0,1),64,32;;")
+        val (derived, degradations) = import(DERIVED)
 
         derived.getComponentAt(8).fieldName mustBe "x"
         degradations["vbase-layout-failed"].orEmpty().must("reported") { single().endsWith("Derived::Wrap") }
+    }
+
+    private companion object {
+        /** Polymorphic, as a class with a vtable is: one virtual, `f`, in slot 0. */
+        const val DERIVED = "Derived:T(0,3)=s32!1,020,(0,2);x:(0,1),64,32;" +
+            "f::(0,5)=#(0,3),(0,1),(0,6)=*(0,3);:_ZN7Derived1fEv;2A*0;(0,3);;;"
     }
 }

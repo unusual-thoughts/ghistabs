@@ -9,6 +9,7 @@ import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
+import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
@@ -16,6 +17,7 @@ import ghistabs.Demangler
 import ghistabs.forceCreateData
 import ghistabs.materialize.DtmRegistry
 import ghistabs.materialize.cpp.ClassNaming
+import ghistabs.readAs
 import ghistabs.readAt
 import ghistabs.readPointer
 import ghistabs.valueOf
@@ -82,6 +84,14 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
 
 /** [record]'s header as memory holds it, read through its layout; null for a gcc 2.x record. */
 fun Program.readHeader(record: VtableRecord): Data? = record.header?.let { readAt(record.address, it) }
+
+/**
+ * The vbase offset [record] keeps [vtableOffset] bytes from its address point (negative, as a virtual base's
+ * `__offset_flags` gives it): where that virtual base sits in the class [record] is the primary vtable of.
+ */
+fun Program.vbaseOffset(record: VtableRecord, vtableOffset: Long): Long? = runCatching {
+    readAs<Scalar>(record.addressPoint.add(vtableOffset), Itanium.offsetToTopType(defaultPointerSize))
+}.getOrNull()?.signedValue
 
 /** The typeinfo [record]'s rtti word points at. */
 fun Program.rttiOf(record: VtableRecord): Address? = readHeader(record)?.valueOf<Address>(Itanium.RTTI)

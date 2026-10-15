@@ -327,18 +327,12 @@ open class VtableSweeper(
 
     /** What [Rtti] says sits where in the class [primary] is the primary of: a direct base per subobject offset. */
     private fun baseSubobjects(primary: VtableRecord, rtti: Address): Map<Long, String> =
-        Itanium.offsetToTopType(program.defaultPointerSize).let { word ->
-            Rtti.Reader(program).basesOf(rtti).orEmpty().mapNotNull { base ->
-                when {
-                    // A virtual base's offset is where the vtable keeps its vbase offset, behind the address point.
-                    base.isVirtual -> runCatching {
-                        program.readAs<Scalar>(primary.addressPoint.add(base.offset), word)
-                    }.getOrNull()?.signedValue
-
-                    else -> base.offset
-                }?.let { it to base.className }
-            }.distinctBy { it.first }.toMap()
-        }
+        Rtti.Reader(program).basesOf(rtti).orEmpty().mapNotNull { base ->
+            // A virtual base's offset is where the vtable keeps its vbase offset, behind the address point.
+            (if (base.isVirtual) program.vbaseOffset(primary, base.offset) else base.offset)?.let {
+                it to base.className
+            }
+        }.distinctBy { it.first }.toMap()
 
     /**
      * The base each table at [offsets] serves, by [subobjects]' name for it shortened as Ghidra shortens
