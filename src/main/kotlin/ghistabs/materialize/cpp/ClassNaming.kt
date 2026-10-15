@@ -65,10 +65,6 @@ object ClassNaming {
     fun isClassVftableLabel(name: String) =
         name == VFTABLE || name == vftableLabel(internal = true) || name.startsWith(vftableForLabel(""))
 
-    /** Whether [name] labels any vftable, a construction one's included. */
-    fun isVftableLabel(name: String) =
-        isClassVftableLabel(name) || name == vftableLabel(false, true) || name == vftableLabel(true, true)
-
     fun isBaseField(name: String) = name.startsWith(BASE_PREFIX) || name.startsWith(VBASE_PREFIX)
 
     /**
