@@ -119,8 +119,6 @@ class CuContext(
         else -> SourceFile.HeaderSource(header)
     }
 
-    fun getAllFileNums(): Set<Int> = fileNumToHeader.keys
-
     /**
      * The range between two boundaries, or null where there is none to make: an address missing, or the
      * two landing together — an N_SO and the N_SOL after it share one address, and a CU can bracket no
