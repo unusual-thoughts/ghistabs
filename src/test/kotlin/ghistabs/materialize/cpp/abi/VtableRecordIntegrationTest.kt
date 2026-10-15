@@ -37,11 +37,11 @@ class VtableRecordIntegrationTest : FeatureFixtureTest() {
         record.prefixWords mustBe 1
         record.header?.name mustBe "VtableHeaderStructure1"
         with(Itanium) { record.vfptrOffset(program) } mustBe 0L
-        program.rttiOf(record)
+        record.rttiOf(program)
             ?.let { program.symbolTable.getSymbols(it) }
             .orEmpty().any { it.name == "_ZTI7Diamond" }
             .mustBeTrue("rtti word should point at _ZTI7Diamond")
-        program.listing.getDataAt(ztv)?.get(VTABLE_OFFSETS)?.get(0)?.defaultValueRepresentation
+        program.listing.getDataAt(ztv)?.get(vtableOffsetField(0))?.defaultValueRepresentation
             ?.endsWith("h").mustBe(false, "a laid vbase offset should render in decimal")
     }
 

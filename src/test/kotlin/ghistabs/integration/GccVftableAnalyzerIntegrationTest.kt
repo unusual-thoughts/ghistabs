@@ -92,7 +92,7 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         analyzer.mustNot("a swept program must not be swept again") { canAnalyze(program) }
     }
 
-    /** The label a class's own `layVtable` leaves is the claim: the sweep must not lay that table again. */
+    /** The label a class's own `VtableRecord.lay` leaves is the claim: the sweep must not lay that table again. */
     @Test
     fun leavesATableAClassLaid() {
         program.runTransaction("class-pass") {

@@ -8,6 +8,7 @@ import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
 import ghistabs.index.demangledClassPath
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.componentsOverlapping
 import ghistabs.materialize.dataSize
 import ghistabs.materialize.naturalAlignment
 import ghistabs.materialize.reportHoles
@@ -70,7 +71,7 @@ internal fun DataTypeRegistry.fillStructBases(
     for ((base, gap) in baseGaps(body)) {
         if (base in laidLater) continue
         val offsetBytes = (base.offsetBits / 8).toInt()
-        val raw = resolveRef(base.type)
+        val raw = resolveRef(base.type)?.let { sizedXRefStub(it, gap, qualifiedName) ?: it }
         // Empty placeholders report length=1 (Ghidra's enforced minimum); isZeroLength gives the
         // logical truth. `dtm.contains` rejects a cycle-break stub, which [seedPlaceholder]
         // deliberately keeps out of the DTM: splicing one in makes `replaceAtOffset` resolve it on
@@ -101,7 +102,8 @@ internal fun DataTypeRegistry.fillStructBases(
             placeholder,
             offsetBytes,
             dt,
-            base,
+            base.isVirtual,
+            ClassNaming.baseComment(base),
             ClassNaming.baseFieldName(false, dt.name, baseCount),
             qualifiedName,
         )
@@ -117,6 +119,24 @@ internal fun DataTypeRegistry.fillStructBases(
         placeholder.description =
             if (placeholder.description.isNullOrEmpty()) lines else "${placeholder.description}\n$lines"
     }
+}
+
+/**
+ * A base class no CU defines, only forward-references (`!1,020,(51,22)` naming an
+ * `xsbasic_ifstream<char,std:…` everywhere), has no size of its own; the [gap] its deriving class leaves
+ * before its next base or own field is the only evidence there is. The empty stub is grown to that
+ * many undefined bytes, in the DTM, the first time a deriving class lays it, so the base is named
+ * rather than left as bare Undefined1. A later deriving class with a smaller gap gets nothing laid.
+ */
+private fun DataTypeRegistry.sizedXRefStub(stub: DataType, gap: Int, qualifiedName: String): DataType? {
+    if (stub !in xrefStubs || stub !is Structure || gap <= 0) return null
+    if (stub.isZeroLength) {
+        stub.growStructure(gap)
+        stub.description = "Only forward-declared; size guessed from the $gap bytes $qualifiedName leaves it"
+        degradation("base-size-guessed", qualifiedName.member(stub.name), "$gap bytes from the deriving class")
+    }
+    // An empty copy a pointer to it already put in the DTM is replaced by this one, not forked.
+    return register(stub)
 }
 
 /**
@@ -174,25 +194,27 @@ internal fun DataTypeRegistry.baseSubobjects(body: TypeDecl.Aggregate<GlobalType
         else -> 0
     }
 
-private fun DataTypeRegistry.placeBase(
+/** Lays [dt] at [offset] in [struct] as a base subobject, and reports how that went. */
+internal fun DiagnosticSink.placeBase(
     struct: Structure,
     offset: Int,
     dt: DataType,
-    base: TypeDecl.Aggregate.Base<GlobalTypeId>,
+    isVirtual: Boolean,
+    comment: String,
     fieldName: String,
     qualifiedName: String,
 ) {
-    val (applied, failed) = if (base.isVirtual) {
+    val (applied, failed) = if (isVirtual) {
         "vbase-applied" to "vbase-layout-failed"
     } else {
         "inheritance-applied" to
             "base-layout-failed"
     }
-    runCatching { struct.replaceAtOffset(offset, dt, dt.length, fieldName, ClassNaming.baseComment(base)) }
+    runCatching { struct.replaceAtOffset(offset, dt, dt.length, fieldName, comment) }
         .onSuccess { debug(applied) }
         .onFailure {
             degradation(failed, qualifiedName.member(dt.name), it.message)
-            if (!base.isVirtual) debug("inheritance-failed")
+            if (!isVirtual) debug("inheritance-failed")
         }
 }
 
@@ -316,10 +338,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
                 )
                 continue
             }
-            val clash = struct.definedComponents.firstOrNull {
-                offset < it.offset + it.length &&
-                    it.offset < offset + dt.length
-            }
+            val clash = struct.componentsOverlapping(offset, dt.length).firstOrNull()
             if (clash != null) {
                 degradation(
                     "base-synthesized",
@@ -332,7 +351,8 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
                 struct,
                 offset,
                 dt,
-                base,
+                base.isVirtual,
+                ClassNaming.baseComment(base),
                 ClassNaming.baseFieldName(false, dt.name, count),
                 qualifiedName,
             )
@@ -365,7 +385,15 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         val count = registry.baseSubobjects(body)
         for ((vbase, offset) in vbases.zip(offsets)) {
             val (base, dt) = vbase
-            registry.placeBase(struct, offset, dt, base, ClassNaming.baseFieldName(true, dt.name, count), qualifiedName)
+            registry.placeBase(
+                struct,
+                offset,
+                dt,
+                base.isVirtual,
+                ClassNaming.baseComment(base),
+                ClassNaming.baseFieldName(true, dt.name, count),
+                qualifiedName,
+            )
         }
     }
 
@@ -410,3 +438,14 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
             }
     }
 }
+
+/**
+ * The one struct a stab tag, or typedef, names, when only one does: a class no namespace finds, a plain struct,
+ * `basic_ios<char,…>` under its `ios`. A cycle-break stub, kept out of the DTM, is not one.
+ */
+internal fun DataTypeRegistry.uniqueStructTagged(tag: String) =
+    (types.definitionsByTag[tag].orEmpty() + types.namedTypedefs[tag].orEmpty())
+        .mapNotNull { dataTypeFor(it.id)?.let { dt -> (dt as? TypeDef)?.baseDataType ?: dt } as? Structure }
+        .filter(dtm::contains)
+        .distinct()
+        .singleOrNull()

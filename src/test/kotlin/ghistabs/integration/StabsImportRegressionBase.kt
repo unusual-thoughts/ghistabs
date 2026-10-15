@@ -136,6 +136,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     private val degradationFile get() = File(
         "$OUTPUT_ROOT/degradations/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt",
     )
+    private val structFieldsFile get() = File(
+        "$OUTPUT_ROOT/struct-fields/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt",
+    )
     private val logFile get() = File("$OUTPUT_ROOT/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
     private val analysisTimesFile get() = File(
         "$OUTPUT_ROOT/analysis-times/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt",
@@ -900,6 +903,56 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
+     * Every non-static data member a struct's stab declares is a component of the struct it materialized
+     * as, under its own name at the byte its bitpos gives. The vptr is left out: where it goes is
+     * [declaredVptrsBecomeTheClassVfptr]'s to say, and an inherited one is dropped on purpose. So are
+     * fields the stab itself overlaps, which no struct can hold both of: gcc 2.x flattens the union in
+     * its vtable entry, `__vtbl_ptr_type:T18=s8__delta:8,0,16;__index:8,16,16;__pfn:19=*16,32,32;
+     * __delta2:8,32,16;;`.
+     *
+     * Every struct's components go to `struct-fields/<fixture>.<mode>.txt` alongside, each stab field
+     * missing from it listed under its struct, so a layout can be read without opening Ghidra.
+     */
+    @Test
+    fun everyStabFieldIsAStructComponent() {
+        val structs = builtClasses().sortedBy { (_, dt) -> dt.pathName }
+        assumeTrue(structs.isNotEmpty(), "Skipping: no struct materialized in this fixture")
+
+        val missing = structs.flatMap { (body, dt) ->
+            val components = dt.definedComponents.groupBy({ it.offset }, { it.fieldName })
+            val data = body.fields.filter { !it.isStatic && it.name.isNotEmpty() && !isVptrFieldName(it.name) }
+            data.filter { components[(it.offsetBits / 8).toInt()]?.contains(it.name) != true }
+                .filterNot { field -> data.any { it !== field && it.overlaps(field) } }
+                .map { dt to it }
+        }
+        val missingBy = missing.groupBy({ it.first }, { it.second })
+
+        structFieldsFile.parentFile.mkdirs()
+        structFieldsFile.writeText(
+            buildString {
+                appendLine("fixture: $binaryName ($mode)")
+                appendLine("${structs.size} structs, ${missing.size} stab fields missing\n")
+                for ((_, dt) in structs) {
+                    appendLine("${dt.pathName} (${dt.length} bytes)")
+                    dt.definedComponents.forEach {
+                        appendLine("  +0x%x %4d  %s %s".format(it.offset, it.length, it.dataType.name, it.fieldName))
+                    }
+                    missingBy[dt]?.forEach {
+                        appendLine("  MISSING +0x%x %s (%d bits)".format(it.offsetBits / 8, it.name, it.sizeBits))
+                    }
+                }
+            },
+        )
+
+        missing.map { (dt, field) -> "${dt.pathName}.${field.name} @ +${field.offsetBits / 8}" }
+            .sorted().take(10)
+            .mustBeEmpty(
+                "${missing.size} stab fields have no component of their name at their offset " +
+                    "(all of them in ${structFieldsFile.path})",
+            )
+    }
+
+    /**
      * Every struct, union or enum id the harvest produced is a member of exactly one located group.
      * [everyDeclaredSlotIsFilledWhereItWasDeclared] checks the slots that exist; this checks that no
      * type fell between them. An id in no group has no slot of its own, so its Refs resolve to an
@@ -1432,10 +1485,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "crypto_mi_test_gcc421_stripped.exe", "xmltest_gcc421_stripped.exe",
             // a.out: these fixtures are plain C, so there are no classes and no vtables at all.
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
-            // Own-code-only libg++ driver: its two classes derive from streambuf and iostream,
-            // which reach the CU as `xs` cross-references, so the {vfptr} stays in the base and
-            // neither vftable gets a back-edge. The _fullstabs twin is the contrast.
-            "iostream_test_aout_gcc263.o",
         ],
         reason = "no _ZTV symbol and no method stab section, so nothing can locate or fill a vftable",
     )
@@ -1872,10 +1921,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @ExpectedToFail(
         fixtures = [
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
-            // C++, but every base it names is a libg++ class the CU only cross-references.
-            "iostream_test_aout_gcc263.o",
         ],
-        reason = "no inheritance edge is materializable: plain C, or bases that are `xs` cross-refs",
+        reason = "no inheritance edge is materializable: plain C",
     )
     fun inheritanceWasApplied() {
         val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
@@ -2296,6 +2343,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     /** Whether a base contributes bytes. An empty class is `sizeof == 1` and the empty-base
      *  optimization drops it from the layout entirely; member *functions* do not make it occupy
      *  space, so [TypeDecl.Aggregate.hasMembers] is the wrong question here. */
+
+    private fun TypeDecl.Aggregate.Field<GlobalTypeId>.overlaps(other: TypeDecl.Aggregate.Field<GlobalTypeId>) =
+        offsetBits < other.offsetBits + other.sizeBits && other.offsetBits < offsetBits + sizeBits
 
     private fun occupiesSpace(base: GlobalTypeDecl) =
         (resolve(base) as? TypeDecl.Aggregate)?.let { it.sizeBytes > 1 } == true

@@ -136,17 +136,22 @@ internal fun DataTypeRegistry.fillComposite(
         // is gcc 2.x's unpacked vptr, whose extent is its type's.
         val isBitfield = sizeBits > 0 && (sizeBits < ft.length * 8L || offsetBits % 8 != 0L) &&
             BitFieldDataType.isValidBaseDataType(ft)
+        val at = (offsetBits / 8).toInt()
         try {
             when (placeholder) {
                 is Structure if isBitfield -> placeholder.insertBitField(offsetBits, sizeBits, ft, name)
 
-                is Structure -> placeholder.replaceAtOffset(
-                    (offsetBits / 8).toInt(),
-                    ft,
-                    len,
-                    name,
-                    null,
-                )
+                is Structure -> {
+                    // The stab itself can overlap two fields, as gcc 2.x's flattened vtable-entry union
+                    // `__pfn:19=*16,32,32;__delta2:8,32,16;;` does.
+                    // A struct filled a second time re-places each field over itself, which clears nothing.
+                    for (field in placeholder.componentsOverlapping(at, len).filter { c ->
+                        c.fieldName != name && body.fields.any { it.name == c.fieldName }
+                    }) {
+                        degradation("field-overlapped", "$qualifiedName.${field.fieldName}", "cleared by $name at +$at")
+                    }
+                    placeholder.replaceAtOffset(at, ft, len, name, null)
+                }
 
                 is Union if isBitfield -> placeholder.addBitField(ft, sizeBits.toInt(), name, null)
 

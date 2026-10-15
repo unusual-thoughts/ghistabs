@@ -108,6 +108,9 @@ class Rtti(private val dtm: DataTypeManager) {
 
         // Arbitrary sanity bound: a garbage count must not read megabytes.
         const val MAX_BASES = 256
+
+        // Bound on base chains walked: a typeinfo cycle in garbage must not recurse forever.
+        const val MAX_BASE_DEPTH = 16
     }
 
     /**
@@ -129,8 +132,16 @@ class Rtti(private val dtm: DataTypeManager) {
         /**
          * A direct base. [offset] is `__offset_flags`'s offset: where the base subobject sits in the class,
          * or for a virtual one where the vtable holds that, relative to the address point (negative).
+         * [typeinfo] is where the base's own typeinfo is, to read its bases in turn: the symbol that named
+         * it, which is in the EXTERNAL block for one a shared library defines.
          */
-        data class Base(val className: String, val isVirtual: Boolean, val access: Access, val offset: Long = 0)
+        data class Base(
+            val className: String,
+            val typeinfo: Address,
+            val isVirtual: Boolean,
+            val access: Access,
+            val offset: Long = 0,
+        )
 
         private val ptr = program.defaultPointerSize
         private val symtab = program.symbolTable
@@ -144,13 +155,26 @@ class Rtti(private val dtm: DataTypeManager) {
 
                 TypeinfoKind.SI -> program.readAt(zti, layouts.siClassTi)?.get(BASE_TYPE)
                     ?.let { classAt(it.address) }
-                    ?.let { listOf(Base(it, isVirtual = false, access = Access.PUBLIC)) }
+                    ?.let { (name, at) -> listOf(Base(name, at, isVirtual = false, access = Access.PUBLIC)) }
 
                 TypeinfoKind.VMI -> vmiBases(zti)
 
                 null -> null
             }
         }.getOrNull()
+
+        /**
+         * [zti]'s virtual bases whose offsets its primary vtable keeps, each with its vtable offset: its own,
+         * and those of its primary chain (the non-virtual bases at 0, which share that vtable).
+         */
+        fun virtualBasesOf(zti: Address, depth: Int = 0): List<Base> =
+            basesOf(zti).orEmpty().takeIf { depth < MAX_BASE_DEPTH }.orEmpty().flatMap { base ->
+                when {
+                    base.isVirtual -> listOf(base)
+                    base.offset == 0L -> virtualBasesOf(base.typeinfo, depth + 1)
+                    else -> emptyList()
+                }
+            }.distinctBy { it.className }
 
         fun structFor(zti: Address) = when (kindOf(zti)) {
             TypeinfoKind.CLASS -> layouts.classTi
@@ -166,8 +190,10 @@ class Rtti(private val dtm: DataTypeManager) {
             val array = structFor(zti)?.let { program.readAt(zti, it)?.get(BASES) } ?: return null
             return (0 until array.numComponents).map { i ->
                 val entry = array[i] ?: return null
+                val (name, at) = entry[BASE_TYPE_IN_ENTRY]?.let { classAt(it.address) } ?: return null
                 Base(
-                    entry[BASE_TYPE_IN_ENTRY]?.let { classAt(it.address) } ?: return null,
+                    name,
+                    at,
                     isVirtual = entry.flag(IS_VIRTUAL),
                     access = if (entry.flag(IS_PUBLIC)) Access.PUBLIC else Access.PRIVATE,
                     offset = entry.getScalar(BASE_OFFSET)?.signedValue ?: return null,
@@ -179,8 +205,8 @@ class Rtti(private val dtm: DataTypeManager) {
         internal fun kindOf(zti: Address) =
             pointee(zti, Itanium.vtablePrefixBytes(ptr)) { it.vtableClass?.let(TypeinfoKind::ofVtableClass) }
 
-        /** The class whose typeinfo the pointer at [at] points at. */
-        private fun classAt(at: Address) = pointee(at, 0) { it.typeinfoClass }
+        /** The class whose typeinfo the pointer at [at] points at, and where that typeinfo's symbol is. */
+        private fun classAt(at: Address) = pointee(at, 0) { sym -> sym.typeinfoClass?.let { it to sym.address } }
 
         /**
          * [of] the first symbol the pointer at [at] refers to that it answers for: an external one by
