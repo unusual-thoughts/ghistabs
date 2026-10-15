@@ -20,12 +20,12 @@ import ghistabs.parse.member
 import ghistabs.readAs
 
 /**
- * The virtual bases a class's stab can't show, laid where its vtable says they are. xapasmcsr's
- * `CLexStream` derives from `basic_ifstream<char>`, which no CU defines, so its stab has no virtual
- * base for [layClasses] to lay; its typeinfo still says `basic_istream` has `basic_ios` as a virtual
- * base whose offset is 12 bytes behind the vtable's address point, and that word in `_ZTV10CLexStream`
- * is 0xc0. No CU defines `basic_ios` either, so the first base of it that one does is laid instead, where
- * `basic_ios`'s typeinfo puts it: `ios_base`, 4 bytes in, behind `basic_ios`'s own vptr.
+ * The virtual bases a class's stab can't show, laid where its vtable says they are. A class deriving
+ * from `basic_ifstream<char>` where no CU defines that has no virtual base in its stab for [layClasses] to
+ * lay; its typeinfo still says `basic_istream` has `basic_ios` as a virtual base whose offset is 12 bytes
+ * behind the vtable's address point, and the class's `_ZTV` holds that offset there. When no CU defines
+ * `basic_ios` either, the first base of it that one does is laid instead, where `basic_ios`'s typeinfo
+ * puts it: `ios_base`, 4 bytes in, behind `basic_ios`'s own vptr.
  *
  * Itanium only: gcc 2.x fills its typeinfo at run time. A class whose stab shows a virtual base is
  * [layClasses]'s, and anything that would not fit, or would cover laid bytes, is reported and left. Runs

@@ -16,9 +16,9 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
- * A base no CU defines: xapasmcsr's `CLexStream:Tt(1,309)=s328!1,020,(51,22);LineNo:/0(0,1),896,32;…`,
- * whose `(51,22)` is only ever `xsbasic_ifstream<char,std:…`. The 112 bytes before `LineNo` are the
- * base's, and the only size the binary gives it.
+ * A base no CU defines: `Derived:T(0,3)=s328!1,020,(51,22);a:(0,1),896,32;…` where `(51,22)` is only
+ * ever `xsbasic_ifstream<char,std:…`. The 112 bytes before `a` are the base's, and the only size the
+ * binary gives it.
  */
 @Tag("integration")
 class ForwardDeclaredBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {

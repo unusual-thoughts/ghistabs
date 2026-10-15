@@ -16,10 +16,10 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
- * xapasmcsr's `CLexStream` in miniature: `Derived` derives from `Mid`, which no CU defines, so its stab
- * shows no virtual base. `Mid`'s typeinfo says it virtually inherits `Wrap` through vtable offset −12,
- * where `_ZTV7Derived` holds 16; `Wrap`, defined nowhere either, has `Core` 4 bytes in (`basic_ios`
- * keeps its vptr in front of `ios_base`), so `Core` goes at +20.
+ * A class deriving from an undefined `basic_ifstream<char>`, in miniature: `Derived` derives from `Mid`,
+ * which no CU defines, so its stab shows no virtual base. `Mid`'s typeinfo says it virtually inherits
+ * `Wrap` through vtable offset −12, where `_ZTV7Derived` holds 16; `Wrap`, defined nowhere either, has
+ * `Core` 4 bytes in (`basic_ios` keeps its vptr in front of `ios_base`), so `Core` goes at +20.
  */
 @Tag("integration")
 class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
