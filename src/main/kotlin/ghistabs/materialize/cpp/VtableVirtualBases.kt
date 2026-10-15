@@ -11,12 +11,7 @@ import ghistabs.index.ScopeLocator
 import ghistabs.index.TypeLocation
 import ghistabs.index.scopeCategory
 import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.cpp.abi.Itanium
-import ghistabs.materialize.cpp.abi.ResolvedVtable
-import ghistabs.materialize.cpp.abi.Rtti
-import ghistabs.materialize.cpp.abi.VtableRecord
-import ghistabs.materialize.cpp.abi.rttiOf
-import ghistabs.materialize.cpp.abi.vtableRecord
+import ghistabs.materialize.cpp.abi.*
 import ghistabs.parse.leafName
 import ghistabs.parse.member
 import ghistabs.parse.nameSegments
@@ -34,25 +29,23 @@ import ghistabs.readAs
  * [layClasses]'s, and anything that would not fit, or would cover laid bytes, is reported and left. Runs
  * after [layClasses], so a class embedded as a base was embedded without what this lays.
  */
-internal fun DataTypeRegistry.layVirtualBasesFromVtables(program: Program) {
-    val vtables = buildMap<String, Address> {
+internal fun DataTypeRegistry.layVirtualBasesFromVtables(program: Program) = VtableVirtualBases(this, program).layAll()
+
+/** [vtables] is each class's Itanium `_ZTV`, by the qualified name it demangles to. */
+private class VtableVirtualBases(val registry: DataTypeRegistry, val program: Program) : DiagnosticSink by registry {
+    private val reader = Rtti.Reader(program)
+    private val word = Itanium.offsetToTopType(program.defaultPointerSize)
+
+    val vtables = buildMap {
         for (sym in program.symbolTable.getSymbolIterator(true)) {
             ResolvedVtable.fromSymbol(sym)?.takeIf { it.abi == Itanium }?.let { putIfAbsent(it.className, it.address) }
         }
     }
-    if (vtables.isNotEmpty()) VtableVirtualBases(this, program, vtables).layAll()
-}
-
-/** [vtables] is each class's Itanium `_ZTV`, by the qualified name it demangles to. */
-private class VtableVirtualBases(
-    val registry: DataTypeRegistry,
-    val program: Program,
-    val vtables: Map<String, Address>,
-) : DiagnosticSink by registry {
-    private val reader = Rtti.Reader(program)
-    private val word = Itanium.offsetToTopType(program.defaultPointerSize)
 
     fun layAll() {
+        if (vtables.isEmpty()) {
+            return
+        }
         val done = mutableSetOf<Structure>()
         for (located in registry.classesBasesFirst()) {
             if (registry.types.hasVirtualBase(located.classBody)) continue
@@ -92,11 +85,8 @@ private class VtableVirtualBases(
                 degradation("vbase-layout-failed", at, "${dt.name} at +$offset covers laid fields")
 
             else -> runCatching {
-                val part = if (within == 0 && dt.name == vbase.className.leafName) {
-                    ""
-                } else {
-                    "; only its ${dt.name} at +$within is defined"
-                }
+                val part = "; only its ${dt.name} at +$within is defined"
+                    .takeUnless { within == 0 && dt.name == vbase.className.leafName }.orEmpty()
                 val comment = "${vbase.access.name.lowercase()} virtual ${vbase.className} at " +
                     "+0x${vbaseAt.toString(16)}, by the vtable$part"
                 struct.replaceAtOffset(offset, dt, dt.length, ClassNaming.baseFieldName(true, dt.name, count), comment)
@@ -139,10 +129,9 @@ private class VtableVirtualBases(
      * that sits in [base]: `basic_ios` keeps its own vptr in front of `ios_base`, at +4.
      */
     private fun definedPart(base: Rtti.Reader.Base, depth: Int = 0): Pair<DataType, Int>? =
-        structFor(base.className)?.let { it to 0 }
-            ?: base.typeinfo.takeIf { depth < MAX_DEPTH }?.let(reader::basesOf)
-                ?.filterNot { it.isVirtual }?.minByOrNull { it.offset }
-                ?.let { next -> definedPart(next, depth + 1)?.let { (dt, at) -> dt to at + next.offset.toInt() } }
+        structFor(base.className)?.let { it to 0 } ?: base.typeinfo.takeIf { depth < MAX_DEPTH }?.let(reader::basesOf)
+            ?.filterNot { it.isVirtual }?.minByOrNull { it.offset }
+            ?.let { next -> definedPart(next, depth + 1)?.let { (dt, at) -> dt to at + next.offset.toInt() } }
 
     /** The class as its typeinfo and vtable demangle: its stated namespace chain, else its name. */
     private fun LocatedType.qualifiedName() = statedClassPath(registry.types)?.joinToString("::") ?: className
