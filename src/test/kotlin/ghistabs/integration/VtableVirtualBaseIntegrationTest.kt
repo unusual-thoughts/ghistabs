@@ -31,7 +31,8 @@ import org.junit.jupiter.api.Test
  * A class deriving from an undefined `basic_ifstream<char>`, in miniature: `Derived` derives from `Mid`,
  * which no CU defines, so its stab shows no virtual base. `Mid`'s typeinfo says it virtually inherits
  * `Wrap` through vtable offset −12, where `_ZTV7Derived` holds 16; `Wrap`, defined nowhere either, has
- * `Core` 4 bytes in (`basic_ios` keeps its vptr in front of `ios_base`), so `Core` goes at +20.
+ * `Core` 4 bytes in (`basic_ios` keeps its vptr in front of `ios_base`), so `Wrap` is built as its vptr then
+ * `Core`, and goes at +16.
  */
 @Tag("integration")
 class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -44,6 +45,8 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         builder.createMemory(".data", "0x404000", 512)
         builder.createMemory(".stab", "0x402000", 4)
         builder.createMemory(".stabstr", "0x403000", 4)
+        // The GNU demangler only takes a program it recognizes as gcc's.
+        builder.program.runTransaction { builder.program.executableFormat = ElfLoader.ELF_NAME }
     }
 
     @AfterEach
@@ -92,15 +95,15 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         layRtti(vbaseOffset = 16)
         val (derived, _) = import(DERIVED)
 
-        val core = derived.getComponentAt(20)
-        core.dataType.must("Core at +20") { name == "Core" && length == 8 }
-        core.fieldName mustBe "_vbase_Core"
-        core.comment.must("names the virtual base") { contains("virtual Wrap") && contains("+0x10") }
+        val wrap = derived.getComponentAt(16)
+        wrap.fieldName mustBe "_vbase_Wrap"
+        wrap.comment.must("names the virtual base") { contains("virtual Wrap") && contains("+0x10") }
+        (wrap.dataType as Structure).must("Wrap built as its vptr then its Core") {
+            length == 16 && getComponentAt(0).fieldName == ClassUtils.VFPTR && getComponentAt(0).dataType is Pointer &&
+                getComponentAt(4).dataType.name == "Core"
+        }
         derived.getComponentAt(8).fieldName mustBe "x"
         builder.program.listing.getComment(CommentType.EOL, builder.addr("0x4040a0")) mustBe "vbase offset: Wrap"
-        derived.getComponentAt(16).must("Wrap's vptr in front of its Core") {
-            fieldName == ClassUtils.VFPTR && offset == 16 && dataType is Pointer
-        }
     }
 
     @Test
@@ -118,8 +121,6 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         layRtti(vbaseOffset = 16)
         val program = builder.program
         val derived = program.runTransaction {
-            // The GNU demangler only takes a program it recognizes as gcc's.
-            program.executableFormat = ElfLoader.ELF_NAME
             for (sym in program.symbolTable.symbolIterator.iterator().asSequence().toList()) {
                 if (sym.name.startsWith("_Z")) program.applyDemangling(sym.address, sym.name)
             }
@@ -133,7 +134,7 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
             struct("Derived", 32, 8 to "x").also { VtableVirtualBases(program, DummySink).layAll() mustBe 1 }
         }
 
-        derived.getComponentAt(20).dataType.must("Core at +20") { name == "Core" }
+        (derived.getComponentAt(16).dataType as Structure).getComponentAt(4).dataType.name mustBe "Core"
     }
 
     private companion object {

@@ -2,9 +2,12 @@ package ghistabs.materialize.cpp
 
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -20,8 +23,8 @@ import ghistabs.parse.member
  * from `basic_ifstream<char>` that no debug info defines has no virtual base in its struct; its typeinfo
  * still says `basic_istream` has `basic_ios` as a virtual base whose offset is 12 bytes behind the
  * vtable's address point, and the class's `_ZTV` holds that offset there. When nothing defines
- * `basic_ios` either, the first base of it that something does is laid instead, where `basic_ios`'s
- * typeinfo puts it: `ios_base`, 4 bytes in, behind `basic_ios`'s own vptr.
+ * `basic_ios` either, it is built off its typeinfo: its own vptr, then the first base of it that something
+ * defines where the typeinfo puts it, `ios_base` 4 bytes in. Where that does not fit, that base alone is laid.
  *
  * Needs the labels demangled, so each `vtable` and `typeinfo` sits in its class's namespace, which
  * [DataTypeUtilities.findExistingClassStruct] finds the class's struct by; [fallback] answers, by the
@@ -60,13 +63,15 @@ class VtableVirtualBases(
             }
         }
 
-        val (dt, within) = definedPart(vbase) ?: return false.also {
+        val (found, foundWithin) = definedPart(vbase) ?: return false.also {
             degradation("vbase-undefined", at, "nothing defines it or a base of it")
         }
         // Laid already, by the class layout off the stab's own inheritance line, or by an earlier run.
         struct.getComponentAt(vbaseAt)?.takeIf { it.offset == vbaseAt }?.dataType?.name?.let { laid ->
-            if (laid == vbase.className.leafName || laid == dt.name) return false
+            if (laid == vbase.className.leafName || laid == found.name) return false
         }
+        val (dt, within) = synthesized(vbase, found, foundWithin, roomAt(struct, vbaseAt), at)?.let { it to 0 }
+            ?: (found to foundWithin)
 
         val offset = vbaseAt + within
         when {
@@ -87,29 +92,39 @@ class VtableVirtualBases(
             ClassNaming.baseFieldName(true, dt.name, count),
             at,
         )
-        if (within > 0) layVptr(struct, record, vbaseAt, vbase.className)
         return true
     }
 
     /**
-     * The vptr of a virtual base laid only from a base further in (`basic_ios`, laid as its `ios_base` at +4).
-     * A subobject with its own table in the class's `_ZTV` group starts with the pointer to it (Itanium ABI
-     * §2.4/§2.5.2): that table's `offset_to_top` is minus where the subobject sits. Typed after the struct the
-     * sweep laid over that table.
+     * Undefined [vbase] as its own struct, built off its typeinfo where its labels' namespace files it, once
+     * the first class to need it does: its vptr at 0, typed after its own vftable when one is laid (a dynamic
+     * class with no base at 0 allocates one, Itanium ABI §2.4), then the [part] something defines [within]
+     * bytes in. Nothing says how long it is, so it takes the [room] the class leaves it.
      */
-    private fun layVptr(struct: Structure, record: VtableRecord, vbaseAt: Int, className: String) {
+    private fun synthesized(vbase: Rtti.Reader.Base, part: DataType, within: Int, room: Int, at: String): Structure? {
         val ptr = program.defaultPointerSize
-        val rtti = program.rttiOf(record) ?: return
-        val afterPrimary = record.addressPoint.add(program.vtableSlotTargets(record).size * ptr.toLong())
-        val table = program.secondaryVtables(afterPrimary, rtti)
-            .firstOrNull { with(record.abi) { it.record.vfptrOffset(program) } == vbaseAt.toLong() } ?: return
-        if (struct.componentsOverlapping(vbaseAt, ptr).isNotEmpty()) return
-        val vftable = program.listing.getDataAt(table.record.addressPoint)?.dataType as? Structure
-        val type = vftable?.let { PointerDataType(it, ptr, dtm) } ?: PointerDataType(dtm)
-        struct.replaceAtOffset(vbaseAt, type, ptr, ClassUtils.VFPTR, "vtable pointer of virtual $className")
+        val ns = namespaceOfTypeinfo(vbase.typeinfo)?.takeUnless { it.isGlobal }
+        if (ns == null || within < ptr || within + part.length > room) return null
+        val vftable = dtm.getDataType(ClassNaming.vftablePath(ns))
+        val category = ns.parentNamespace.getPathList(true)
+            .fold(CategoryPath.ROOT) { path, seg -> CategoryPath(path, seg) }
+        val struct = StructureDataType(category, ns.name, room, dtm).apply {
+            replaceAtOffset(0, PointerDataType(vftable, ptr, dtm), ptr, ClassUtils.VFPTR, "vtable pointer")
+            replaceAtOffset(within, part, part.length, ClassNaming.baseFieldName(false, part.name, 1), "public base")
+            description = "Defined nowhere: built off its typeinfo, its size guessed from the $room bytes $at leaves it"
+        }
+        degradation("vbase-size-guessed", at, "$room bytes from the deriving class")
+        return dtm.resolve(
+            struct,
+            DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER,
+        ) as? Structure
     }
 
     private fun Structure.takeAcceptable() = takeUnless { it.isZeroLength }
+
+    /** The bytes from [offset] to the next laid component, or the end of [struct]. */
+    private fun roomAt(struct: Structure, offset: Int) =
+        (struct.definedComponents.map { it.offset }.filter { it > offset }.minOrNull() ?: struct.length) - offset
 
     /** [className]'s struct, by the namespace its demangled labels sit in, else by [fallback]. */
     private fun structFor(className: String, namespace: Namespace?): Structure? = when (namespace) {
