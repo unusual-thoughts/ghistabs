@@ -7,6 +7,9 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
+import ghistabs.index.ScopeLocator
+import ghistabs.index.TypeLocation
+import ghistabs.index.scopeCategory
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.abi.ResolvedVtable
@@ -16,6 +19,7 @@ import ghistabs.materialize.cpp.abi.rttiOf
 import ghistabs.materialize.cpp.abi.vtableRecord
 import ghistabs.parse.leafName
 import ghistabs.parse.member
+import ghistabs.parse.nameSegments
 import ghistabs.readAs
 
 /**
@@ -47,14 +51,6 @@ private class VtableVirtualBases(
 ) : DiagnosticSink by registry {
     private val reader = Rtti.Reader(program)
     private val word = Itanium.offsetToTopType(program.defaultPointerSize)
-
-    // Any struct by name, a C++ class or not: the defined part of a virtual base needn't be one.
-    private val structOf = registry.byLocation.values.mapNotNull { located ->
-        (registry.dataTypeFor(located.type.id) as? Structure)?.let { located.qualifiedName() to it }
-    }.toMap()
-    private val byLeaf = structOf.entries.groupBy { it.key.leafName }
-        .mapNotNull { (leaf, all) -> all.map { it.value }.distinct().singleOrNull()?.let { leaf to it } }
-        .toMap()
 
     fun layAll() {
         val done = mutableSetOf<Structure>()
@@ -109,8 +105,30 @@ private class VtableVirtualBases(
         }
     }
 
-    private fun structFor(className: String) = (structOf[className] ?: byLeaf[className.leafName])
+    /**
+     * The struct filed where [className] says: a class gcc stated a scope for is located at its demangled
+     * path ([ScopeLocator]), the one its typeinfo's symbol demangles to as well. One it stated none for,
+     * having no out-of-line member, is filed by where it was declared instead, so only its name finds
+     * it, and only when no other struct has that name.
+     */
+    private fun structFor(className: String) = className.nameSegments
+        .let { registry.byLocation[TypeLocation(scopeCategory(it.dropLast(1)), it.last())] }
+        ?.let { registry.dataTypeFor(it.type.id) as? Structure }
+        .let { it ?: byLeaf[className.leafName] }
         ?.takeIf { registry.dtm.contains(it) && !it.isZeroLength }
+
+    private val byLeaf: Map<String, Structure> by lazy {
+        registry.byLocation.values
+            .mapNotNull { located ->
+                (registry.dataTypeFor(located.type.id) as? Structure)?.let {
+                    located.className to
+                        it
+                }
+            }
+            .groupBy({ it.first.leafName }, { it.second })
+            .mapNotNull { (leaf, all) -> all.distinct().singleOrNull()?.let { leaf to it } }
+            .toMap()
+    }
 
     /** [zti]'s virtual bases, its own and those of its primary chain, each with its vtable offset. */
     private fun virtualBases(zti: Address, depth: Int = 0): List<Rtti.Reader.Base> =
