@@ -86,8 +86,19 @@ fun Program.vbaseOffset(record: VtableRecord, base: Rtti.Reader.Base): Long? {
     val offsets = readHeader(record)?.get(VTABLE_OFFSETS) ?: return null
     val index = (record.addressPoint + base.offset - offsets.address) / defaultPointerSize
     val word = offsets[index.toInt()] ?: return null
-    listing.setComment(word.address, CommentType.EOL, "vbase offset: ${base.className}")
+    nameOffsetWord(record, index.toInt(), "vbase offset: ${base.className}")
     return (word.value as? Scalar)?.signedValue
+}
+
+/**
+ * Says what word [i] of [record]'s [VTABLE_OFFSETS] holds, as its `[i] what` line of the one comment on
+ * the array: Ghidra shows no comment on a word inside an array inside a struct.
+ */
+private fun Program.nameOffsetWord(record: VtableRecord, i: Int, kind: String) {
+    val at = record.fieldAddress(VTABLE_OFFSETS) ?: return
+    val lines = listing.getComment(CommentType.EOL, at)?.lines().orEmpty().filterNot { it.startsWith("[$i] ") }
+    val ordered = (lines + "[$i] $kind").sortedBy { it.substringAfter('[').substringBefore(']').toIntOrNull() }
+    listing.setComment(at, CommentType.EOL, ordered.joinToString("\n"))
 }
 
 /** The typeinfo [record]'s rtti word points at. */
@@ -265,10 +276,9 @@ fun Program.layVtable(
 
     labelVtable(record.address, ClassNaming.vtableLabel(internal, construction), ns, source)
     forceCreateData(record.address, registry.resolveLayout(header))
-    val ptr = defaultPointerSize.toLong()
-    for (i in 0 until record.prefixWords) {
-        val kind = prefixKind(i, record.prefixWords, virtualBases)
-        listing.setComment(record.address.add(i * ptr), CommentType.EOL, kind)
+    record.fieldAddress(VTABLE_OFFSETS)?.let { at ->
+        val words = (0 until record.prefixWords).map { "[$it] ${prefixKind(it, record.prefixWords, virtualBases)}" }
+        listing.setComment(at, CommentType.EOL, words.joinToString("\n"))
     }
     record.fieldAddress(Itanium.RTTI)?.let { listing.setComment(it, CommentType.EOL, rttiComment(record, className)) }
     vftable?.let { forceCreateData(record.addressPoint, it) }
