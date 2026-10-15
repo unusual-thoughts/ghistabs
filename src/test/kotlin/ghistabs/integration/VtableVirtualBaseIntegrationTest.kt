@@ -5,8 +5,10 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.IntegerDataType
+import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.applyDemangling
@@ -66,6 +68,8 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         words(0x404090, 0x404018, 0, 0x404070)
         label(0x4040a0, "_ZTV7Derived")
         words(0x4040a0, vbaseOffset, 0, 0x404090, 0x400000)
+        // Wrap's table in Derived's group: offset_to_top is minus where Wrap sits.
+        words(0x4040b0, -vbaseOffset and 0xffffffffL, 0x404090, 0x400000)
     }
 
     private fun import(vararg derived: String): Pair<Structure, Map<String, List<String>>> {
@@ -94,6 +98,9 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         core.comment.must("names the virtual base") { contains("virtual Wrap") && contains("+0x10") }
         derived.getComponentAt(8).fieldName mustBe "x"
         builder.program.listing.getComment(CommentType.EOL, builder.addr("0x4040a0")) mustBe "vbase offset: Wrap"
+        derived.getComponentAt(16).must("Wrap's vptr in front of its Core") {
+            fieldName == ClassUtils.VFPTR && offset == 16 && dataType is Pointer
+        }
     }
 
     @Test

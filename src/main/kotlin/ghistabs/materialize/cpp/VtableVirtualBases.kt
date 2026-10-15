@@ -3,7 +3,9 @@ package ghistabs.materialize.cpp
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
+import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
@@ -85,7 +87,26 @@ class VtableVirtualBases(
             ClassNaming.baseFieldName(true, dt.name, count),
             at,
         )
+        if (within > 0) layVptr(struct, record, vbaseAt, vbase.className)
         return true
+    }
+
+    /**
+     * The vptr of a virtual base laid only from a base further in (`basic_ios`, laid as its `ios_base` at +4).
+     * A subobject with its own table in the class's `_ZTV` group starts with the pointer to it (Itanium ABI
+     * §2.4/§2.5.2): that table's `offset_to_top` is minus where the subobject sits. Typed after the struct the
+     * sweep laid over that table.
+     */
+    private fun layVptr(struct: Structure, record: VtableRecord, vbaseAt: Int, className: String) {
+        val ptr = program.defaultPointerSize
+        val rtti = program.rttiOf(record) ?: return
+        val afterPrimary = record.addressPoint.add(program.vtableSlotTargets(record).size * ptr.toLong())
+        val table = program.secondaryVtables(afterPrimary, rtti)
+            .firstOrNull { with(record.abi) { it.record.vfptrOffset(program) } == vbaseAt.toLong() } ?: return
+        if (struct.componentsOverlapping(vbaseAt, ptr).isNotEmpty()) return
+        val vftable = program.listing.getDataAt(table.record.addressPoint)?.dataType as? Structure
+        val type = vftable?.let { PointerDataType(it, ptr, dtm) } ?: PointerDataType(dtm)
+        struct.replaceAtOffset(vbaseAt, type, ptr, ClassUtils.VFPTR, "vtable pointer of virtual $className")
     }
 
     private fun Structure.takeAcceptable() = takeUnless { it.isZeroLength }
