@@ -190,6 +190,15 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   Ghidra's `RecoverClassesFromRTTIScript` skips any vtable that already has a struct under
   `/ClassDataTypes`, so it recovers nothing for these classes and retypes their methods' `this` to an
   empty placeholder: run it on a program analysed with this analyzer off and no stabs import.
+- **Itanium virtual bases** - runs after GCC C++ vftables and lays the virtual bases a class
+  struct lacks, at the offset its `_ZTV` gives. The class's typeinfo names the virtual bases,
+  and its demangled `vtable` label's namespace finds its struct. A class deriving from a
+  `basic_ifstream<char>` that no debug info defines gets a `_vbase_ios_base` where the
+  vtable puts `basic_ios`, plus `basic_ios`'s own vptr: when nothing defines a virtual base,
+  the first base of it that something does is laid. It skips a base already in place and
+  reports one that would overrun the struct or cover laid fields. On a binary with stabs, the
+  importer runs it itself once its labels are demangled; turning the analyzer off turns that
+  off too.
 
 The Gap Disassembler and Filler Byte Condenser run before the importer, mostly so its data-coverage report doesn't flag
 compiler scaffolding as missing.
