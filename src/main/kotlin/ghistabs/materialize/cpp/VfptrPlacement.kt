@@ -15,11 +15,8 @@ import ghistabs.parse.leafName
  * otherwise own it. See [VfptrModel] for what the choice costs a virtual call. [ClassLayout]'s, which
  * runs it on each class in its turn.
  */
-internal class VfptrPlacement(
-    private val registry: DataTypeRegistry,
-    private val model: VfptrModel,
-    private val layoutsOf: (Structure) -> List<Structure>,
-) : DiagnosticSink by registry {
+internal class VfptrPlacement(private val registry: DataTypeRegistry, private val model: VfptrModel) :
+    DiagnosticSink by registry {
     private val dtm = registry.dtm
 
     /**
@@ -175,6 +172,17 @@ internal class VfptrPlacement(
         }.onFailure {
             degradation("vfptr-split-failed", className, "${baseDt.name} at +$baseOff: ${it.message}")
         }.isSuccess
+    }
+
+    /**
+     * [base] and, when it is a self-base ([ClassUtils.getBaseClassDataTypePath], `<Class>/!internal/<Class>`),
+     * the class it copies: every struct that holds its fields.
+     */
+    private fun layoutsOf(base: Structure): List<Structure> {
+        val owner = base.categoryPath.parent?.parent
+            ?.let { dtm.getDataType(it, base.name) as? Structure }
+            ?.takeIf { ClassUtils.getBaseClassDataTypePath(it) == base.dataTypePath }
+        return listOfNotNull(base, owner)
     }
 
     /**
