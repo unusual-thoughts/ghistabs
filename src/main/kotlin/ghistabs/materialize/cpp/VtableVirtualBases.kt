@@ -119,14 +119,8 @@ private class VtableVirtualBases(
 
     private val byLeaf: Map<String, Structure> by lazy {
         registry.byLocation.values
-            .mapNotNull { located ->
-                (registry.dataTypeFor(located.type.id) as? Structure)?.let {
-                    located.className to
-                        it
-                }
-            }
-            .groupBy({ it.first.leafName }, { it.second })
-            .mapNotNull { (leaf, all) -> all.distinct().singleOrNull()?.let { leaf to it } }
+            .groupBy({ it.className.leafName }, { registry.dataTypeFor(it.type.id) as? Structure })
+            .mapNotNull { (leaf, all) -> all.filterNotNull().distinct().singleOrNull()?.let { leaf to it } }
             .toMap()
     }
 
