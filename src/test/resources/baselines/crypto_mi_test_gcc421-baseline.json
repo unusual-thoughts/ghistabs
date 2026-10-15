@@ -1208,6 +1208,10 @@
             "min": 12,
             "max": 12
         },
+        "vbase-primary-from-vtable": {
+            "min": 11,
+            "max": 11
+        },
         "vfptr-inherited-from-base": {
             "min": 192,
             "max": 192

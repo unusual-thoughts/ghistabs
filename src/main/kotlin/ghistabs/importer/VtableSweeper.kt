@@ -5,7 +5,6 @@ import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
-import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
@@ -13,12 +12,8 @@ import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.materialize.DtmRegistry
-import ghistabs.materialize.cpp.ClassNaming
+import ghistabs.materialize.cpp.*
 import ghistabs.materialize.cpp.abi.*
-import ghistabs.materialize.cpp.describeVxTable
-import ghistabs.materialize.cpp.isBaseField
-import ghistabs.materialize.cpp.vfptrOffset
-import ghistabs.materialize.cpp.vfptrOffsetOfBase
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.leafName
 import ghistabs.parse.nameSegments
@@ -99,7 +94,7 @@ open class VtableSweeper(
         for ((qualified, addr, abi) in unclaimed) {
             monitor.increment()
             val record = program.vtableRecord(addr, abi)
-            val targets = program.vtableSlotTargets(record)
+            val targets = record.vtableSlotTargets(program)
             if (targets.isEmpty()) {
                 degradation("vtable-swept-empty", qualified, "no function pointers", record.addressPoint)
                 continue
@@ -119,7 +114,7 @@ open class VtableSweeper(
                 vftable.describeVxTable(leaf, ClassNaming.VFTABLE, 0L.takeIf { abi.hasRttiHeader })
             }
 
-            val addressPoint = program.layVtable(registry, record, vftable, qualified, ns, source = SWEPT)
+            val addressPoint = record.lay(registry, program, vftable, qualified, ns, source = SWEPT)
             debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
             laid++
             // Itanium packs a class's secondaries into the same record, walkable from the primary's
@@ -157,7 +152,7 @@ open class VtableSweeper(
             val ns = constructionNamespace(sym.name) ?: continue
             val name = ns.getName(true)
             val record = program.vtableRecord(sym.address)
-            val targets = program.vtableSlotTargets(record)
+            val targets = record.vtableSlotTargets(program)
             val path = ClassNaming.vftablePath(ns)
             // A base with no virtuals of its own (`Left`) has a header and no slots: nothing to type.
             val vftable = targets.takeIf { it.isNotEmpty() }?.let {
@@ -170,7 +165,7 @@ open class VtableSweeper(
                     }
                 }
             }
-            val at = program.layVtable(registry, record, vftable, ns.name, ns, source = SWEPT, construction = true)
+            val at = record.lay(registry, program, vftable, ns.name, ns, source = SWEPT, construction = true)
             debug("vtable-construction", "$name: ${targets.size} slot(s)", at)
             laySecondaryVtables(record, vftable, ns.name, ns, SWEPT, construction = true)
         }
@@ -211,9 +206,9 @@ open class VtableSweeper(
         construction: Boolean = false,
     ) {
         val abi = primary.abi
-        val rtti = program.rttiOf(primary) ?: return
+        val rtti = primary.rttiOf(program) ?: return
         val ptr = program.defaultPointerSize.toLong()
-        val slots = program.vtableSlotTargets(primary).size
+        val slots = primary.vtableSlotTargets(program).size
         // Only a record with slots is laid: an empty one has no function array to put a struct over.
         val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
             .filter { it.targets.isNotEmpty() }
@@ -234,8 +229,8 @@ open class VtableSweeper(
             val vftable = internalVftable(at, ClassNaming.internalSlotCategory(path, i), sub.targets, abi)
             val label = ClassNaming.vftableLabel(internal = true, construction, base)
             vftable.describeVxTable(leaf, label, offsets[index])
-            val laidAt = program.layVtable(
-                registry, sub.record, vftable, leaf, ns,
+            val laidAt = sub.record.lay(
+                registry, program, vftable, leaf, ns,
                 internal = true, source = source, construction = construction, base = base,
             )
             debug("vtable-secondary", "class=$leaf index=$index base=$base slots=${sub.targets.size}", address = laidAt)
@@ -294,9 +289,9 @@ open class VtableSweeper(
             val vfptrAt = classStruct?.vfptrOffsetOfBase(base)?.toLong()
             val label = ClassNaming.vftableLabel(internal = true, base = name)
             vftable.describeVxTable(leaf, label, vfptrAt)
-            program.layVtable(
+            record.lay(
                 registry,
-                record,
+                program,
                 vftable,
                 leaf,
                 ns,
@@ -318,27 +313,25 @@ open class VtableSweeper(
             when (val record = program.vtableRecord(at, abi)) {
                 else if program.isVtableClaimed(record) -> null
 
-                else -> program.vtableSlotTargets(record).ifEmpty {
+                else -> record.vtableSlotTargets(program).ifEmpty {
                     degradation("vtable-secondary-empty", className, "no slots read for base $base", at)
                     null
                 }?.let { (base to record) to it }
             }
         }
 
-    /** What [Rtti] says sits where in the class [primary] is the primary of: a direct base per subobject offset. */
+    /**
+     * What [Rtti] says sits where in the class [primary] is the primary of: a direct base, or a virtual one
+     * its primary chain inherits, per subobject offset.
+     */
     private fun baseSubobjects(primary: VtableRecord, rtti: Address): Map<Long, String> =
-        Itanium.offsetToTopType(program.defaultPointerSize).let { word ->
-            Rtti.Reader(program).basesOf(rtti).orEmpty().mapNotNull { base ->
-                when {
-                    // A virtual base's offset is where the vtable keeps its vbase offset, behind the address point.
-                    base.isVirtual -> runCatching {
-                        program.readAs<Scalar>(primary.addressPoint.add(base.offset), word)
-                    }.getOrNull()?.signedValue
-
-                    else -> base.offset
-                }?.let { it to base.className }
-            }.distinctBy { it.first }.toMap()
-        }
+        Rtti.Reader(program).run { basesOf(rtti).orEmpty() + virtualBasesOf(rtti) }.mapNotNull { base ->
+            // A virtual base's offset is where the vtable keeps its vbase offset, behind the address point.
+            when {
+                base.isVirtual -> primary.vbaseOffset(program, base)
+                else -> base.offset
+            }?.let { it to base.className }
+        }.distinctBy { it.first }.toMap()
 
     /**
      * The base each table at [offsets] serves, by [subobjects]' name for it shortened as Ghidra shortens
