@@ -91,8 +91,7 @@ class VtableVirtualBases(
 
         else -> namespace.takeUnless { it.isGlobal }
             ?.let { DataTypeUtilities.findDataType(dtm, it.parentNamespace, it.name, Structure::class.java) }
-    }.let { it?.takeUnless { s -> s.isZeroLength } ?: fallback(className) }
-        ?.takeIf { dtm.contains(it) && !it.isZeroLength }
+    }?.takeUnless { it.isZeroLength } ?: fallback(className)?.takeUnless { it.isZeroLength }
 
     /** The namespace the demangled `typeinfo` label at [zti] sits in. */
     private fun namespaceOfTypeinfo(zti: Address) = program.symbolTable.getSymbols(zti)
