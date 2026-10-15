@@ -80,6 +80,9 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
             "int:t(0,1)=r(0,1);-2147483648;2147483647;",
             "Core:T(0,4)=s8a:(0,1),0,32;b:(0,1),32,32;;",
             "Mid:t(0,2)=xsMid:",
+            // Only forward-declared, under a typedef as `ios` names `basic_ios<char,…>`, and used.
+            "Wrap:t(0,7)=xsWrapImpl:",
+            "User:T(0,8)=s4w:(0,9)=*(0,7),0,32;;",
         ) + derived
         val records = listOf(StabRecord(0, StabType.N_SO, 0, 0, 0, "vbase.cpp")) +
             stabs.mapIndexed { i, stab -> StabRecord(i + 1, StabType.N_LSYM, 0, 0, 0, stab) }
@@ -98,8 +101,9 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         val wrap = derived.getComponentAt(16)
         wrap.fieldName mustBe "_vbase_Wrap"
         wrap.comment.must("names the virtual base") { contains("virtual Wrap") && contains("+0x10") }
-        (wrap.dataType as Structure).must("Wrap built as its vptr then its Core") {
-            length == 16 && getComponentAt(0).fieldName == ClassUtils.VFPTR && getComponentAt(0).dataType is Pointer &&
+        (wrap.dataType as Structure).must("the stabs' placeholder, filled as Wrap's vptr then its Core") {
+            pathName == "/stabs/Wrap" && length == 16 &&
+                getComponentAt(0).run { fieldName == ClassUtils.VFPTR && dataType is Pointer } &&
                 getComponentAt(4).dataType.name == "Core"
         }
         derived.getComponentAt(8).fieldName mustBe "x"
