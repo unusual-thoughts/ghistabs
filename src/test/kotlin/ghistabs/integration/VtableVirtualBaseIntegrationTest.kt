@@ -1,12 +1,21 @@
 package ghistabs.integration
 
+import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.database.ProgramBuilder
+import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.DataTypeConflictHandler
+import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.applyDemangling
+import ghistabs.diagnose.DummySink
 import ghistabs.importer.StabsImporter
+import ghistabs.materialize.cpp.VtableVirtualBases
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
+import ghistabs.runTransaction
 import ghistabs.test.defaultContext
 import ghistabs.test.must
 import ghistabs.test.mustBe
@@ -92,6 +101,30 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
 
         derived.getComponentAt(8).fieldName mustBe "x"
         degradations["vbase-layout-failed"].orEmpty().must("reported") { single().endsWith("Derived::Wrap") }
+    }
+
+    /** No stabs: the structs are whatever the program has, found by the class namespaces of its labels. */
+    @Test
+    fun withoutStabsTheClassStructsAreFoundByNamespace() {
+        layRtti(vbaseOffset = 16)
+        val program = builder.program
+        val derived = program.runTransaction {
+            // The GNU demangler only takes a program it recognizes as gcc's.
+            program.executableFormat = ElfLoader.ELF_NAME
+            for (sym in program.symbolTable.symbolIterator.iterator().asSequence().toList()) {
+                if (sym.name.startsWith("_Z")) program.applyDemangling(sym.address, sym.name)
+            }
+            fun struct(name: String, size: Int, vararg ints: Pair<Int, String>) = program.dataTypeManager.addDataType(
+                StructureDataType(CategoryPath.ROOT, name, size).apply {
+                    ints.forEach { (at, field) -> replaceAtOffset(at, IntegerDataType.dataType, 4, field, null) }
+                },
+                DataTypeConflictHandler.DEFAULT_HANDLER,
+            ) as Structure
+            struct("Core", 8, 0 to "a", 4 to "b")
+            struct("Derived", 32, 8 to "x").also { VtableVirtualBases(program, DummySink).layAll() mustBe 1 }
+        }
+
+        derived.getComponentAt(20).dataType.must("Core at +20") { name == "Core" }
     }
 
     private companion object {

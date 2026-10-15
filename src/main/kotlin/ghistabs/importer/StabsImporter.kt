@@ -3,17 +3,21 @@ package ghistabs.importer
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.entrypoints.GccVftableAnalyzer
 import ghistabs.entrypoints.RttiLayoutAnalyzer
+import ghistabs.entrypoints.VirtualBaseAnalyzer
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.cpp.VtableVirtualBases
 import ghistabs.materialize.cpp.layClasses
+import ghistabs.materialize.cpp.uniqueStructTagged
 import ghistabs.materialize.materializeAll
 import ghistabs.materialize.reportConflictDelta
 import ghistabs.materialize.reportSurvivingPlaceholders
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
+import ghistabs.parse.leafName
 import ghistabs.runTransaction
 import java.nio.file.Path
 
@@ -77,6 +81,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     GccVftableAnalyzer.sweep(ctx.program, registry, ctx.monitor, ctx)
                 }
                 ctx.demanglerReplacer(registry).replace()
+                // Once labels are demangled, so each typeinfo and vtable sits in its class's namespace.
+                if (VirtualBaseAnalyzer.isEnabled(ctx.program)) {
+                    VtableVirtualBases(ctx.program, ctx) { registry.uniqueStructTagged(it.leafName) }.layAll()
+                }
             }
         }
 

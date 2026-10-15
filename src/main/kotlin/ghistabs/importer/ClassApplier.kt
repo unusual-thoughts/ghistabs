@@ -337,7 +337,6 @@ class ClassApplier(
         vftable.describeVxTable(name, ClassNaming.VFTABLE, vfptrAt)
 
         if (record == null) return
-        if (abi.hasRttiHeader) rttiVirtualBases.lay(located, structDt, record)
 
         // One vbase offset per virtual base, so the two counts must agree. They are derived
         // independently — the stab's base graph vs. where vtableRecord put offset_to_top — which makes
@@ -482,8 +481,6 @@ class ClassApplier(
         val resolved = registry.registerAgain(funcDef) as FunctionDefinition
         return PointerDataType(resolved, dtm)
     }
-
-    private val rttiVirtualBases by lazy { RttiVirtualBases(registry, program) }
 
     /** `_ZTV<class>` demangled qualified-class-name → address, built once. Replaces the per-class
      *  `O(classes × symbols)` demangle scan that made [resolveVtableAddress] pathological on CryptoPP

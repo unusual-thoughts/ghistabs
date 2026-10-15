@@ -195,7 +195,7 @@ internal fun DataTypeRegistry.baseSubobjects(body: TypeDecl.Aggregate<GlobalType
     }
 
 /** Lays [dt] at [offset] in [struct] as a base subobject, and reports how that went. */
-internal fun DataTypeRegistry.placeBase(
+internal fun DiagnosticSink.placeBase(
     struct: Structure,
     offset: Int,
     dt: DataType,
@@ -220,9 +220,6 @@ internal fun DataTypeRegistry.placeBase(
 
 internal val LocatedType.classBody get() = type.body as TypeDecl.Aggregate<GlobalTypeId>
 internal val LocatedType.className get() = location.name
-
-/** How layout diagnostics name the class: its location's category and its own name. */
-internal val LocatedType.layoutName get() = "${location.category}/${type.ghidraName}"
 
 /**
  * The namespace chain gcc *stated* for this class, the class itself last: off a member's mangled name,
@@ -295,7 +292,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
             runCatching {
                 // Two locations can fill one struct (`/stabs/basic_ostream<…>` and `/std/basic_ostream<…>`),
                 // and a second pass would take the laid virtual base for own data.
-                val qualifiedName = located.layoutName
+                val qualifiedName = "${located.location.category}/${located.type.ghidraName}"
                 if (add(struct.dataTypePath)) layBases(located.classBody, struct, qualifiedName)
                 placeVfptr(located, struct)
             }.onFailure { err("class-layout-error", "${located.location}: ${it.message}") }
@@ -441,3 +438,9 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
             }
     }
 }
+
+/** The one struct a stab tag names, when only one does: a class no namespace finds, a plain struct. */
+internal fun DataTypeRegistry.uniqueStructTagged(tag: String) = types.definitionsByTag[tag].orEmpty()
+    .mapNotNull { dataTypeFor(it.id) as? Structure }
+    .distinct()
+    .singleOrNull()
