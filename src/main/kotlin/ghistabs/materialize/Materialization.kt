@@ -136,14 +136,19 @@ internal fun DataTypeRegistry.fillComposite(
         // is gcc 2.x's unpacked vptr, whose extent is its type's.
         val isBitfield = sizeBits > 0 && (sizeBits < ft.length * 8L || offsetBits % 8 != 0L) &&
             BitFieldDataType.isValidBaseDataType(ft)
+        val at = (offsetBits / 8).toInt()
         try {
             when (placeholder) {
                 is Structure if isBitfield -> placeholder.insertBitField(offsetBits, sizeBits, ft, name)
 
                 is Structure -> {
-                    val at = (offsetBits / 8).toInt()
-                    placeholder.ownFieldsOverlapping(body, name, at, len).forEach {
-                        degradation("field-overlapped", "$qualifiedName.${it.fieldName}", "cleared by $name at +$at")
+                    // The stab itself can overlap two fields, as gcc 2.x's flattened vtable-entry union
+                    // `__pfn:19=*16,32,32;__delta2:8,32,16;;` does.
+                    // A struct filled a second time re-places each field over itself, which clears nothing.
+                    for (field in placeholder.componentsOverlapping(at, len).filter { c ->
+                        c.fieldName != name && body.fields.any { it.name == c.fieldName }
+                    }) {
+                        degradation("field-overlapped", "$qualifiedName.${field.fieldName}", "cleared by $name at +$at")
                     }
                     placeholder.replaceAtOffset(at, ft, len, name, null)
                 }
@@ -173,22 +178,6 @@ internal fun DataTypeRegistry.fillComposite(
     }
 
     return placeholder
-}
-
-/**
- * The other own fields [replaceAtOffset][Structure.replaceAtOffset] would silently clear to place [name]'s
- * [length] bytes at [offset]: the stab itself can overlap two, as gcc 2.x's flattened vtable-entry union
- * `__pfn:19=*16,32,32;__delta2:8,32,16;;` does. A struct filled a second time re-places each field over
- * itself, which clears nothing.
- */
-private fun Structure.ownFieldsOverlapping(
-    body: TypeDecl.Aggregate<GlobalTypeId>,
-    name: String,
-    offset: Int,
-    length: Int,
-) = componentsOverlapping(offset, length).filter { c ->
-    c.fieldName != name &&
-        body.fields.any { it.name == c.fieldName }
 }
 
 /**
