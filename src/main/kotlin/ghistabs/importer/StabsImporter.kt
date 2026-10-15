@@ -9,6 +9,7 @@ import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.cpp.layClasses
+import ghistabs.materialize.cpp.layVirtualBasesFromVtables
 import ghistabs.materialize.materializeAll
 import ghistabs.materialize.reportConflictDelta
 import ghistabs.materialize.reportSurvivingPlaceholders
@@ -46,6 +47,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             registry.materializeAll().also {
                 if (ctx.options.shortenTypedefs) ctx.typedefShortener(registry).apply()
                 registry.layClasses(ctx.options.vfptrModel.takeIf { ctx.options.buildClasses })
+                // After every class is laid, so a class embedded as a base is embedded without them.
+                registry.layVirtualBasesFromVtables(ctx.program)
                 // The render spells types to match the decompiler, and it may run much later from the GUI
                 // against analyzer options that have since been toggled — so record what actually happened.
                 ctx.program.markStabsTypedefsShortened(ctx.options.shortenTypedefs)
