@@ -86,14 +86,17 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
 fun Program.readHeader(record: VtableRecord): Data? = record.header?.let { readAt(record.address, it) }
 
 /**
- * The vbase offset [record] keeps [vtableOffset] bytes from its address point (negative, as a virtual base's
- * `__offset_flags` gives it), in its header's [VTABLE_OFFSETS]: where that virtual base sits in the class
- * [record] is the primary vtable of. Null when that word is not one of them.
+ * The vbase offset [record] keeps for virtual [base], in its header's [VTABLE_OFFSETS]: where [base] sits
+ * in the class [record] is the primary vtable of. [base]'s offset is that word's position behind the
+ * address point, which the typeinfo gives exactly, so the word is commented with [base]'s name over
+ * [prefixKind]'s guess. Null when that word is not one of them.
  */
-fun Program.vbaseOffset(record: VtableRecord, vtableOffset: Long): Long? {
+fun Program.vbaseOffset(record: VtableRecord, base: Rtti.Reader.Base): Long? {
     val offsets = readHeader(record)?.get(VTABLE_OFFSETS) ?: return null
-    val index = record.addressPoint.add(vtableOffset).subtract(offsets.address) / defaultPointerSize
-    return (offsets[index.toInt()]?.value as? Scalar)?.signedValue
+    val index = record.addressPoint.add(base.offset).subtract(offsets.address) / defaultPointerSize
+    val word = offsets[index.toInt()] ?: return null
+    listing.setComment(word.address, CommentType.EOL, "vbase offset: ${base.className}")
+    return (word.value as? Scalar)?.signedValue
 }
 
 /** The typeinfo [record]'s rtti word points at. */

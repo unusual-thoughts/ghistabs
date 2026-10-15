@@ -47,7 +47,7 @@ class VtableVirtualBases(
         }
 
     private fun lay(struct: Structure, record: VtableRecord, vbase: Rtti.Reader.Base, at: String, count: Int): Boolean {
-        val vbaseAt = program.vbaseOffset(record, vbase.offset)?.toInt()
+        val vbaseAt = program.vbaseOffset(record, vbase)?.toInt()
         // A nearly-empty virtual base can be the primary base, sharing the class's vptr at 0 (CryptoPP's
         // CryptoMaterial under CryptoParameters): there is nothing of its own to lay.
         when {

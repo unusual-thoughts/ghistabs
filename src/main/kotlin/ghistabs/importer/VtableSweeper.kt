@@ -329,7 +329,7 @@ open class VtableSweeper(
     private fun baseSubobjects(primary: VtableRecord, rtti: Address): Map<Long, String> =
         Rtti.Reader(program).basesOf(rtti).orEmpty().mapNotNull { base ->
             // A virtual base's offset is where the vtable keeps its vbase offset, behind the address point.
-            (if (base.isVirtual) program.vbaseOffset(primary, base.offset) else base.offset)?.let {
+            (if (base.isVirtual) program.vbaseOffset(primary, base) else base.offset)?.let {
                 it to base.className
             }
         }.distinctBy { it.first }.toMap()
