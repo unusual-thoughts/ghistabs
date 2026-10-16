@@ -24,6 +24,7 @@ private const val ALIGN_PADDING = 16L
  *
  * Non-code segments (.data/.rdata/.bss/…) are swept directly; initialized zero-fill runs are ignored
  * and .bss keeps only runs ≥ one alignment window (the ≤15-byte CU-boundary padding is dropped).
+ * Zero-fill runs outside every function in .text are ignored too.
  * Read-only data serialized into .text (a CU whose linker had no separate .rodata) is reported too:
  * an undefined .text run inside a function body is a missed-code hole (`text-undisassembled-code`),
  * one outside every function is that CU's undescribed rodata (`text-data-no-coverage`, attributed to
@@ -66,6 +67,8 @@ private fun ImportContext<*>.reportTextRun(range: AddressRange, cuStarts: List<P
         debug("text-undisassembled-code", "(${range.length} bytes)", address = range.minAddress)
         return
     }
+    // Zero-fill, as in a data segment: the padding to a section's or page's end, not data.
+    if (range.isAllZero(program)) return
     val cu = cuStarts.lastOrNull { it.first <= range.minAddress }?.let { " in ${it.second}" }.orEmpty()
     debug(
         "text-data-no-coverage",
