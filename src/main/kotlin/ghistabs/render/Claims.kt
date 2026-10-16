@@ -130,6 +130,11 @@ data class Claim(
     val anchoring: Anchoring = if (line == null) Anchoring.BAND else Anchoring.EXACT,
     /** Furthest row an [Anchoring.AFTER] claim may slide to — a function body stays in its span. */
     val limit: Int? = null,
+    /**
+     * A class whose written member opens on the class's own line: `struct Named { virtual ~Named() {}
+     * … };`, where gcc dates both at L43. It rides the row the member's body opens on, ahead of it.
+     */
+    val hosted: Boolean = false,
 )
 
 /** [claim] got [range]; [copies] > 1 when identical claims merged. */
@@ -252,6 +257,9 @@ fun allocate(claims: List<Claim>, range: ClosedRange<Int>): Allocation {
             // by owner alone — a misattributed local shares its line with a real one, as it always
             // has; `stale` decides who reserves *first*, which is what stops it taking the row.
             held[line] == claim.owner.group -> shared.add(Triple(claim, copies, line)).let { null }
+
+            // Its member's head asked this row and, as a FUNCTION_BODY, always gets it.
+            claim.hosted && held[line] == "body" -> shared.add(Triple(claim, copies, line)).let { null }
 
             line in held -> dropped.add(Dropped(claim, ROW_TAKEN)).let { null }
 
