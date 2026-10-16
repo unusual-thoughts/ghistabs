@@ -11,7 +11,7 @@
 #   binutils-2.13.90-20030111-1-src.tar.gz     (in "Previous Release_ binutils-2.13.90/")
 #   mingw-runtime-3.1-src.tar.gz
 #   w32api-2.4-src.tar.gz
-# and build_mingw323-libstdcxx-config.h (next to this script) in /build.
+#   gcc-3.2.3-20030504-1.tar.gz                (the binary release: for its c++config.h)
 #
 # Three things the bundle's binaries show that its build scripts don't:
 # - mingw-runtime 3.1 was compiled -O2 -mcpu=i686 (its isascii schedules
@@ -20,9 +20,9 @@
 #   path (_GLOBAL__N_.._.._.._.._gcc_libstdc___v3_libsupc___vec.cc...).
 # - libstdc++ was configured natively. A cross configure misses HAVE_MODFF,
 #   HAVE_EXPF, HAVE___BUILTIN_* and so on and links libmath stubs the bundle
-#   doesn't have, so its config.h is replaced by build_mingw323-libstdcxx-config.h: the
-#   bundle's installed bits/c++config.h with the c++config template stripped
-#   and the HAVE_/PACKAGE/VERSION/WORDS_ renaming undone.
+#   doesn't have, so its config.h is rebuilt from the binary release's installed
+#   bits/c++config.h: the c++config template stripped and the
+#   HAVE_/PACKAGE/VERSION/WORDS_ renaming undone.
 #
 # Configuration follows MinGW's own gcc-3.2.3-build.sh and binutils-2.13-build.sh
 # (target mingw32, prefix /mingw, --enable-threads --enable-sjlj-exceptions
@@ -92,7 +92,13 @@ done
 # stage 2: libsupc++ / libstdc++, with stabs, configured as the bundle's
 cd b-gcc
 make configure-target-libstdc++-v3 CFLAGS=-O2 CFLAGS_FOR_TARGET="$DBG -O2" CXXFLAGS_FOR_TARGET="$DBG -O2"
-cp /build/build_mingw323-libstdcxx-config.h $T/libstdc++-v3/config.h
+C=include/c++/3.2.3/mingw32/bits/c++config.h
+rm -rf /build/bin-323 && mkdir /build/bin-323
+tar xzf $S/gcc-3.2.3-20030504-1.tar.gz -C /build/bin-323 $C
+n=$(wc -l < ../gcc/libstdc++-v3/include/bits/c++config)
+tail -n +$((n+1)) /build/bin-323/$C | sed '$d' | sed -e 's/_GLIBCPP_HAVE_/HAVE_/g' \
+  -e 's/_GLIBCPP_PACKAGE/PACKAGE/g' -e 's/_GLIBCPP_VERSION/VERSION/g' -e 's/_GLIBCPP_WORDS_/WORDS_/g' \
+  > $T/libstdc++-v3/config.h
 make all CFLAGS=-O2 CFLAGS_FOR_TARGET="$DBG -O2" CXXFLAGS_FOR_TARGET="$DBG -O2" \
   LIBGCC2_DEBUG_CFLAGS="$DBG"
 make install

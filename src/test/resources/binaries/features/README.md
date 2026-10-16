@@ -62,8 +62,8 @@ Getting there took three things the bundle's scripts don't say:
 - mingw-runtime 3.1 was compiled `-O2 -mcpu=i686`: `isascii`'s `push/mov/xor/test/pop/sete` schedule is gcc 3.2.3
   `-mcpu=i686` and nothing else (3.3.1 is `push/xor/mov`, plain 3.2.3 is `sete; and $0xff`).
 - libstdc++ was configured natively; a cross configure turns off `HAVE_MODFF`, `HAVE_EXPF`, `HAVE___BUILTIN_*` etc. and
-  adds libmath stubs, so `build_mingw323-libstdcxx-config.h` is the bundle's installed `bits/c++config.h` turned back into
-  the `config.h` it was generated from. (The installed header's `_GLIBCPP_USE_C99 (__MINGW32_MAJOR_VERSION >= 3)` is a
+  adds libmath stubs, so the script turns the binary release's installed `bits/c++config.h` back into the `config.h` it
+  was generated from. (The installed header's `_GLIBCPP_USE_C99 (__MINGW32_MAJOR_VERSION >= 3)` is a
   hand edit after the build, with a `c++config.h.$$$` backup beside it.)
 - the gcc tree must be called `gcc`, because anonymous-namespace symbols embed the source path.
 
