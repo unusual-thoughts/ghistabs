@@ -9,12 +9,14 @@ import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.cpp.VtableVirtualBases
 import ghistabs.materialize.cpp.layClasses
 import ghistabs.materialize.cpp.uniqueStructTagged
 import ghistabs.materialize.materializeAll
 import ghistabs.materialize.reportConflictDelta
 import ghistabs.materialize.reportSurvivingPlaceholders
+import ghistabs.materialize.typedefAliases
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
 import ghistabs.parse.leafName
@@ -81,6 +83,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     GccVftableAnalyzer.sweep(ctx.program, registry, ctx.monitor, ctx)
                 }
                 ctx.demanglerReplacer(registry).replace()
+                // After the demangle passes above, which re-file methods under their mangled scope, and before
+                // the virtual bases, which find a class's struct by the namespace its labels sit in.
+                if (ctx.options.shortenTypedefs && ctx.options.buildClasses) {
+                    ctx.program.rehomeOntoShortenedClasses(TemplateNameShortener(registry.typedefAliases()), ctx)
+                }
                 // Once labels are demangled, so each typeinfo and vtable sits in its class's namespace.
                 if (VirtualBaseAnalyzer.isEnabled(ctx.program)) {
                     VtableVirtualBases(ctx.program, ctx) { registry.uniqueStructTagged(it.leafName) }.layAll()

@@ -110,17 +110,25 @@ fun FunctionManager.inHull(addr: Address) = getFunctionWrapping(addr) != null
 val Function.isMethod get() = parentNamespace is GhidraClass
 
 /** Creates a hierarchy of namespaces, named [parts], in [parent] or Global namespace, with [sourceType],
- *  the final of which will be a [GhidraClass]
+ *  the final of which will be a [GhidraClass].
+ *
+ *  [rename] gives a part the name it should carry instead (typedef shortening's `vector<string>` for
+ *  `vector<std::basic_string<…>,…>`). A namespace already under the long name is renamed rather than
+ *  duplicated, so the labels the demangler put in it move along; if the short name is taken, that one
+ *  is used and the long one left as it is.
  */
 fun SymbolTable.buildClassNamespaces(
     parts: List<String>,
     sourceType: SourceType = SourceType.IMPORTED,
     parent: Namespace? = null,
+    rename: (String) -> String? = { null },
 ): GhidraClass {
     var ns = parent
-    for ((i, part) in parts.withIndex()) {
+    for ((i, long) in parts.withIndex()) {
         val isLast = i == parts.lastIndex
+        val part = rename(long) ?: long
         val existing = getNamespace(part, ns)
+            ?: getNamespace(long, ns)?.also { if (part != long) runCatching { it.symbol.setName(part, sourceType) } }
         ns = when (existing) {
             null if isLast -> createClass(ns, part, sourceType)
             null -> createNameSpace(ns, part, sourceType)

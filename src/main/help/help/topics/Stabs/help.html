@@ -103,7 +103,8 @@
           <TD>off</TD>
           <TD>Rename long templated data types onto their shorter typedef aliases
           (<CODE>basic_string&lt;char, &hellip;&gt;</CODE> &rarr; <CODE>string</CODE>),
-          recursively inside other templates. Much more readable on C++ code; the original
+          recursively inside other templates. A renamed class's namespace is renamed with it,
+          so its methods keep a typed <CODE>this</CODE>. Much more readable on C++ code; the original
           spelling is lost from the type name.</TD>
         </TR>
 
