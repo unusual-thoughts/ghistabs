@@ -1265,6 +1265,10 @@
             "min": 1,
             "max": 1
         },
+        "typedef-shorten-rehomed": {
+            "min": 811,
+            "max": 811
+        },
         "unfinished-cu": {
             "min": 1,
             "max": 1
