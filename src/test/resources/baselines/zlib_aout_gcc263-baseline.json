@@ -248,8 +248,8 @@
             "max": 2
         },
         "text-data-no-coverage": {
-            "min": 8,
-            "max": 8
+            "min": 4,
+            "max": 4
         },
         "textrange-entries": {
             "min": 29,

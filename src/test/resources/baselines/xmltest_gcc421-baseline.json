@@ -375,8 +375,8 @@
             "max": 1
         },
         "text-data-no-coverage": {
-            "min": 407,
-            "max": 409
+            "min": 399,
+            "max": 401
         },
         "text-undisassembled-code": {
             "min": 137,
