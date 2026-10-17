@@ -701,11 +701,11 @@
         },
         "text-data-no-coverage": {
             "min": 10,
-            "max": 13
+            "max": 10
         },
         "text-undisassembled-code": {
             "min": 0,
-            "max": 37
+            "max": 0
         },
         "textrange-entries": {
             "min": 922,
