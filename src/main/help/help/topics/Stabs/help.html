@@ -212,7 +212,7 @@
 
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
 
-    <P>Five analyzers ship with the extension that do not read stabs at all. They are enabled
+    <P>Six analyzers ship with the extension that do not read stabs at all. They are enabled
     by default, can be re-run, and are each available as one-shot analysis.</P>
 
     <BLOCKQUOTE>
@@ -235,6 +235,19 @@
           <CODE>__cdecl_regret</CODE>, &hellip;) installed as a program specification
           extension. The correction is therefore visible as a named convention, and can be
           undone by hand.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Deferred stack pops (x86)</B></TD>
+          <TD>gcc leaves a call's arguments pushed when the code ahead only addresses through
+          <CODE>EBP</CODE>, so two paths can meet with <CODE>ESP</CODE> a few bytes apart, and the
+          decompiler turns every later push past the merge into a store through a pointer. The
+          analyzer finds those merges and pops the dead bytes at the call that left them, through
+          a call-site override whose derived calling convention pops that much more
+          (<CODE>__cdecl_pop16</CODE>, &hellip;), installed as a program specification extension.
+          A function's overrides are kept only if the decompiler then makes fewer stores through
+          pointers. It also gives MinGW <CODE>_Name@N</CODE> import stubs the <CODE>N</CODE>-byte
+          purge Ghidra leaves at 0.</TD>
         </TR>
 
         <TR>
