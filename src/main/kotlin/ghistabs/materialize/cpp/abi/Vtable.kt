@@ -86,7 +86,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     fun vbaseOffset(program: Program, base: Rtti.Reader.Base) = vtableOffsetField(
         ((addressPoint + base.offset - address) / program.defaultPointerSize).toInt(),
     ).let { field ->
-        fieldAddress(field)?.let { program.listing.setComment(it, CommentType.EOL, "vbase offset: ${base.className}") }
+        fieldAddress(field)?.let { program.listing.setComment(it, CommentType.EOL, "${base.className} vbase offset") }
         readHeader(program)?.getScalar(field)?.signedValue
     }
 
@@ -148,7 +148,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
             ?.let { program.symbolTable.getSymbols(it).map { s -> s.name } }
             ?.let { names -> names.firstOrNull(Itanium::looksLikeZti) ?: names.firstOrNull() }
             ?: Itanium.zti(className)
-        return "${Itanium.RTTI}: $name typeinfo"
+        return "$name typeinfo"
     }
 
     /**

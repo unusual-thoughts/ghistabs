@@ -90,10 +90,13 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
      */
     private val linkSymbols: Map<String, Long> by lazy { StabReader.linkSymbolsOf(program) }
 
+    /** A PE's symbols at section offset 0, which Ghidra's loader leaves out; see [peSectionStartSymbols]. */
+    private val sectionStartSymbols: Map<String, Address> by lazy { program.peSectionStartSymbols() }
+
     /**
-     * Resolve [name]: link table → symbol table, each tried bare then `_`-prefixed (MinGW/PE cdecl and
-     * SunOS both prefix — `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`). The link table has to try both as
-     * well, or an underscoring a.out drops through to Ghidra's symbols — the very ones [linkSymbols]
+     * Resolve [name]: link table → symbol table → a PE's section-start symbols, each tried bare then
+     * `_`-prefixed (MinGW/PE cdecl and SunOS both prefix — `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`). The
+     * link table has to try both as well, or an underscoring a.out drops through to Ghidra's symbols — the very ones [linkSymbols]
      * exists to overrule (1084 globals on `graphcnv.SUN4`, every one landing outside the image).
      * Several symbols carrying one name is common — 169 on one PE fixture, 1991 on locale_test — and
      * nothing here can tell them apart, so the first stands.
@@ -111,7 +114,7 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
                 program.symbolTable.getSymbols("_$name").map { it.address }
             ).filter { it.isMemoryAddress }
         if (candidates.size > 1) sink.debug("resolve-ambiguous", name)
-        return candidates.firstOrNull()
+        return candidates.firstOrNull() ?: sectionStartSymbols[name] ?: sectionStartSymbols["_$name"]
     }
 
     override fun blockEnd(addr: Address) = program.memory.getBlock(addr)?.end

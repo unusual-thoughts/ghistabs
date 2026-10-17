@@ -733,12 +733,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
         for (point in addressPoints) {
             val rttiHeader = runCatching { point.subtract(ptr) }.getOrNull() ?: continue
-            // Guarded, not `removePrefix` alone: that is a no-op when the prefix is absent, and a
+            // Guarded, not `removeSuffix` alone: that is a no-op when the suffix is absent, and a
             // gcc 2.x record has no rtti word at all — its second header word is a reserved entry,
             // whose comment would otherwise be read as if it named a symbol.
             eol(rttiHeader)
-                ?.takeIf { it.startsWith("${Itanium.RTTI}: ") }
-                ?.removePrefix("${Itanium.RTTI}: ")?.substringBefore(" typeinfo")?.let { named ->
+                ?.takeIf { it.endsWith(" typeinfo") }
+                ?.removeSuffix(" typeinfo")?.let { named ->
                     // Only a *contradiction* counts: with no symbol at the target there is nothing to
                     // name and the closed form is the honest fallback.
                     val present = program.readPointer(rttiHeader)
@@ -755,7 +755,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 val prev = runCatching { word.subtract(ptr) }.getOrNull() ?: break
                 val comment = eol(prev)?.takeIf { "offset" in it } ?: break
                 if (comment.startsWith("vcall")) vcallOnPrimary += "$prev: $comment"
-                if (comment.startsWith("vbase offset:")) namedVbases++
+                if (comment.endsWith(" vbase offset")) namedVbases++
                 word = prev
             }
         }
