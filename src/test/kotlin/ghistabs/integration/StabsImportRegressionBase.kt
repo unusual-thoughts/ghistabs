@@ -1535,9 +1535,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     @ExpectedToFail(
         fixtures = [
-            // Stripped: no symbol table at all, so neither the stab method list nor §25's `_ZTV`
-            // sweep has anything to read. Their unstripped twins pass on the sweep alone.
-            "crypto_mi_test_gcc421_stripped.exe", "xmltest_gcc421_stripped.exe",
             // a.out: these fixtures are plain C, so there are no classes and no vtables at all.
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
         ],
