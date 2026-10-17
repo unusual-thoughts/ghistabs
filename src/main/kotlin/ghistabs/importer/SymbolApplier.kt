@@ -27,6 +27,7 @@ import ghistabs.materialize.cpp.abi.Itanium.isInlineStdMember
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
 import ghistabs.parse.*
+import ghidra.program.model.data.Array as GhidraArray
 
 /**
  * The apply phase: writes harvested functions, params, locals, globals, statics, labels and scope
@@ -585,6 +586,17 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     }
 
     /**
+     * What a static member declared [dt] lays at [addr], or null to leave it. `static T x[];` states no size:
+     * its definition's `G` stab, applied before the members, does, and without one its first element is all
+     * there is to go on.
+     */
+    private fun declaredAt(addr: Address, dt: DataType): DataType? = when {
+        dt !is GhidraArray || !dt.isZeroLength -> dt
+        ctx.program.listing.getDefinedDataAt(addr) != null -> null
+        else -> dt.dataType
+    }
+
+    /**
      * Apply C++ static data members (`alnum:/2(5,44):_ZNSt10ctype_base5alnumE;`). They carry no
      * `G`/`S` address stab, so [applyStatic] never sees them and this linkage name is their
      * only link to the emitted symbol. Symbol-table-bound: a stripped binary resolves none.
@@ -600,26 +612,33 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             for (field in body.fields) {
                 val mangled = field.mangled ?: continue
                 if (!field.isStatic || !seen.add(mangled)) continue
-                val addr = ctx.resolver.resolve(mangled) ?: run {
-                    debug("static-member-unresolved", mangled)
-                    continue
-                }
-                val dt = registry.resolveRef(field.type) ?: run {
-                    degradation("static-member-untyped", mangled)
-                    continue
-                }
-                // Names it `Class::member` when the demangler hasn't already; typed below regardless.
-                ensureStabLabel(addr, mangled)
-                try {
-                    ctx.program.forceCreateData(addr, dt) { debug("code-cleared-for-data", mangled, address = addr) }
-                    applied++
-                    debug("static-member-applied", "$mangled dt=${dt.displayName}", address = addr)
-                } catch (e: Exception) {
-                    err("apply-error", "static member $mangled at $addr: ${e.message}", addr)
-                }
+                if (applyStaticMember(mangled, field.type)) applied++
             }
         }
         return applied
+    }
+
+    /** One static member declared [type], at the address its linkage name [mangled] resolves to. */
+    private fun applyStaticMember(mangled: String, type: GlobalTypeDecl): Boolean {
+        val addr = ctx.resolver.resolve(mangled) ?: run {
+            debug("static-member-unresolved", mangled)
+            return false
+        }
+        val dt = registry.resolveRef(type) ?: run {
+            degradation("static-member-untyped", mangled)
+            return false
+        }
+        val sized = declaredAt(addr, dt) ?: return false
+        // Names it `Class::member` when the demangler hasn't already; typed below regardless.
+        ensureStabLabel(addr, mangled)
+        return try {
+            ctx.program.forceCreateData(addr, sized) { debug("code-cleared-for-data", mangled, address = addr) }
+            debug("static-member-applied", "$mangled dt=${sized.displayName}", address = addr)
+            true
+        } catch (e: Exception) {
+            err("apply-error", "static member $mangled at $addr: ${e.message}", addr)
+            false
+        }
     }
 
     /**
