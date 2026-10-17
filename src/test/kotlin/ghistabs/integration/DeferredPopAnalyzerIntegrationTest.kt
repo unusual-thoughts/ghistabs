@@ -12,7 +12,6 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.entrypoints.CALL_BOOKMARK
-import ghistabs.entrypoints.DEFERRED_POP_ANALYZER_NAME
 import ghistabs.entrypoints.DeferredPopAnalyzer
 import ghistabs.entrypoints.MERGE_BOOKMARK
 import ghistabs.entrypoints.UNFIXED_BOOKMARK
@@ -108,7 +107,7 @@ class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         overrides(DEFERRED).mapValues { it.value.callingConventionName } mustBe before
     }
 
-    private fun runAnalyzer() = program.runTransaction(DEFERRED_POP_ANALYZER_NAME) {
+    private fun runAnalyzer() = program.runTransaction(DeferredPopAnalyzer.NAME) {
         DeferredPopAnalyzer().added(
             program,
             program.memory.loadedAndInitializedAddressSet,
