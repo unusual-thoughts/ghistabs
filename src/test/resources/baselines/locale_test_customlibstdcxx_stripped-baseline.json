@@ -207,13 +207,6 @@
             "min": 65,
             "max": 65
         },
-        "global-typed-all-undefined": {
-            "min": 1,
-            "max": 1,
-            "degrades": [
-                "_ZSt8__ioinit"
-            ]
-        },
         "harvest-collisions-divergent": {
             "min": 0,
             "max": 0
@@ -361,58 +354,6 @@
         "linesource-start": {
             "min": 900,
             "max": 900
-        },
-        "local-typed-all-undefined": {
-            "min": 46,
-            "max": 46,
-            "degrades": [
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIjEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIlEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intImEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intItEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIxEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIyEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE16_M_extract_floatES3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE6do_getES3_S3_RSt8ios_baseRSt12_Ios_IostateRb.__uc",
-                "_ZNKSt7num_getIwSt19istreambuf_iteratorIwSt11char_traitsIwEEE14_M_extract_intIjEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIwSt19istreambuf_iteratorIwSt11char_traitsIwEEE14_M_extract_intIlEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIwSt19istreambuf_iteratorIwSt11char_traitsIwEEE14_M_extract_intImEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIwSt19istreambuf_iteratorIwSt11char_traitsIwEEE14_M_extract_intItEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIwSt19istreambuf_iteratorIwSt11char_traitsIwEEE14_M_extract_intIxEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIwSt19istreambuf_iteratorIwSt11char_traitsIwEEE14_M_extract_intIyEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIwSt19istreambuf_iteratorIwSt11char_traitsIwEEE16_M_extract_floatES3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
-                "_ZNKSt7num_getIwSt19istreambuf_iteratorIwSt11char_traitsIwEEE6do_getES3_S3_RSt8ios_baseRSt12_Ios_IostateRb.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intIlEES3_S3_RSt8ios_basecT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intImEES3_S3_RSt8ios_basecT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intIxEES3_S3_RSt8ios_basecT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intIyEES3_S3_RSt8ios_basecT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE15_M_insert_floatIdEES3_S3_RSt8ios_baseccT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE15_M_insert_floatIeEES3_S3_RSt8ios_baseccT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE6do_putES3_RSt8ios_basecb.__uc",
-                "_ZNKSt7num_putIwSt19ostreambuf_iteratorIwSt11char_traitsIwEEE13_M_insert_intIlEES3_S3_RSt8ios_basewT_.__uc",
-                "_ZNKSt7num_putIwSt19ostreambuf_iteratorIwSt11char_traitsIwEEE13_M_insert_intImEES3_S3_RSt8ios_basewT_.__uc",
-                "_ZNKSt7num_putIwSt19ostreambuf_iteratorIwSt11char_traitsIwEEE13_M_insert_intIxEES3_S3_RSt8ios_basewT_.__uc",
-                "_ZNKSt7num_putIwSt19ostreambuf_iteratorIwSt11char_traitsIwEEE13_M_insert_intIyEES3_S3_RSt8ios_basewT_.__uc",
-                "_ZNKSt7num_putIwSt19ostreambuf_iteratorIwSt11char_traitsIwEEE15_M_insert_floatIdEES3_S3_RSt8ios_basewcT_.__uc",
-                "_ZNKSt7num_putIwSt19ostreambuf_iteratorIwSt11char_traitsIwEEE15_M_insert_floatIeEES3_S3_RSt8ios_basewcT_.__uc",
-                "_ZNKSt7num_putIwSt19ostreambuf_iteratorIwSt11char_traitsIwEEE6do_putES3_RSt8ios_basewb.__uc",
-                "_ZNKSt9money_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE10_M_extractILb0EEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
-                "_ZNKSt9money_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE10_M_extractILb1EEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
-                "_ZNKSt9money_getIwSt19istreambuf_iteratorIwSt11char_traitsIwEEE10_M_extractILb0EEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
-                "_ZNKSt9money_getIwSt19istreambuf_iteratorIwSt11char_traitsIwEEE10_M_extractILb1EEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
-                "_ZNKSt9money_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE9_M_insertILb0EEES3_S3_RSt8ios_basecRKSs.__uc",
-                "_ZNKSt9money_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE9_M_insertILb1EEES3_S3_RSt8ios_basecRKSs.__uc",
-                "_ZNKSt9money_putIwSt19ostreambuf_iteratorIwSt11char_traitsIwEEE9_M_insertILb0EEES3_S3_RSt8ios_basewRKSbIwS2_SaIwEE.__uc",
-                "_ZNKSt9money_putIwSt19ostreambuf_iteratorIwSt11char_traitsIwEEE9_M_insertILb1EEES3_S3_RSt8ios_basewRKSbIwS2_SaIwEE.__uc",
-                "_ZNSbIwSt11char_traitsIwESaIwEE6assignERKS2_.__a",
-                "_ZNSbIwSt11char_traitsIwESaIwEE7reserveEj.__a",
-                "_ZNSbIwSt11char_traitsIwESaIwEE9_M_mutateEjjj.__a",
-                "_ZNSs6assignERKSs.__a",
-                "_ZNSs7reserveEj.__a",
-                "_ZNSs9_M_mutateEjjj.__a",
-                "_ZNSt8ios_base15sync_with_stdioEb.__init",
-                "__cxa_call_unexpected.end_catch_protect_obj"
-            ]
         },
         "local-var-add-success": {
             "min": 2604,
@@ -597,24 +538,6 @@
             "min": 43634,
             "max": 43634
         },
-        "placeholder-undefined-fields": {
-            "min": 202,
-            "max": 202,
-            "degrades": [
-                "__is_arithmetic<int>",
-                "__is_arithmetic<short_unsigned_int>",
-                "__is_scalar<int>",
-                "__is_scalar<short_unsigned_int>",
-                "allocator<char>",
-                "allocator<unsigned_short>",
-                "allocator<wchar_t>",
-                "bidirectional_iterator_tag",
-                "forward_iterator_tag",
-                "less<char_const*>",
-                "less<wchar_t_const*>",
-                "random_access_iterator_tag"
-            ]
-        },
         "pointee-typed": {
             "min": 99,
             "max": 99
@@ -685,10 +608,6 @@
         "text-data-no-coverage": {
             "min": 10,
             "max": 10
-        },
-        "text-undisassembled-code": {
-            "min": 0,
-            "max": 0
         },
         "textrange-entries": {
             "min": 903,

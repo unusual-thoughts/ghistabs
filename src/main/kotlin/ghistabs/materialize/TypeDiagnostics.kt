@@ -13,6 +13,7 @@ import ghistabs.conflictBase
 import ghistabs.diagnose.GapRecord
 import ghistabs.harvest.Type
 import ghistabs.isConflict
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
 import ghidra.program.model.data.Array as GhidraArray
 
@@ -22,6 +23,8 @@ import ghidra.program.model.data.Array as GhidraArray
  * classifies [DataTypeRegistry.byId] / [DataTypeRegistry.xrefStubs] entries against the harvest.
  */
 internal fun DataTypeRegistry.computeDegraded(): Map<DataType, String> = buildMap {
+    fun holdsNothing(body: GlobalTypeDecl) = body is TypeDecl.Aggregate && types.holdsNothing(body)
+
     fun classify(ast: Type, dt: DataType) {
         if (containsKey(dt)) return
         // Unresolved XRef placeholders are flagged unconditionally — their dt is an
@@ -37,7 +40,7 @@ internal fun DataTypeRegistry.computeDegraded(): Map<DataType, String> = buildMa
         when {
             ast.name == null -> "anonymous"
             dt is Composite && dt.numComponents == 0 -> "empty-placeholder"
-            dt is Composite && dt.allComponentsUndefined() -> "all-undefined"
+            dt is Composite && dt.allComponentsUndefined() && !holdsNothing(ast.body) -> "all-undefined"
             else -> null
         }?.let { reason -> put(dt, reason) }
     }
@@ -79,13 +82,11 @@ fun DataTypeRegistry.reportSurvivingPlaceholders() {
         val ast = types.byId(id) ?: continue
         if (ast.body !is TypeDecl.Aggregate) continue
         val composite = placeholder as? Composite ?: continue
-        // Empty C++ trait/tag types: sizeBytes=1, no source members. Ghidra fills
-        // with Undefined1; that's correct, not a degradation.
-        val sourceHasNoMembers =
-            ast.body.fields.none { !it.isStatic } && ast.body.bases.isEmpty()
+        // Empty C++ trait/tag types: Ghidra fills them with Undefined1; that's correct, not a degradation.
+        if (types.holdsNothing(ast.body)) continue
         val tag = when {
-            composite.numComponents == 0 && !sourceHasNoMembers -> "placeholder-unresolved"
-            composite.allComponentsUndefined() && !sourceHasNoMembers -> "placeholder-undefined-fields"
+            composite.numComponents == 0 -> "placeholder-unresolved"
+            composite.allComponentsUndefined() -> "placeholder-undefined-fields"
             else -> continue
         }
         degradation(

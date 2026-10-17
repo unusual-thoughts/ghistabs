@@ -76,6 +76,18 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
         it.isVirtual || inheritsVirtually(it.type)
     }
 
+    /**
+     * Whether [aggregate] holds no byte, of its own or through a base: no non-static field, no vptr, and only
+     * non-virtual bases holding none either. gcc sizes such a class `s1` and Ghidra fills it with one
+     * Undefined1, which is the whole class: `forward_iterator_tag:T(0,237)=s1input_iterator_tag:(0,235),0,64;;`.
+     * [path] is the bases above, so a cycle through corrupt stabs answers no.
+     */
+    fun holdsNothing(aggregate: TypeDecl.Aggregate<GlobalTypeId>, path: Set<GlobalTypeDecl> = emptySet()): Boolean =
+        aggregate.fields.all { it.isStatic } && !aggregate.declaresVptr && aggregate.bases.all { base ->
+            val body = resolveAgg(base.type)?.takeUnless { base.isVirtual || base.type in path }
+            body != null && holdsNothing(body, path + base.type)
+        }
+
     /** Whether the struct a base's [decl] names inherits virtually anywhere, answered once per base. */
     fun inheritsVirtually(decl: GlobalTypeDecl): Boolean = virtualBaseAnswers[decl] ?: run {
         virtualBaseAnswers[decl] = false // a cycle through corrupt stabs answers no
