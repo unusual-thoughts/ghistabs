@@ -89,7 +89,7 @@ class DeferredPopAnalyzer :
 
         val decomp = DecompInterface().also { it.openProgram(program) }
         try {
-            val kept = fixable.count { (f, plan) -> program.apply(decomp, f, plan.pops, monitor, log) }
+            val kept = fixable.count { (f, plan) -> program.applyExtraPops(decomp, f, plan.pops, monitor, log) }
             if (kept > 0) log.appendMsg(NAME, "popped deferred arguments in $kept function(s)")
         } finally {
             decomp.dispose()
@@ -97,38 +97,38 @@ class DeferredPopAnalyzer :
         return true
     }
 
-    private fun Program.apply(
-        decomp: DecompInterface,
-        f: Function,
-        pops: Map<Address, Pop>,
-        monitor: TaskMonitor,
-        log: MessageLog,
-    ): Boolean {
-        val before = decomp.pointerStores(f, monitor) ?: return false
-        val written = pops.mapNotNull { (call, pop) -> override(f, call, pop.extra, log)?.let { call to it } }
-        if (written.isEmpty()) return false
-        val after = decomp.pointerStores(f, monitor)
-        val kept = after != null && after < before
-        if (kept) {
-            for ((call, convention) in written) {
-                bookmarkCall(
-                    call,
-                    convention,
-                    pops.getValue(call),
-                    before,
-                    after,
-                )
-            }
-        } else {
-            removeOverrides(f, written.map { it.first }.toSet())
-        }
-        bookmarkMerges(pops, kept, before, after)
-        return kept
-    }
-
     companion object {
         const val NAME = "Deferred stack pops (x86)"
     }
+}
+
+private fun Program.applyExtraPops(
+    decomp: DecompInterface,
+    f: Function,
+    pops: Map<Address, Pop>,
+    monitor: TaskMonitor,
+    log: MessageLog,
+): Boolean {
+    val before = decomp.pointerStores(f, monitor) ?: return false
+    val written = pops.mapNotNull { (call, pop) -> override(f, call, pop.extra, log)?.let { call to it } }
+    if (written.isEmpty()) return false
+    val after = decomp.pointerStores(f, monitor)
+    val kept = after != null && after < before
+    if (kept) {
+        for ((call, convention) in written) {
+            bookmarkCall(
+                call,
+                convention,
+                pops.getValue(call),
+                before,
+                after,
+            )
+        }
+    } else {
+        removeOverrides(f, written.map { it.first }.toSet())
+    }
+    bookmarkMerges(pops, kept, before, after)
+    return kept
 }
 
 /** Bytes a call is made to pop beyond its convention, and the merges whose ESP mismatch that evens out. */
