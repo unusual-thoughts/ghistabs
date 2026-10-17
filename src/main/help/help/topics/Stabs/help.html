@@ -27,7 +27,7 @@
     gcc 12 and removed outright in gcc 13, so 12 is a hard ceiling.)</P>
 
     <P>Everything is driven by the <A href="#Stabs_Importer_Analyzer">Stabs Importer</A>
-    analyzer. Three <A href="#Stabs_Supporting_Analyzers">supporting analyzers</A> clean up
+    analyzer. Four <A href="#Stabs_Supporting_Analyzers">supporting analyzers</A> clean up
     code and ABI details around it, <A href="#Stabs_Tools_Menu">Tools &rarr; Stabs</A> re-runs
     the import, and two <A href="#Stabs_Export_Decompilation">exporters</A> write out the
     reconstructed sources.</P>
@@ -212,7 +212,7 @@
 
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
 
-    <P>Three analyzers ship with the extension that do not read stabs at all. They are enabled
+    <P>Four analyzers ship with the extension that do not read stabs at all. They are enabled
     by default, can be re-run, and are each available as one-shot analysis.</P>
 
     <BLOCKQUOTE>
@@ -251,6 +251,17 @@
           the jump-over-fill form GAS emits for <CODE>.p2align</CODE> &mdash; into
           <CODE>Alignment</CODE> data, so it is not mistaken for undescribed data. Real data
           following the padding is left alone.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>GCC SJLJ exception tables</B></TD>
+          <TD>Lays the LSDA of every function a MinGW gcc built with SJLJ exceptions &mdash; the
+          header, call-site, action and type tables of its <CODE>.gcc_except_table</CODE> entry
+          &mdash; each field typed and commented, labelled <CODE>lsda</CODE> in the function's
+          namespace. Ghidra's <I>GCC Exception Handlers</I> analyzer finds LSDAs through
+          <CODE>.eh_frame</CODE>, which an SJLJ binary does not have; these are found through the
+          personality routine and LSDA each function stores into its unwind context, so a stripped
+          binary is covered too.</TD>
         </TR>
       </TABLE>
     </BLOCKQUOTE>

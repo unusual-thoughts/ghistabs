@@ -4,6 +4,7 @@ package ghistabs
 
 import ghidra.app.cmd.function.CallDepthChangeInfo
 import ghidra.app.util.NamespaceUtils
+import ghidra.app.util.PseudoData
 import ghidra.app.util.PseudoDisassembler
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
@@ -15,6 +16,7 @@ import ghidra.program.model.data.*
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
+import ghidra.program.model.mem.DumbMemBufferImpl
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.scalar.Scalar
@@ -214,8 +216,21 @@ fun Program.forceCreateData(
  */
 fun Program.readAt(addr: Address, dt: DataType): Data? = PseudoDisassembler(this).applyDataType(addr, dt)
 
-/** [readAt]'s value as a [T]: a [Scalar] for an integer type, an [Address] for a pointer. */
-inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = readAt(addr, dt)?.value as? T
+/**
+ * [readAt]'s value as a [T]: a [Scalar] for an integer type, an [Address] for a pointer. A [Dynamic]
+ * type such as a LEB128 is read at the length it sizes itself to, which [PseudoData]'s fixed one
+ * would cut to a byte.
+ */
+inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = when (dt) {
+    is Dynamic -> dt.getValue(DumbMemBufferImpl(memory, addr), dt.defaultSettings, -1)
+    else -> readAt(addr, dt)?.value
+} as? T
+
+/** How many bytes [dt] spans at [addr]: a [Dynamic] type's own decoded length, or null if unreadable. */
+fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
+    is Dynamic -> dt.getLength(DumbMemBufferImpl(memory, addr), -1)
+    else -> dt.length
+}.takeIf { it > 0 }
 
 /**
  * The pointer stored at [addr], taken as it stands. The loader has already relocated what memory

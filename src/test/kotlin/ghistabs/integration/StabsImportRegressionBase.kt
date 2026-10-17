@@ -11,6 +11,7 @@ import ghidra.program.model.data.Enum
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
+import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
@@ -21,6 +22,7 @@ import ghistabs.baseline.BaselineWriter
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
+import ghistabs.entrypoints.SjljLsdaAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.disableStabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.enableStabsAnalyzer
@@ -38,6 +40,7 @@ import ghistabs.materialize.cpp.abi.Gcc2
 import ghistabs.materialize.cpp.abi.Gcc2Abi
 import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.abi.isPrimaryVftable
+import ghistabs.materialize.cpp.abi.isTypeinfo
 import ghistabs.materialize.cpp.abi.vftableStructAt
 import ghistabs.parse.*
 import ghistabs.test.*
@@ -765,6 +768,47 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         println(
             "vtableHeaderCommentsDescribeWhatIsThere[$binaryName/$mode]: " +
                 "${addressPoints.size} vtables, $namedVbases named vbase offsets",
+        )
+    }
+
+    /**
+     * Every SJLJ LSDA a MinGW prologue stores is laid and labelled, and its type table lines up: an
+     * entry pointing at a named address points at a typeinfo. A stripped binary leaves its typeinfo
+     * objects only Ghidra's default `PTR_…` labels, which say nothing either way. Off by a word, the entries would
+     * land on the typeinfo's neighbours, or on the action table's bytes read as a pointer.
+     */
+    @Test
+    fun sjljLsdasAreLaidWithTheirTypeTables() {
+        assumeTrue(mode != Mode.BEFORE, "Skipping: the LSDAs are laid by auto-analysis")
+        val lsdas = SjljLsdaAnalyzer.lsdas(program, program.memory, TaskMonitor.DUMMY)
+        assumeTrue(lsdas.isNotEmpty(), "Skipping: no SJLJ exception tables in this fixture")
+
+        val unlaid = mutableListOf<String>()
+        val notTypeinfo = mutableListOf<String>()
+        var typeinfos = 0
+        for ((at, found) in lsdas) {
+            val lsda = found.first
+            if (lsda == null || program.listing.getDefinedDataAt(at) == null ||
+                program.symbolTable.getSymbols(at).none { it.name == SjljLsdaAnalyzer.LABEL }
+            ) {
+                unlaid += "$at (stored at ${found.second.first().store})"
+                continue
+            }
+            for (item in lsda.items.filter { it.kind == ghistabs.eh.SjljLsda.Kind.POINTER }) {
+                val target = program.readPointer(item.at)?.takeIf { it.offset != 0L } ?: continue
+                val symbols = program.symbolTable.getSymbols(target).filter { it.source != SourceType.DEFAULT }
+                when {
+                    symbols.isEmpty() -> {}
+                    symbols.any { it.isTypeinfo } -> typeinfos++
+                    else -> notTypeinfo += "${item.at} -> $target ${symbols.map { it.getName(true) }}"
+                }
+            }
+        }
+        unlaid.take(10).mustBeEmpty("${unlaid.size} of ${lsdas.size} LSDAs not laid")
+        notTypeinfo.take(10).mustBeEmpty("${notTypeinfo.size} type table entries point at something else")
+        println(
+            "sjljLsdasAreLaidWithTheirTypeTables[$binaryName/$mode]: " +
+                "${lsdas.size} LSDAs, $typeinfos typeinfo entries",
         )
     }
 

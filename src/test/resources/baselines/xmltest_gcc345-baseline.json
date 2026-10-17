@@ -67,12 +67,12 @@
             "max": 3752
         },
         "demangle-displaced-function-renamed": {
-            "min": 0,
-            "max": 0
+            "min": 1,
+            "max": 1
         },
         "demangle-displaced-label-dropped": {
-            "min": 1400,
-            "max": 1400
+            "min": 1399,
+            "max": 1399
         },
         "demangler-exact-match": {
             "min": 100,
@@ -119,8 +119,8 @@
             "max": 121
         },
         "function-created-from-stab": {
-            "min": 6,
-            "max": 6
+            "min": 7,
+            "max": 7
         },
         "global-applied": {
             "min": 491,
@@ -575,12 +575,12 @@
             "max": 1
         },
         "text-data-no-coverage": {
-            "min": 237,
-            "max": 268
+            "min": 3,
+            "max": 44
         },
         "text-undisassembled-code": {
-            "min": 204,
-            "max": 265
+            "min": 1,
+            "max": 65
         },
         "textrange-entries": {
             "min": 7838,

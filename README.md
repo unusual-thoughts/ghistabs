@@ -190,6 +190,13 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   Ghidra's `RecoverClassesFromRTTIScript` skips any vtable that already has a struct under
   `/ClassDataTypes`, so it recovers nothing for these classes and retypes their methods' `this` to an
   empty placeholder: run it on a program analysed with this analyzer off and no stabs import.
+- **GCC SJLJ exception tables** - lays the LSDA (`.gcc_except_table` entry) of every function a
+  MinGW gcc built with SJLJ exceptions: header, call-site, action and type tables, each field typed
+  and commented, labelled `lsda` in the function's namespace. Ghidra's own `GCC Exception Handlers`
+  analyzer finds LSDAs through `.eh_frame`, which an SJLJ binary has none of, so it never runs on
+  these. The tables are found through the prologue that fills the function's unwind context
+  (`movl $___gxx_personality_sj0` then `movl $LSDA` one word above), so stripped binaries are
+  covered too.
 - **Itanium virtual bases** - runs after GCC C++ vftables and lays the virtual bases a class
   struct lacks, at the offset its `_ZTV` gives. The class's typeinfo names the virtual bases,
   and its demangled `vtable` label's namespace finds its struct. A class deriving from a
@@ -200,7 +207,7 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   importer runs it itself once its labels are demangled; turning the analyzer off turns that
   off too.
 
-The Gap Disassembler and Filler Byte Condenser run before the importer, mostly so its data-coverage report doesn't flag
+The Gap Disassembler, Filler Byte Condenser and SJLJ exception tables run before the importer, mostly so its data-coverage report doesn't flag
 compiler scaffolding as missing.
 
 ## Headless CLI
