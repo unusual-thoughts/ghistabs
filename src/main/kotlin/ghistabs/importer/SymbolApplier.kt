@@ -401,10 +401,23 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         Undefined4DataType.dataType
     }
 
-    private fun Function.addRegister(sym: LocalSymbol, name: String, firstUse: Int, reg: Register) = addLocalVariable(
-        LocalVariableImpl(name, firstUse, sym.resolvedDataType(this), reg, ctx.program, source),
-        source,
-    )
+    private fun Function.addRegister(sym: LocalSymbol, name: String, firstUse: Int, reg: Register): Variable {
+        val dt = sym.resolvedDataType(this)
+        val storage = registerStorage(reg, dt)
+        return addLocalVariable(LocalVariableImpl(name, firstUse, dt, storage, false, ctx.program, source), source)
+    }
+
+    /**
+     * [low] alone, or — for a two-word value, which the stab files under its low register only — the
+     * register pair, high word first as Ghidra orders compound storage.
+     */
+    private fun registerStorage(low: Register, dt: DataType): VariableStorage {
+        val high = ctx.program.dbxArch
+            ?.takeIf { dt.length == 2 * low.minimumByteSize }
+            ?.nextRegister(low.name)
+            ?.let { ctx.program.getRegister(it) }
+        return if (high == null) VariableStorage(ctx.program, low) else VariableStorage(ctx.program, high, low)
+    }
 
     private fun Function.addStack(sym: LocalSymbol, offset: Int) = addLocalVariable(
         LocalVariableImpl(sym.body.name, sym.resolvedDataType(this), offset, ctx.program, source),
@@ -469,8 +482,10 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
                     val name = scopedName(func, reglocalName) {
                         // Base registers: Ghidra narrows a register variable to its type's width, so the
-                        // `CL` an earlier import left for a `char` in ECX is this same slot.
-                        it.firstUseOffset == firstUse && it.register?.baseRegister == reg.baseRegister
+                        // `CL` an earlier import left for a `char` in ECX is this same slot. The last register,
+                        // because a register pair lists its low word, the one the stab names, last.
+                        val low = it.lastStorageVarnode?.let { vn -> ctx.program.getRegister(vn) }
+                        it.firstUseOffset == firstUse && low?.baseRegister == reg.baseRegister
                     } ?: run {
                         debug("reglocal-skipped-dup-local")
                         return
