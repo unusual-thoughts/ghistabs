@@ -21,6 +21,7 @@ import ghistabs.materialize.buildFunctionDefinition
 import ghistabs.materialize.cpp.*
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.abi.ResolvedVtable
 import ghistabs.materialize.cpp.abi.RttiSymbols
 import ghistabs.materialize.cpp.abi.vtableRecord
@@ -136,7 +137,8 @@ class ClassApplier(
      */
     fun applyAll(): Int {
         // A stripped binary's vtables and typeinfos are only found by their symbols once these are back.
-        RttiSymbols(program, this).restore()
+        // Itanium only: gcc 2.x builds its typeinfo at run time, so a name string in its data proves nothing.
+        if (fallbackAbi == Itanium) RttiSymbols(program, this).restore()
         val classes = registry.classesBasesFirst()
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
