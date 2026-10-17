@@ -100,8 +100,9 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: O
         )
         val ELIDE_SJLJ = BoolOption(
             "Elide gcc SjLj exception scaffolding",
-            "Drop the __Unwind_SjLj_* calls, personality store and per-call-site index writes gcc " +
-                "emits for exceptions. No-op on DWARF-EH (ELF).",
+            "Drop the _Unwind_SjLj_* register calls and the stores to the SJLJ function context (its " +
+                "personality, LSDA, setjmp buffer and per-call-site index) gcc emits for exceptions. " +
+                "No-op on DWARF-EH (ELF).",
             true,
         )
         val SHOW_STORAGE = BoolOption(
