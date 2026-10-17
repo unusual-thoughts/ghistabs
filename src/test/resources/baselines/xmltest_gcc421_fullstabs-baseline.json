@@ -714,7 +714,7 @@
         },
         "text-undisassembled-code": {
             "min": 0,
-            "max": 37
+            "max": 0
         },
         "textrange-entries": {
             "min": 922,

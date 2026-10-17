@@ -197,6 +197,14 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   these. The tables are found through the prologue that fills the function's unwind context
   (`movl $___gxx_personality_sj0` then `movl $LSDA` one word above), so stripped binaries are
   covered too.
+- **GCC SJLJ unwind context** - runs after GCC SJLJ exception tables, on the functions it found.
+  Each one's unwind context becomes a local `fc` of type `SjLj_Function_Context`, including the
+  `__builtin_setjmp` buffer that gcc's own stabs leave out, and the `_Unwind_SjLj_*` calls, the
+  SJLJ personality routines and the `__cxa_*` throw and catch calls get their signatures
+  wherever nothing more definite than analysis typed them. The decompiler then shows
+  `fc.call_site = 2` and `fc.jbuf.resume = …` instead of raw stack slots, and `--elide-sjlj`
+  drops those stores by the context's type. On a binary with stabs, the importer runs it itself
+  after applying its symbols, so a type or signature the stabs give is the one kept.
 - **Itanium virtual bases** - runs after GCC C++ vftables and lays the virtual bases a class
   struct lacks, at the offset its `_ZTV` gives. The class's typeinfo names the virtual bases,
   and its demangled `vtable` label's namespace finds its struct. A class deriving from a

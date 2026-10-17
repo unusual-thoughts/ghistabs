@@ -1470,11 +1470,11 @@
         },
         "text-data-no-coverage": {
             "min": 10,
-            "max": 21
+            "max": 18
         },
         "text-undisassembled-code": {
             "min": 0,
-            "max": 125
+            "max": 10
         },
         "textrange-entries": {
             "min": 4014,

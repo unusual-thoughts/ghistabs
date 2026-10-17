@@ -1251,7 +1251,7 @@
         },
         "text-undisassembled-code": {
             "min": 17,
-            "max": 251
+            "max": 35
         },
         "textrange-entries": {
             "min": 3118,
