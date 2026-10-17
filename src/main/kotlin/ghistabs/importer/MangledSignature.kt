@@ -6,6 +6,7 @@ import ghidra.program.model.data.BooleanDataType
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.Pointer
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.lang.CompilerSpec
@@ -38,10 +39,22 @@ fun Function.conventionFor(takesThis: Boolean): PrototypeModel? {
  * can't find, an enum included, as a typedef of the 1-byte `undefined`. Neither is the parameter's
  * size, and applying either loses the parameter's name and moves every slot after it: typing gcc 12
  * `xmltest`'s `XMLDocument::SetError(XMLError error, int, const char* format, ...)`'s `error` so
- * cost `format` its `char*`.
+ * cost `format` its `char*`. [registered], our own type for the demangled spelling, goes first.
  */
-fun DemangledDataType.parameterType(dtm: DataTypeManager): DataType? = runCatching { getDataType(dtm) }.getOrNull()
-    ?.takeUnless { it.isNotYetDefined || it.isZeroLength || it.withoutTypedefs() == DataType.DEFAULT }
+fun DemangledDataType.parameterType(
+    dtm: DataTypeManager,
+    registered: (DemangledDataType) -> DataType? = { null },
+): DataType? = listOf({ registered(this)?.let { decorated(it, dtm) } }, { getDataType(dtm) })
+    .firstNotNullOfOrNull { lookup ->
+        runCatching(lookup).getOrNull()
+            ?.takeUnless { it.isNotYetDefined || it.isZeroLength || it.withoutTypedefs() == DataType.DEFAULT }
+    }
+
+/** [base] behind [this]'s pointers and reference, which Ghidra also lays as a pointer. */
+private fun DemangledDataType.decorated(base: DataType, dtm: DataTypeManager): DataType {
+    val levels = pointerLevels + if (isLValueReference || isRValueReference) 1 else 0
+    return (1..levels).fold(base) { dt, _ -> PointerDataType.getPointer(dt, dtm) }
+}
 
 /** [t]'s [parameterType], or `undefined4` with a [category] degradation against [degrades]. */
 fun DiagnosticSink.parameterTypeOrUndefined(
@@ -49,7 +62,8 @@ fun DiagnosticSink.parameterTypeOrUndefined(
     dtm: DataTypeManager,
     category: String,
     degrades: String,
-): DataType = t.parameterType(dtm) ?: Undefined4DataType.dataType
+    registered: (DemangledDataType) -> DataType? = { null },
+): DataType = t.parameterType(dtm, registered) ?: Undefined4DataType.dataType
     .also { degradation(category, degrades, "demangler gave no type for $t") }
 
 /**

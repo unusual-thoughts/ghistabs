@@ -1,5 +1,6 @@
 package ghistabs.importer
 
+import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.database.data.DataTypeManagerDB
 import ghidra.program.database.data.replaceDataTypesBatched
@@ -365,17 +366,6 @@ class DemanglerReplacer(
         return Owner.Spelled(ourSpelling(leaf))
     }
 
-    /**
-     * A demangled name in *our* spelling — the pipeline [ghistabs.harvest.Type.ghidraName] runs. Both the
-     * site lookup and the instantiation census go through it, so "distinct instantiation" is measured in
-     * the same spelling space we resolve in: three renderings of one class collapse to one, instead of
-     * declining a bind that was only ever ambiguous as a string.
-     */
-    private fun ourSpelling(leaf: String): String = SymbolUtilities.replaceInvalidChars(
-        DemanglerUtil.stripSuperfluousSignatureSpaces(canonTemplateName(leaf)),
-        true,
-    )
-
     /** [dt] with its pointer/array/typedef decoration rebuilt over [replacement], if its base matches [isTarget]. */
     private fun redecorate(dt: DataType?, replacement: DataType, isTarget: (DataType?) -> Boolean): DataType? = when {
         dt is Pointer -> redecorate(dt.dataType, replacement, isTarget)?.let { dtm.getPointer(it) }
@@ -469,6 +459,23 @@ class DemanglerReplacer(
      */
     private val shortener by lazy {
         if (program.stabsTypedefsShortened) TemplateNameShortener(registry.typedefAliases()) else null
+    }
+
+    /**
+     * The type we materialized for [t], by its spelling with template arguments, under its namespace when
+     * several share that. Ghidra's own [DemangledDataType.getDataType] looks a template up by its bare name
+     * (`allocator`, never `allocator<CryptoPP::Integer>`) and takes nothing outside the namespace's
+     * category, which a class whose stabs state no scope is never in: `std::__true_type` is
+     * `/algparam.cpp/multi/__true_type`. Its reference comes back a pointer to an empty `/Demangler` stand-in.
+     * A builtin has neither namespace nor template, and is Ghidra's.
+     */
+    fun registeredType(t: DemangledDataType): DataType? = when {
+        t.namespace == null && t.template == null -> null
+
+        else -> findByExactName(
+            ourSpelling(t.name + t.template?.toTemplate().orEmpty()),
+            CategoryPath.ROOT.extend(t.namespace?.fullName.orEmpty()),
+        )
     }
 
     /** Exact DTM-name match for a demangler stub — no spelling normalization. */
@@ -586,3 +593,14 @@ class DemanglerReplacer(
         return null
     }
 }
+
+/**
+ * A demangled name in *our* spelling — the pipeline [ghistabs.harvest.Type.ghidraName] runs. Both the
+ * site lookup and the instantiation census go through it, so "distinct instantiation" is measured in
+ * the same spelling space we resolve in: three renderings of one class collapse to one, instead of
+ * declining a bind that was only ever ambiguous as a string.
+ */
+private fun ourSpelling(leaf: String): String = SymbolUtilities.replaceInvalidChars(
+    DemanglerUtil.stripSuperfluousSignatureSpaces(canonTemplateName(leaf)),
+    true,
+)
