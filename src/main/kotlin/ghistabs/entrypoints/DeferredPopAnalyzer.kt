@@ -75,16 +75,14 @@ class DeferredPopAnalyzer :
         language.processor.toString() == "x86" && !language.isBigEndian && defaultPointerSize == 4
     } ?: false
 
-    override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
-        program ?: return false
-        val mon = monitor ?: TaskMonitor.DUMMY
+    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
         val stdcall = fixImportPurges(program)
-        if (stdcall > 0) log?.appendMsg(DEFERRED_POP_ANALYZER_NAME, "set the purge of $stdcall stdcall import(s)")
+        if (stdcall > 0) log.appendMsg(DEFERRED_POP_ANALYZER_NAME, "set the purge of $stdcall stdcall import(s)")
 
         val plans = program.functionManager.getFunctions(set, true)
             .filterNot { it.isThunk || it.isExternal }
             .mapNotNull { f ->
-                mon.checkCancelled()
+                monitor.checkCancelled()
                 EspWalk(program, f).plan()?.let { f to it }
             }
         plans.forEach { (_, plan) -> plan.unfixed.forEach { (merge, into) -> bookmarkUnfixed(program, merge, into) } }
@@ -93,8 +91,8 @@ class DeferredPopAnalyzer :
 
         val decomp = DecompInterface().also { it.openProgram(program) }
         try {
-            val kept = fixable.count { (f, plan) -> apply(program, decomp, f, plan.pops, mon, log) }
-            if (kept > 0) log?.appendMsg(DEFERRED_POP_ANALYZER_NAME, "popped deferred arguments in $kept function(s)")
+            val kept = fixable.count { (f, plan) -> apply(program, decomp, f, plan.pops, monitor, log) }
+            if (kept > 0) log.appendMsg(DEFERRED_POP_ANALYZER_NAME, "popped deferred arguments in $kept function(s)")
         } finally {
             decomp.dispose()
         }
@@ -107,7 +105,7 @@ class DeferredPopAnalyzer :
         f: Function,
         pops: Map<Address, Pop>,
         monitor: TaskMonitor,
-        log: MessageLog?,
+        log: MessageLog,
     ): Boolean {
         val before = decomp.pointerStores(f, monitor) ?: return false
         val written = pops.mapNotNull { (call, pop) -> override(program, f, call, pop.extra, log)?.let { call to it } }
@@ -223,30 +221,24 @@ private fun HighFunction.stores() = pcodeOps.asSequence().count { it.opcode == P
 private const val DECOMPILE_TIMEOUT_SECONDS = 60
 
 /** Writes the call-site prototype popping [extra] more at [call]; the convention it uses, or null if it can't. */
-private fun override(program: Program, caller: Function, call: Address, extra: Int, log: MessageLog?) = runCatching {
+private fun override(program: Program, caller: Function, call: Address, extra: Int, log: MessageLog) = runCatching {
     val callee = program.listing.getInstructionAt(call).flows.single().let { program.functionManager.getFunctionAt(it) }
-    val base =
-        callee.callingConventionName.takeUnless {
-            it == Function.UNKNOWN_CALLING_CONVENTION_STRING ||
-                it == Function.DEFAULT_CALLING_CONVENTION_STRING
+    val model = callee.callingConvention ?: program.compilerSpec.defaultCallingConvention
+    require(model.extrapop != PrototypeModel.UNKNOWN_EXTRAPOP) { "${model.name} pops an unknown amount" }
+    "${model.name}_pop$extra".also { ccName ->
+        if (program.compilerSpec.getCallingConvention(ccName) == null) {
+            SpecExtension(program).addReplaceCompilerSpecExtension(
+                poppingConventionXml(program, model, ccName, extra),
+                TaskMonitor.DUMMY,
+            )
         }
-            ?: program.compilerSpec.defaultCallingConvention.name
-    val model = requireNotNull(program.compilerSpec.getCallingConvention(base)) { "no calling convention $base" }
-    require(model.extrapop != PrototypeModel.UNKNOWN_EXTRAPOP) { "$base pops an unknown amount" }
-    val name = "${base}_pop$extra"
-    if (program.compilerSpec.getCallingConvention(name) == null) {
-        SpecExtension(
-            program,
-        ).addReplaceCompilerSpecExtension(poppingConventionXml(program, model, name, extra), TaskMonitor.DUMMY)
+        val sig = FunctionDefinitionDataType(callee.getSignature(true), program.dataTypeManager).apply {
+            setCallingConvention(ccName)
+        }
+        HighFunctionDBUtil.writeOverride(caller, call, sig)
     }
-    val sig = FunctionDefinitionDataType(callee.getSignature(true), program.dataTypeManager)
-    sig.setCallingConvention(name)
-    HighFunctionDBUtil.writeOverride(caller, call, sig)
-    name
-}.getOrElse {
-    log?.appendMsg(DEFERRED_POP_ANALYZER_NAME, "no override at $call in ${caller.name}: ${it.message}")
-    null
-}
+}.onFailure { log.appendMsg(DEFERRED_POP_ANALYZER_NAME, "no override at $call in ${caller.name}: ${it.message}") }
+    .getOrNull()
 
 private fun removeOverrides(program: Program, f: Function, calls: Set<Address>) {
     val space = HighFunction.findOverrideSpace(f) ?: return
@@ -254,12 +246,10 @@ private fun removeOverrides(program: Program, f: Function, calls: Set<Address>) 
 }
 
 /** [model] re-encoded under [name], popping [extra] more bytes. See [derivedConventionXml]. */
-private fun poppingConventionXml(program: Program, model: PrototypeModel, name: String, extra: Int): String {
-    val encoded = XmlEncode().apply { model.encode(this, program.compilerSpec.pcodeInjectLibrary) }.toString()
-    return encoded
+private fun poppingConventionXml(program: Program, model: PrototypeModel, name: String, extra: Int) =
+    XmlEncode().apply { model.encode(this, program.compilerSpec.pcodeInjectLibrary) }.toString()
         .replaceFirst(Regex("name=\"[^\"]*\""), "name=\"$name\"")
         .replaceFirst(Regex("extrapop=\"-?\\d+\""), "extrapop=\"${model.extrapop + extra}\"")
-}
 
 /**
  * ESP, as an offset from its value at entry, at every block of [f] — tracked through the p-code the
@@ -276,13 +266,10 @@ private class EspWalk(private val program: Program, private val f: Function) {
     /** Call sites already overridden, ours from an earlier run included, with what their convention pops. */
     private val overridden: Map<Address, Int> = HighFunction.findOverrideSpace(f)?.let { space ->
         program.symbolTable.getSymbols(space).mapNotNull { sym ->
-            val convention = (
-                HighFunctionDBUtil.readOverride(
-                    sym,
-                )?.dataType as? FunctionSignature
-                )?.callingConventionName
-            val extrapop = convention?.let { program.compilerSpec.getCallingConvention(it) }?.extrapop
-            extrapop?.takeIf { it != PrototypeModel.UNKNOWN_EXTRAPOP }?.let { sym.address to it - 4 }
+            (HighFunctionDBUtil.readOverride(sym)?.dataType as? FunctionSignature)
+                ?.callingConventionName
+                ?.let { program.compilerSpec.getCallingConvention(it) }?.extrapop
+                ?.takeIf { it != PrototypeModel.UNKNOWN_EXTRAPOP }?.let { sym.address to it - 4 }
         }.toMap()
     } ?: emptyMap()
     private lateinit var entry: MutableMap<Address, Long>
@@ -334,13 +321,10 @@ private class EspWalk(private val program: Program, private val f: Function) {
         if (!seen.add(from)) return true
         val block = blocks.getCodeBlockAt(from, TaskMonitor.DUMMY) ?: return false
         val culprit = program.listing.getInstructions(block, true).toList().lastOrNull {
-            depthAtCall[it.address]?.plus(4) ==
-                deep
+            depthAtCall[it.address]?.plus(4) == deep
         }
         if (culprit != null) {
-            if (culprit.flows.size != 1 ||
-                program.functionManager.getFunctionAt(culprit.flows.single()) == null
-            ) {
+            if (culprit.flows.size != 1 || program.functionManager.getFunctionAt(culprit.flows.single()) == null) {
                 return false
             }
             pops.merge(culprit.address, extra, Int::plus)
@@ -381,12 +365,10 @@ private class EspWalk(private val program: Program, private val f: Function) {
     private fun isNewConflict(at: Address) = conflict == null && at !in stuck && readsEsp(at)
 
     /** [state] after [block], or null where the path ends there. */
-    private fun run(block: CodeBlock, state: Map<Varnode, Long>): Map<Varnode, Long>? {
-        val s = state.toMutableMap()
+    private fun run(block: CodeBlock, state: Map<Varnode, Long>): Map<Varnode, Long>? = state.toMutableMap().apply {
         for (insn in program.listing.getInstructions(block, true)) {
-            for (op in insn.pcode) if (!step(insn, op, s)) return null
+            for (op in insn.pcode) if (!step(insn, op, this)) return null
         }
-        return s
     }
 
     private fun step(insn: Instruction, op: PcodeOp, s: MutableMap<Varnode, Long>): Boolean {
@@ -409,12 +391,10 @@ private class EspWalk(private val program: Program, private val f: Function) {
                 val x = value(op.getInput(0))
                 val k = op.getInput(1).takeIf { it.isConstant }?.offset?.toInt()?.toLong()
                 set(
-                    if (x == null || k == null) {
-                        null
-                    } else if (op.opcode == PcodeOp.INT_ADD) {
-                        x + k
-                    } else {
-                        x - k
+                    when {
+                        x == null || k == null -> null
+                        op.opcode == PcodeOp.INT_ADD -> x + k
+                        else -> x - k
                     },
                 )
             }
@@ -425,10 +405,9 @@ private class EspWalk(private val program: Program, private val f: Function) {
     }
 
     /** What a direct call's callee pops beyond its return address; null if it never returns, 0 if unknown. */
-    private fun calleePurge(op: PcodeOp): Int? = if (op.opcode == PcodeOp.CALL) {
-        program.functionManager.getFunctionAt(op.getInput(0).address)?.let { return purgeOf(it) } ?: 0
-    } else {
-        0
+    private fun calleePurge(op: PcodeOp): Int? = when (op.opcode) {
+        PcodeOp.CALL -> program.functionManager.getFunctionAt(op.getInput(0).address)?.let { return purgeOf(it) } ?: 0
+        else -> 0
     }
 
     /** The bytes [callee] pops beyond its return address, or null if it never returns. */
@@ -436,10 +415,8 @@ private class EspWalk(private val program: Program, private val f: Function) {
         val target = if (callee.isThunk) callee.getThunkedFunction(true) else callee
         if (target.hasNoReturn()) return null
         return target.stackPurgeSize.takeUnless {
-            it == Function.UNKNOWN_STACK_DEPTH_CHANGE ||
-                it == Function.INVALID_STACK_DEPTH_CHANGE
-        }
-            ?: 0
+            it == Function.UNKNOWN_STACK_DEPTH_CHANGE || it == Function.INVALID_STACK_DEPTH_CHANGE
+        } ?: 0
     }
 
     /**
@@ -453,21 +430,21 @@ private class EspWalk(private val program: Program, private val f: Function) {
             val insn = program.listing.getInstructionAt(cur ?: return true) ?: return true
             for (op in insn.pcode) {
                 val usesSp = op.inputs.any { it == esp || it in derived }
-                val out = op.output
-                if (out == esp) {
-                    if (!usesSp) return false
-                    if (op.opcode != PcodeOp.COPY) return true
-                }
-                if (usesSp) {
-                    if (out == null || !out.isUnique) return true
-                    derived += out
+                when (val out = op.output) {
+                    esp if !usesSp -> return false
+                    esp if op.opcode != PcodeOp.COPY -> return true
+                    null if usesSp -> return true
+                    else if out.isUnique && usesSp -> return true
+                    else if usesSp -> derived += out
                 }
             }
             val flow = insn.flowType
-            if (flow.isTerminal) return false
-            if (flow.isCall) return true
-            cur =
-                if (flow.isJump && flow.isUnConditional) insn.flows.singleOrNull() ?: return true else insn.fallThrough
+            cur = when {
+                flow.isTerminal -> return false
+                flow.isCall -> return true
+                flow.isJump && flow.isUnConditional -> insn.flows.singleOrNull() ?: return true
+                else -> insn.fallThrough
+            }
         }
         return true
     }
@@ -477,9 +454,8 @@ private class EspWalk(private val program: Program, private val f: Function) {
     }
 
     private fun CodeBlock.sources() = getSources(TaskMonitor.DUMMY).let { i ->
-        generateSequence {
-            if (i.hasNext()) i.next() else null
-        }.map { it.flowType to it.sourceBlock.firstStartAddress }.toList()
+        generateSequence { if (i.hasNext()) i.next() else null }
+            .map { it.flowType to it.sourceBlock.firstStartAddress }.toList()
     }
 
     companion object {
