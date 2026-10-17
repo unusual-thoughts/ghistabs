@@ -3,6 +3,7 @@ package ghistabs.render
 import ghidra.app.decompiler.*
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.listing.Function
+import ghistabs.eh.SjljAbi
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.blockAt
@@ -49,29 +50,47 @@ private fun List<Placed>.booleanCuts(): List<Cut> {
     }
 }
 
-private const val SJLJ_PERSONALITY = "___gxx_personality_sj0"
-private val SJLJ_CALLS = setOf("__Unwind_SjLj_Register", "__Unwind_SjLj_Unregister")
+/** [names] spelled as gcc does or with PE's leading underscore, as a COFF symbol table gives them. */
+private fun ClangToken.isOneOf(names: Set<String>) = text in names || text.removePrefix("_") in names
 
 /**
- * ClangLines that are gcc SjLj exception scaffolding: the `__Unwind_SjLj_*` register/unregister
- * calls, the personality-routine store, and every write to the write-only call-site-index slot —
- * the SjLj context base + 4, base being the `&ctx` passed to `__Unwind_SjLj_Register`. Empty unless
- * the SjLj personality routine appears, so DWARF-EH (ELF) binaries, which keep unwinding out of the
- * code, match nothing.
+ * A store to a field of the SJLJ context, `fc.call_site = 1` or `fc.jbuf.resume = …`: every token
+ * before the `=` is the variable, the field access, and the first field is the context's. Reads, as
+ * the dispatch after the receiver makes of `fc.call_site`, are code and stay.
+ */
+private fun ClangLine.storesSjljContext(): Boolean {
+    val toks = significant()
+    val assign = toks.indexOfFirst { it is ClangOpToken && it.text == "=" }.takeIf { it > 0 } ?: return false
+    val lhs = toks.subList(0, assign)
+    if (lhs.first() !is ClangVariableToken || lhs.drop(1).any { it !is ClangFieldToken && it.text != "." }) {
+        return false
+    }
+    return (lhs.firstOrNull { it is ClangFieldToken } as? ClangFieldToken)?.dataType?.name == SjljAbi.CONTEXT
+}
+
+/**
+ * ClangLines that are gcc SjLj exception scaffolding: the `_Unwind_SjLj_*` register/unregister
+ * calls, the personality-routine store, and every store to the context — the call-site index gcc
+ * writes before each protected call and never reads, the LSDA, the `__builtin_setjmp` buffer.
+ * Empty unless the SjLj personality routine or a context appears, so DWARF-EH (ELF) binaries, which
+ * keep unwinding out of the code, match nothing.
  */
 private fun sjljScaffolding(lines: List<ClangLine>): Set<ClangLine> {
-    if (lines.none { l -> l.content().any { it.text == SJLJ_PERSONALITY } }) return emptySet()
-    // The `&ctx` passed to __Unwind_SjLj_Register is an address-of, so its ClangVariableToken has no
-    // stack varnode — we can't read the context offset from it. Identify the call-site index by its
-    // signature instead: it's the one stack slot written on many lines as the sole variable (SjLj
-    // stores it before every protected call and never reads it).
+    val personality = setOf(SjljAbi.PERSONALITY)
+    val calls = SjljAbi.REGISTRATION_CALLS
+    val stores = lines.filterTo(mutableSetOf()) { it.storesSjljContext() }
+    if (stores.isEmpty() && lines.none { l -> l.content().any { it.isOneOf(personality) } }) return emptySet()
+    // Where nothing typed the context, its `&ctx` passed to _Unwind_SjLj_Register is an address-of,
+    // so its ClangVariableToken has no stack varnode — we can't read the context offset from it.
+    // Identify the call-site index by its signature instead: it's the one stack slot written on many
+    // lines as the sole variable (SjLj stores it before every protected call and never reads it).
     val callSiteOffset = lines
         .mapNotNull { it.stackOffsets().singleOrNull() }
         .groupingBy { it }.eachCount()
         .filterValues { it >= 3 }
         .maxByOrNull { it.value }?.key
-    return lines.filterTo(mutableSetOf()) { line ->
-        line.content().any { (it is ClangFuncNameToken && it.text in SJLJ_CALLS) || it.text == SJLJ_PERSONALITY } ||
+    return stores + lines.filter { line ->
+        line.content().any { (it is ClangFuncNameToken && it.isOneOf(calls)) || it.isOneOf(personality) } ||
             (callSiteOffset != null && line.stackOffsets().singleOrNull() == callSiteOffset)
     }
 }
