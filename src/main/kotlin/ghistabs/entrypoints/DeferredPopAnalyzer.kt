@@ -239,7 +239,7 @@ private fun override(program: Program, caller: Function, call: Address, extra: I
             program,
         ).addReplaceCompilerSpecExtension(poppingConventionXml(program, model, name, extra), TaskMonitor.DUMMY)
     }
-    val sig = FunctionDefinitionDataType(callee, true).clone(program.dataTypeManager) as FunctionDefinitionDataType
+    val sig = FunctionDefinitionDataType(callee.getSignature(true), program.dataTypeManager)
     sig.setCallingConvention(name)
     HighFunctionDBUtil.writeOverride(caller, call, sig)
     name
