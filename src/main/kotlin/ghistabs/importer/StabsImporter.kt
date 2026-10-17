@@ -3,6 +3,7 @@ package ghistabs.importer
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.entrypoints.GccVftableAnalyzer
 import ghistabs.entrypoints.RttiLayoutAnalyzer
+import ghistabs.entrypoints.SjljContextAnalyzer
 import ghistabs.entrypoints.VirtualBaseAnalyzer
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
@@ -91,6 +92,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                 // Once labels are demangled, so each typeinfo and vtable sits in its class's namespace.
                 if (VirtualBaseAnalyzer.isEnabled(ctx.program)) {
                     VtableVirtualBases(ctx.program, ctx) { registry.uniqueStructTagged(it.leafName) }.layAll()
+                }
+                // Once the stabs have typed what they type, the libgcc entry points among it.
+                if (SjljContextAnalyzer.isEnabled(ctx.program)) {
+                    SjljContextAnalyzer.typeAll(ctx.program, ctx.monitor, ctx)
                 }
             }
         }
