@@ -68,32 +68,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                         else -> 0
                     },
                 )
-            }.also {
-                // Typeinfos first, so the coverage report counts them in every analysis order: some
-                // `_ZTI` labels only exist once this import has applied its globals.
-                if (RttiLayoutAnalyzer.isEnabled(ctx.program)) {
-                    RttiLayoutAnalyzer.layTypeinfos(ctx.program, registry, ctx)
-                }
-                // The classes the stabs describe are laid; the analyzer's sweep takes the rest now, on
-                // this import's registry and diagnostics, ahead of the demangler stub replacement.
-                if (GccVftableAnalyzer.isEnabled(ctx.program)) {
-                    GccVftableAnalyzer.sweep(ctx.program, registry, ctx.monitor, ctx)
-                }
-                ctx.demanglerReplacer(registry).replace()
-                // After the demangle passes above, which re-file methods under their mangled scope, and before
-                // the virtual bases, which find a class's struct by the namespace its labels sit in.
-                if (ctx.options.shortenTypedefs && ctx.options.buildClasses) {
-                    ctx.program.rehomeOntoShortenedClasses(TemplateNameShortener(registry.typedefAliases()), ctx)
-                }
-                // Once labels are demangled, so each typeinfo and vtable sits in its class's namespace.
-                if (VirtualBaseAnalyzer.isEnabled(ctx.program)) {
-                    VtableVirtualBases(ctx.program, ctx) { registry.uniqueStructTagged(it.leafName) }.layAll()
-                }
-                // Once the stabs have typed what they type, the libgcc entry points among it.
-                if (SjljContextAnalyzer.isEnabled(ctx.program)) {
-                    SjljContextAnalyzer.typeAll(ctx.program, ctx.monitor, ctx)
-                }
-            }
+            }.also { layAfterSymbols(registry) }
         }
 
         // Pass D — publish the line map, then point it at local sources if any root was given
@@ -115,6 +90,34 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             sourceMapEntries = sourceMapEntries,
             artifacts = ImportArtifacts(registry, stabs.records),
         )
+    }
+
+    /** The ABI passes that need the stabs' symbols applied first, in the order each depends on. */
+    private fun layAfterSymbols(registry: DataTypeRegistry) {
+        // Typeinfos first, so the coverage report counts them in every analysis order: some
+        // `_ZTI` labels only exist once this import has applied its globals.
+        if (RttiLayoutAnalyzer.isEnabled(ctx.program)) {
+            RttiLayoutAnalyzer.layTypeinfos(ctx.program, registry, ctx)
+        }
+        // The classes the stabs describe are laid; the analyzer's sweep takes the rest now, on
+        // this import's registry and diagnostics, ahead of the demangler stub replacement.
+        if (GccVftableAnalyzer.isEnabled(ctx.program)) {
+            GccVftableAnalyzer.sweep(ctx.program, registry, ctx.monitor, ctx)
+        }
+        ctx.demanglerReplacer(registry).replace()
+        // After the demangle passes above, which re-file methods under their mangled scope, and before
+        // the virtual bases, which find a class's struct by the namespace its labels sit in.
+        if (ctx.options.shortenTypedefs && ctx.options.buildClasses) {
+            ctx.program.rehomeOntoShortenedClasses(TemplateNameShortener(registry.typedefAliases()), ctx)
+        }
+        // Once labels are demangled, so each typeinfo and vtable sits in its class's namespace.
+        if (VirtualBaseAnalyzer.isEnabled(ctx.program)) {
+            VtableVirtualBases(ctx.program, ctx) { registry.uniqueStructTagged(it.leafName) }.layAll()
+        }
+        // Once the stabs have typed what they type, the libgcc entry points among it.
+        if (SjljContextAnalyzer.isEnabled(ctx.program)) {
+            SjljContextAnalyzer.typeAll(ctx.program, ctx.monitor, ctx)
+        }
     }
 
     private fun recordHarvestCounters(harvest: Harvest, types: TypeGraph, stabs: StabReader.Result) {
