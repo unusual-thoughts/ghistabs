@@ -133,13 +133,6 @@
             "min": 10,
             "max": 10
         },
-        "global-typed-all-undefined": {
-            "min": 4,
-            "max": 4,
-            "degrades": [
-                "_ZSt8__ioinit"
-            ]
-        },
         "harvest-collisions-divergent": {
             "min": 0,
             "max": 0
@@ -312,17 +305,6 @@
             "min": 742,
             "max": 742
         },
-        "placeholder-undefined-fields": {
-            "min": 20,
-            "max": 20,
-            "degrades": [
-                "allocator<char>",
-                "allocator<wchar_t>",
-                "bidirectional_iterator_tag",
-                "forward_iterator_tag",
-                "random_access_iterator_tag"
-            ]
-        },
         "pointee-typed": {
             "min": 2,
             "max": 2
@@ -377,10 +359,6 @@
         "text-data-no-coverage": {
             "min": 1,
             "max": 3
-        },
-        "text-undisassembled-code": {
-            "min": 0,
-            "max": 1
         },
         "textrange-entries": {
             "min": 74,
