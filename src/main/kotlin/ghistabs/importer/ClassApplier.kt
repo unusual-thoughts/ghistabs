@@ -22,6 +22,7 @@ import ghistabs.materialize.cpp.*
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.cpp.abi.ResolvedVtable
+import ghistabs.materialize.cpp.abi.RttiSymbols
 import ghistabs.materialize.cpp.abi.vtableRecord
 import ghistabs.materialize.resolveRef
 import ghistabs.materialize.signatureParams
@@ -134,6 +135,8 @@ class ClassApplier(
      * sweep, which knows the ones laid here by their `vftable` labels.
      */
     fun applyAll(): Int {
+        // A stripped binary's vtables and typeinfos are only found by their symbols once these are back.
+        RttiSymbols(program, this).restore()
         val classes = registry.classesBasesFirst()
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
