@@ -115,24 +115,27 @@ class RttiSymbols(private val program: Program, sink: DiagnosticSink) : Diagnost
                 }
                 return@mapNotNull null
             }
-            val start = prefixStart(top)
-            if (!label(start, Itanium.VTABLE_PREFIX + name)) return@mapNotNull null
-            debug("vtable-from-rtti", name, at(start))
+            if (!label(prefixStart(top), Itanium.VTABLE_PREFIX + name)) return@mapNotNull null
             Triple(name, typeinfo, top)
         }
         // Once every typeinfo and vtable is labelled, the typeinfos can be read for where they put their
-        // vbase offsets, which a run of zeros in front of offset_to_top hides.
+        // vbase offsets, which a run of zeros in front of offset_to_top hides. Where the true start was
+        // named all along (an unstripped binary), the label just laid is a duplicate and goes.
         val reader = Rtti.Reader(program)
-        for ((name, typeinfo, top) in laid) {
-            val lowest = reader.virtualBasesOf(at(typeinfo)).minOfOrNull { it.offset } ?: continue
+        val kept = laid.filter { (name, typeinfo, top) ->
             val start = prefixStart(top)
-            val vbaseStart = top + 2L * ptr + lowest
-            if (vbaseStart >= start) continue
+            val lowest = reader.virtualBasesOf(at(typeinfo)).minOfOrNull { it.offset }
+            val vbaseStart = lowest?.let { top + 2L * ptr + it }?.takeIf { it < start }
+            if (vbaseStart == null) {
+                debug("vtable-from-rtti", name, at(start))
+                return@filter true
+            }
             program.symbolTable.getSymbol(Itanium.VTABLE_PREFIX + name, at(start), null)?.delete()
-            label(vbaseStart, Itanium.VTABLE_PREFIX + name)
-            debug("vtable-rtti-zero-vbase", name, at(vbaseStart))
+            label(vbaseStart, Itanium.VTABLE_PREFIX + name).also {
+                if (it) debug("vtable-rtti-zero-vbase", name, at(vbaseStart))
+            }
         }
-        return laid.size
+        return kept.size
     }
 
     /**
