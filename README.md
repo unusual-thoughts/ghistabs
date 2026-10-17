@@ -177,6 +177,14 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   reads the callee's stack purge (which settles the question: `RET 0x4` vs bare `RET`) and,
   where it disagrees with the cspec, reassigns the function to a derived calling convention
   (`__thiscall_memret`, `__cdecl_regret`, …) installed as a program spec extension.
+- **Deferred stack pops (x86)** - gcc leaves a call's arguments pushed when the code ahead only
+  addresses through `EBP`, so two paths can meet with `ESP` a few bytes apart, and the
+  decompiler then turns every later push past the merge into a store through a pointer
+  (`*(undefined4 *)(puVar7 + -0x14) = 0x42350c`). This analyzer finds those merges and pops the dead
+  bytes at the call that left them, through a call-site override whose derived convention pops
+  that much more (`__cdecl_pop16`, …). A function's overrides are kept only if the decompiler
+  then makes fewer stores through pointers. It also gives MinGW `_Name@N` import stubs the
+  `N`-byte purge Ghidra leaves at 0.
 - **In-Function Gap Disassembler** - disassembles undefined bytes that lie *inside* a
   function's extent: hot/cold split holes and exception landing pads reachable only by
   unwinding. Only runs where every byte of the gap decodes cleanly.

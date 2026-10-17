@@ -61,7 +61,7 @@ Two axes, deliberately separate. **`-Pregression`** picks the *suite*; **`-Pfixt
   instead of re-analyzing: the first run over a binary costs the usual 90-500s, every later one a
   second or two. Written and read automatically, never committed, and safe to delete. A snapshot also
   carries *our* non-stabs analyzers (`HullDisassemblyAnalyzer`, `NoReturnAnalyzer`, `ThisParamAnalyzer`,
-  `StructReturnAnalyzer`, `FillerByteAnalyzer`), which run inside the same pass, and nothing keys it to
+  `StructReturnAnalyzer`, `DeferredPopAnalyzer`, `FillerByteAnalyzer`), which run inside the same pass, and nothing keys it to
   the code that produced it — **a change to one of those is only seen under `-Pmode=CONCURRENT`, or after
   `-PanalysisCache=refresh`**, which re-analyzes and overwrites. `off` bypasses the cache in both
   directions. `-PanalysisCacheDir=<dir>` puts the databases somewhere `clean` does not reach.
