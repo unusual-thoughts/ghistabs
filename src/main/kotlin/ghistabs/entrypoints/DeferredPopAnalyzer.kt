@@ -12,6 +12,7 @@ import ghidra.program.model.block.BasicBlockModel
 import ghidra.program.model.block.CodeBlock
 import ghidra.program.model.data.FunctionDefinitionDataType
 import ghidra.program.model.lang.PrototypeModel
+import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.FunctionSignature
 import ghidra.program.model.listing.Instruction
@@ -102,18 +103,40 @@ class DeferredPopAnalyzer :
         program: Program,
         decomp: DecompInterface,
         f: Function,
-        pops: Map<Address, Int>,
+        pops: Map<Address, Pop>,
         monitor: TaskMonitor,
         log: MessageLog?,
     ): Boolean {
         val before = decomp.pointerStores(f, monitor) ?: return false
-        val written = pops.filter { (call, extra) -> override(program, f, call, extra, log) }.keys
+        val written = pops.mapNotNull { (call, pop) -> override(program, f, call, pop.extra, log)?.let { call to it } }
         if (written.isEmpty()) return false
         val after = decomp.pointerStores(f, monitor)
-        if (after != null && after < before) return true
-        removeOverrides(program, f, written)
-        return false
+        if (after == null || after >= before) {
+            removeOverrides(program, f, written.map { it.first }.toSet())
+            return false
+        }
+        written.forEach { (call, convention) ->
+            bookmark(program, call, convention, pops.getValue(call), before, after)
+        }
+        return true
     }
+}
+
+/** Bytes a call is made to pop beyond its convention, and the merges whose ESP mismatch that evens out. */
+private data class Pop(val extra: Int, val joins: Set<Address>)
+
+/** Says at [call] what its override pops and why, since nothing in the listing shows a call-site prototype. */
+private fun bookmark(program: Program, call: Address, convention: String, pop: Pop, before: Int, after: Int) {
+    val joins = pop.joins.joinToString()
+    program.bookmarkManager.setBookmark(
+        call,
+        BookmarkType.ANALYSIS,
+        DEFERRED_POP_ANALYZER_NAME,
+        "$convention: this call pops ${pop.extra} more bytes than its callee's convention. gcc left that many " +
+            "bytes of arguments pushed here (a deferred pop) and the path reaches $joins with ESP ${pop.extra} " +
+            "deeper than the others, which makes the decompiler lose the stack there. Popping the dead " +
+            "arguments at this call evens ESP out (stores through pointers in this function: $before -> $after).",
+    )
 }
 
 /** MinGW import stubs `_Name@N` whose external target records a purge other than the `N` it pops. */
@@ -135,6 +158,7 @@ private fun HighFunction.stores() = pcodeOps.asSequence().count { it.opcode == P
 
 private const val DECOMPILE_TIMEOUT_SECONDS = 60
 
+/** Writes the call-site prototype popping [extra] more at [call]; the convention it uses, or null if it can't. */
 private fun override(program: Program, caller: Function, call: Address, extra: Int, log: MessageLog?) = runCatching {
     val callee = program.listing.getInstructionAt(call).flows.single().let { program.functionManager.getFunctionAt(it) }
     val base =
@@ -154,10 +178,10 @@ private fun override(program: Program, caller: Function, call: Address, extra: I
     val sig = FunctionDefinitionDataType(callee, true).clone(program.dataTypeManager) as FunctionDefinitionDataType
     sig.setCallingConvention(name)
     HighFunctionDBUtil.writeOverride(caller, call, sig)
-    true
+    name
 }.getOrElse {
     log?.appendMsg(DEFERRED_POP_ANALYZER_NAME, "no override at $call in ${caller.name}: ${it.message}")
-    false
+    null
 }
 
 private fun removeOverrides(program: Program, f: Function, calls: Set<Address>) {
@@ -183,6 +207,7 @@ private class EspWalk(private val program: Program, private val f: Function) {
     private val blocks = BasicBlockModel(program)
 
     private val pops = mutableMapOf<Address, Int>()
+    private val joins = mutableMapOf<Address, MutableSet<Address>>()
 
     /** Call sites already overridden, ours from an earlier run included, with what their convention pops. */
     private val overridden: Map<Address, Int> = HighFunction.findOverrideSpace(f)?.let { space ->
@@ -205,34 +230,40 @@ private class EspWalk(private val program: Program, private val f: Function) {
     private val stuck = mutableSetOf<Address>()
 
     /** Calls to make pop more, and by how much, so that no two paths meet with ESP apart; null if none or no way. */
-    fun plan(): Map<Address, Int>? {
+    fun plan(): Map<Address, Pop>? {
         walk()
         if (conflict == null) return null
         repeat(MAX_ROUNDS) {
-            val at = conflict ?: return pops.ifEmpty { null }
+            val at = conflict ?: return planned()
             val into = incoming.getValue(at)
             val target = into.values.max()
             val seen = mutableSetOf<Address>()
             val saved = pops.toMap()
+            val savedJoins = joins.mapValues { it.value.toSet() }
             if (!into.all { (from, depth) ->
-                    depth == target || popAt(from, (target - depth).toInt(), depth, seen)
+                    depth == target || popAt(from, (target - depth).toInt(), depth, at, seen)
                 }
             ) {
                 stuck += at
                 pops.clear()
                 pops.putAll(saved)
+                joins.clear()
+                savedJoins.forEach { (call, merges) -> joins[call] = merges.toMutableSet() }
             }
             walk()
         }
-        return pops.ifEmpty { null }
+        return planned()
     }
+
+    private fun planned() = pops.mapValues { (call, extra) -> Pop(extra, joins[call].orEmpty()) }.ifEmpty { null }
 
     /**
      * Make the path out of block [from] pop [extra] more, at the last call before it whose own
      * arguments are what is still pushed — the call at which ESP stood at [deep]. A call that pushes
-     * and pops its own arguments in between is passed over: the bytes predate it.
+     * and pops its own arguments in between is passed over: the bytes predate it. [join] is the merge
+     * this evens out.
      */
-    private fun popAt(from: Address, extra: Int, deep: Long, seen: MutableSet<Address>): Boolean {
+    private fun popAt(from: Address, extra: Int, deep: Long, join: Address, seen: MutableSet<Address>): Boolean {
         if (!seen.add(from)) return true
         val block = blocks.getCodeBlockAt(from, TaskMonitor.DUMMY) ?: return false
         val culprit = program.listing.getInstructions(block, true).toList().lastOrNull {
@@ -246,10 +277,11 @@ private class EspWalk(private val program: Program, private val f: Function) {
                 return false
             }
             pops.merge(culprit.address, extra, Int::plus)
+            joins.getOrPut(culprit.address) { mutableSetOf() } += join
             return true
         }
         val preds = block.sources().filter { (flow, start) -> !flow.isCall && f.body.contains(start) }
-        return preds.isNotEmpty() && preds.all { (_, start) -> popAt(start, extra, deep, seen) }
+        return preds.isNotEmpty() && preds.all { (_, start) -> popAt(start, extra, deep, join, seen) }
     }
 
     private fun walk() {

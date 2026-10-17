@@ -4,6 +4,7 @@ import ghidra.app.decompiler.DecompInterface
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.database.SpecExtension
+import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.FunctionSignature
 import ghidra.program.model.pcode.HighFunction
@@ -78,12 +79,19 @@ class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         runAnalyzer()
         overrides(DEFERRED).mapValues { it.value.callingConventionName } mustBe mapOf(FIRST_CALL to "__cdecl_pop4")
         stores(DEFERRED) mustBe 0
+        bookmarks().keys mustBe setOf(FIRST_CALL)
+        bookmarks().getValue(FIRST_CALL).mustNot("names the merge it evens out") { "00400011" !in this }
     }
+
+    private fun bookmarks() = program.bookmarkManager.getBookmarksIterator(BookmarkType.ANALYSIS).asSequence()
+        .filter { it.category == DEFERRED_POP_ANALYZER_NAME }
+        .associate { it.address.toString() to it.comment }
 
     @Test
     fun balancedFunctionsAreLeftAlone() {
         runAnalyzer()
         overrides(BALANCED) mustBe emptyMap()
+        bookmarks().keys.filter { it >= "00400030" } mustBe emptyList()
     }
 
     @Test
