@@ -16,10 +16,12 @@ import ghistabs.entrypoints.DEFERRED_POP_ANALYZER_NAME
 import ghistabs.entrypoints.DeferredPopAnalyzer
 import ghistabs.entrypoints.MERGE_BOOKMARK
 import ghistabs.entrypoints.UNFIXED_BOOKMARK
+import ghistabs.entrypoints.endStatePropagator
 import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustNot
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -78,6 +80,7 @@ class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
     @Test
     fun deadArgumentsArePoppedAtTheirCall() {
+        assumeTrue(endStatePropagator(program) != null, "ESP at each instruction's end needs Ghidra 11.4")
         runAnalyzer()
         overrides(DEFERRED).mapValues { it.value.callingConventionName } mustBe mapOf(FIRST_CALL to "__cdecl_pop4")
         stores(DEFERRED) mustBe 0
