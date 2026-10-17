@@ -150,14 +150,6 @@
             "min": 505,
             "max": 505
         },
-        "global-typed-all-undefined": {
-            "min": 5,
-            "max": 5,
-            "degrades": [
-                "_ZSt7nothrow",
-                "_ZSt8__ioinit"
-            ]
-        },
         "harvest-collisions-divergent": {
             "min": 1,
             "max": 1
@@ -325,36 +317,6 @@
                 "__umoddi3.v"
             ]
         },
-        "local-typed-all-undefined": {
-            "min": 24,
-            "max": 24,
-            "degrades": [
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIjEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIlEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intImEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intItEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIxEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIyEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE16_M_extract_floatES3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE6do_getES3_S3_RSt8ios_baseRSt12_Ios_IostateRb.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intIlEES3_S3_RSt8ios_basecT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intImEES3_S3_RSt8ios_basecT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intIxEES3_S3_RSt8ios_basecT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intIyEES3_S3_RSt8ios_basecT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE15_M_insert_floatIdEES3_S3_RSt8ios_baseccT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE15_M_insert_floatIeEES3_S3_RSt8ios_baseccT_.__uc",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE6do_putES3_RSt8ios_basecb.__uc",
-                "_ZNKSt9money_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE10_M_extractILb0EEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
-                "_ZNKSt9money_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE10_M_extractILb1EEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
-                "_ZNKSt9money_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE9_M_insertILb0EEES3_S3_RSt8ios_basecRKSs.__uc",
-                "_ZNKSt9money_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE9_M_insertILb1EEES3_S3_RSt8ios_basecRKSs.__uc",
-                "_ZNSs6assignERKSs.__a",
-                "_ZNSs7reserveEj.__a",
-                "_ZNSs9_M_mutateEjjj.__a",
-                "_ZNSt8ios_base15sync_with_stdioEb.__init",
-                "__cxa_call_unexpected.end_catch_protect_obj"
-            ]
-        },
         "local-var-add-success": {
             "min": 1539,
             "max": 1539
@@ -500,20 +462,6 @@
             "min": 16803,
             "max": 16803
         },
-        "placeholder-undefined-fields": {
-            "min": 15,
-            "max": 15,
-            "degrades": [
-                "__pool_alloc<char>",
-                "__pool_alloc<wchar_t>",
-                "allocator<char>",
-                "allocator<wchar_t>",
-                "bidirectional_iterator_tag",
-                "forward_iterator_tag",
-                "less<char_const*>",
-                "random_access_iterator_tag"
-            ]
-        },
         "pointee-typed": {
             "min": 17,
             "max": 17
@@ -600,10 +548,6 @@
         "text-data-no-coverage": {
             "min": 1,
             "max": 1
-        },
-        "text-undisassembled-code": {
-            "min": 0,
-            "max": 2
         },
         "textrange-entries": {
             "min": 665,
