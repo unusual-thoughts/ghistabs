@@ -430,12 +430,11 @@ private class EspWalk(private val program: Program, private val f: Function) {
             val insn = program.listing.getInstructionAt(cur ?: return true) ?: return true
             for (op in insn.pcode) {
                 val usesSp = op.inputs.any { it == esp || it in derived }
-                when (val out = op.output) {
-                    esp if !usesSp -> return false
-                    esp if op.opcode != PcodeOp.COPY -> return true
-                    null if usesSp -> return true
-                    else if out.isUnique && usesSp -> return true
-                    else if usesSp -> derived += out
+                val out = op.output
+                when {
+                    !usesSp -> if (out == esp) return false
+                    out == null || !out.isUnique -> return true
+                    else -> derived += out
                 }
             }
             val flow = insn.flowType
