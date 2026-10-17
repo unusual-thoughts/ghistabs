@@ -184,7 +184,7 @@ class ClassApplier(
     fun applyAll(): Int {
         // A stripped binary's vtables and typeinfos are only found by their symbols once these are back.
         // Itanium only: gcc 2.x builds its typeinfo at run time, so a name string in its data proves nothing.
-        if (fallbackAbi == Itanium) RttiSymbols(program, this).restore()
+        if (symtab.prevailingAbi() == Itanium) RttiSymbols(program, this).restore()
         val classes = registry.classesBasesFirst()
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
