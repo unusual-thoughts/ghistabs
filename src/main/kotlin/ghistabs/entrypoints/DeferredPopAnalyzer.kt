@@ -24,8 +24,6 @@ import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.pcode.XmlEncode
 import ghidra.util.task.TaskMonitor
 
-const val DEFERRED_POP_ANALYZER_NAME = "Deferred stack pops (x86)"
-
 /**
  * gcc defers popping a call's arguments (`-fdefer-pop`, on at -O1 and up, and the default for some
  * paths even at -O0) and may never pop them at all when the code ahead only addresses through EBP
@@ -59,7 +57,7 @@ const val DEFERRED_POP_ANALYZER_NAME = "Deferred stack pops (x86)"
  */
 class DeferredPopAnalyzer :
     AbstractAnalyzer(
-        DEFERRED_POP_ANALYZER_NAME,
+        NAME,
         "Pop arguments gcc left on the stack at a call, where two paths would meet with ESP apart.",
         AnalyzerType.FUNCTION_ANALYZER,
     ) {
@@ -76,8 +74,8 @@ class DeferredPopAnalyzer :
     } ?: false
 
     override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
-        val stdcall = fixImportPurges(program)
-        if (stdcall > 0) log.appendMsg(DEFERRED_POP_ANALYZER_NAME, "set the purge of $stdcall stdcall import(s)")
+        val stdcall = program.fixImportPurges()
+        if (stdcall > 0) log.appendMsg(NAME, "set the purge of $stdcall stdcall import(s)")
 
         val plans = program.functionManager.getFunctions(set, true)
             .filterNot { it.isThunk || it.isExternal }
@@ -85,22 +83,21 @@ class DeferredPopAnalyzer :
                 monitor.checkCancelled()
                 EspWalk(program, f).plan()?.let { f to it }
             }
-        plans.forEach { (_, plan) -> plan.unfixed.forEach { (merge, into) -> bookmarkUnfixed(program, merge, into) } }
+        plans.forEach { (_, plan) -> plan.unfixed.forEach { (merge, into) -> program.bookmarkUnfixed(merge, into) } }
         val fixable = plans.filter { it.second.pops.isNotEmpty() }
         if (fixable.isEmpty()) return true
 
         val decomp = DecompInterface().also { it.openProgram(program) }
         try {
-            val kept = fixable.count { (f, plan) -> apply(program, decomp, f, plan.pops, monitor, log) }
-            if (kept > 0) log.appendMsg(DEFERRED_POP_ANALYZER_NAME, "popped deferred arguments in $kept function(s)")
+            val kept = fixable.count { (f, plan) -> program.apply(decomp, f, plan.pops, monitor, log) }
+            if (kept > 0) log.appendMsg(NAME, "popped deferred arguments in $kept function(s)")
         } finally {
             decomp.dispose()
         }
         return true
     }
 
-    private fun apply(
-        program: Program,
+    private fun Program.apply(
         decomp: DecompInterface,
         f: Function,
         pops: Map<Address, Pop>,
@@ -108,14 +105,13 @@ class DeferredPopAnalyzer :
         log: MessageLog,
     ): Boolean {
         val before = decomp.pointerStores(f, monitor) ?: return false
-        val written = pops.mapNotNull { (call, pop) -> override(program, f, call, pop.extra, log)?.let { call to it } }
+        val written = pops.mapNotNull { (call, pop) -> override(f, call, pop.extra, log)?.let { call to it } }
         if (written.isEmpty()) return false
         val after = decomp.pointerStores(f, monitor)
         val kept = after != null && after < before
         if (kept) {
             for ((call, convention) in written) {
                 bookmarkCall(
-                    program,
                     call,
                     convention,
                     pops.getValue(call),
@@ -124,10 +120,14 @@ class DeferredPopAnalyzer :
                 )
             }
         } else {
-            removeOverrides(program, f, written.map { it.first }.toSet())
+            removeOverrides(f, written.map { it.first }.toSet())
         }
-        bookmarkMerges(program, pops, kept, before, after)
+        bookmarkMerges(pops, kept, before, after)
         return kept
+    }
+
+    companion object {
+        const val NAME = "Deferred stack pops (x86)"
     }
 }
 
@@ -138,14 +138,14 @@ private data class Pop(val extra: Int, val joins: Set<Address>)
 private data class Plan(val pops: Map<Address, Pop>, val unfixed: Map<Address, Map<Address, Long>>)
 
 /** Bookmark categories, one per kind, so two kinds at one address don't replace each other. */
-internal const val CALL_BOOKMARK = "$DEFERRED_POP_ANALYZER_NAME: call"
-internal const val MERGE_BOOKMARK = "$DEFERRED_POP_ANALYZER_NAME: merge"
-internal const val UNFIXED_BOOKMARK = "$DEFERRED_POP_ANALYZER_NAME: unfixed merge"
-internal const val IMPORT_BOOKMARK = "$DEFERRED_POP_ANALYZER_NAME: stdcall import"
+internal const val CALL_BOOKMARK = "${DeferredPopAnalyzer.NAME}: call"
+internal const val MERGE_BOOKMARK = "${DeferredPopAnalyzer.NAME}: merge"
+internal const val UNFIXED_BOOKMARK = "${DeferredPopAnalyzer.NAME}: unfixed merge"
+internal const val IMPORT_BOOKMARK = "${DeferredPopAnalyzer.NAME}: stdcall import"
 
 /** Says at [call] what its override pops and why, since nothing in the listing shows a call-site prototype. */
-private fun bookmarkCall(program: Program, call: Address, convention: String, pop: Pop, before: Int, after: Int) =
-    program.bookmarkManager.setBookmark(
+private fun Program.bookmarkCall(call: Address, convention: String, pop: Pop, before: Int, after: Int) =
+    bookmarkManager.setBookmark(
         call,
         BookmarkType.ANALYSIS,
         CALL_BOOKMARK,
@@ -157,12 +157,12 @@ private fun bookmarkCall(program: Program, call: Address, convention: String, po
     )
 
 /** Says at each merge [pops] are for which calls pop for it, or that it stays apart if the decompiler rejected them. */
-private fun bookmarkMerges(program: Program, pops: Map<Address, Pop>, kept: Boolean, before: Int, after: Int?) {
+private fun Program.bookmarkMerges(pops: Map<Address, Pop>, kept: Boolean, before: Int, after: Int?) {
     val callsByMerge = pops.flatMap { (call, pop) -> pop.joins.map { it to call } }.groupBy({ it.first }, { it.second })
     for ((merge, calls) in callsByMerge) {
         val at = calls.joinToString { "$it (${pops.getValue(it).extra} bytes)" }
         if (kept) {
-            program.bookmarkManager.setBookmark(
+            bookmarkManager.setBookmark(
                 merge,
                 BookmarkType.ANALYSIS,
                 MERGE_BOOKMARK,
@@ -170,7 +170,7 @@ private fun bookmarkMerges(program: Program, pops: Map<Address, Pop>, kept: Bool
                     "Evened out by popping them at $at.",
             )
         } else {
-            program.bookmarkManager.setBookmark(
+            bookmarkManager.setBookmark(
                 merge,
                 BookmarkType.WARNING,
                 UNFIXED_BOOKMARK,
@@ -183,22 +183,21 @@ private fun bookmarkMerges(program: Program, pops: Map<Address, Pop>, kept: Bool
 }
 
 /** Says at [merge] that paths meet with ESP apart and nothing could pop the difference, so what follows may decay. */
-private fun bookmarkUnfixed(program: Program, merge: Address, into: Map<Address, Long>) =
-    program.bookmarkManager.setBookmark(
-        merge,
-        BookmarkType.WARNING,
-        UNFIXED_BOOKMARK,
-        "Paths meet here with ESP apart (ESP ${into.entries.joinToString { (from, sp) -> "$sp from $from" }}, " +
-            "relative to entry), and on some way in no call's arguments account for the extra bytes, so nothing " +
-            "was popped. The decompiler may turn stack accesses past this point into stores through a pointer.",
-    )
+private fun Program.bookmarkUnfixed(merge: Address, into: Map<Address, Long>) = bookmarkManager.setBookmark(
+    merge,
+    BookmarkType.WARNING,
+    UNFIXED_BOOKMARK,
+    "Paths meet here with ESP apart (ESP ${into.entries.joinToString { (from, sp) -> "$sp from $from" }}, " +
+        "relative to entry), and on some way in no call's arguments account for the extra bytes, so nothing " +
+        "was popped. The decompiler may turn stack accesses past this point into stores through a pointer.",
+)
 
 /** MinGW import stubs `_Name@N` whose external target records a purge other than the `N` it pops. */
-internal fun fixImportPurges(program: Program): Int = program.functionManager.getFunctions(true).count { stub ->
+internal fun Program.fixImportPurges(): Int = functionManager.getFunctions(true).count { stub ->
     val pops = STDCALL_SUFFIX.find(stub.name)?.groupValues?.get(1)?.toInt()
     val target = if (stub.isThunk) stub.getThunkedFunction(true) else null
     if (pops == null || target == null || !target.isExternal || target.stackPurgeSize == pops) return@count false
-    program.bookmarkManager.setBookmark(
+    bookmarkManager.setBookmark(
         stub.entryPoint,
         BookmarkType.ANALYSIS,
         IMPORT_BOOKMARK,
@@ -221,33 +220,31 @@ private fun HighFunction.stores() = pcodeOps.asSequence().count { it.opcode == P
 private const val DECOMPILE_TIMEOUT_SECONDS = 60
 
 /** Writes the call-site prototype popping [extra] more at [call]; the convention it uses, or null if it can't. */
-private fun override(program: Program, caller: Function, call: Address, extra: Int, log: MessageLog) = runCatching {
-    val callee = program.listing.getInstructionAt(call).flows.single().let { program.functionManager.getFunctionAt(it) }
-    val model = callee.callingConvention ?: program.compilerSpec.defaultCallingConvention
+private fun Program.override(caller: Function, call: Address, extra: Int, log: MessageLog) = runCatching {
+    val callee = listing.getInstructionAt(call).flows.single().let { functionManager.getFunctionAt(it) }
+    val model = callee.callingConvention ?: compilerSpec.defaultCallingConvention
     require(model.extrapop != PrototypeModel.UNKNOWN_EXTRAPOP) { "${model.name} pops an unknown amount" }
     "${model.name}_pop$extra".also { ccName ->
-        if (program.compilerSpec.getCallingConvention(ccName) == null) {
-            SpecExtension(program).addReplaceCompilerSpecExtension(
-                poppingConventionXml(program, model, ccName, extra),
-                TaskMonitor.DUMMY,
-            )
+        if (compilerSpec.getCallingConvention(ccName) == null) {
+            SpecExtension(this)
+                .addReplaceCompilerSpecExtension(poppingConventionXml(model, ccName, extra), TaskMonitor.DUMMY)
         }
-        val sig = FunctionDefinitionDataType(callee.getSignature(true), program.dataTypeManager).apply {
+        val sig = FunctionDefinitionDataType(callee.getSignature(true), dataTypeManager).apply {
             setCallingConvention(ccName)
         }
         HighFunctionDBUtil.writeOverride(caller, call, sig)
     }
-}.onFailure { log.appendMsg(DEFERRED_POP_ANALYZER_NAME, "no override at $call in ${caller.name}: ${it.message}") }
+}.onFailure { log.appendMsg(DeferredPopAnalyzer.NAME, "no override at $call in ${caller.name}: ${it.message}") }
     .getOrNull()
 
-private fun removeOverrides(program: Program, f: Function, calls: Set<Address>) {
+private fun Program.removeOverrides(f: Function, calls: Set<Address>) {
     val space = HighFunction.findOverrideSpace(f) ?: return
-    program.symbolTable.getSymbols(space).filter { it.address in calls }.forEach { it.delete() }
+    symbolTable.getSymbols(space).filter { it.address in calls }.forEach { it.delete() }
 }
 
 /** [model] re-encoded under [name], popping [extra] more bytes. See [derivedConventionXml]. */
-private fun poppingConventionXml(program: Program, model: PrototypeModel, name: String, extra: Int) =
-    XmlEncode().apply { model.encode(this, program.compilerSpec.pcodeInjectLibrary) }.toString()
+private fun Program.poppingConventionXml(model: PrototypeModel, name: String, extra: Int) =
+    XmlEncode().apply { model.encode(this, compilerSpec.pcodeInjectLibrary) }.toString()
         .replaceFirst(Regex("name=\"[^\"]*\""), "name=\"$name\"")
         .replaceFirst(Regex("extrapop=\"-?\\d+\""), "extrapop=\"${model.extrapop + extra}\"")
 
@@ -367,19 +364,19 @@ private class EspWalk(private val program: Program, private val f: Function) {
     /** [state] after [block], or null where the path ends there. */
     private fun run(block: CodeBlock, state: Map<Varnode, Long>): Map<Varnode, Long>? = state.toMutableMap().apply {
         for (insn in program.listing.getInstructions(block, true)) {
-            for (op in insn.pcode) if (!step(insn, op, this)) return null
+            for (op in insn.pcode) if (!step(insn, op)) return null
         }
     }
 
-    private fun step(insn: Instruction, op: PcodeOp, s: MutableMap<Varnode, Long>): Boolean {
-        fun value(v: Varnode) = if (v.isConstant) null else s[v]
-        fun set(v: Long?) = op.output?.let { if (v == null) s.remove(it) else s[it] = v }
+    private fun MutableMap<Varnode, Long>.step(insn: Instruction, op: PcodeOp): Boolean {
+        fun value(v: Varnode) = if (v.isConstant) null else get(v)
+        fun set(v: Long?) = op.output?.let { if (v == null) remove(it) else put(it, v) }
         when (op.opcode) {
             PcodeOp.CALL, PcodeOp.CALLIND -> {
-                val purge = overridden[insn.address] ?: calleePurge(op) ?: return false
-                s[esp]?.let {
+                val purge = overridden[insn.address] ?: op.calleePurge() ?: return false
+                get(esp)?.let {
                     depthAtCall.putIfAbsent(insn.address, it)
-                    s[esp] = it + 4 + purge + (pops[insn.address] ?: 0)
+                    put(esp, it + 4 + purge + (pops[insn.address] ?: 0))
                 }
             }
 
@@ -405,16 +402,15 @@ private class EspWalk(private val program: Program, private val f: Function) {
     }
 
     /** What a direct call's callee pops beyond its return address; null if it never returns, 0 if unknown. */
-    private fun calleePurge(op: PcodeOp): Int? = when (op.opcode) {
-        PcodeOp.CALL -> program.functionManager.getFunctionAt(op.getInput(0).address)?.let { return purgeOf(it) } ?: 0
+    private fun PcodeOp.calleePurge(): Int? = when (opcode) {
+        PcodeOp.CALL -> program.functionManager.getFunctionAt(getInput(0).address)?.let { return it.purgeOf() } ?: 0
         else -> 0
     }
 
     /** The bytes [callee] pops beyond its return address, or null if it never returns. */
-    private fun purgeOf(callee: Function): Int? {
-        val target = if (callee.isThunk) callee.getThunkedFunction(true) else callee
-        if (target.hasNoReturn()) return null
-        return target.stackPurgeSize.takeUnless {
+    private fun Function.purgeOf(): Int? = (if (isThunk) getThunkedFunction(true) else this).run {
+        if (hasNoReturn()) return null
+        stackPurgeSize.takeUnless {
             it == Function.UNKNOWN_STACK_DEPTH_CHANGE || it == Function.INVALID_STACK_DEPTH_CHANGE
         } ?: 0
     }
