@@ -1162,12 +1162,12 @@
             "max": 1
         },
         "text-data-no-coverage": {
-            "min": 488,
-            "max": 496
+            "min": 59,
+            "max": 67
         },
         "text-undisassembled-code": {
-            "min": 3107,
-            "max": 3118
+            "min": 32,
+            "max": 43
         },
         "textrange-entries": {
             "min": 3173,
