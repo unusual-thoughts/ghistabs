@@ -1,5 +1,6 @@
 package ghistabs.entrypoints
 
+import ghidra.app.cmd.function.CallDepthChangeInfo
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
@@ -10,18 +11,19 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.block.BasicBlockModel
 import ghidra.program.model.block.CodeBlock
+import ghidra.program.model.block.CodeBlockIterator
 import ghidra.program.model.data.FunctionDefinitionDataType
 import ghidra.program.model.lang.PrototypeModel
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.FunctionSignature
-import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.HighFunctionDBUtil
 import ghidra.program.model.pcode.PcodeOp
-import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.pcode.XmlEncode
+import ghidra.program.util.ContextEvaluatorAdapter
+import ghidra.program.util.SymbolicPropogator
 import ghidra.util.task.TaskMonitor
 
 const val DEFERRED_POP_ANALYZER_NAME = "Deferred stack pops (x86)"
@@ -49,9 +51,11 @@ const val DEFERRED_POP_ANALYZER_NAME = "Deferred stack pops (x86)"
  * everywhere else; and a derived *convention*, installed as a spec extension like
  * [StructReturnAnalyzer]'s, because extrapop is all an override can carry.
  *
- * The walk over ESP is a model of the decompiler's, not the decompiler itself, and the two can
- * disagree (a callee whose purge Ghidra's solver later works out differently, say), so each function's
- * fix is kept only if the decompiler then makes fewer stores through pointers than it did before.
+ * ESP comes from Ghidra's own constant propagation, which is not the decompiler and can disagree with
+ * it (a merge nothing past reads ESP from, a callee whose purge the decompiler works out differently),
+ * so each function's fix is kept only if the decompiler then makes fewer stores through pointers than
+ * it did before. Propagation records each instruction's end state only from Ghidra 11.4, so before
+ * it only the import purges below are fixed.
  *
  * MinGW's import stubs give it a second source of the same mismatch: `_Sleep@4` thunks to an
  * external `Sleep` whose purge Ghidra records as 0 against the 4 the `@4` says it pops, so every path
@@ -82,10 +86,10 @@ class DeferredPopAnalyzer :
         if (stdcall > 0) log?.appendMsg(DEFERRED_POP_ANALYZER_NAME, "set the purge of $stdcall stdcall import(s)")
 
         val plans = program.functionManager.getFunctions(set, true)
-            .filterNot { it.isThunk || it.isExternal }
+            .filterNot { it.isThunk || it.isExternal || hasPopOverrides(program, it) }
             .mapNotNull { f ->
                 mon.checkCancelled()
-                EspWalk(program, f).plan()?.let { f to it }
+                plan(program, f, mon)?.let { f to it }
             }
         plans.forEach { (_, plan) -> plan.unfixed.forEach { (merge, into) -> bookmarkUnfixed(program, merge, into) } }
         val fixable = plans.filter { it.second.pops.isNotEmpty() }
@@ -136,7 +140,7 @@ class DeferredPopAnalyzer :
 /** Bytes a call is made to pop beyond its convention, and the merges whose ESP mismatch that evens out. */
 private data class Pop(val extra: Int, val joins: Set<Address>)
 
-/** What [EspWalk] found in a function: the pops to try, and the merges left apart with the ESP each way brings. */
+/** What [plan] found in a function: the pops to try, and the merges left apart with the ESP each way brings. */
 private data class Plan(val pops: Map<Address, Pop>, val unfixed: Map<Address, Map<Address, Long>>)
 
 /** Bookmark categories, one per kind, so two kinds at one address don't replace each other. */
@@ -233,7 +237,7 @@ private fun override(program: Program, caller: Function, call: Address, extra: I
             ?: program.compilerSpec.defaultCallingConvention.name
     val model = requireNotNull(program.compilerSpec.getCallingConvention(base)) { "no calling convention $base" }
     require(model.extrapop != PrototypeModel.UNKNOWN_EXTRAPOP) { "$base pops an unknown amount" }
-    val name = "${base}_pop$extra"
+    val name = "$base$POP_SUFFIX$extra"
     if (program.compilerSpec.getCallingConvention(name) == null) {
         SpecExtension(
             program,
@@ -248,6 +252,8 @@ private fun override(program: Program, caller: Function, call: Address, extra: I
     null
 }
 
+private const val POP_SUFFIX = "_pop"
+
 private fun removeOverrides(program: Program, f: Function, calls: Set<Address>) {
     val space = HighFunction.findOverrideSpace(f) ?: return
     program.symbolTable.getSymbols(space).filter { it.address in calls }.forEach { it.delete() }
@@ -261,229 +267,113 @@ private fun poppingConventionXml(program: Program, model: PrototypeModel, name: 
         .replaceFirst(Regex("extrapop=\"-?\\d+\""), "extrapop=\"${model.extrapop + extra}\"")
 }
 
+/** Whether an earlier run already popped deferred arguments in [f]: its fix stands, as the oracle judged it. */
+private fun hasPopOverrides(program: Program, f: Function) = HighFunction.findOverrideSpace(f)?.let { space ->
+    program.symbolTable.getSymbols(space).any { sym ->
+        (HighFunctionDBUtil.readOverride(sym)?.dataType as? FunctionSignature)?.callingConventionName
+            ?.contains(POP_SUFFIX) == true
+    }
+} ?: false
+
 /**
- * ESP, as an offset from its value at entry, at every block of [f] — tracked through the p-code the
- * way the decompiler does, by constant adds and subtracts, a call moving it by the callee's
- * convention plus purge, `and esp, -16` read as a copy, and nothing else.
+ * Calls to make pop more, and by how much, so that no two paths into a block arrive with ESP apart;
+ * null if there are none. A pop moves ESP at every merge past it, so each round feeds the pops
+ * planned so far back to Ghidra's propagation as stack-depth overrides on their calls, and fixes the
+ * first merge still apart. The overrides are scratch, gone again on return: the decompiler reads
+ * them per callee, not per call, so what it gets is the call-site prototype [override] writes.
  */
-private class EspWalk(private val program: Program, private val f: Function) {
-    private val esp = Varnode(program.language.getRegister("ESP").address, 4)
-    private val blocks = BasicBlockModel(program)
-
-    private val pops = mutableMapOf<Address, Int>()
-    private val joins = mutableMapOf<Address, MutableSet<Address>>()
-
-    /** Call sites already overridden, ours from an earlier run included, with what their convention pops. */
-    private val overridden: Map<Address, Int> = HighFunction.findOverrideSpace(f)?.let { space ->
-        program.symbolTable.getSymbols(space).mapNotNull { sym ->
-            val convention = (
-                HighFunctionDBUtil.readOverride(
-                    sym,
-                )?.dataType as? FunctionSignature
-                )?.callingConventionName
-            val extrapop = convention?.let { program.compilerSpec.getCallingConvention(it) }?.extrapop
-            extrapop?.takeIf { it != PrototypeModel.UNKNOWN_EXTRAPOP }?.let { sym.address to it - 4 }
-        }.toMap()
-    } ?: emptyMap()
-    private lateinit var entry: MutableMap<Address, Long>
-    private lateinit var depthAtCall: MutableMap<Address, Long>
-    private lateinit var incoming: MutableMap<Address, MutableMap<Address, Long>>
-    private var conflict: Address? = null
-
-    /** Merges with no call to pop at on some way in: passed over, so the rest of the function is still fixed. */
-    private val stuck = mutableMapOf<Address, Map<Address, Long>>()
-
-    /**
-     * Calls to make pop more, and by how much, so that no two paths meet with ESP apart, and the merges
-     * that can't be evened out; null if paths never meet apart.
-     */
-    fun plan(): Plan? {
-        walk()
-        if (conflict == null) return null
+private fun plan(program: Program, f: Function, monitor: TaskMonitor): Plan? {
+    if (CallDepthChangeInfo.getStackDepthChanges(program, f.body).hasNext()) return null
+    val pops = mutableMapOf<Address, Int>()
+    val joins = mutableMapOf<Address, MutableSet<Address>>()
+    val stuck = mutableMapOf<Address, Map<Address, Long>>()
+    fun planned() = Plan(pops.mapValues { (call, extra) -> Pop(extra, joins[call].orEmpty()) }, stuck.toMap())
+    try {
         repeat(MAX_ROUNDS) {
-            val at = conflict ?: return planned()
-            val into = incoming.getValue(at)
-            val target = into.values.max()
-            val seen = mutableSetOf<Address>()
-            val saved = pops.toMap()
-            val savedJoins = joins.mapValues { it.value.toSet() }
-            if (!into.all { (from, depth) ->
-                    depth == target || popAt(from, (target - depth).toInt(), depth, at, seen)
-                }
-            ) {
-                stuck[at] = into.toMap()
-                pops.clear()
-                pops.putAll(saved)
-                joins.clear()
-                savedJoins.forEach { (call, merges) -> joins[call] = merges.toMutableSet() }
+            val esp = Esp.of(program, f, monitor) ?: return null
+            val (merge, into) = esp.merges().firstOrNull { it.first !in stuck } ?: return planned().takeIf {
+                it.pops.isNotEmpty() || it.unfixed.isNotEmpty()
             }
-            walk()
+            val shallow = into.values.max()
+            val fixes = into.filterValues { it != shallow }.map { (from, deep) ->
+                esp.culprits(from, deep)?.map { it to (shallow - deep).toInt() }
+            }
+            if (fixes.any { it == null }) {
+                stuck[merge] = into
+            } else {
+                fixes.flatMap { it.orEmpty() }.distinct().forEach { (call, extra) ->
+                    CallDepthChangeInfo.setStackDepthChange(program, call, pops.merge(call, extra, Int::plus)!!)
+                    joins.getOrPut(call) { mutableSetOf() } += merge
+                }
+            }
         }
         return planned()
+    } finally {
+        pops.keys.forEach { CallDepthChangeInfo.removeStackDepthChange(program, it) }
     }
+}
 
-    private fun planned() = Plan(pops.mapValues { (call, extra) -> Pop(extra, joins[call].orEmpty()) }, stuck.toMap())
+private const val MAX_ROUNDS = 32
+
+/**
+ * ESP at each instruction of [f], relative to entry, as Ghidra's constant propagation tracks it —
+ * set up the way [CallDepthChangeInfo] sets it up, which offers only the start of each instruction
+ * where a merge needs what each predecessor leaves at its end.
+ */
+private class Esp(private val program: Program, private val f: Function, private val values: SymbolicPropogator) {
+    private val sp = program.compilerSpec.stackPointer
+    private val blocks = BasicBlockModel(program)
+
+    /** Blocks that paths enter with ESP apart, in address order, each with the ESP its predecessors leave. */
+    fun merges(): List<Pair<Address, Map<Address, Long>>> =
+        blocks.getCodeBlocksContaining(f.body, TaskMonitor.DUMMY).asSequence().mapNotNull { block ->
+            val into = block.preds().mapNotNull { pred ->
+                val last = program.listing.getInstructionContaining(pred.maxAddress) ?: return@mapNotNull null
+                values.valueAfter(last.address, sp)?.depth()?.let { pred.firstStartAddress to it }
+            }.toMap()
+            (block.firstStartAddress to into).takeIf { into.values.toSet().size > 1 }
+        }.sortedBy { it.first }.toList()
 
     /**
-     * Make the path out of block [from] pop [extra] more, at the last call before it whose own
-     * arguments are what is still pushed — the call at which ESP stood at [deep]. A call that pushes
-     * and pops its own arguments in between is passed over: the bytes predate it. [join] is the merge
-     * this evens out.
+     * The calls whose arguments are what the path out of block [from] still has pushed: on each way
+     * back, the last call before which ESP stood at [deep]. A call that pushes and pops its own
+     * arguments in between is passed over, since the bytes predate it. Null where a way back has none.
      */
-    private fun popAt(from: Address, extra: Int, deep: Long, join: Address, seen: MutableSet<Address>): Boolean {
-        if (!seen.add(from)) return true
-        val block = blocks.getCodeBlockAt(from, TaskMonitor.DUMMY) ?: return false
-        val culprit = program.listing.getInstructions(block, true).toList().lastOrNull {
-            depthAtCall[it.address]?.plus(4) ==
-                deep
+    fun culprits(from: Address, deep: Long, seen: MutableSet<Address> = mutableSetOf()): List<Address>? {
+        if (!seen.add(from)) return emptyList()
+        val block = blocks.getCodeBlockAt(from, TaskMonitor.DUMMY) ?: return null
+        val call = program.listing.getInstructions(block, true).lastOrNull {
+            it.flowType.isCall && values.getRegisterValue(it.address, sp)?.depth() == deep
         }
-        if (culprit != null) {
-            if (culprit.flows.size != 1 ||
-                program.functionManager.getFunctionAt(culprit.flows.single()) == null
-            ) {
-                return false
-            }
-            pops.merge(culprit.address, extra, Int::plus)
-            joins.getOrPut(culprit.address) { mutableSetOf() } += join
-            return true
+        if (call != null) {
+            val callee = call.flows.singleOrNull()?.let { program.functionManager.getFunctionAt(it) }
+            return if (callee == null) null else listOf(call.address)
         }
-        val preds = block.sources().filter { (flow, start) -> !flow.isCall && f.body.contains(start) }
-        return preds.isNotEmpty() && preds.all { (_, start) -> popAt(start, extra, deep, join, seen) }
+        val preds = block.preds().takeIf { it.isNotEmpty() } ?: return null
+        return preds.flatMap { culprits(it.firstStartAddress, deep, seen) ?: return null }
     }
 
-    private fun walk() {
-        entry = mutableMapOf()
-        depthAtCall = mutableMapOf()
-        incoming = mutableMapOf()
-        conflict = null
-        val work = ArrayDeque<Triple<Address, Map<Varnode, Long>, Address?>>()
-        work.add(Triple(f.entryPoint, mapOf(esp to 0L), null))
-        while (work.isNotEmpty()) {
-            val (at, state, from) = work.removeFirst()
-            if (!f.body.contains(at)) continue
-            val sp = state[esp] ?: continue
-            val into = incoming.getOrPut(at) { sortedMapOf() }
-            if (from != null) into[from] = sp
-            entry[at]?.let { seen ->
-                if (seen != sp && isNewConflict(at)) conflict = at
-                continue
-            }
-            entry[at] = sp
-            val block = blocks.getCodeBlockAt(at, TaskMonitor.DUMMY) ?: continue
-            val out = run(block, state) ?: continue
-            block.destinations().filterNot {
-                it.first.isCall
-            }.forEach { work.add(Triple(it.second, out, block.firstStartAddress)) }
-        }
-    }
+    private fun SymbolicPropogator.Value.depth() = value.takeIf { relativeRegister == sp }
 
-    /** Whether a merge of two ESPs at [at] is the one to fix next: the first, not given up on, read past. */
-    private fun isNewConflict(at: Address) = conflict == null && at !in stuck && readsEsp(at)
+    private fun CodeBlockIterator.asSequence() = generateSequence { if (hasNext()) next() else null }
 
-    /** [state] after [block], or null where the path ends there. */
-    private fun run(block: CodeBlock, state: Map<Varnode, Long>): Map<Varnode, Long>? {
-        val s = state.toMutableMap()
-        for (insn in program.listing.getInstructions(block, true)) {
-            for (op in insn.pcode) if (!step(insn, op, s)) return null
-        }
-        return s
-    }
-
-    private fun step(insn: Instruction, op: PcodeOp, s: MutableMap<Varnode, Long>): Boolean {
-        fun value(v: Varnode) = if (v.isConstant) null else s[v]
-        fun set(v: Long?) = op.output?.let { if (v == null) s.remove(it) else s[it] = v }
-        when (op.opcode) {
-            PcodeOp.CALL, PcodeOp.CALLIND -> {
-                val purge = overridden[insn.address] ?: calleePurge(op) ?: return false
-                s[esp]?.let {
-                    depthAtCall.putIfAbsent(insn.address, it)
-                    s[esp] = it + 4 + purge + (pops[insn.address] ?: 0)
-                }
-            }
-
-            PcodeOp.RETURN -> return false
-
-            PcodeOp.COPY, PcodeOp.INT_AND -> set(value(op.getInput(0)))
-
-            PcodeOp.INT_ADD, PcodeOp.INT_SUB -> {
-                val x = value(op.getInput(0))
-                val k = op.getInput(1).takeIf { it.isConstant }?.offset?.toInt()?.toLong()
-                set(
-                    if (x == null || k == null) {
-                        null
-                    } else if (op.opcode == PcodeOp.INT_ADD) {
-                        x + k
-                    } else {
-                        x - k
-                    },
-                )
-            }
-
-            else -> set(null)
-        }
-        return true
-    }
-
-    /** What a direct call's callee pops beyond its return address; null if it never returns, 0 if unknown. */
-    private fun calleePurge(op: PcodeOp): Int? = if (op.opcode == PcodeOp.CALL) {
-        program.functionManager.getFunctionAt(op.getInput(0).address)?.let { return purgeOf(it) } ?: 0
-    } else {
-        0
-    }
-
-    /** The bytes [callee] pops beyond its return address, or null if it never returns. */
-    private fun purgeOf(callee: Function): Int? {
-        val target = if (callee.isThunk) callee.getThunkedFunction(true) else callee
-        if (target.hasNoReturn()) return null
-        return target.stackPurgeSize.takeUnless {
-            it == Function.UNKNOWN_STACK_DEPTH_CHANGE ||
-                it == Function.INVALID_STACK_DEPTH_CHANGE
-        }
-            ?: 0
-    }
-
-    /**
-     * Whether code from [at] reads ESP before setting it from something else. A merge that runs
-     * straight into `lea -0xc(%ebp),%esp` or `leave` is harmless: nothing sees which ESP arrived.
-     */
-    private fun readsEsp(at: Address): Boolean {
-        val derived = mutableSetOf<Varnode>()
-        var cur: Address? = at
-        repeat(READ_LOOKAHEAD) {
-            val insn = program.listing.getInstructionAt(cur ?: return true) ?: return true
-            for (op in insn.pcode) {
-                val usesSp = op.inputs.any { it == esp || it in derived }
-                val out = op.output
-                if (out == esp) {
-                    if (!usesSp) return false
-                    if (op.opcode != PcodeOp.COPY) return true
-                }
-                if (usesSp) {
-                    if (out == null || !out.isUnique) return true
-                    derived += out
-                }
-            }
-            val flow = insn.flowType
-            if (flow.isTerminal) return false
-            if (flow.isCall) return true
-            cur =
-                if (flow.isJump && flow.isUnConditional) insn.flows.singleOrNull() ?: return true else insn.fallThrough
-        }
-        return true
-    }
-
-    private fun CodeBlock.destinations() = getDestinations(TaskMonitor.DUMMY).let { i ->
-        generateSequence { if (i.hasNext()) i.next() else null }.map { it.flowType to it.destinationAddress }.toList()
-    }
-
-    private fun CodeBlock.sources() = getSources(TaskMonitor.DUMMY).let { i ->
-        generateSequence {
-            if (i.hasNext()) i.next() else null
-        }.map { it.flowType to it.sourceBlock.firstStartAddress }.toList()
+    /** Blocks flowing into this one inside [f], calls aside. */
+    private fun CodeBlock.preds() = getSources(TaskMonitor.DUMMY).let { refs ->
+        generateSequence { if (refs.hasNext()) refs.next() else null }
+            .filter { !it.flowType.isCall && f.body.contains(it.sourceAddress) }
+            .map { it.sourceBlock }
+            .toList()
     }
 
     companion object {
-        const val MAX_ROUNDS = 32
-        const val READ_LOOKAHEAD = 64
+        fun of(program: Program, f: Function, monitor: TaskMonitor): Esp? {
+            val values = endStatePropagator(program) ?: return null
+            values.setParamRefCheck(false)
+            values.setReturnRefCheck(false)
+            values.setStoredRefCheck(false)
+            values.setRegister(f.entryPoint, program.compilerSpec.stackPointer)
+            values.flowConstants(f.entryPoint, f.body, ContextEvaluatorAdapter(), true, monitor)
+            return Esp(program, f, values)
+        }
     }
 }
