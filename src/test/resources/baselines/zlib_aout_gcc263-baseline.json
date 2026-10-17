@@ -173,13 +173,6 @@
             "min": 16,
             "max": 16
         },
-        "local-dropped": {
-            "min": 1,
-            "max": 1,
-            "degrades": [
-                "huft_build.r"
-            ]
-        },
         "local-typed-anonymous": {
             "min": 1,
             "max": 1,
@@ -208,8 +201,8 @@
             "max": 4
         },
         "reglocal-add-success": {
-            "min": 293,
-            "max": 293
+            "min": 294,
+            "max": 294
         },
         "reglocal-param-home": {
             "min": 148,

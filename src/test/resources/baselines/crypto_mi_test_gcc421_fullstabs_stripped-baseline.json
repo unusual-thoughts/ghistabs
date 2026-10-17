@@ -1212,6 +1212,10 @@
             "min": 10,
             "max": 18
         },
+        "text-undisassembled-code": {
+            "min": 10,
+            "max": 10
+        },
         "textrange-entries": {
             "min": 4014,
             "max": 4014
