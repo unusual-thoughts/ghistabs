@@ -87,11 +87,13 @@ class DeferredPopAnalyzer :
                 mon.checkCancelled()
                 EspWalk(program, f).plan()?.let { f to it }
             }
-        if (plans.isEmpty()) return true
+        plans.forEach { (_, plan) -> plan.unfixed.forEach { (merge, into) -> bookmarkUnfixed(program, merge, into) } }
+        val fixable = plans.filter { it.second.pops.isNotEmpty() }
+        if (fixable.isEmpty()) return true
 
         val decomp = DecompInterface().also { it.openProgram(program) }
         try {
-            val kept = plans.count { (f, pops) -> apply(program, decomp, f, pops, mon, log) }
+            val kept = fixable.count { (f, plan) -> apply(program, decomp, f, plan.pops, mon, log) }
             if (kept > 0) log?.appendMsg(DEFERRED_POP_ANALYZER_NAME, "popped deferred arguments in $kept function(s)")
         } finally {
             decomp.dispose()
@@ -111,39 +113,101 @@ class DeferredPopAnalyzer :
         val written = pops.mapNotNull { (call, pop) -> override(program, f, call, pop.extra, log)?.let { call to it } }
         if (written.isEmpty()) return false
         val after = decomp.pointerStores(f, monitor)
-        if (after == null || after >= before) {
+        val kept = after != null && after < before
+        if (kept) {
+            for ((call, convention) in written) {
+                bookmarkCall(
+                    program,
+                    call,
+                    convention,
+                    pops.getValue(call),
+                    before,
+                    after,
+                )
+            }
+        } else {
             removeOverrides(program, f, written.map { it.first }.toSet())
-            return false
         }
-        written.forEach { (call, convention) ->
-            bookmark(program, call, convention, pops.getValue(call), before, after)
-        }
-        return true
+        bookmarkMerges(program, pops, kept, before, after)
+        return kept
     }
 }
 
 /** Bytes a call is made to pop beyond its convention, and the merges whose ESP mismatch that evens out. */
 private data class Pop(val extra: Int, val joins: Set<Address>)
 
+/** What [EspWalk] found in a function: the pops to try, and the merges left apart with the ESP each way brings. */
+private data class Plan(val pops: Map<Address, Pop>, val unfixed: Map<Address, Map<Address, Long>>)
+
+/** Bookmark categories, one per kind, so two kinds at one address don't replace each other. */
+internal const val CALL_BOOKMARK = "$DEFERRED_POP_ANALYZER_NAME: call"
+internal const val MERGE_BOOKMARK = "$DEFERRED_POP_ANALYZER_NAME: merge"
+internal const val UNFIXED_BOOKMARK = "$DEFERRED_POP_ANALYZER_NAME: unfixed merge"
+internal const val IMPORT_BOOKMARK = "$DEFERRED_POP_ANALYZER_NAME: stdcall import"
+
 /** Says at [call] what its override pops and why, since nothing in the listing shows a call-site prototype. */
-private fun bookmark(program: Program, call: Address, convention: String, pop: Pop, before: Int, after: Int) {
-    val joins = pop.joins.joinToString()
+private fun bookmarkCall(program: Program, call: Address, convention: String, pop: Pop, before: Int, after: Int) =
     program.bookmarkManager.setBookmark(
         call,
         BookmarkType.ANALYSIS,
-        DEFERRED_POP_ANALYZER_NAME,
+        CALL_BOOKMARK,
         "$convention: this call pops ${pop.extra} more bytes than its callee's convention. gcc left that many " +
-            "bytes of arguments pushed here (a deferred pop) and the path reaches $joins with ESP ${pop.extra} " +
-            "deeper than the others, which makes the decompiler lose the stack there. Popping the dead " +
-            "arguments at this call evens ESP out (stores through pointers in this function: $before -> $after).",
+            "bytes of arguments pushed here (a deferred pop) and the path reaches ${pop.joins.joinToString()} " +
+            "with ESP ${pop.extra} deeper than the others, which makes the decompiler lose the stack there. " +
+            "Popping the dead arguments at this call evens ESP out (stores through pointers in this " +
+            "function: $before -> $after).",
     )
+
+/** Says at each merge [pops] are for which calls pop for it, or that it stays apart if the decompiler rejected them. */
+private fun bookmarkMerges(program: Program, pops: Map<Address, Pop>, kept: Boolean, before: Int, after: Int?) {
+    val callsByMerge = pops.flatMap { (call, pop) -> pop.joins.map { it to call } }.groupBy({ it.first }, { it.second })
+    for ((merge, calls) in callsByMerge) {
+        val at = calls.joinToString { "$it (${pops.getValue(it).extra} bytes)" }
+        if (kept) {
+            program.bookmarkManager.setBookmark(
+                merge,
+                BookmarkType.ANALYSIS,
+                MERGE_BOOKMARK,
+                "Paths meet here with ESP apart, because gcc left call arguments pushed on the deeper ones. " +
+                    "Evened out by popping them at $at.",
+            )
+        } else {
+            program.bookmarkManager.setBookmark(
+                merge,
+                BookmarkType.WARNING,
+                UNFIXED_BOOKMARK,
+                "Paths meet here with ESP apart. Popping the leftover arguments at $at was tried, but the " +
+                    "decompiler's stores through pointers in this function went $before -> $after rather than " +
+                    "down, so it was undone.",
+            )
+        }
+    }
 }
+
+/** Says at [merge] that paths meet with ESP apart and nothing could pop the difference, so what follows may decay. */
+private fun bookmarkUnfixed(program: Program, merge: Address, into: Map<Address, Long>) =
+    program.bookmarkManager.setBookmark(
+        merge,
+        BookmarkType.WARNING,
+        UNFIXED_BOOKMARK,
+        "Paths meet here with ESP apart (ESP ${into.entries.joinToString { (from, sp) -> "$sp from $from" }}, " +
+            "relative to entry), and on some way in no call's arguments account for the extra bytes, so nothing " +
+            "was popped. The decompiler may turn stack accesses past this point into stores through a pointer.",
+    )
 
 /** MinGW import stubs `_Name@N` whose external target records a purge other than the `N` it pops. */
 internal fun fixImportPurges(program: Program): Int = program.functionManager.getFunctions(true).count { stub ->
     val pops = STDCALL_SUFFIX.find(stub.name)?.groupValues?.get(1)?.toInt()
     val target = if (stub.isThunk) stub.getThunkedFunction(true) else null
     if (pops == null || target == null || !target.isExternal || target.stackPurgeSize == pops) return@count false
+    program.bookmarkManager.setBookmark(
+        stub.entryPoint,
+        BookmarkType.ANALYSIS,
+        IMPORT_BOOKMARK,
+        "${target.name} is stdcall: the @$pops in ${stub.name} says it pops $pops bytes of arguments, but Ghidra " +
+            "recorded ${target.stackPurgeSize} for the import. Set to $pops, or every path through a call to it " +
+            "comes back $pops bytes deep and meets the others with ESP apart.",
+    )
     target.stackPurgeSize = pops
     true
 }
@@ -227,10 +291,13 @@ private class EspWalk(private val program: Program, private val f: Function) {
     private var conflict: Address? = null
 
     /** Merges with no call to pop at on some way in: passed over, so the rest of the function is still fixed. */
-    private val stuck = mutableSetOf<Address>()
+    private val stuck = mutableMapOf<Address, Map<Address, Long>>()
 
-    /** Calls to make pop more, and by how much, so that no two paths meet with ESP apart; null if none or no way. */
-    fun plan(): Map<Address, Pop>? {
+    /**
+     * Calls to make pop more, and by how much, so that no two paths meet with ESP apart, and the merges
+     * that can't be evened out; null if paths never meet apart.
+     */
+    fun plan(): Plan? {
         walk()
         if (conflict == null) return null
         repeat(MAX_ROUNDS) {
@@ -244,7 +311,7 @@ private class EspWalk(private val program: Program, private val f: Function) {
                     depth == target || popAt(from, (target - depth).toInt(), depth, at, seen)
                 }
             ) {
-                stuck += at
+                stuck[at] = into.toMap()
                 pops.clear()
                 pops.putAll(saved)
                 joins.clear()
@@ -255,7 +322,7 @@ private class EspWalk(private val program: Program, private val f: Function) {
         return planned()
     }
 
-    private fun planned() = pops.mapValues { (call, extra) -> Pop(extra, joins[call].orEmpty()) }.ifEmpty { null }
+    private fun planned() = Plan(pops.mapValues { (call, extra) -> Pop(extra, joins[call].orEmpty()) }, stuck.toMap())
 
     /**
      * Make the path out of block [from] pop [extra] more, at the last call before it whose own

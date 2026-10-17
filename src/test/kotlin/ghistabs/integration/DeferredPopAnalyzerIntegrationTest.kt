@@ -4,7 +4,6 @@ import ghidra.app.decompiler.DecompInterface
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.database.SpecExtension
-import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.FunctionSignature
 import ghidra.program.model.pcode.HighFunction
@@ -12,8 +11,11 @@ import ghidra.program.model.pcode.HighFunctionDBUtil
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.entrypoints.CALL_BOOKMARK
 import ghistabs.entrypoints.DEFERRED_POP_ANALYZER_NAME
 import ghistabs.entrypoints.DeferredPopAnalyzer
+import ghistabs.entrypoints.MERGE_BOOKMARK
+import ghistabs.entrypoints.UNFIXED_BOOKMARK
 import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustNot
@@ -79,19 +81,23 @@ class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         runAnalyzer()
         overrides(DEFERRED).mapValues { it.value.callingConventionName } mustBe mapOf(FIRST_CALL to "__cdecl_pop4")
         stores(DEFERRED) mustBe 0
-        bookmarks().keys mustBe setOf(FIRST_CALL)
-        bookmarks().getValue(FIRST_CALL).mustNot("names the merge it evens out") { "00400011" !in this }
+        bookmarks(CALL_BOOKMARK).keys mustBe setOf(FIRST_CALL)
+        bookmarks(CALL_BOOKMARK).getValue(FIRST_CALL).mustNot("names the merge it evens out") { MERGE !in this }
+        bookmarks(MERGE_BOOKMARK).keys mustBe setOf(MERGE)
+        bookmarks(MERGE_BOOKMARK).getValue(MERGE).mustNot("names the call that pops") { FIRST_CALL !in this }
+        bookmarks(UNFIXED_BOOKMARK) mustBe emptyMap()
     }
 
-    private fun bookmarks() = program.bookmarkManager.getBookmarksIterator(BookmarkType.ANALYSIS).asSequence()
-        .filter { it.category == DEFERRED_POP_ANALYZER_NAME }
+    private fun bookmarks(category: String) = program.bookmarkManager.bookmarksIterator.asSequence()
+        .filter { it.category == category }
         .associate { it.address.toString() to it.comment }
 
     @Test
     fun balancedFunctionsAreLeftAlone() {
         runAnalyzer()
         overrides(BALANCED) mustBe emptyMap()
-        bookmarks().keys.filter { it >= "00400030" } mustBe emptyList()
+        listOf(CALL_BOOKMARK, MERGE_BOOKMARK, UNFIXED_BOOKMARK).flatMap { bookmarks(it).keys }
+            .filter { it >= BALANCED.removePrefix("0x").padStart(8, '0') } mustBe emptyList()
     }
 
     @Test
@@ -134,6 +140,7 @@ class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         const val CALLEE = "0x400020"
         const val BALANCED = "0x400030"
         const val FIRST_CALL = "0040000c"
+        const val MERGE = "00400011"
 
         // push ebp / mov ebp,esp / sub esp,0x18 / test eax,eax
         const val PROLOGUE = "55 89 e5 83 ec 18 85 c0"
