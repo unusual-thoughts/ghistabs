@@ -201,24 +201,30 @@ private class EspWalk(private val program: Program, private val f: Function) {
     private lateinit var incoming: MutableMap<Address, MutableMap<Address, Long>>
     private var conflict: Address? = null
 
+    /** Merges with no call to pop at on some way in: passed over, so the rest of the function is still fixed. */
+    private val stuck = mutableSetOf<Address>()
+
     /** Calls to make pop more, and by how much, so that no two paths meet with ESP apart; null if none or no way. */
     fun plan(): Map<Address, Int>? {
         walk()
         if (conflict == null) return null
         repeat(MAX_ROUNDS) {
-            val at = conflict ?: return pops
+            val at = conflict ?: return pops.ifEmpty { null }
             val into = incoming.getValue(at)
             val target = into.values.max()
             val seen = mutableSetOf<Address>()
+            val saved = pops.toMap()
             if (!into.all { (from, depth) ->
                     depth == target || popAt(from, (target - depth).toInt(), depth, seen)
                 }
             ) {
-                return null
+                stuck += at
+                pops.clear()
+                pops.putAll(saved)
             }
             walk()
         }
-        return pops.takeIf { conflict == null }
+        return pops.ifEmpty { null }
     }
 
     /**
@@ -260,7 +266,7 @@ private class EspWalk(private val program: Program, private val f: Function) {
             val into = incoming.getOrPut(at) { sortedMapOf() }
             if (from != null) into[from] = sp
             entry[at]?.let { seen ->
-                if (seen != sp && conflict == null && readsEsp(at)) conflict = at
+                if (seen != sp && isNewConflict(at)) conflict = at
                 continue
             }
             entry[at] = sp
@@ -271,6 +277,9 @@ private class EspWalk(private val program: Program, private val f: Function) {
             }.forEach { work.add(Triple(it.second, out, block.firstStartAddress)) }
         }
     }
+
+    /** Whether a merge of two ESPs at [at] is the one to fix next: the first, not given up on, read past. */
+    private fun isNewConflict(at: Address) = conflict == null && at !in stuck && readsEsp(at)
 
     /** [state] after [block], or null where the path ends there. */
     private fun run(block: CodeBlock, state: Map<Varnode, Long>): Map<Varnode, Long>? {
