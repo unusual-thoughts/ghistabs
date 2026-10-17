@@ -40,6 +40,9 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     val symtab: SymbolTable get() = ctx.program.symbolTable
     val funMgr: FunctionManager get() = ctx.program.functionManager
 
+    /** Only for its lookup of our types by their demangled spelling. */
+    private val demangled by lazy { ctx.demanglerReplacer(registry) }
+
     companion object {
         /** Distinguishes the `:r` register home of a `:p` parameter from the parameter itself. */
         private const val REGISTER_HOME_SUFFIX = "_reg"
@@ -71,13 +74,19 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         val stabParams = params.filterNot { it.body.name == "this" }
         val stabTypes = stabParams.map { p -> registry.resolveRef(p.body.type)?.let { passedByAddress(p, it) ?: it } }
         val formals = (Demangler.of(name) as? DemangledFunction)?.formals.orEmpty()
-        val declared = formals.map { lazy { it.parameterType(dtm) } }
+        val declared = formals.map { lazy { it.parameterType(dtm, demangled::registeredType) } }
         val slots = alignToDeclared(stabTypes, declared) ?: stabParams.indices.toList()
         val unnamed = slots.count { it == null }
         if (unnamed > 0) degradation("param-unnamed-padded", name, "stabs=${stabParams.size} mangled=${slots.size}")
         return slots.mapIndexed { slot, i ->
             if (i == null) {
-                val dt = parameterTypeOrUndefined(formals[slot], dtm, "param-unnamed-untyped", name)
+                val dt = parameterTypeOrUndefined(
+                    formals[slot],
+                    dtm,
+                    "param-unnamed-untyped",
+                    name,
+                    demangled::registeredType,
+                )
                 return@mapIndexed ParameterImpl("param_${slot + 1}", dt, ctx.program, source)
             }
             val p = stabParams[i]
