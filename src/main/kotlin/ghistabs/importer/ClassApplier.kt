@@ -335,10 +335,25 @@ class ClassApplier(
      * among them: the demangler reports a member's formals only.
      */
     private fun stubParams(mangled: String, at: String): List<DataType> = (Demangler.of(mangled) as? DemangledFunction)
-        ?.formals
-        ?.map { parameterTypeOrUndefined(it, dtm, "method-stub-param-untyped", at) }
+        ?.let { formalTypes(it, at) }
         .orEmpty()
         .also { if (it.isNotEmpty()) debug("method-stub-params-recovered", "$at: ${it.size} from $mangled") }
+
+    private fun formalTypes(f: DemangledFunction, at: String) =
+        f.formals.map { parameterTypeOrUndefined(it, dtm, "method-stub-param-untyped", at) }
+
+    /**
+     * [stubParams] for a virtual slot, whose member need not be linked: a pure virtual has no symbol,
+     * but the physname it would have still demangles. Null when none does, which leaves the slot `this`-only.
+     */
+    private fun LocatedClass.slotStubParams(m: Method<GlobalTypeId>, at: String): List<DataType>? =
+        abi.physnameCandidates(m, qualifiedClassName)
+            .firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
+            ?.let { formalTypes(it, at) }
+            ?: run {
+                degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
+                null
+            }
 
     private fun LocatedClass.buildAndApplyVtable() {
         val declared = types.collectAllVirtuals(body)
@@ -479,6 +494,9 @@ class ClassApplier(
             .let { SymbolUtilities.replaceInvalidChars(it, true) }
             .takeIf { it.isNotEmpty() && it != "void" }
 
+    /** gcc 2.x's `##<ret>;`: no domain, no parameters, `this` included. */
+    private val TypeDecl.Method<*>.isStub get() = cls == null && params.isEmpty()
+
     /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
     private fun unwrapSignature(sig: GlobalTypeDecl) = types.resolveWith(sig) { it as? TypeDecl.Callable }
 
@@ -513,6 +531,7 @@ class ClassApplier(
                     degradation("vftable-slot-this-untyped", at, "${method.cls}; used void*")
                 },
             at = at,
+            stubFormals = if (method.isStub) slotStubParams(m, at).orEmpty() else emptyList(),
         )
         val resolved = registry.registerAgain(funcDef) as FunctionDefinition
         return PointerDataType(resolved, dtm)
