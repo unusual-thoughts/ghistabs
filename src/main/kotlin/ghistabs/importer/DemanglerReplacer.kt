@@ -366,6 +366,17 @@ class DemanglerReplacer(
         return Owner.Spelled(ourSpelling(leaf))
     }
 
+    /**
+     * A demangled name in *our* spelling — the pipeline [ghistabs.harvest.Type.ghidraName] runs. Both the
+     * site lookup and the instantiation census go through it, so "distinct instantiation" is measured in
+     * the same spelling space we resolve in: three renderings of one class collapse to one, instead of
+     * declining a bind that was only ever ambiguous as a string.
+     */
+    private fun ourSpelling(leaf: String): String = SymbolUtilities.replaceInvalidChars(
+        DemanglerUtil.stripSuperfluousSignatureSpaces(canonTemplateName(leaf)),
+        true,
+    )
+
     /** [dt] with its pointer/array/typedef decoration rebuilt over [replacement], if its base matches [isTarget]. */
     private fun redecorate(dt: DataType?, replacement: DataType, isTarget: (DataType?) -> Boolean): DataType? = when {
         dt is Pointer -> redecorate(dt.dataType, replacement, isTarget)?.let { dtm.getPointer(it) }
@@ -597,14 +608,3 @@ class DemanglerReplacer(
         return null
     }
 }
-
-/**
- * A demangled name in *our* spelling — the pipeline [ghistabs.harvest.Type.ghidraName] runs. Both the
- * site lookup and the instantiation census go through it, so "distinct instantiation" is measured in
- * the same spelling space we resolve in: three renderings of one class collapse to one, instead of
- * declining a bind that was only ever ambiguous as a string.
- */
-private fun ourSpelling(leaf: String): String = SymbolUtilities.replaceInvalidChars(
-    DemanglerUtil.stripSuperfluousSignatureSpaces(canonTemplateName(leaf)),
-    true,
-)
