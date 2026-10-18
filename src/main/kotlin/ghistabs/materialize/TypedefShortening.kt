@@ -157,6 +157,9 @@ fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String
         typeNames.mapNotNull { name -> s.shortenedNestedOrNull(name)?.let { TypedefRename(name, it) } }
     }
 
+fun DataTypeRegistry.typedefShorteningRenames(): List<TypedefRename> =
+    typedefShorteningRenames(typedefAliases(), allRegistered.mapTo(mutableSetOf()) { it.name })
+
 /**
  * Opt-in pass that renames the long templated datatypes [registry] created onto their shorter typedef
  * aliases, so the listing and decompiler show `string` / `vector<string>` rather than the full
@@ -167,60 +170,53 @@ fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String
  * `unsigned char` to `BYTE` because Ghidra's PE loader applied `windows_vs12_32`, or renaming a
  * `/Demangler` stub out from under [ghistabs.importer.DemanglerReplacer], is not our business.
  */
-class TypedefShortener(private val registry: DataTypeRegistry, private val monitor: TaskMonitor) :
-    DiagnosticSink by registry {
-    private val dtm = registry.dtm
-
+fun DataTypeRegistry.shortenTypedefs(monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
+    val shortener = TemplateNameShortener(typedefAliases())
+    if (shortener.isEmpty) return 0
     // Recomputed per read on the registry (pass C keeps registering) — snapshot once for this pass.
-    private val byName by lazy { registry.allRegistered.groupBy { it.name } }
-
-    fun renames(): List<TypedefRename> = typedefShorteningRenames(
-        registry.typedefAliases(),
-        byName.keys,
-    )
-
-    fun apply(): Int {
-        val shortener = TemplateNameShortener(registry.typedefAliases())
-        if (shortener.isEmpty) return 0
-        val composites = byName.values.flatten().filterIsInstance<Composite>()
-        monitor.initialize((byName.size + composites.size).toLong(), "Stabs: shortening typedefs")
-        val typeRenamed = byName.keys.sumOf { name ->
-            monitor.increment()
-            shortener.shortenedNestedOrNull(name)
-                ?.let { short -> byName.getValue(name).count { rename(it, short) } } ?: 0
-        }
-        // Base-class subobject fields (`_base_<Name>`/`_vbase_<Name>`) embed the base type's name at
-        // build time, so renaming the base datatype never reaches them — rewrite those field names too.
-        val fieldRenamed = composites.sumOf { c ->
-            monitor.increment()
-            c.components.count { it.shortenBaseField(shortener) }
-        }
-        log("typedef-shorten", "renamed $typeRenamed datatypes, $fieldRenamed base fields")
-        return typeRenamed + fieldRenamed
+    val byName = allRegistered.groupBy { it.name }
+    val composites = byName.values.flatten().filterIsInstance<Composite>()
+    monitor.initialize((byName.size + composites.size).toLong(), "Stabs: shortening typedefs")
+    val typeRenamed = byName.keys.sumOf { name ->
+        monitor.increment()
+        shortener.shortenedNestedOrNull(name)?.let { short -> byName.getValue(name).count { rename(it, short) } } ?: 0
     }
-
-    private fun DataTypeComponent.shortenBaseField(shortener: TemplateNameShortener): Boolean {
-        val name = fieldName ?: return false
-        if (!isBaseField()) return false
-        val short = shortener.shortenedOrNull(name) ?: return false
-        return runCatching { fieldName = short }.isSuccess
+    // Base-class subobject fields (`_base_<Name>`/`_vbase_<Name>`) embed the base type's name at
+    // build time, so renaming the base datatype never reaches them — rewrite those field names too.
+    val fieldRenamed = composites.sumOf { c ->
+        monitor.increment()
+        c.components.count { it.shortenBaseField(shortener) }
     }
+    log("typedef-shorten", "renamed $typeRenamed datatypes, $fieldRenamed base fields")
+    return typeRenamed + fieldRenamed
+}
 
-    /**
-     * Rename [dt] to [to]. The alias frequently already lives in [dt]'s own category as the very
-     * typedef pointing at [dt] (`string` → `basic_string<…>`): renaming would collide. Fold that
-     * typedef into [dt] first — [DataTypeManager.replaceDataType] redirects every reference and
-     * drops the typedef — which frees the name.
-     */
-    private fun rename(dt: DataType, to: String): Boolean {
-        if (runCatching { dt.name = to }.isSuccess) return true
-        val conflict = dtm.getDataType(dt.categoryPath, to)
-        if (conflict is TypeDef && conflict.dataType == dt) {
-            runCatching { dtm.replaceDataType(conflict, dt, false) }
-                .onFailure { debug("typedef-shorten-skip", "fold ${conflict.pathName}: ${it.message}") }
-            return runCatching { dt.name = to }.isSuccess
+private fun DataTypeComponent.shortenBaseField(shortener: TemplateNameShortener): Boolean {
+    val name = fieldName ?: return false
+    if (!isBaseField()) return false
+    val short = shortener.shortenedOrNull(name) ?: return false
+    return runCatching { fieldName = short }.isSuccess
+}
+
+/**
+ * Rename [dt] to [to]. The alias frequently already lives in [dt]'s own category as the very
+ * typedef pointing at [dt] (`string` → `basic_string<…>`): renaming would collide. Fold that
+ * typedef into [dt] first — [DataTypeManager.replaceDataType] redirects every reference and
+ * drops the typedef — which frees the name.
+ */
+private fun DataTypeRegistry.rename(dt: DataType, to: String): Boolean {
+    if (runCatching { dt.name = to }.isSuccess) return true
+    return when (val conflict = dtm.getDataType(dt.categoryPath, to)) {
+        is TypeDef if conflict.dataType == dt -> {
+            runCatching { dtm.replaceDataType(conflict, dt, false) }.onFailure {
+                debug("typedef-shorten-skip", "fold ${conflict.pathName}: ${it.message}")
+            }
+            runCatching { dt.name = to }.isSuccess
         }
-        debug("typedef-shorten-skip", "${dt.pathName} -> $to: name held by ${conflict?.pathName ?: "?"}")
-        return false
+
+        else -> {
+            debug("typedef-shorten-skip", "${dt.pathName} -> $to: name held by ${conflict?.pathName ?: "?"}")
+            false
+        }
     }
 }
