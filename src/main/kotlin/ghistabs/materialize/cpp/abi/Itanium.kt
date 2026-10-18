@@ -72,6 +72,17 @@ object Itanium : CxxAbi {
     const val SI_CLASS_TYPE_INFO_PSEUDO = "__si_class_type_info_pseudo"
     const val VMI_CLASS_TYPE_INFO_PSEUDO = "__vmi_class_type_info_pseudo"
 
+    // The non-class typeinfos' pseudo structs: a pointer's and a member pointer's carry the pointee
+    // (`_ZTIPKc`), the rest only the name (`_ZTIc`, an enum's `_ZTI`).
+    const val POINTER_TYPE_INFO_PSEUDO = "__pointer_type_info_pseudo"
+    const val POINTER_TO_MEMBER_TYPE_INFO_PSEUDO = "__pointer_to_member_type_info_pseudo"
+    val NAME_ONLY_TYPE_INFO_PSEUDOS = setOf(
+        "__fundamental_type_info_pseudo",
+        "__enum_type_info_pseudo",
+        "__function_type_info_pseudo",
+        "__array_type_info_pseudo",
+    )
+
     const val OFFSET_TO_TOP = "offset_to_top"
     const val RTTI = "rtti"
 
