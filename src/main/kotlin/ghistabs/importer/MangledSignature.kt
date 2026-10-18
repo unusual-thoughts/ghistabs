@@ -39,19 +39,17 @@ fun Function.conventionFor(takesThis: Boolean): PrototypeModel? {
  * can't find, an enum included, as a typedef of the 1-byte `undefined`. Neither is the parameter's
  * size, and applying either loses the parameter's name and moves every slot after it: typing gcc 12
  * `xmltest`'s `XMLDocument::SetError(XMLError error, int, const char* format, ...)`'s `error` so
- * cost `format` its `char*`. [registered], our own type for the demangled spelling, goes first.
+ * cost `format` its `char*`.
  */
-fun DemangledDataType.parameterType(
-    dtm: DataTypeManager,
-    registered: (DemangledDataType) -> DataType? = { null },
-): DataType? = listOf({ registered(this)?.let { decorated(it, dtm) } }, { getDataType(dtm) })
-    .firstNotNullOfOrNull { lookup ->
-        runCatching(lookup).getOrNull()
-            ?.takeUnless { it.isNotYetDefined || it.isZeroLength || it.withoutTypedefs() == DataType.DEFAULT }
-    }
+fun DemangledDataType.parameterType(dtm: DataTypeManager): DataType? =
+    runCatching { getDataType(dtm) }.getOrNull()?.takeIf { it.isParameterSized }
+
+/** Whether [this] has a parameter's size: neither a stand-in nor a 1-byte `undefined` in disguise. */
+internal val DataType.isParameterSized
+    get() = !isNotYetDefined && !isZeroLength && withoutTypedefs() != DataType.DEFAULT
 
 /** [base] behind [this]'s pointers and reference, which Ghidra also lays as a pointer. */
-private fun DemangledDataType.decorated(base: DataType, dtm: DataTypeManager): DataType {
+internal fun DemangledDataType.decorated(base: DataType, dtm: DataTypeManager): DataType {
     val levels = pointerLevels + if (isLValueReference || isRValueReference) 1 else 0
     return (1..levels).fold(base) { dt, _ -> PointerDataType.getPointer(dt, dtm) }
 }
@@ -62,8 +60,7 @@ fun DiagnosticSink.parameterTypeOrUndefined(
     dtm: DataTypeManager,
     category: String,
     degrades: String,
-    registered: (DemangledDataType) -> DataType? = { null },
-): DataType = t.parameterType(dtm, registered) ?: Undefined4DataType.dataType
+): DataType = t.parameterType(dtm) ?: Undefined4DataType.dataType
     .also { degradation(category, degrades, "demangler gave no type for $t") }
 
 /**

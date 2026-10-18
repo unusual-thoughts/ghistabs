@@ -478,6 +478,10 @@ class DemanglerReplacer(
         )
     }
 
+    /** [t] as a parameter's type: [registeredType] behind its pointers if we have it, else Ghidra's [parameterType]. */
+    fun parameterType(t: DemangledDataType): DataType? =
+        registeredType(t)?.let { t.decorated(it, dtm) }?.takeIf { it.isParameterSized } ?: t.parameterType(dtm)
+
     /** Exact DTM-name match for a demangler stub — no spelling normalization. */
     fun findByExactName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
         disambiguate(byExactName[simpleName].orEmpty(), simpleName, preferredCategory)

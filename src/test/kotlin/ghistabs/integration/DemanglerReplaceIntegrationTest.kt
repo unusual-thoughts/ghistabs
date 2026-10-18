@@ -6,7 +6,6 @@ import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.Demangler
 import ghistabs.formals
-import ghistabs.importer.parameterType
 import ghistabs.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -236,8 +235,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             trueType = registry.register(StructureDataType(CategoryPath("/algparam.cpp/multi"), "__true_type", 1))
         }
         val replacer = program.defaultContext().demanglerReplacer(registry)
-        fun third(mangled: String) = (Demangler.of(mangled) as DemangledFunction).formals[2]
-            .parameterType(program.dataTypeManager, replacer::registeredType)
+        fun third(mangled: String) = replacer.parameterType((Demangler.of(mangled) as DemangledFunction).formals[2])
             .let { (it as? Pointer)?.dataType ?: it }
 
         third("_ZNSt5dequeIjSaIjEE15_M_destroy_dataESt15_Deque_iteratorIjRjPjES5_RKS0_") mustBe allocator

@@ -72,19 +72,14 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         val stabParams = params.filterNot { it.body.name == "this" }
         val stabTypes = stabParams.map { p -> registry.resolveRef(p.body.type)?.let { passedByAddress(p, it) ?: it } }
         val formals = (Demangler.of(name) as? DemangledFunction)?.formals.orEmpty()
-        val declared = formals.map { lazy { it.parameterType(dtm, demangled::registeredType) } }
+        val declared = formals.map { lazy { demangled.parameterType(it) } }
         val slots = alignToDeclared(stabTypes, declared) ?: stabParams.indices.toList()
         val unnamed = slots.count { it == null }
         if (unnamed > 0) degradation("param-unnamed-padded", name, "stabs=${stabParams.size} mangled=${slots.size}")
         return slots.mapIndexed { slot, i ->
             if (i == null) {
-                val dt = parameterTypeOrUndefined(
-                    formals[slot],
-                    dtm,
-                    "param-unnamed-untyped",
-                    name,
-                    demangled::registeredType,
-                )
+                val dt = declared[slot].value ?: Undefined4DataType.dataType
+                    .also { degradation("param-unnamed-untyped", name, "demangler gave no type for ${formals[slot]}") }
                 return@mapIndexed ParameterImpl("param_${slot + 1}", dt, ctx.program, source)
             }
             val p = stabParams[i]
