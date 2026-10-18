@@ -66,6 +66,20 @@ fun DbxArch.registerName(dbxNum: Int): String? = when (this) {
 
 fun Program.dbxRegisterName(dbxNum: Int) = dbxArch?.registerName(dbxNum)
 
+// gcc's own i386 register numbering (i386.h REGISTER_NAMES), which is neither the dbx map above nor the
+// encoding order. A value wider than a word — `long long`, a register-held `double` — takes regno N and
+// N+1, low word in N, and its stab names N alone: `__udivdi3`'s `n` arrives in ECX:EBX, `d` in EAX:EDX.
+private val X86_GCC_REGNO = listOf("EAX", "EDX", "ECX", "EBX", "ESI", "EDI", "EBP", "ESP")
+
+/**
+ * The register holding the next word of a value whose stab names [low], in Ghidra's spelling — or null
+ * where that isn't known. Only i386 is mapped: no other fixture keeps a two-word local in registers.
+ */
+fun DbxArch.nextRegister(low: String): String? = when (this) {
+    DbxArch.X86 -> X86_GCC_REGNO.indexOf(low).takeIf { it >= 0 }?.let { X86_GCC_REGNO.getOrNull(it + 1) }
+    else -> null
+}
+
 /**
  * Where the compiler put a variable, as the scope plate comments spell it: `EBX` for a register,
  * `Stack[-0x80-8]` for a frame slot. [rawValue] is the stab's value field — a dbx register number or a

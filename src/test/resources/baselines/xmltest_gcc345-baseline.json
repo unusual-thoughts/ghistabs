@@ -244,28 +244,6 @@
             "min": 7781,
             "max": 7781
         },
-        "local-dropped": {
-            "min": 32,
-            "max": 32,
-            "degrades": [
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIxEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__new_result",
-                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIyEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__new_result",
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intIxEES3_S3_RSt8ios_basecT_.__ull",
-                "_ZNSt12__basic_fileIcE7seekoffExSt12_Ios_Seekdir.__off",
-                "_ZNSt13basic_filebufIcSt11char_traitsIcEE7_M_seekExSt12_Ios_Seekdiri.__off",
-                "_ZSt13__int_to_charIcyEiPT_T0_PKS0_St13_Ios_Fmtflagsb.__v",
-                "_ZSt14__convert_to_vIdEvPKcRT_RSt12_Ios_IostateRKPi.__d",
-                "__divdi3.uu",
-                "__divdi3.vv",
-                "__divdi3.w",
-                "__divdi3.ww",
-                "__udivdi3.d",
-                "__udivdi3.n",
-                "__udivdi3.ww",
-                "__umoddi3.u",
-                "__umoddi3.v"
-            ]
-        },
         "local-var-add-success": {
             "min": 974,
             "max": 974
@@ -397,16 +375,16 @@
             "max": 30
         },
         "reglocal-add-success": {
-            "min": 3455,
-            "max": 3455
+            "min": 3487,
+            "max": 3487
         },
         "reglocal-param-home": {
-            "min": 485,
-            "max": 485
+            "min": 494,
+            "max": 494
         },
         "reglocal-renamed-scope": {
-            "min": 2171,
-            "max": 2171
+            "min": 2182,
+            "max": 2182
         },
         "reglocal-skipped-dup-local": {
             "min": 219,
