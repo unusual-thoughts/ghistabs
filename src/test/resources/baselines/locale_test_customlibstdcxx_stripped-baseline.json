@@ -706,10 +706,6 @@
                 "wstringstream"
             ]
         },
-        "vtable-failed-truly-missing": {
-            "min": 113,
-            "max": 113
-        },
         "vtable-unlinked": {
             "min": 9,
             "max": 9

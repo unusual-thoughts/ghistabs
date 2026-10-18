@@ -715,10 +715,6 @@
                 "wstreambuf"
             ]
         },
-        "vtable-failed-truly-missing": {
-            "min": 104,
-            "max": 104
-        },
         "vtable-skipped": {
             "min": 11,
             "max": 11

@@ -572,11 +572,6 @@ class ClassApplier(
             name,
             "$failureBucket (tried ${candidates.joinToString()}); slots laid as $fallbackAbi",
         )
-        debug(
-            "vtable-failed-$failureBucket",
-            "class '$name': vtable not found (tried ${candidates.joinToString()})",
-        )
-
         return null
     }
 
