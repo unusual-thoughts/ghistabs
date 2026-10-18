@@ -679,24 +679,6 @@
             "min": 8,
             "max": 8
         },
-        "vftable-slot-name-collision": {
-            "min": 53,
-            "max": 53,
-            "degrades": [
-                "Print_1",
-                "ToComment_1",
-                "ToDeclaration_1",
-                "ToDocument_1",
-                "ToElement_1",
-                "ToText_1",
-                "ToUnknown_1",
-                "VisitEnter_1",
-                "VisitExit_1",
-                "Visit_1",
-                "Visit_2",
-                "Visit_3"
-            ]
-        },
         "vtable-applied": {
             "min": 9,
             "max": 9
