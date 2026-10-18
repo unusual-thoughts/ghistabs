@@ -32,8 +32,8 @@
             "max": 4
         },
         "data-no-coverage": {
-            "min": 208,
-            "max": 208
+            "min": 109,
+            "max": 109
         },
         "demangle-applied": {
             "min": 28541,
@@ -138,93 +138,6 @@
         "global-applied": {
             "min": 3155,
             "max": 3155
-        },
-        "global-typed-xref-stub": {
-            "min": 85,
-            "max": 85,
-            "degrades": [
-                "_ZTIN8CryptoPP21BlockPaddingSchemeDef18BlockPaddingSchemeE",
-                "_ZTIN8CryptoPP7Integer16RandomNumberTypeE",
-                "_ZTIPKN8CryptoPP13PrimeSelectorE",
-                "_ZTIPKa",
-                "_ZTIPKb",
-                "_ZTIPKc",
-                "_ZTIPKd",
-                "_ZTIPKe",
-                "_ZTIPKf",
-                "_ZTIPKh",
-                "_ZTIPKi",
-                "_ZTIPKj",
-                "_ZTIPKl",
-                "_ZTIPKm",
-                "_ZTIPKs",
-                "_ZTIPKt",
-                "_ZTIPKv",
-                "_ZTIPKw",
-                "_ZTIPKx",
-                "_ZTIPKy",
-                "_ZTIPN8CryptoPP12DL_PublicKeyINS_7IntegerEEE",
-                "_ZTIPN8CryptoPP12DL_PublicKeyINS_8ECPPointEEE",
-                "_ZTIPN8CryptoPP12DL_PublicKeyINS_9EC2NPointEEE",
-                "_ZTIPN8CryptoPP13DL_PrivateKeyINS_7IntegerEEE",
-                "_ZTIPN8CryptoPP13DL_PrivateKeyINS_8ECPPointEEE",
-                "_ZTIPN8CryptoPP13DL_PrivateKeyINS_9EC2NPointEEE",
-                "_ZTIPN8CryptoPP16DL_PublicKeyImplINS_21DL_GroupParameters_ECINS_3ECPEEEEE",
-                "_ZTIPN8CryptoPP16DL_PublicKeyImplINS_21DL_GroupParameters_ECINS_4EC2NEEEEE",
-                "_ZTIPN8CryptoPP16DL_PublicKeyImplINS_22DL_GroupParameters_DSAEEE",
-                "_ZTIPN8CryptoPP16DL_PublicKeyImplINS_22DL_GroupParameters_GFPEEE",
-                "_ZTIPN8CryptoPP16DL_PublicKeyImplINS_39DL_GroupParameters_GFP_DefaultSafePrimeEEE",
-                "_ZTIPN8CryptoPP17DL_PrivateKeyImplINS_21DL_GroupParameters_ECINS_3ECPEEEEE",
-                "_ZTIPN8CryptoPP17DL_PrivateKeyImplINS_21DL_GroupParameters_ECINS_4EC2NEEEEE",
-                "_ZTIPN8CryptoPP17DL_PrivateKeyImplINS_22DL_GroupParameters_DSAEEE",
-                "_ZTIPN8CryptoPP17DL_PrivateKeyImplINS_22DL_GroupParameters_GFPEEE",
-                "_ZTIPN8CryptoPP17DL_PrivateKeyImplINS_39DL_GroupParameters_GFP_DefaultSafePrimeEEE",
-                "_ZTIPN8CryptoPP18DL_GroupParametersINS_7IntegerEEE",
-                "_ZTIPN8CryptoPP18DL_GroupParametersINS_8ECPPointEEE",
-                "_ZTIPN8CryptoPP18DL_GroupParametersINS_9EC2NPointEEE",
-                "_ZTIPN8CryptoPP21DL_GroupParameters_ECINS_3ECPEEE",
-                "_ZTIPN8CryptoPP21DL_GroupParameters_ECINS_4EC2NEEE",
-                "_ZTIPN8CryptoPP21RandomNumberGeneratorE",
-                "_ZTIPN8CryptoPP22BufferedTransformationE",
-                "_ZTIPN8CryptoPP22DL_GroupParameters_GFPE",
-                "_ZTIPN8CryptoPP31DL_GroupParameters_IntegerBasedE",
-                "_ZTIPN8CryptoPP35DL_GroupParameters_IntegerBasedImplINS_20ModExpPrecomputationENS_30DL_FixedBasePrecomputationImplINS_7IntegerEEEEE",
-                "_ZTIPSs",
-                "_ZTIPa",
-                "_ZTIPb",
-                "_ZTIPc",
-                "_ZTIPd",
-                "_ZTIPe",
-                "_ZTIPf",
-                "_ZTIPh",
-                "_ZTIPi",
-                "_ZTIPj",
-                "_ZTIPl",
-                "_ZTIPm",
-                "_ZTIPs",
-                "_ZTIPt",
-                "_ZTIPv",
-                "_ZTIPw",
-                "_ZTIPx",
-                "_ZTIPy",
-                "_ZTIa",
-                "_ZTIb",
-                "_ZTIc",
-                "_ZTId",
-                "_ZTIe",
-                "_ZTIf",
-                "_ZTIh",
-                "_ZTIi",
-                "_ZTIj",
-                "_ZTIl",
-                "_ZTIm",
-                "_ZTIs",
-                "_ZTIt",
-                "_ZTIv",
-                "_ZTIw",
-                "_ZTIx",
-                "_ZTIy"
-            ]
         },
         "harvest-collisions-divergent": {
             "min": 1,
@@ -910,8 +823,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 25828,
-            "max": 25828
+            "min": 25819,
+            "max": 25819
         },
         "placeholder-undefined-fields": {
             "min": 2,
@@ -949,8 +862,8 @@
             "max": 1207
         },
         "rtti-pseudo-substituted": {
-            "min": 152,
-            "max": 152
+            "min": 161,
+            "max": 161
         },
         "scope-from-twin": {
             "min": 285,
