@@ -537,20 +537,22 @@ class ClassApplier(
     private fun LocatedClass.resolveVtableAddress(): ResolvedVtable? {
         val candidates = CxxAbi.vtableCandidates(name)
 
-        // A class's vtable that a symbol names only as an external reference is in another object
-        val unlinked = {
-            null.also {
-                debug("vtable-unlinked", "class '$name': neither its vtable nor any member of it is linked here")
-            }
+        fun unlinked(): ResolvedVtable? {
+            debug("vtable-unlinked", "class '$name': neither its vtable nor any member of it is linked here")
+            return null
         }
 
-        candidates.firstNotNullOfOrNull { name ->
-            resolver.resolve(name)?.also { if (!it.isDefined()) return unlinked() }
-        }?.let { return ResolvedVtable.of(qualifiedClassName, name, it) }
+        val named = candidates.mapNotNull { sym -> resolver.resolve(sym)?.let { sym to it } }
+        named.firstNotNullOfOrNull { (sym, at) ->
+            at.takeIf { it.isDefined() }?.let { ResolvedVtable.of(qualifiedClassName, sym, it) }
+        }?.let { return it }
 
-        vtableAddressByClass[qualifiedClassName]?.let {
-            return if (!it.address.isDefined()) unlinked() else it
-        }
+        val indexed = vtableAddressByClass[qualifiedClassName]
+        if (indexed?.address?.isDefined() == true) return indexed
+
+        // A vtable a symbol names only as an external reference is in another object
+        // (`tinyxml_aout_gcc295.o`'s `TiXmlDocument`).
+        if (named.isNotEmpty() || indexed != null) return unlinked()
 
         // Members resolve through [fallbackAbi]: [abi] is what this vtable's lookup is deciding.
         fun TypeDecl.Aggregate.Method<*>.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
@@ -558,8 +560,9 @@ class ClassApplier(
         }
 
         // A vtable of a class none of whose members was linked was never emitted, since gcc lays a vtable
-        // beside its key function and any constructor stores its address.
-        body.methods.find { it.linked() } ?: return unlinked()
+        // beside its key function and any constructor stores its address (`stringbuf`, `__array_type_info`
+        // from libstdc++'s headers).
+        if (body.methods.none { it.linked() }) return unlinked()
 
         val failureBucket = when {
             body.hasVTablePointerMarker && body.methods.none { it.virt == VirtKind.VIRTUAL } ->

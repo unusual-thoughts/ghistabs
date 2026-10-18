@@ -42,4 +42,16 @@ class VtableUnlinkedIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val failures = ctx.diagnostics.degradationTargets()["vtable-failed"].orEmpty()
         (cls in failures) mustBe failed
     }
+
+    /** The other side of the same lookup: the vtables a gcc 2.x object does define are found by their symbols. */
+    @ParameterizedTest
+    @CsvSource("tinyxml_aout_gcc295.o")
+    fun `a vtable the binary holds is laid`(fixture: String) {
+        assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
+        loaded = loadProgram(File("src/test/resources/binaries/$fixture"))
+        val ctx = loaded.program.defaultContext()
+        ctx.import()
+
+        (ctx.diagnostics["vtable-applied"] > 0) mustBe true
+    }
 }
