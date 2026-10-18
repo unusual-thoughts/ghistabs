@@ -1,32 +1,5 @@
 {
     "counters": {
-        "array-count-substituted": {
-            "min": 21,
-            "max": 21,
-            "degrades": [
-                "Anon_locale_classes_36_32bf87b5",
-                "Anon_locale_classes_36_aa149e8e",
-                "Anon_locale_classes_36_ac06a6b6",
-                "Anon_locale_classes_38_32bf87b7",
-                "Anon_locale_classes_38_aa149e90",
-                "Anon_locale_classes_38_ac06a6b8",
-                "Anon_locale_classes_39_32bf87b8",
-                "Anon_locale_classes_39_aa149e91",
-                "Anon_locale_classes_39_ac06a6b9",
-                "Anon_locale_classes_40_32bf87b9",
-                "Anon_locale_classes_40_aa149e92",
-                "Anon_locale_classes_40_ac06a6ba",
-                "Anon_locale_classes_41_32bf87ba",
-                "Anon_locale_classes_41_aa149e93",
-                "Anon_locale_classes_41_ac06a6bb",
-                "Anon_locale_classes_42_32bf87bb",
-                "Anon_locale_classes_42_aa149e94",
-                "Anon_locale_classes_42_ac06a6bc",
-                "Anon_locale_classes_43_32bf87bc",
-                "Anon_locale_classes_43_aa149e95",
-                "Anon_locale_classes_43_ac06a6bd"
-            ]
-        },
         "base-empty-ebo": {
             "min": 29,
             "max": 29
@@ -48,8 +21,8 @@
             "max": 4
         },
         "data-no-coverage": {
-            "min": 46,
-            "max": 46
+            "min": 41,
+            "max": 41
         },
         "demangle-applied": {
             "min": 3635,
@@ -488,8 +461,8 @@
             "max": 2
         },
         "static-member-applied": {
-            "min": 149,
-            "max": 149
+            "min": 142,
+            "max": 142
         },
         "static-member-unresolved": {
             "min": 379,

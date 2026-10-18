@@ -1,6 +1,7 @@
 package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
+import ghidra.program.model.data.Array
 import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.UnsignedIntegerDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -10,6 +11,7 @@ import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.test.defaultContext
 import ghistabs.test.must
+import ghistabs.test.mustBe
 import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -277,5 +279,34 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         base.must("expected unsigned_int -> uint, got ${nnu::class.simpleName}(${nnu.name})") {
             isEquivalent(UnsignedIntegerDataType())
         }
+    }
+
+    /**
+     * libstdc++'s `locale::_Impl` declares `static const id* const _S_id_ctype[];` (`ar(0,7);0;-1;`) and
+     * defines it in `locale_init.cc` with its size (`_ZNSt6locale5_Impl11_S_id_ctypeE:G(0,1581)=ar(0,82);0;4;`).
+     * The declaration is a zero-element array, not one substituted as `[1]`, and leaves the definition's type be.
+     */
+    @Test
+    fun `an unsized static member array keeps its definition's size`() {
+        val program = builder.program
+        builder.createLabel("0x401000", "_ZN1C3idsE")
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "c.cpp"),
+            StabRecord(1, StabType.N_LSYM, 0, 0, 0, "int:t(0,1)=r(0,1);-2147483648;2147483647;"),
+            StabRecord(
+                2,
+                StabType.N_LSYM,
+                0,
+                0,
+                0,
+                "C:Tt(0,2)=s4n:(0,1),0,32;ids:/0(0,3)=ar(0,1);0;-1;(0,4)=*(0,1):_ZN1C3idsE;;",
+            ),
+            StabRecord(3, StabType.N_GSYM, 0, 0, 0, "_ZN1C3idsE:G(0,5)=ar(0,1);0;4;(0,4)"),
+        )
+        val ctx = program.defaultContext()
+        StabsImporter(ctx).runOnRecords(StabReader.Result(records))
+
+        ctx.diagnostics["array-count-substituted"] mustBe 0L
+        (program.listing.getDefinedDataAt(builder.addr("0x401000"))?.dataType as? Array)?.numElements mustBe 5
     }
 }
