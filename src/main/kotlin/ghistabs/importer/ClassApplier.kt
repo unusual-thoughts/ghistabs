@@ -551,11 +551,28 @@ class ClassApplier(
     /** Resolve _ZTV<class> address: try AddressResolver candidates, then the demangled-vtable index. */
     private fun LocatedClass.resolveVtableAddress(): ResolvedVtable? {
         val candidates = CxxAbi.vtableCandidates(name)
-        candidates.firstNotNullOfOrNull { name ->
-            resolver.resolve(name)?.takeIf { it.isDefined() }?.let { ResolvedVtable.of(qualifiedClassName, name, it) }
+
+        val resolved = candidates.mapNotNull { sym -> resolver.resolve(sym)?.let { sym to it } }
+        resolved.firstNotNullOfOrNull { (sym, at) ->
+            at.takeIf { it.isDefined() }?.let { ResolvedVtable.of(qualifiedClassName, sym, at) }
         }?.let { return it }
 
-        vtableAddressByClass[qualifiedClassName]?.takeIf { it.address.isDefined() }?.let { return it }
+        val indexed = vtableAddressByClass[qualifiedClassName]?.also {
+            if (it.address.isDefined()) return it
+        }
+
+        // Members resolve through [fallbackAbi]: [abi] is what this vtable's lookup is deciding.
+        fun TypeDecl.Aggregate.Method<*>.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
+            resolver.resolve(it)?.isDefined() == true
+        }
+
+        // - A vtable a symbol names only as an external reference is in another object
+        // - A vtable of a class none of whose members was linked was never emitted, since gcc lays a vtable
+        //   beside its key function and any constructor stores its address
+        if (resolved.isNotEmpty() || indexed != null || body.methods.none { it.linked() }) {
+            debug("vtable-unlinked", "class '$name': neither its vtable nor any member of it is linked here")
+            return null
+        }
 
         val failureBucket = when {
             body.hasVTablePointerMarker && body.methods.none { it.virt == VirtKind.VIRTUAL } ->
@@ -566,13 +583,9 @@ class ClassApplier(
         // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
         // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
         degradation(
-            "vtable-failed",
-            name,
-            "$failureBucket (tried ${candidates.joinToString()}); slots laid as $fallbackAbi",
-        )
-        debug(
             "vtable-failed-$failureBucket",
-            "class '$name': vtable not found (tried ${candidates.joinToString()})",
+            name,
+            "vtable not found (tried ${candidates.joinToString()}); slots laid as $fallbackAbi",
         )
 
         return null

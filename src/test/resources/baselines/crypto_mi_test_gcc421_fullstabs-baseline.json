@@ -1194,26 +1194,6 @@
             "min": 241,
             "max": 241
         },
-        "vtable-failed": {
-            "min": 10,
-            "max": 10,
-            "degrades": [
-                "char_producer<char>",
-                "char_producer<wchar_t>",
-                "istringstream",
-                "ostringstream",
-                "stringbuf",
-                "stringstream",
-                "wistringstream",
-                "wostringstream",
-                "wstringbuf",
-                "wstringstream"
-            ]
-        },
-        "vtable-failed-truly-missing": {
-            "min": 10,
-            "max": 10
-        },
         "vtable-reconstructed": {
             "min": 460,
             "max": 460,
@@ -1687,6 +1667,10 @@
         "vtable-skipped": {
             "min": 625,
             "max": 625
+        },
+        "vtable-unlinked": {
+            "min": 10,
+            "max": 10
         },
         "vtable-virtual-no-impl": {
             "min": 38,

@@ -611,33 +611,6 @@
             "min": 14,
             "max": 14
         },
-        "vtable-failed": {
-            "min": 17,
-            "max": 17,
-            "degrades": [
-                "__array_type_info",
-                "__enum_type_info",
-                "__function_type_info",
-                "__fundamental_type_info",
-                "__pbase_type_info",
-                "__pointer_to_member_type_info",
-                "__pointer_type_info",
-                "char_producer<char>",
-                "char_producer<wchar_t>",
-                "istringstream",
-                "ostringstream",
-                "stringbuf",
-                "stringstream",
-                "wistringstream",
-                "wostringstream",
-                "wstringbuf",
-                "wstringstream"
-            ]
-        },
-        "vtable-failed-truly-missing": {
-            "min": 17,
-            "max": 17
-        },
         "vtable-reconstructed": {
             "min": 11,
             "max": 11,
@@ -662,6 +635,10 @@
         "vtable-skipped": {
             "min": 11,
             "max": 11
+        },
+        "vtable-unlinked": {
+            "min": 17,
+            "max": 17
         },
         "vtable-virtual-no-impl": {
             "min": 38,

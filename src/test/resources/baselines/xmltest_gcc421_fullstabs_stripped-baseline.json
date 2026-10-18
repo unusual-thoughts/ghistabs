@@ -595,11 +595,10 @@
             "min": 103,
             "max": 103
         },
-        "vtable-failed": {
-            "min": 121,
-            "max": 121,
+        "vtable-failed-truly-missing": {
+            "min": 104,
+            "max": 104,
             "degrades": [
-                "__array_type_info",
                 "__class_type_info",
                 "__codecvt_abstract_base<char,char,int>",
                 "__codecvt_abstract_base<wchar_t,char,int>",
@@ -607,18 +606,12 @@
                 "__concurrence_unlock_error",
                 "__ctype_abstract_base<char>",
                 "__ctype_abstract_base<wchar_t>",
-                "__enum_type_info",
-                "__function_type_info",
-                "__fundamental_type_info",
                 "__moneypunct_cache<char,false>",
                 "__moneypunct_cache<char,true>",
                 "__moneypunct_cache<wchar_t,false>",
                 "__moneypunct_cache<wchar_t,true>",
                 "__numpunct_cache<char>",
                 "__numpunct_cache<wchar_t>",
-                "__pbase_type_info",
-                "__pointer_to_member_type_info",
-                "__pointer_type_info",
                 "__si_class_type_info",
                 "__timepunct<char>",
                 "__timepunct<wchar_t>",
@@ -629,8 +622,6 @@
                 "bad_cast",
                 "bad_exception",
                 "bad_typeid",
-                "char_producer<char>",
-                "char_producer<wchar_t>",
                 "codecvt<char,char,int>",
                 "codecvt<wchar_t,char,int>",
                 "codecvt_byname<char,char,int>",
@@ -655,7 +646,6 @@
                 "ios_base",
                 "iostream",
                 "istream",
-                "istringstream",
                 "length_error",
                 "logic_error",
                 "messages<char>",
@@ -684,7 +674,6 @@
                 "numpunct_byname<wchar_t>",
                 "ofstream",
                 "ostream",
-                "ostringstream",
                 "out_of_range",
                 "overflow_error",
                 "range_error",
@@ -695,8 +684,6 @@
                 "stdio_sync_filebuf<char,std::char_traits<char>>",
                 "stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>",
                 "streambuf",
-                "stringbuf",
-                "stringstream",
                 "time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
                 "time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
                 "time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
@@ -713,22 +700,18 @@
                 "wios",
                 "wiostream",
                 "wistream",
-                "wistringstream",
                 "wofstream",
                 "wostream",
-                "wostringstream",
-                "wstreambuf",
-                "wstringbuf",
-                "wstringstream"
+                "wstreambuf"
             ]
-        },
-        "vtable-failed-truly-missing": {
-            "min": 121,
-            "max": 121
         },
         "vtable-skipped": {
             "min": 11,
             "max": 11
+        },
+        "vtable-unlinked": {
+            "min": 17,
+            "max": 17
         },
         "xref-base-tag-resolved": {
             "min": 2,
