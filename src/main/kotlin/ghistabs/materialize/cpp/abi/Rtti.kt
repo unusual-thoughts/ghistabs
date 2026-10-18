@@ -41,6 +41,9 @@ class Rtti(private val dtm: DataTypeManager) {
             TYPE_INFO, CLASS_TYPE_INFO, CLASS_TYPE_INFO_PSEUDO -> classTi
             SI_CLASS_TYPE_INFO, SI_CLASS_TYPE_INFO_PSEUDO -> siClassTi
             VMI_CLASS_TYPE_INFO -> vmiClassTypeInfo(1)
+            POINTER_TYPE_INFO_PSEUDO -> pointerTi
+            POINTER_TO_MEMBER_TYPE_INFO_PSEUDO -> pointerToMemberTi
+            in NAME_ONLY_TYPE_INFO_PSEUDOS -> typeInfo
             else -> name.removePrefixOrNull(VMI_CLASS_TYPE_INFO_PSEUDO)?.toIntOrNull()?.let(::vmiClassTypeInfo)
         }
     }
@@ -54,6 +57,34 @@ class Rtti(private val dtm: DataTypeManager) {
         add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
         add(dtm.getPointer(CharDataType()), "typeinfoName", null)
         add(dtm.getPointer(classTi), BASE_TYPE, null)
+        isPackingEnabled = true
+    }
+
+    /** `std::type_info` as a typeinfo that isn't a class's: a fundamental type's, an enum's, a function's. */
+    val typeInfo = StructureDataType(ClassNaming.classDataTypesRoot, "TypeInfoStructure", 0, dtm).apply {
+        add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
+        add(dtm.getPointer(CharDataType()), "typeinfoName", null)
+        isPackingEnabled = true
+    }
+
+    /** `__pbase_type_info` as a pointer's: its cv-qualifier `__flags`, then the pointee's typeinfo. */
+    val pointerTi = StructureDataType(ClassNaming.classDataTypesRoot, "PointerTypeInfoStructure", 0, dtm).apply {
+        add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
+        add(dtm.getPointer(CharDataType()), "typeinfoName", null)
+        add(UnsignedIntegerDataType(), "flags", null)
+        add(dtm.getPointer(typeInfo), "pointee", null)
+        isPackingEnabled = true
+    }
+
+    /** A member pointer's: [pointerTi] and the class the member is of. */
+    val pointerToMemberTi = StructureDataType(
+        ClassNaming.classDataTypesRoot,
+        "PointerToMemberTypeInfoStructure",
+        0,
+        dtm,
+    ).apply {
+        for (c in pointerTi.definedComponents) add(c.dataType, c.fieldName, null)
+        add(dtm.getPointer(classTi), "context", null)
         isPackingEnabled = true
     }
 
