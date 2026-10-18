@@ -1018,26 +1018,6 @@
             "min": 111,
             "max": 111
         },
-        "vtable-failed": {
-            "min": 10,
-            "max": 10,
-            "degrades": [
-                "char_producer<char>",
-                "char_producer<wchar_t>",
-                "istringstream",
-                "ostringstream",
-                "stringbuf",
-                "stringstream",
-                "wistringstream",
-                "wostringstream",
-                "wstringbuf",
-                "wstringstream"
-            ]
-        },
-        "vtable-failed-truly-missing": {
-            "min": 10,
-            "max": 10
-        },
         "vtable-from-rtti": {
             "min": 560,
             "max": 560
