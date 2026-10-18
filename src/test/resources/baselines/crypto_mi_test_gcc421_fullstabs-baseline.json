@@ -1186,16 +1186,6 @@
             "min": 488,
             "max": 488
         },
-        "vftable-slot-name-collision": {
-            "min": 8,
-            "max": 8,
-            "degrades": [
-                "do_get_1",
-                "do_get_2",
-                "do_put_1",
-                "do_put_2"
-            ]
-        },
         "vtable-applied": {
             "min": 111,
             "max": 111
