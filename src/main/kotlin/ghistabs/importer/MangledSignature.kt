@@ -6,6 +6,7 @@ import ghidra.program.model.data.BooleanDataType
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.Pointer
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.lang.CompilerSpec
@@ -40,8 +41,18 @@ fun Function.conventionFor(takesThis: Boolean): PrototypeModel? {
  * `xmltest`'s `XMLDocument::SetError(XMLError error, int, const char* format, ...)`'s `error` so
  * cost `format` its `char*`.
  */
-fun DemangledDataType.parameterType(dtm: DataTypeManager): DataType? = runCatching { getDataType(dtm) }.getOrNull()
-    ?.takeUnless { it.isNotYetDefined || it.isZeroLength || it.withoutTypedefs() == DataType.DEFAULT }
+fun DemangledDataType.parameterType(dtm: DataTypeManager): DataType? =
+    runCatching { getDataType(dtm) }.getOrNull()?.takeIf { it.isParameterSized }
+
+/** Whether [this] has a parameter's size: neither a stand-in nor a 1-byte `undefined` in disguise. */
+internal val DataType.isParameterSized get() =
+    !isNotYetDefined && !isZeroLength && withoutTypedefs() != DataType.DEFAULT
+
+/** [base] behind [this]'s pointers and reference, which Ghidra also lays as a pointer. */
+internal fun DemangledDataType.decorated(base: DataType, dtm: DataTypeManager): DataType {
+    val levels = pointerLevels + if (isLValueReference || isRValueReference) 1 else 0
+    return (1..levels).fold(base) { dt, _ -> PointerDataType.getPointer(dt, dtm) }
+}
 
 /** [t]'s [parameterType], or `undefined4` with a [category] degradation against [degrades]. */
 fun DiagnosticSink.parameterTypeOrUndefined(

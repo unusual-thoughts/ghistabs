@@ -386,15 +386,6 @@
                 "_ZnwmPv"
             ]
         },
-        "param-untyped": {
-            "min": 3,
-            "max": 3,
-            "degrades": [
-                "_ZN8tinyxml211XMLDocument13ErrorIDToNameENS_8XMLErrorE.errorID",
-                "_ZN8tinyxml211XMLDocument8SetErrorENS_8XMLErrorEiPKcz.error",
-                "_ZN8tinyxml211XMLDocumentC2EbNS_10WhitespaceE.whitespaceMode"
-            ]
-        },
         "placeholder-created": {
             "min": 214,
             "max": 214
