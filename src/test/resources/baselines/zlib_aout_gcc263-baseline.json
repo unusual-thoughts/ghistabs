@@ -1,14 +1,5 @@
 {
     "counters": {
-        "array-count-substituted": {
-            "min": 3,
-            "max": 3,
-            "degrades": [
-                "Anon_infblock_54_37eaffe2",
-                "Anon_inftrees_56_06ddf7ec",
-                "Anon_inftrees_57_06ddf7ed"
-            ]
-        },
         "canonical-key-merged": {
             "min": 13,
             "max": 13

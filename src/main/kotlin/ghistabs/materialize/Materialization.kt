@@ -306,13 +306,15 @@ private fun TypeDecl.Enum<GlobalTypeId>.fillEnum(placeholder: GhidraEnum): DataT
 }
 
 /**
- * `ArrayDataType` takes an Int count ≥ 1, so an unsized (`char x[]`), zero-length or
- * absurdly-long stab declaration has to be substituted — a shape the array does not have.
+ * An unsized declaration (`static const id* const _S_id_ctype[];`, `ar(0,7);0;-1;`) is a zero-element
+ * array, which is what Ghidra makes of `T x[]`. An absurdly long one has to be substituted.
  */
 internal fun DataTypeRegistry.buildArray(decl: TypeDecl.Array<*>, elem: DataType, at: String): ArrayDataType {
     val declared = decl.declaredElements
-    val count = (declared ?: 1L).coerceIn(1L, Int.MAX_VALUE.toLong())
-    if (declared != count) degradation("array-count-substituted", at, "declared=$declared, built as [$count]")
+    val count = (declared ?: 0L).coerceAtMost(Int.MAX_VALUE.toLong())
+    if (declared != null && declared != count) {
+        degradation("array-count-substituted", at, "declared=$declared, built as [$count]")
+    }
     return ArrayDataType(elem, count.toInt(), elem.length)
 }
 
