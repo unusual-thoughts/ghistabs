@@ -13,20 +13,17 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
-import ghistabs.Demangler
+import ghistabs.*
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
-import ghistabs.forceCreateData
-import ghistabs.formals
-import ghistabs.fullName
 import ghistabs.harvest.*
-import ghistabs.isVarArgs
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.cpp.abi.Itanium.isInlineStdMember
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
 import ghistabs.parse.*
+import ghidra.program.model.data.Array as GhidraArray
 
 /**
  * The apply phase: writes harvested functions, params, locals, globals, statics, labels and scope
@@ -39,6 +36,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     val source = SourceType.IMPORTED
     val symtab: SymbolTable get() = ctx.program.symbolTable
     val funMgr: FunctionManager get() = ctx.program.functionManager
+    val listing: Listing get() = ctx.program.listing
 
     companion object {
         /** Distinguishes the `:r` register home of a `:p` parameter from the parameter itself. */
@@ -299,7 +297,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
         // CreateFunctionCmd refuses uninitialised code. MinGW COMDAT chunks that
         // autoanalysis hasn't reached need a manual disassemble first.
-        if (ctx.program.listing.getInstructionAt(addr) == null) {
+        if (listing.getInstructionAt(addr) == null) {
             val disasm = DisassembleCommand(addr, null, true)
             if (disasm.applyTo(ctx.program, ctx.monitor) && disasm.disassembledAddressSet.numAddresses > 0) {
                 debug("function-create-disassembled-first")
@@ -375,8 +373,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         val text = homes.joinToString("\n", "Stabs register parameters (gcc's home, not the passing slot):\n")
 
         try {
-            val existing = ctx.program.listing.getComment(CommentType.PLATE, func.entryPoint)
-            ctx.program.listing.setComment(
+            val existing = listing.getComment(CommentType.PLATE, func.entryPoint)
+            listing.setComment(
                 func.entryPoint,
                 CommentType.PLATE,
                 existing?.let { "$it\n$text" } ?: text,
@@ -496,7 +494,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                     if (locals.isEmpty()) {
                         debug("empty-scope", "function=${func.name}", address = start)
                     } else {
-                        ctx.program.listing.setComment(start, CommentType.PLATE, scopeCommentText(locals, open))
+                        listing.setComment(start, CommentType.PLATE, scopeCommentText(locals, open))
                     }
                 } catch (e: Exception) {
                     degradation("scope-comment-dropped", "${func.name}", e.message, start)
@@ -553,7 +551,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
         val owner = sym.enclosingFunction
         if (ctx.options.applyPlateComments && decl.scope == StaticScope.FUNCTION && owner != null) {
-            ctx.program.listing.setComment(addr, CommentType.PLATE, "static local of ${Demangler.name(owner)}()")
+            listing.setComment(addr, CommentType.PLATE, "static local of ${Demangler.name(owner)}()")
             debug("static-local-plate", address = addr)
         }
 
@@ -600,26 +598,39 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             for (field in body.fields) {
                 val mangled = field.mangled ?: continue
                 if (!field.isStatic || !seen.add(mangled)) continue
-                val addr = ctx.resolver.resolve(mangled) ?: run {
-                    debug("static-member-unresolved", mangled)
-                    continue
-                }
-                val dt = registry.resolveRef(field.type) ?: run {
-                    degradation("static-member-untyped", mangled)
-                    continue
-                }
-                // Names it `Class::member` when the demangler hasn't already; typed below regardless.
-                ensureStabLabel(addr, mangled)
-                try {
-                    ctx.program.forceCreateData(addr, dt) { debug("code-cleared-for-data", mangled, address = addr) }
-                    applied++
-                    debug("static-member-applied", "$mangled dt=${dt.displayName}", address = addr)
-                } catch (e: Exception) {
-                    err("apply-error", "static member $mangled at $addr: ${e.message}", addr)
-                }
+                if (applyStaticMember(mangled, field.type)) applied++
             }
         }
         return applied
+    }
+
+    /** One static member declared [type], at the address its linkage name [mangled] resolves to. */
+    private fun applyStaticMember(mangled: String, type: GlobalTypeDecl): Boolean {
+        val addr = ctx.resolver.resolve(mangled) ?: run {
+            debug("static-member-unresolved", mangled)
+            return false
+        }
+        val dt = registry.resolveRef(type) ?: run {
+            degradation("static-member-untyped", mangled)
+            return false
+        }
+
+        // `static T x[];` states no size: its definition's `G` stab, applied before the members, does,
+        // and without one its first element is all there is to go on.
+        val sized = when {
+            dt !is GhidraArray || !dt.isZeroLength -> dt
+            listing.getDefinedDataAt(addr) != null -> return false
+            else -> dt.dataType
+        }
+
+        // Names it `Class::member` when the demangler hasn't already; typed below regardless.
+        ensureStabLabel(addr, mangled)
+        return runCatching {
+            ctx.program.forceCreateData(addr, sized) { debug("code-cleared-for-data", mangled, address = addr) }
+            debug("static-member-applied", "$mangled dt=${sized.displayName}", address = addr)
+        }.onFailure {
+            err("apply-error", "static member $mangled at $addr: ${it.message}", addr)
+        }.isSuccess
     }
 
     /**

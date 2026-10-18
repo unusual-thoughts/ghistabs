@@ -8,30 +8,6 @@
             "min": 6,
             "max": 6
         },
-        "array-count-substituted": {
-            "min": 18,
-            "max": 18,
-            "degrades": [
-                "Anon_asn_556_e729411d",
-                "Anon_asn_558_e729411f",
-                "Anon_cryptlib_567_c3edfcc3",
-                "Anon_dll_1290_6301e063",
-                "Anon_dll_438_6301dd0f",
-                "Anon_dll_997_6301df3e",
-                "Anon_dll_999_6301df40",
-                "Anon_gf2n_580_b5df8b14",
-                "Anon_gf2n_582_b5df8b16",
-                "Anon_integer_672_80b9aed3",
-                "Anon_integer_674_80b9aed5",
-                "Anon_minimal_test_438_c1414b9b",
-                "Anon_minimal_test_692_c1414c99",
-                "Anon_minimal_test_694_c1414c9b",
-                "Anon_osrng_559_922a73ab",
-                "Anon_randpool_552_45cbc89e",
-                "Anon_rdtables_438_cb7f0502",
-                "Anon_rijndael_438_ce11420a"
-            ]
-        },
         "base-empty-ebo": {
             "min": 239,
             "max": 239

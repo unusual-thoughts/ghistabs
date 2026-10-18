@@ -8,20 +8,6 @@
             "min": 7,
             "max": 7
         },
-        "array-count-substituted": {
-            "min": 8,
-            "max": 8,
-            "degrades": [
-                "Anon_tinyxml_305_0c72c27d",
-                "Anon_tinyxml_307_0c72c27f",
-                "Anon_tinyxmlerror_305_b492dd37",
-                "Anon_tinyxmlerror_307_b492dd39",
-                "Anon_tinyxmlparser_305_0bdeae1c",
-                "Anon_tinyxmlparser_307_0bdeae1e",
-                "Anon_xmltest_min_305_94bf3fe2",
-                "Anon_xmltest_min_307_94bf3fe4"
-            ]
-        },
         "base-empty-ebo": {
             "min": 18,
             "max": 18
