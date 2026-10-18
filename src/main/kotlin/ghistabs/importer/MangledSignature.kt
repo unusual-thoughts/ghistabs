@@ -45,8 +45,8 @@ fun DemangledDataType.parameterType(dtm: DataTypeManager): DataType? =
     runCatching { getDataType(dtm) }.getOrNull()?.takeIf { it.isParameterSized }
 
 /** Whether [this] has a parameter's size: neither a stand-in nor a 1-byte `undefined` in disguise. */
-internal val DataType.isParameterSized
-    get() = !isNotYetDefined && !isZeroLength && withoutTypedefs() != DataType.DEFAULT
+internal val DataType.isParameterSized get() =
+    !isNotYetDefined && !isZeroLength && withoutTypedefs() != DataType.DEFAULT
 
 /** [base] behind [this]'s pointers and reference, which Ghidra also lays as a pointer. */
 internal fun DemangledDataType.decorated(base: DataType, dtm: DataTypeManager): DataType {
