@@ -427,7 +427,7 @@ class ClassApplier(
             with(abi) { vftable.addEntryAdjustment(slot) }
             val m = virtuals[slot]
             when {
-                m != null -> slotName(m, used)
+                m != null -> slotName(m, used, virtuals.values)
                     .let { vftable.add(buildVirtualSlotType(m, it), it, "virtual ${m.name}") }
 
                 slot < targets.size -> addSweptSlot(vftable, vftableCategory, targets[slot], used, abi)
@@ -448,21 +448,36 @@ class ClassApplier(
      * Field name for [m]'s slot, unique within the table. The field and its FunctionDefinition share
      * one name (`atLeastOneVtableStructApplied` requires it), so two virtual *overloads* — which the
      * slot index now keeps apart where matching on name did not — would otherwise fork a `.conflict`
-     * per slot. Disambiguated by the parameter list the mangled name carries, leaf types only: an
-     * enclosing namespace is the same for both and so tells them apart no better than a counter.
+     * per slot. Disambiguated by the parameter list its physname carries, leaf types only: an
+     * enclosing namespace is the same for both and so tells them apart no better than a counter. The
+     * leaf keeps its `unsigned` (`num_get::do_get(…, long&)` and `(…, unsigned long&)`), and a `const`
+     * overload, which the parameters don't tell apart (`ToComment()`), says so. The physname is
+     * composed, since gcc 2.x's stab holds only the mangled argument list.
      */
-    private fun slotName(m: Method<GlobalTypeId>, used: MutableSet<String>): String {
-        val overload = (m.mangled?.let(Demangler::of) as? DemangledFunction)
-            ?.parameters.orEmpty()
-            .joinToString("_") { it.type.name.orEmpty() }
-            .let { SymbolUtilities.replaceInvalidChars(it, true) }
-            .takeIf { it.isNotEmpty() }
-        val candidates = listOfNotNull(m.name, overload?.let { "${m.name}_$it" })
+    private fun LocatedClass.slotName(
+        m: Method<GlobalTypeId>,
+        used: MutableSet<String>,
+        siblings: Collection<Method<GlobalTypeId>>,
+    ): String {
+        val overload = paramSpelling(m)
+        val byParams = overload?.let { "${m.name}_$it" } ?: m.name
+        val constTwin = m.isConst &&
+            siblings.any { it !== m && it.name == m.name && !it.isConst && paramSpelling(it) == overload }
+        val candidates = if (constTwin) listOf("${byParams}_const") else listOf(m.name, byParams).distinct()
         return candidates.firstOrNull(used::add)
             ?: generateSequence(1) { it + 1 }.map { "${m.name}_$it" }.first(used::add).also {
                 degradation("vftable-slot-name-collision", it, "no unique name from $candidates")
             }
     }
+
+    /** [m]'s parameter leaf types as [slotName] spells them, or null for none: gcc 2.x's `(void)` is none. */
+    private fun LocatedClass.paramSpelling(m: Method<GlobalTypeId>): String? =
+        abi.physnameCandidates(m, qualifiedClassName)
+            .firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
+            ?.parameters.orEmpty()
+            .joinToString("_") { (if (it.type.isUnsigned) "unsigned_" else "") + it.type.name.orEmpty() }
+            .let { SymbolUtilities.replaceInvalidChars(it, true) }
+            .takeIf { it.isNotEmpty() && it != "void" }
 
     /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
     private fun unwrapSignature(sig: GlobalTypeDecl) = types.resolveWith(sig) { it as? TypeDecl.Callable }
