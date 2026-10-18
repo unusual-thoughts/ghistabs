@@ -6,6 +6,8 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.importer.ImportProbe
 import ghistabs.isConflict
+import ghistabs.materialize.shortenTypedefs
+import ghistabs.materialize.typedefShorteningRenames
 import ghistabs.nameWithoutConflict
 import ghistabs.runTransaction
 import ghistabs.test.defaultContext
@@ -49,8 +51,7 @@ class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
             // The analyzer runs its own import inside the analysis above (shortening off by default);
             // the shortener is registry-scoped, so take the registry it built rather than the DTM.
             val registry = checkNotNull(probe.artifacts) { "analyzer produced no artifacts" }.registry
-            val shortener = program.defaultContext().typedefShortener(registry)
-            val renames = shortener.renames().sortedByDescending { it.from.length - it.to.length }
+            val renames = registry.typedefShorteningRenames().sortedByDescending { it.from.length - it.to.length }
 
             val outDir = File("build/test-output/typedef-renames").apply { mkdirs() }
             File(outDir, "${fixture.nameWithoutExtension}.txt").writeText(
@@ -60,7 +61,7 @@ class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
             renames.take(8).forEach { println("  ${it.from}\n    -> ${it.to}") }
 
             assumeTrue(renames.isNotEmpty(), "no shortenable typedefs in this binary")
-            val renamed = program.runTransaction("probe-apply") { shortener.apply() }
+            val renamed = program.runTransaction("probe-apply") { registry.shortenTypedefs() }
             renamed.must("apply renamed nothing") { this > 0 }
             // The alias usually sits in the target's own category as the typedef naming it, and folding
             // that typedef away is what frees the name — so a rename that lost the collision leaves a

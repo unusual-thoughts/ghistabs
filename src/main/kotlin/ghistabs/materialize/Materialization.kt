@@ -434,7 +434,7 @@ fun DataTypeRegistry.materializeAll(): Int {
  * Each declaration's own id resolves to that typedef, not to its target: gcc emits `ofstream os` as
  * `os:(28,23)` — the typedef's id — so resolving through to the target is what printed
  * `basic_ofstream<char,…>` for a variable declared `ofstream`. Independent of `OPT_SHORTEN_TYPEDEFS`,
- * which governs only the [TypedefShortener] rename pass; the declared type is the typedef either way.
+ * which governs only the [shortenTypedefs] rename pass; the declared type is the typedef either way.
  */
 private fun DataTypeRegistry.materializeTypedefs() {
     for ((ghidraName, asts) in types.namedTypedefs) {

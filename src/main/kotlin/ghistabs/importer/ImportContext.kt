@@ -16,7 +16,6 @@ import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.TypedefShortener
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import org.jetbrains.annotations.TestOnly
@@ -77,7 +76,6 @@ class ImportContext<Terminal : DiagnosticSink>(
     fun sources(harvest: Harvest) = SourceIndex(harvest, options.foldSources, this)
     fun hints(harvest: Harvest) = SourceHints(harvest, types(harvest), sources(harvest), this)
     fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
-    fun typedefShortener(registry: DataTypeRegistry) = TypedefShortener(registry, monitor)
     fun classApplier(registry: DataTypeRegistry) = ClassApplier(registry, program, resolver, monitor, this)
 
     /**
