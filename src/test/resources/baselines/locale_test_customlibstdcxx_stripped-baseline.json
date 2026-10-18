@@ -587,7 +587,7 @@
                 "do_put_2"
             ]
         },
-        "vtable-failed": {
+        "vtable-failed-truly-missing": {
             "min": 113,
             "max": 113,
             "degrades": [

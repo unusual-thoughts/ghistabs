@@ -39,7 +39,9 @@ class VtableUnlinkedIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val ctx = loaded.program.defaultContext()
         ctx.import()
 
-        val failures = ctx.diagnostics.degradationTargets()["vtable-failed"].orEmpty()
+        val failures = ctx.diagnostics.degradationTargets()
+            .filterKeys { it.startsWith("vtable-failed-") }
+            .values.flatten()
         (cls in failures) mustBe failed
     }
 
