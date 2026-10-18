@@ -542,6 +542,10 @@ class ClassApplier(
 
         vtableAddressByClass[qualifiedClassName]?.takeIf { it.address.isDefined() }?.let { return it }
 
+        if (!isLinkedHere(candidates)) {
+            debug("vtable-unlinked", "class '$name': neither its vtable nor any member of it is linked here")
+            return null
+        }
         val failureBucket = when {
             body.hasVTablePointerMarker && body.methods.none { it.virt == VirtKind.VIRTUAL } ->
                 "no-virtual-methods-flagged-but-marker-set"
@@ -561,6 +565,21 @@ class ClassApplier(
         )
 
         return null
+    }
+
+    /**
+     * Whether this class's vtable should be in the binary. One that a symbol names only as an external
+     * reference is in another object (`tinyxml_aout_gcc295.o`'s `TiXmlDocument`); one of a class none of
+     * whose members was linked was never emitted, since gcc lays a vtable beside its key function and any
+     * constructor stores its address (`stringbuf`, `__array_type_info` from libstdc++'s headers). Members
+     * resolve through [fallbackAbi]: [abi] is what this vtable's lookup is deciding.
+     */
+    private fun LocatedClass.isLinkedHere(candidates: List<String>): Boolean {
+        // Named but undefined: the defined ones were already taken.
+        if (candidates.any { resolver.resolve(it) != null } || qualifiedClassName in vtableAddressByClass) return false
+        return body.methods.any { m ->
+            fallbackAbi.physnameCandidates(m, qualifiedClassName).any { resolver.resolve(it)?.isDefined() == true }
+        }
     }
 
     /**
