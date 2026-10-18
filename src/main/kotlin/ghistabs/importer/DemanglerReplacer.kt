@@ -1,5 +1,6 @@
 package ghistabs.importer
 
+import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.database.data.DataTypeManagerDB
 import ghidra.program.database.data.replaceDataTypesBatched
@@ -470,6 +471,27 @@ class DemanglerReplacer(
     private val shortener by lazy {
         if (program.stabsTypedefsShortened) TemplateNameShortener(registry.typedefAliases()) else null
     }
+
+    /**
+     * The type we materialized for [t], by its spelling with template arguments, under its namespace when
+     * several share that. Ghidra's own [DemangledDataType.getDataType] looks a template up by its bare name
+     * (`allocator`, never `allocator<CryptoPP::Integer>`) and takes nothing outside the namespace's
+     * category, which a class whose stabs state no scope is never in: `std::__true_type` is
+     * `/algparam.cpp/multi/__true_type`. Its reference comes back a pointer to an empty `/Demangler` stand-in.
+     * A builtin has neither namespace nor template, and is Ghidra's.
+     */
+    fun registeredType(t: DemangledDataType): DataType? = when {
+        t.namespace == null && t.template == null -> null
+
+        else -> findByExactName(
+            ourSpelling(t.name + t.template?.toTemplate().orEmpty()),
+            CategoryPath.ROOT.extend(t.namespace?.fullName.orEmpty()),
+        )
+    }
+
+    /** [t] as a parameter's type: [registeredType] behind its pointers if we have it, else Ghidra's [parameterType]. */
+    fun parameterType(t: DemangledDataType): DataType? =
+        registeredType(t)?.let { t.decorated(it, dtm) }?.takeIf { it.isParameterSized } ?: t.parameterType(dtm)
 
     /** Exact DTM-name match for a demangler stub — no spelling normalization. */
     fun findByExactName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
