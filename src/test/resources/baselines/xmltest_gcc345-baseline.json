@@ -1,39 +1,5 @@
 {
     "counters": {
-        "array-count-substituted": {
-            "min": 28,
-            "max": 28,
-            "degrades": [
-                "Anon_locale_classes_11_189e19d3",
-                "Anon_locale_classes_11_707e0a5c",
-                "Anon_locale_classes_13_189e19d5",
-                "Anon_locale_classes_13_707e0a5e",
-                "Anon_locale_classes_14_189e19d6",
-                "Anon_locale_classes_14_707e0a5f",
-                "Anon_locale_classes_15_189e19d7",
-                "Anon_locale_classes_15_707e0a60",
-                "Anon_locale_classes_16_189e19d8",
-                "Anon_locale_classes_16_707e0a61",
-                "Anon_locale_classes_17_189e19d9",
-                "Anon_locale_classes_17_707e0a62",
-                "Anon_locale_classes_18_189e19da",
-                "Anon_locale_classes_18_707e0a63",
-                "Anon_locale_classes_36_73ac642c",
-                "Anon_locale_classes_36_f8eb9f46",
-                "Anon_locale_classes_38_73ac642e",
-                "Anon_locale_classes_38_f8eb9f48",
-                "Anon_locale_classes_39_73ac642f",
-                "Anon_locale_classes_39_f8eb9f49",
-                "Anon_locale_classes_40_73ac6430",
-                "Anon_locale_classes_40_f8eb9f4a",
-                "Anon_locale_classes_41_73ac6431",
-                "Anon_locale_classes_41_f8eb9f4b",
-                "Anon_locale_classes_42_73ac6432",
-                "Anon_locale_classes_42_f8eb9f4c",
-                "Anon_locale_classes_43_73ac6433",
-                "Anon_locale_classes_43_f8eb9f4d"
-            ]
-        },
         "base-empty-ebo": {
             "min": 27,
             "max": 27
@@ -55,8 +21,8 @@
             "max": 4
         },
         "data-no-coverage": {
-            "min": 63,
-            "max": 63
+            "min": 59,
+            "max": 59
         },
         "demangle-applied": {
             "min": 3752,
@@ -504,8 +470,8 @@
             "max": 2
         },
         "static-member-applied": {
-            "min": 149,
-            "max": 149
+            "min": 142,
+            "max": 142
         },
         "static-member-unresolved": {
             "min": 379,
