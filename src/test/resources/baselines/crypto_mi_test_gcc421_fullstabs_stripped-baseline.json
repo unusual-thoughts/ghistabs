@@ -1180,9 +1180,9 @@
                 "do_put_2"
             ]
         },
-        "vtable-failed": {
-            "min": 121,
-            "max": 121,
+        "vtable-failed-truly-missing": {
+            "min": 111,
+            "max": 111,
             "degrades": [
                 "__array_type_info",
                 "__class_type_info",
@@ -1214,8 +1214,6 @@
                 "bad_cast",
                 "bad_exception",
                 "bad_typeid",
-                "char_producer<char>",
-                "char_producer<wchar_t>",
                 "codecvt<char,char,int>",
                 "codecvt<wchar_t,char,int>",
                 "codecvt_byname<char,char,int>",
@@ -1240,7 +1238,6 @@
                 "ios_base",
                 "iostream",
                 "istream",
-                "istringstream",
                 "length_error",
                 "logic_error",
                 "messages<char>",
@@ -1269,7 +1266,6 @@
                 "numpunct_byname<wchar_t>",
                 "ofstream",
                 "ostream",
-                "ostringstream",
                 "out_of_range",
                 "overflow_error",
                 "range_error",
@@ -1280,8 +1276,6 @@
                 "stdio_sync_filebuf<char,std::char_traits<char>>",
                 "stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>",
                 "streambuf",
-                "stringbuf",
-                "stringstream",
                 "time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
                 "time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
                 "time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
@@ -1298,22 +1292,18 @@
                 "wios",
                 "wiostream",
                 "wistream",
-                "wistringstream",
                 "wofstream",
                 "wostream",
-                "wostringstream",
-                "wstreambuf",
-                "wstringbuf",
-                "wstringstream"
+                "wstreambuf"
             ]
-        },
-        "vtable-failed-truly-missing": {
-            "min": 121,
-            "max": 121
         },
         "vtable-skipped": {
             "min": 625,
             "max": 625
+        },
+        "vtable-unlinked": {
+            "min": 10,
+            "max": 10
         },
         "xref-base-tag-resolved": {
             "min": 2,
