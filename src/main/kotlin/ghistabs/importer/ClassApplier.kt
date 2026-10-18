@@ -538,9 +538,9 @@ class ClassApplier(
         val candidates = CxxAbi.vtableCandidates(name)
 
         val resolved = candidates.mapNotNull { sym -> resolver.resolve(sym)?.let { sym to it } }
-        resolved.find { (_, at) -> at.isDefined() }?.let { (sym, at) ->
-            return ResolvedVtable.of(qualifiedClassName, sym, at)
-        }
+        resolved.firstNotNullOfOrNull { (sym, at) ->
+            at.takeIf { it.isDefined() }?.let { ResolvedVtable.of(qualifiedClassName, sym, at) }
+        }?.let { return it }
 
         val indexed = vtableAddressByClass[qualifiedClassName]?.also {
             if (it.address.isDefined()) return it
@@ -568,10 +568,11 @@ class ClassApplier(
         // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
         // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
         degradation(
-            "vtable-failed",
+            "vtable-failed-$failureBucket",
             name,
-            "$failureBucket (tried ${candidates.joinToString()}); slots laid as $fallbackAbi",
+            "vtable not found (tried ${candidates.joinToString()}); slots laid as $fallbackAbi",
         )
+
         return null
     }
 
