@@ -587,12 +587,11 @@
                 "do_put_2"
             ]
         },
-        "vtable-failed": {
-            "min": 122,
-            "max": 122,
+        "vtable-failed-truly-missing": {
+            "min": 113,
+            "max": 113,
             "degrades": [
                 "MyCType",
-                "__array_type_info",
                 "__class_type_info",
                 "__codecvt_abstract_base<char,char,int>",
                 "__codecvt_abstract_base<wchar_t,char,int>",
@@ -600,18 +599,12 @@
                 "__concurrence_unlock_error",
                 "__ctype_abstract_base<char>",
                 "__ctype_abstract_base<wchar_t>",
-                "__enum_type_info",
-                "__function_type_info",
-                "__fundamental_type_info",
                 "__moneypunct_cache<char,false>",
                 "__moneypunct_cache<char,true>",
                 "__moneypunct_cache<wchar_t,false>",
                 "__moneypunct_cache<wchar_t,true>",
                 "__numpunct_cache<char>",
                 "__numpunct_cache<wchar_t>",
-                "__pbase_type_info",
-                "__pointer_to_member_type_info",
-                "__pointer_type_info",
                 "__si_class_type_info",
                 "__timepunct<char>",
                 "__timepunct<wchar_t>",
@@ -622,8 +615,6 @@
                 "bad_cast",
                 "bad_exception",
                 "bad_typeid",
-                "char_producer<char>",
-                "char_producer<wchar_t>",
                 "codecvt<char,char,int>",
                 "codecvt<wchar_t,char,int>",
                 "codecvt_byname<char,char,int>",
@@ -715,9 +706,9 @@
                 "wstringstream"
             ]
         },
-        "vtable-failed-truly-missing": {
-            "min": 122,
-            "max": 122
+        "vtable-unlinked": {
+            "min": 9,
+            "max": 9
         },
         "xref-base-tag-resolved": {
             "min": 2,
