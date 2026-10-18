@@ -1,8 +1,11 @@
 package ghistabs.integration
 
+import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.Demangler
+import ghistabs.formals
 import ghistabs.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -214,5 +217,28 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             "/Demangler/std stub should be replaced by the real candidate, " +
                 "not left ambiguous with the /stabs placeholder",
         )
+    }
+
+    /**
+     * crypto_mi_test_gcc421: gcc writes no N_PSYM for the unnamed `allocator` of `deque<unsigned>::_M_destroy_data`
+     * or the unnamed `__true_type` of `__destroy_aux`, so those slots take the mangled name's type. Ghidra's
+     * lookup looked for `allocator`, and for `__true_type` only under `/std`, and typed both `undefined4`.
+     */
+    @Test
+    fun `an unnamed parameter takes our type for its demangled spelling`() {
+        val program = builder.program
+        val registry = program.defaultContext().defaultTypeRegistry()
+        lateinit var allocator: DataType
+        lateinit var trueType: DataType
+        program.runTransaction("setup-test") {
+            allocator = registry.register(StructureDataType(CategoryPath("/std"), "allocator<unsigned_int>", 1))
+            trueType = registry.register(StructureDataType(CategoryPath("/algparam.cpp/multi"), "__true_type", 1))
+        }
+        val replacer = program.defaultContext().demanglerReplacer(registry)
+        fun third(mangled: String) = replacer.parameterType((Demangler.of(mangled) as DemangledFunction).formals[2])
+            .let { (it as? Pointer)?.dataType ?: it }
+
+        third("_ZNSt5dequeIjSaIjEE15_M_destroy_dataESt15_Deque_iteratorIjRjPjES5_RKS0_") mustBe allocator
+        third("_ZSt13__destroy_auxISt15_Deque_iteratorIjRjPjEEvT_S4_11__true_type") mustBe trueType
     }
 }
