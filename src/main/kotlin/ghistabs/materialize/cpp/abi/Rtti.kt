@@ -27,6 +27,8 @@ class Rtti(private val dtm: DataTypeManager) {
     private val bigEndian = dtm.dataOrganization.isBigEndian
     private val componentOffset = Itanium.vtablePrefixBytes(pointerSize)
 
+    private fun struct(name: String) = StructureDataType(ClassNaming.classDataTypesRoot, name, 0, dtm)
+
     /**
      * Reference layout for an Itanium typeinfo type named [name], keyed on both spellings it reaches
      * us by: gcc's internal `__*_type_info_pseudo` structs (from stab XRefs via `makePlaceholder`;
@@ -48,12 +50,12 @@ class Rtti(private val dtm: DataTypeManager) {
         }
     }
 
-    val classTi = StructureDataType(ClassNaming.classDataTypesRoot, "ClassTypeInfoStructure", 0, dtm).apply {
+    val classTi = struct("ClassTypeInfoStructure").apply {
         add(PointerTypedef(null, PointerDataType.dataType, -1, dtm, componentOffset), "classTypeinfoPtr", null)
         add(dtm.getPointer(CharDataType()), "typeinfoName", null)
         isPackingEnabled = true
     }
-    val siClassTi = StructureDataType(ClassNaming.classDataTypesRoot, "SiClassTypeInfoStructure", 0, dtm).apply {
+    val siClassTi = struct("SiClassTypeInfoStructure").apply {
         add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
         add(dtm.getPointer(CharDataType()), "typeinfoName", null)
         add(dtm.getPointer(classTi), BASE_TYPE, null)
@@ -61,14 +63,14 @@ class Rtti(private val dtm: DataTypeManager) {
     }
 
     /** `std::type_info` as a typeinfo that isn't a class's: a fundamental type's, an enum's, a function's. */
-    val typeInfo = StructureDataType(ClassNaming.classDataTypesRoot, "TypeInfoStructure", 0, dtm).apply {
+    val typeInfo = struct("TypeInfoStructure").apply {
         add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
         add(dtm.getPointer(CharDataType()), "typeinfoName", null)
         isPackingEnabled = true
     }
 
     /** `__pbase_type_info` as a pointer's: its cv-qualifier `__flags`, then the pointee's typeinfo. */
-    val pointerTi = StructureDataType(ClassNaming.classDataTypesRoot, "PointerTypeInfoStructure", 0, dtm).apply {
+    val pointerTi = struct("PointerTypeInfoStructure").apply {
         add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
         add(dtm.getPointer(CharDataType()), "typeinfoName", null)
         add(UnsignedIntegerDataType(), "flags", null)
@@ -77,12 +79,7 @@ class Rtti(private val dtm: DataTypeManager) {
     }
 
     /** A member pointer's: [pointerTi] and the class the member is of. */
-    val pointerToMemberTi = StructureDataType(
-        ClassNaming.classDataTypesRoot,
-        "PointerToMemberTypeInfoStructure",
-        0,
-        dtm,
-    ).apply {
+    val pointerToMemberTi = struct("PointerToMemberTypeInfoStructure").apply {
         for (c in pointerTi.definedComponents) add(c.dataType, c.fieldName, null)
         add(dtm.getPointer(classTi), "context", null)
         isPackingEnabled = true
@@ -90,7 +87,7 @@ class Rtti(private val dtm: DataTypeManager) {
 
     // `__base_class_type_info`: `__offset_flags`' low bits are the `__offset_flags_masks` (ABI §2.9.5),
     // virtual (0x1) then public (0x2), and the offset sits above the low byte.
-    val bClassTi = StructureDataType(ClassNaming.classDataTypesRoot, "BaseClassTypeInfoStructure", 0, dtm).apply {
+    val bClassTi = struct("BaseClassTypeInfoStructure").apply {
         add(dtm.getPointer(classTi), "classTypeinfoPtr", null)
 
         val (offsetBitSize, dataType) = when (pointerSize) {
@@ -113,12 +110,7 @@ class Rtti(private val dtm: DataTypeManager) {
         isPackingEnabled = true
     }
 
-    fun vmiClassTypeInfo(numBaseClasses: Int) = StructureDataType(
-        ClassNaming.classDataTypesRoot,
-        "VmiClassTypeInfoStructure$numBaseClasses",
-        0,
-        dtm,
-    ).apply {
+    fun vmiClassTypeInfo(numBaseClasses: Int) = struct("VmiClassTypeInfoStructure$numBaseClasses").apply {
         add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
         add(dtm.getPointer(CharDataType()), "typeinfoName", null)
         add(UnsignedIntegerDataType(), "flags", null)
