@@ -11,6 +11,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
+import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.DtmRegistry
 import ghistabs.materialize.cpp.*
 import ghistabs.materialize.cpp.abi.*
@@ -36,6 +37,20 @@ open class VtableSweeper(
 ) : DiagnosticSink by sink {
     internal val symtab = program.symbolTable
     internal val dtm = program.dataTypeManager
+
+    /**
+     * A demangled parameter's type as the stabs made it, where this sweep runs on an import's registry:
+     * gcc 3's stabs file `std::_Ios_Openmode` under no namespace, so Ghidra's lookup in `/std` misses it.
+     */
+    private val ours by lazy { (registry as? DataTypeRegistry)?.let { DemanglerReplacer(program, it, monitor, sink) } }
+
+    internal fun DemangledDataType.slotParameterType(category: String, degrades: String) =
+        parameterTypeOrUndefined(this, dtm, category, degrades) { t ->
+            when (val o = ours) {
+                null -> t.parameterType(dtm)
+                else -> o.parameterType(t)
+            }
+        }
 
     companion object {
         /** What a swept table's labels carry, so a class laying it later claims it ([isVtableClaimed]). */
@@ -435,8 +450,7 @@ open class VtableSweeper(
      *  target that has a linkage name and nothing else. Names but does not type an unmangled one. */
     private fun demangledDefinition(category: CategoryPath, name: String, linkage: String) =
         FunctionDefinitionDataType(category, name, dtm).apply {
-            fun DemangledDataType.dt() =
-                parameterTypeOrUndefined(this, dtm, "vftable-demangled-untyped", "$category/$name")
+            fun DemangledDataType.dt() = slotParameterType("vftable-demangled-untyped", "$category/$name")
             (Demangler.of(linkage) as? DemangledFunction)?.let { df ->
                 // The return's own type even where a parameter's would be refused: `void` has no size either.
                 df.returnType?.let { t -> returnType = runCatching { t.getDataType(dtm) }.getOrNull() ?: t.dt() }
