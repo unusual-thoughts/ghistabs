@@ -92,9 +92,9 @@ class ClassApplier(
         val vtable: ResolvedVtable? by lazy { if (isPoly) resolveVtableAddress() else null }
         val abi: CxxAbi get() = vtable?.abi ?: fallbackAbi
 
-        // Filled by reparentMethod, read back by the vtable plate-comment pass so a virtual's address
-        // isn't resolved twice.
-        val members = mutableMapOf<Method<*>, ResolvedMember?>()
+        // [resolveMember]'s answers, misses included, so the reparenting and plate-comment passes resolve
+        // each member once.
+        private val members = mutableMapOf<Method<*>, ResolvedMember?>()
 
         val name get() = located.className
         val body get() = located.classBody
@@ -108,9 +108,11 @@ class ClassApplier(
         // (no enclosing struct — see buildAndApplyVtable).
         val vftableCategory by lazy { ClassNaming.vftableCategory(ns) }
         val vftable: Structure by lazy { registry.vftableOf(located.vftablePath(types)).refiledUnder(vftableCategory) }
-        fun memberCandidates(m: Method<*>, anAbi: CxxAbi = abi) = anAbi.physnameCandidates(m, qualifiedClassName)
-        fun tryDemangleMember(m: Method<GlobalTypeId>) =
-            memberCandidates(m).firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
+        fun physnames(m: Method<*>) = abi.physnameCandidates(m, qualifiedClassName)
+
+        /** The first of [m]'s physnames that demangles, linked or not: a pure virtual has no symbol. */
+        fun demangledPhysname(m: Method<GlobalTypeId>) =
+            physnames(m).firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
 
         /**
          * The symbol [m] was emitted as and where it landed, or null if none of the ABI's spellings
@@ -119,10 +121,11 @@ class ClassApplier(
          * up — which is why both the reparenting pass and the vtable plate comments come through here
          * rather than reaching for [Method.mangled].
          */
-        fun resolveMember(m: Method<*>, anAbi: CxxAbi = abi): ResolvedMember? = members.getOrPut(m) {
-            memberCandidates(m, anAbi).firstNotNullOfOrNull { name ->
-                resolver.resolve(name)?.let { ResolvedMember(name, it) }
-            }
+        fun resolveMember(m: Method<*>): ResolvedMember? = if (m in members) {
+            members[m]
+        } else {
+            physnames(m).firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { ResolvedMember(name, it) } }
+                .also { members[m] = it }
         }
     }
 
@@ -366,7 +369,7 @@ class ClassApplier(
      * but the physname it would have still demangles. Null when none does, which leaves the slot `this`-only.
      */
     private fun LocatedClass.slotStubParams(m: Method<GlobalTypeId>, at: String): List<DataType>? =
-        tryDemangleMember(m)?.formalTypes(at) ?: run {
+        demangledPhysname(m)?.formalTypes(at) ?: run {
             degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
             null
         }
@@ -501,7 +504,7 @@ class ClassApplier(
 
     /** [m]'s parameter leaf types as [slotName] spells them, or null for none: gcc 2.x's `(void)` is none. */
     private fun LocatedClass.paramSpelling(m: Method<GlobalTypeId>): String? =
-        tryDemangleMember(m)?.parameters.orEmpty()
+        demangledPhysname(m)?.parameters.orEmpty()
             .joinToString("_") { (if (it.type.isUnsigned) "unsigned_" else "") + it.type.name.orEmpty() }
             .let { SymbolUtilities.replaceInvalidChars(it, true) }
             .takeIf { it.isNotEmpty() && it != "void" }
@@ -593,7 +596,9 @@ class ClassApplier(
         }
 
         // Members resolve through [fallbackAbi]: [abi] is what this vtable's lookup is deciding.
-        fun TypeDecl.Aggregate.Method<*>.linked() = resolveMember(this, fallbackAbi)?.addr?.isDefined() == true
+        fun TypeDecl.Aggregate.Method<*>.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
+            resolver.resolve(it)?.isDefined() == true
+        }
 
         // - A vtable a symbol names only as an external reference is in another object
         // - A vtable of a class none of whose members was linked was never emitted, since gcc lays a vtable
