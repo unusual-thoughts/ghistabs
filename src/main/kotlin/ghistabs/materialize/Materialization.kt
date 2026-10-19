@@ -358,7 +358,8 @@ fun DataTypeRegistry.signatureParams(params: List<GlobalTypeDecl>, at: String): 
 /**
  * Build a FunctionDefinition (not yet added to DTM) from stab types. Resolves
  * [ret] via [resolveRef] and [params] via [signatureParams], and applies [callingConvention] if the
- * program's CompilerSpec accepts it.
+ * program's CompilerSpec accepts it. [stubFormals] are the parameters after `this` for a gcc 2.x stub
+ * (`##<ret>;`), which states none; only the mangled name has them.
  */
 fun DataTypeRegistry.buildFunctionDefinition(
     category: CategoryPath,
@@ -366,6 +367,7 @@ fun DataTypeRegistry.buildFunctionDefinition(
     sig: TypeDecl.Callable<GlobalTypeId>,
     thisType: DataType? = null,
     at: String = name,
+    stubFormals: List<DataType> = emptyList(),
 ) = FunctionDefinitionDataType(category, name, dtm).apply {
     returnType = resolveRef(sig.ret) ?: run {
         degradation("function-ret-untyped", at, sig.ret.toString())
@@ -377,13 +379,16 @@ fun DataTypeRegistry.buildFunctionDefinition(
     val argDefs = signatureParams(sig.params, at).mapIndexed { i, dt ->
         ParameterDefinitionImpl(if (i == 0 && thisType != null) "this" else "arg$i", dt, null)
     }.toMutableList()
-    // Broken-emitter guard: gdb's read_args has the same complaint for stabs that
-    // omit the `this` param. Without this, a __thiscall FD with arity 0 silently
-    // produces a wrong-shaped signature.
+    // A method's list always starts with `this`. A stub states no list at all, and is gcc 2.x's
+    // normal form; any other method without one is gdb read_args' broken-emitter complaint. Without
+    // `this`, a __thiscall FD with arity 0 silently produces a wrong-shaped signature.
     if (thisType != null && argDefs.isEmpty()) {
         val safe = if (thisType is VoidDataType) PointerDataType(VoidDataType(), dtm) else thisType
         argDefs += ParameterDefinitionImpl("this", safe, null)
-        degradation("function-this-synthesized", at, "method signature carried no `this` param")
+        argDefs += stubFormals.mapIndexed { i, dt -> ParameterDefinitionImpl("arg${i + 1}", dt, null) }
+        if ((sig as? TypeDecl.Method)?.cls != null) {
+            degradation("function-this-synthesized", at, "method signature carried no `this` param")
+        }
     }
     setArguments(*argDefs.toTypedArray())
     // Skip unsupported conventions (e.g. __thiscall on x86-64 ELF would throw
