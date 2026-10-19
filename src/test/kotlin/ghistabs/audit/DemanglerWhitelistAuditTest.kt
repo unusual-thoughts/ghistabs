@@ -49,6 +49,10 @@ object DemanglerWhitelist {
         // locale facets forward-declared in non-libstdc++ fixtures (full instantiations elsewhere)
         "__ctype_abstract_base<char>",
         "stdio_filebuf<char,std::char_traits<char>>",
+        // tinyxml_aout_gcc258.o is tinyxml.cc alone: TiXmlParsingData is defined in tinyxmlparser.cc,
+        // so the object only names it in the physnames of the `Parse` virtuals whose vftable slots
+        // demangle their stub parameters. The executables link both and define it.
+        "TiXmlParsingData",
     )
 }
 
