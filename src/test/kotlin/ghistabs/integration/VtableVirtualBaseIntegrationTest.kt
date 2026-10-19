@@ -141,6 +141,29 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         (derived.getComponentAt(16).dataType as Structure).getComponentAt(4).dataType.name mustBe "Core"
     }
 
+    /**
+     * A forward-declared `basic_ifstream<char>` is sized 112 off its deriving class's gap, and its own
+     * vtable puts `ios` at 112: the struct is its non-virtual part, the offset agrees with it.
+     */
+    @Test
+    fun aVirtualBaseRightPastTheStructIsNoUnreadableOffset() {
+        layRtti(vbaseOffset = 16)
+        val program = builder.program
+        val ctx = program.defaultContext()
+        program.runTransaction {
+            for (sym in program.symbolTable.symbolIterator.iterator().asSequence().toList()) {
+                if (sym.name.startsWith("_Z")) program.applyDemangling(sym.address, sym.name)
+            }
+            program.dataTypeManager.addDataType(
+                StructureDataType(CategoryPath.ROOT, "Derived", 16),
+                DataTypeConflictHandler.DEFAULT_HANDLER,
+            )
+            VtableVirtualBases(program, ctx).layAll() mustBe 0
+        }
+
+        ctx.diagnostics.degradationTargets()["vbase-offset-unreadable"].orEmpty() mustBe emptyList()
+    }
+
     private companion object {
         /** Polymorphic, as a class with a vtable is: one virtual, `f`, in slot 0. */
         const val DERIVED = "Derived:T(0,3)=s32!1,020,(0,2);x:(0,1),64,32;" +
