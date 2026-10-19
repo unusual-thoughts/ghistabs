@@ -47,8 +47,8 @@ class VtableVirtualBases(
         }
 
     private fun lay(struct: Structure, record: VtableRecord, vbase: Rtti.Reader.Base, at: String, count: Int): Boolean {
-        val vbaseAt =
-            record.vbaseOffset(program, vbase)?.toInt().takeIf { isInside(struct, it, vbase, at) } ?: return false
+        val vbaseAt = record.vbaseOffset(program, vbase)?.toInt()
+            .takeIf { struct.isInside(it, vbase, at) } ?: return false
 
         val (found, foundWithin) = definedPart(vbase) ?: return false.also {
             degradation("vbase-undefined", at, "nothing defines it or a base of it")
@@ -104,29 +104,28 @@ class VtableVirtualBases(
             description = "Defined nowhere: built off its typeinfo, its size guessed from the $room bytes $at leaves it"
         }
         degradation("vbase-size-guessed", at, "$room bytes from the deriving class")
-        return struct.takeIf(dtm::contains)
-            ?: dtm.resolve(
-                struct,
-                DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER,
-            ) as? Structure
+        return struct.takeIf(dtm::contains) ?: dtm.resolve(
+            struct,
+            DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER,
+        ) as? Structure
     }
 
-    /** Whether [vbaseAt] puts [vbase] inside [struct], logging why not where it doesn't. */
-    private fun isInside(struct: Structure, vbaseAt: Int?, vbase: Rtti.Reader.Base, at: String): Boolean = when {
+    /** Whether [vbaseAt] puts [vbase] inside [this], logging why not where it doesn't. */
+    private fun Structure.isInside(vbaseAt: Int?, vbase: Rtti.Reader.Base, at: String): Boolean = when (vbaseAt) {
         // A nearly-empty virtual base can be the primary base, sharing the class's vptr at 0 (CryptoPP's
         // CryptoMaterial under CryptoParameters): there is nothing of its own to lay.
-        vbaseAt == 0 -> false.also { debug("vbase-primary-from-vtable") }
+        0 -> false.also { debug("vbase-primary-from-vtable") }
+
+        in 1..<length -> true
 
         // Right past the struct's end: it holds only the non-virtual part, as a forward-declared base
         // sized off the gap its deriving class leaves does, and the offset agrees with that guess. The
         // deriving class, whose object the virtual base is part of, lays it there.
-        vbaseAt == struct.length -> false.also { debug("vbase-past-base-subobject", at) }
+        length -> false.also { debug("vbase-past-base-subobject", at) }
 
-        vbaseAt == null || vbaseAt < 0 || vbaseAt > struct.length -> false.also {
+        else -> false.also {
             degradation("vbase-offset-unreadable", at, "vtable word at ${vbase.offset} reads $vbaseAt")
         }
-
-        else -> true
     }
 
     private fun Structure.takeAcceptable() = takeUnless { it.isZeroLength }
