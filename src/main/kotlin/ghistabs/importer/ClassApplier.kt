@@ -335,12 +335,12 @@ class ClassApplier(
      * among them: the demangler reports a member's formals only.
      */
     private fun stubParams(mangled: String, at: String): List<DataType> = (Demangler.of(mangled) as? DemangledFunction)
-        ?.let { formalTypes(it, at) }
+        ?.formalTypes( at)
         .orEmpty()
         .also { if (it.isNotEmpty()) debug("method-stub-params-recovered", "$at: ${it.size} from $mangled") }
 
-    private fun formalTypes(f: DemangledFunction, at: String) =
-        f.formals.map { parameterTypeOrUndefined(it, dtm, "method-stub-param-untyped", at) }
+    private fun DemangledFunction.formalTypes(at: String) =
+        formals.map { parameterTypeOrUndefined(it, dtm, "method-stub-param-untyped", at) }
 
     /**
      * [stubParams] for a virtual slot, whose member need not be linked: a pure virtual has no symbol,
@@ -349,7 +349,7 @@ class ClassApplier(
     private fun LocatedClass.slotStubParams(m: Method<GlobalTypeId>, at: String): List<DataType>? =
         abi.physnameCandidates(m, qualifiedClassName)
             .firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
-            ?.let { formalTypes(it, at) }
+            ?.formalTypes(at)
             ?: run {
                 degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
                 null
