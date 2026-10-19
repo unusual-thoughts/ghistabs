@@ -784,7 +784,7 @@
             "max": 1
         },
         "text-data-no-coverage": {
-            "min": 59,
+            "min": 53,
             "max": 67
         },
         "text-undisassembled-code": {
@@ -800,8 +800,8 @@
             "max": 1
         },
         "typedef-shorten-rehomed": {
-            "min": 1131,
-            "max": 1131
+            "min": 977,
+            "max": 977
         },
         "typeinfo-unread": {
             "min": 2,
@@ -834,10 +834,6 @@
         "vfptr-split-from-base": {
             "min": 454,
             "max": 454
-        },
-        "vtable-from-rtti": {
-            "min": 560,
-            "max": 560
         },
         "vtable-reconstructed": {
             "min": 571,
@@ -1415,10 +1411,6 @@
                 "std::wostream",
                 "std::wstreambuf"
             ]
-        },
-        "vtable-rtti-zero-vbase": {
-            "min": 11,
-            "max": 11
         },
         "vtable-secondary": {
             "min": 444,

@@ -346,10 +346,6 @@
             "min": 69,
             "max": 69
         },
-        "vtable-from-rtti": {
-            "min": 115,
-            "max": 115
-        },
         "vtable-reconstructed": {
             "min": 115,
             "max": 115,

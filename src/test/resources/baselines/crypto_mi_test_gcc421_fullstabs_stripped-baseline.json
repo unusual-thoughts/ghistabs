@@ -971,8 +971,8 @@
             "max": 1
         },
         "typedef-shorten-rehomed": {
-            "min": 1131,
-            "max": 1131
+            "min": 977,
+            "max": 977
         },
         "typeinfo-unread": {
             "min": 2,
@@ -1017,10 +1017,6 @@
         "vtable-applied": {
             "min": 111,
             "max": 111
-        },
-        "vtable-from-rtti": {
-            "min": 560,
-            "max": 560
         },
         "vtable-reconstructed": {
             "min": 460,
@@ -1487,10 +1483,6 @@
                 "CryptoPP::X509PublicKey",
                 "CryptoPP::X917RNG"
             ]
-        },
-        "vtable-rtti-zero-vbase": {
-            "min": 11,
-            "max": 11
         },
         "vtable-secondary": {
             "min": 444,

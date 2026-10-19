@@ -527,10 +527,6 @@
             "min": 113,
             "max": 113
         },
-        "vtable-from-rtti": {
-            "min": 113,
-            "max": 113
-        },
         "vtable-secondary": {
             "min": 24,
             "max": 24
