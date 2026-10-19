@@ -8,7 +8,6 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.Level
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.get
 import ghistabs.materialize.cpp.abi.RttiSymbols
@@ -36,7 +35,7 @@ class RttiSymbolsAnalyzer :
     override fun canAnalyze(program: Program) = !program[RTTI_SYMBOLS_RESTORED] && GnuDemangler().canDemangle(program)
 
     override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
-        val laid = RttiSymbols.restoreOnce(program, MessageLogSink(log, Level.DEBUG, NAME))
+        val laid = RttiSymbols.restoreOnce(program, MessageLogSink(log, originator = NAME))
         if (laid > 0) log.appendMsg(NAME, "labelled $laid vtable(s)")
         return true
     }
