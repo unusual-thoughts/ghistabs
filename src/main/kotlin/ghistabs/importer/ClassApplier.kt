@@ -94,7 +94,7 @@ class ClassApplier(
 
         // Filled by reparentMethod, read back by the vtable plate-comment pass so a virtual's address
         // isn't resolved twice.
-        val memberAddresses = mutableMapOf<Method<GlobalTypeId>, Address>()
+        val members = mutableMapOf<Method<*>, ResolvedMember?>()
 
         val name get() = located.className
         val body get() = located.classBody
@@ -108,6 +108,35 @@ class ClassApplier(
         // (no enclosing struct — see buildAndApplyVtable).
         val vftableCategory by lazy { ClassNaming.vftableCategory(ns) }
         val vftable: Structure by lazy { registry.vftableOf(located.vftablePath(types)).refiledUnder(vftableCategory) }
+        fun memberCandidates(m: Method<*>, anAbi: CxxAbi = abi) = anAbi.physnameCandidates(m, qualifiedClassName)
+        fun tryDemangleMember(m: Method<GlobalTypeId>) =
+            memberCandidates(m).firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
+
+        /**
+         * The symbol [m] was emitted as and where it landed, or null if none of the ABI's spellings
+         * resolve. Not the same question as "what does the stab state": under gcc 2.x the physname field
+         * holds only the mangled argument list, so the symbol has to be composed before it can be looked
+         * up — which is why both the reparenting pass and the vtable plate comments come through here
+         * rather than reaching for [Method.mangled].
+         */
+        fun resolveMember(m: Method<*>, anAbi: CxxAbi = abi): ResolvedMember? = members.getOrPut(m) {
+            memberCandidates(m, anAbi).firstNotNullOfOrNull { name ->
+                resolver.resolve(name)?.let { ResolvedMember(name, it) }
+            }
+        }
+    }
+
+    private inner class ResolvedMember(val mangledName: String, val addr: Address) {
+        fun func(): Function? = program.functionManager.getFunctionAt(addr)
+        fun demangled() = Demangler.of(mangledName) as? DemangledFunction
+
+        /**
+         * The parameter types [mangledName] carries, for a stub method whose stab states none. `this` is not
+         * among them: the demangler reports a member's formals only.
+         */
+        fun stubParams(at: String): List<DataType> = demangled()
+            ?.formalTypes(at).orEmpty()
+            .also { if (it.isNotEmpty()) debug("method-stub-params-recovered", "$at: ${it.size} from $mangledName") }
     }
 
     /**
@@ -215,35 +244,34 @@ class ClassApplier(
      */
     private fun LocatedClass.reparentMethod(m: Method<GlobalTypeId>) {
         val at = name.member(m.name)
-        val (mangled, addr) = resolveMember(m) ?: run {
+        val member = resolveMember(m) ?: run {
             return if (abi.isImplicitMember(m, qualifiedClassName)) {
                 debug("method-implicit-not-emitted")
             } else {
                 debug("unresolved-symbol", "method ${m.mangled ?: m.name} (in $name)")
             }
         }
-        memberAddresses[m] = addr
-        val func = program.functionManager.getFunctionAt(addr) ?: run {
-            val (tag, level) = if (abi.isInlineStdMember(mangled)) {
+        val func = member.func() ?: run {
+            val (tag, level) = if (abi.isInlineStdMember(member.mangledName)) {
                 "unresolved-symbol-inlined-std" to Level.DEBUG
             } else {
                 "unresolved-symbol" to Level.WARN
             }
-            return log(tag, "no Function at $addr for $mangled", level, addr)
+            return log(tag, "no Function at ${member.addr} for ${member.mangledName}", level, member.addr)
         }
 
         // Re-parent + rename via Ghidra's demangler (reuses the GhidraClass leaf
         // ensureClassNamespace already created). Signature/calling-convention application stays
         // off (Demangler's defaults): the stab has richer types than the mangled name, and our
         // __thiscall choice below must win.
-        if (!program.applyDemangling(addr, mangled)) {
+        if (!program.applyDemangling(member.addr, member.mangledName)) {
             func.parentNamespace = ns
-            val fallbackName = abi.specialMemberDisplayName(mangled, name) ?: m.name
+            val fallbackName = abi.specialMemberDisplayName(member.mangledName, name) ?: m.name
             if (func.name != fallbackName) func.setName(fallbackName, source)
             degradation(
                 "method-demangle-fallback",
                 at,
-                "demangler did not apply to $mangled",
+                "demangler did not apply to ${member.mangledName}",
                 func.entryPoint,
             )
         } else if (shortener != null && func.parentNamespace != ns) {
@@ -317,7 +345,7 @@ class ClassApplier(
         // Guarded on emptiness rather than on stub-ness, which costs nothing — a genuinely nil-ary
         // member demangles to no parameters either.
         val formals = registry.signatureParams(paramDecls, at).ifEmpty {
-            stubParams(mangled, at)
+            member.stubParams(at)
         }.mapIndexed { i, pdt ->
             ParameterImpl(priorNames.getOrNull(i) ?: "arg$i", pdt, program, source)
         }
@@ -330,15 +358,6 @@ class ClassApplier(
         )
     }
 
-    /**
-     * The parameter types [mangled] carries, for a stub method whose stab states none. `this` is not
-     * among them: the demangler reports a member's formals only.
-     */
-    private fun stubParams(mangled: String, at: String): List<DataType> = (Demangler.of(mangled) as? DemangledFunction)
-        ?.formalTypes( at)
-        .orEmpty()
-        .also { if (it.isNotEmpty()) debug("method-stub-params-recovered", "$at: ${it.size} from $mangled") }
-
     private fun DemangledFunction.formalTypes(at: String) =
         formals.map { parameterTypeOrUndefined(it, dtm, "method-stub-param-untyped", at) }
 
@@ -347,13 +366,10 @@ class ClassApplier(
      * but the physname it would have still demangles. Null when none does, which leaves the slot `this`-only.
      */
     private fun LocatedClass.slotStubParams(m: Method<GlobalTypeId>, at: String): List<DataType>? =
-        abi.physnameCandidates(m, qualifiedClassName)
-            .firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
-            ?.formalTypes(at)
-            ?: run {
-                degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
-                null
-            }
+        tryDemangleMember(m)?.formalTypes(at) ?: run {
+            degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
+            null
+        }
 
     private fun LocatedClass.buildAndApplyVtable() {
         val declared = types.collectAllVirtuals(body)
@@ -400,29 +416,27 @@ class ClassApplier(
         // method composes its symbol from the base's name — spelling it with the derived class's
         // invents a symbol that was never emitted. Each base plates its own on its own pass.
         virtuals.filterValues { m -> body.methods.any { it === m } }.forEach { (slot, m) ->
-            val mAddr = memberAddresses[m] ?: resolveMember(m)?.second
-            if (mAddr != null) {
-                val func = program.functionManager.getFunctionAt(mAddr)
-                if (func != null) {
-                    program.listing.setComment(
+            when (val resolved = resolveMember(m)) {
+                null -> debug(
+                    "vtable-virtual-no-impl",
+                    "virtual method '${m.name}' in $name has no resolvable implementation " +
+                        "(pure virtual or DLL import); slot type still applied",
+                )
+
+                else -> when (val func = resolved.func()) {
+                    null -> debug(
+                        "vtable-virtual-no-function",
+                        "virtual method ${m.name} in $name not found",
+                        resolved.addr,
+                    )
+
+                    else -> program.listing.setComment(
                         func.entryPoint,
                         CommentType.PLATE,
                         "virtual ${m.name}; ${ClassNaming.vftableName(name)} offset " +
                             "${abi.slotOffset(slot, program.defaultPointerSize)}",
                     )
-                } else {
-                    debug(
-                        "vtable-virtual-no-function",
-                        "virtual method ${m.name} in $name not found",
-                        mAddr,
-                    )
                 }
-            } else {
-                debug(
-                    "vtable-virtual-no-impl",
-                    "virtual method '${m.name}' in $name has no resolvable implementation " +
-                        "(pure virtual or DLL import); slot type still applied",
-                )
             }
         }
     }
@@ -487,9 +501,7 @@ class ClassApplier(
 
     /** [m]'s parameter leaf types as [slotName] spells them, or null for none: gcc 2.x's `(void)` is none. */
     private fun LocatedClass.paramSpelling(m: Method<GlobalTypeId>): String? =
-        abi.physnameCandidates(m, qualifiedClassName)
-            .firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
-            ?.parameters.orEmpty()
+        tryDemangleMember(m)?.parameters.orEmpty()
             .joinToString("_") { (if (it.type.isUnsigned) "unsigned_" else "") + it.type.name.orEmpty() }
             .let { SymbolUtilities.replaceInvalidChars(it, true) }
             .takeIf { it.isNotEmpty() && it != "void" }
@@ -581,9 +593,7 @@ class ClassApplier(
         }
 
         // Members resolve through [fallbackAbi]: [abi] is what this vtable's lookup is deciding.
-        fun TypeDecl.Aggregate.Method<*>.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
-            resolver.resolve(it)?.isDefined() == true
-        }
+        fun TypeDecl.Aggregate.Method<*>.linked() = resolveMember(this, fallbackAbi)?.addr?.isDefined() == true
 
         // - A vtable a symbol names only as an external reference is in another object
         // - A vtable of a class none of whose members was linked was never emitted, since gcc lays a vtable
@@ -609,17 +619,6 @@ class ClassApplier(
 
         return null
     }
-
-    /**
-     * The symbol [m] was emitted as and where it landed, or null if none of the ABI's spellings
-     * resolve. Not the same question as "what does the stab state": under gcc 2.x the physname field
-     * holds only the mangled argument list, so the symbol has to be composed before it can be looked
-     * up — which is why both the reparenting pass and the vtable plate comments come through here
-     * rather than reaching for [Method.mangled].
-     */
-    private fun LocatedClass.resolveMember(m: Method<GlobalTypeId>): Pair<String, Address>? =
-        abi.physnameCandidates(m, qualifiedClassName)
-            .firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { name to it } }
 
     /** What every ABI question falls back to for a class whose own vtable symbol never resolved. */
     private val fallbackAbi: CxxAbi by lazy {
@@ -696,7 +695,7 @@ private fun Program.refileClassDataTypes(longPath: List<String>, short: String) 
     val from = dataTypeManager.getCategory(ClassNaming.vftableCategory(longPath)) ?: return
     val to = ClassNaming.vftableCategory(longPath.dropLast(1) + short)
     val leaf = longPath.last()
-    if (dataTypeManager.getCategory(to) == null) runCatching { from.setName(short) }
+    if (dataTypeManager.getCategory(to) == null) runCatching { from.name = short }
     val category = dataTypeManager.getCategory(to) ?: return
     for (dt in from.dataTypes.toList() + category.dataTypes.toList()) {
         runCatching { if (dt.categoryPath != to) dt.categoryPath = to }
