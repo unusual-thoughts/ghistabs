@@ -1,12 +1,16 @@
 package ghistabs.integration
 
+import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghidra.util.task.TaskMonitor
 import ghistabs.LoadedProgram
+import ghistabs.entrypoints.RttiSymbolsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.loadProgram
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.vtableRecord
+import ghistabs.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -30,13 +34,29 @@ class RttiSymbolsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         if (::loaded.isInitialized) loaded.close()
     }
 
+    /** By the analyzer, ahead of everything, or by a stabs import run before analysis. */
     @ParameterizedTest
-    @CsvSource("0x492400, 0x492408", "0x492700, 0x49270c")
-    fun `a stripped binary's vtable is found through its typeinfo`(start: String, addressPoint: String) {
+    @CsvSource(
+        "0x492400, 0x492408, true",
+        "0x492700, 0x49270c, true",
+        "0x492400, 0x492408, false",
+        "0x492700, 0x49270c, false",
+    )
+    fun `a stripped binary's vtable is found through its typeinfo`(
+        start: String,
+        addressPoint: String,
+        analyzer: Boolean,
+    ) {
         val fixture = "xmltest_gcc421_fullstabs_stripped.exe"
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loaded = loadProgram(File("src/test/resources/binaries/$fixture"))
-        program.defaultContext().import()
+        if (analyzer) {
+            program.runTransaction("rtti-symbols") {
+                RttiSymbolsAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog())
+            }
+        } else {
+            program.defaultContext().import()
+        }
 
         val at = program.addressFactory.defaultAddressSpace.getAddress(start)
         val named = program.symbolTable.getSymbols(at)

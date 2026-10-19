@@ -1,11 +1,16 @@
 package ghistabs.materialize.cpp.abi
 
+import ghidra.app.util.bin.BinaryReader
+import ghidra.app.util.bin.MemoryByteProvider
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
-import ghidra.program.model.mem.MemoryBlock
 import ghidra.program.model.symbol.SourceType
+import ghistabs.BoolOption
 import ghistabs.Demangler
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.get
+import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.set
 import kotlin.math.abs
 
 /** Longest typeinfo name read; CryptoPP's deepest template instantiations run to a few hundred bytes. */
@@ -39,65 +44,92 @@ private val CLASS_TYPE_NAME = Regex("[0-9NS][A-Za-z0-9_]*")
  * Only reads non-executable blocks for the RTTI: an old i386 ELF linking `.rodata` into text has its
  * symbols anyway. Leaves any address something already named alone, so an unstripped binary is untouched.
  */
-class RttiSymbols(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
+class RttiSymbols(
+    private val program: Program,
+    sink: DiagnosticSink,
+    /** With no mangled symbol to tell the ABI by, only go ahead once a name only Itanium spells turns up. */
+    private val itaniumUnproven: Boolean = false,
+) : DiagnosticSink by sink {
     private val ptr = program.defaultPointerSize
-    private val bigEndian = program.language.isBigEndian
     private val space = program.addressFactory.defaultAddressSpace
-    private val data = program.memory.blocks.filter { it.isInitialized && !it.isExecute }.map(::Bytes)
-    private val code = program.memory.blocks.filter { it.isExecute }.map { it.start.offset..it.end.offset }
+    private val memory = program.memory
 
-    private class Bytes(block: MemoryBlock) {
-        val start = block.start.offset
-        val bytes = ByteArray(block.size.toInt()).also { block.getBytes(block.start, it) }
-        operator fun contains(offset: Long) = offset - start in bytes.indices
-    }
+    /** Reads memory where it lies, indexed by offset into the default space, with nothing copied out. */
+    private val reader = BinaryReader(MemoryByteProvider(memory, space), !program.language.isBigEndian)
 
-    /** The word at [offset], unsigned, or null outside the data blocks. */
-    private fun word(offset: Long): Long? = data.firstOrNull { offset in it && offset + ptr - 1 in it }?.let { b ->
-        val at = (offset - b.start).toInt()
-        (0 until ptr).fold(0L) { acc, i ->
-            val byte = b.bytes[at + if (bigEndian) i else ptr - 1 - i].toLong() and 0xff
-            (acc shl 8) or byte
-        }
-    }
+    private fun isData(addr: Address) = memory.getBlock(addr)?.let { it.isInitialized && !it.isExecute } == true
+
+    private fun isCode(addr: Address) = memory.getBlock(addr)?.isExecute == true
+
+    private fun Address.plusWords(n: Int): Address? = plusOrNull(n.toLong() * ptr)
+
+    private fun Address.lastByteOfWord(): Address? = plusOrNull(ptr - 1L)
+
+    /** The word at [addr], unsigned, or null unless it lies whole in one data block. */
+    private fun word(addr: Address): Long? = memory.getBlock(addr)
+        ?.takeIf { it.isInitialized && !it.isExecute && addr.lastByteOfWord()?.let(it::contains) == true }
+        ?.let { reader.readUnsignedValue(addr.offset, ptr) }
 
     /** [word], sign-extended from the pointer width. */
-    private fun signedWord(offset: Long) = word(offset)?.let { if (ptr == 4) it.toInt().toLong() else it }
+    private fun signedWord(addr: Address) = word(addr)?.let { if (ptr == 4) it.toInt().toLong() else it }
 
-    private fun isData(offset: Long) = data.any { offset in it }
+    /** [word] as the address it points at, if any. */
+    private fun pointer(addr: Address): Address? = word(addr)?.let { runCatching { space.getAddress(it) }.getOrNull() }
 
-    private fun isCode(offset: Long) = code.any { offset in it }
+    private fun Address.plusOrNull(by: Long): Address? = runCatching { addNoWrap(by) }.getOrNull()
 
     /** Every aligned word in the data blocks that points into them, by what it points at. */
-    private val sitesByTarget: Map<Long, List<Long>> by lazy {
-        val sites = HashMap<Long, MutableList<Long>>()
-        for (b in data) {
-            val first = b.start + (ptr - b.start % ptr) % ptr
-            for (site in first..b.start + b.bytes.size - ptr step ptr.toLong()) {
-                val target = word(site) ?: continue
-                if (isData(target)) sites.getOrPut(target) { mutableListOf() }.add(site)
+    private val sitesByTarget: Map<Address, List<Address>> by lazy {
+        val sites = HashMap<Address, MutableList<Address>>()
+        for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
+            var site = b.start.add((ptr - b.start.offset % ptr) % ptr)
+            while (site.lastByteOfWord()?.let(b::contains) == true) {
+                val target = runCatching { space.getAddress(reader.readUnsignedValue(site.offset, ptr)) }.getOrNull()
+                if (target != null && isData(target)) sites.getOrPut(target) { mutableListOf() }.add(site)
+                site = site.plusWords(1) ?: break
             }
         }
         sites
     }
 
-    /** The NUL-terminated class name at [offset], or null if what is there can't be one. */
-    private fun className(offset: Long): String? {
-        val b = data.firstOrNull { offset in it } ?: return null
-        val from = (offset - b.start).toInt()
-        val end = (from until minOf(b.bytes.size, from + MAX_TYPE_NAME)).firstOrNull { b.bytes[it] == 0.toByte() }
-            ?: return null
-        return String(b.bytes, from, end - from, Charsets.ISO_8859_1).takeIf(CLASS_TYPE_NAME::matches)
+    /** The NUL-terminated class name at [addr], or null if what is there can't be one. */
+    private fun className(addr: Address): String? {
+        val block = memory.getBlock(addr) ?: return null
+        val length = (0 until minOf(MAX_TYPE_NAME.toLong(), block.end.subtract(addr) + 1))
+            .firstOrNull { reader.readByte(addr.offset + it) == 0.toByte() } ?: return null
+        return reader.readAsciiString(addr.offset, length.toInt()).takeIf(CLASS_TYPE_NAME::matches)
+    }
+
+    companion object {
+        val RTTI_SYMBOLS_RESTORED = BoolOption("RTTI Symbols Restored", "Stripped RTTI labels already put back.", false)
+
+        /** Typeinfo names only Itanium spells: a nested name, or one in `std`. gcc 2.x writes `Q2…`, `9type_info`. */
+        private val ITANIUM_ONLY_NAME = Regex("N.*E|St.*")
+
+        /**
+         * [restore] on an Itanium binary, once: early analysis does it ([ghistabs.entrypoints.RttiSymbolsAnalyzer]),
+         * and a stabs import run before analysis does it itself. gcc 2.x builds its typeinfo at run time, so a
+         * name string in its data proves nothing; a stripped binary may have no mangled symbol left to say which
+         * ABI it is, and then a name only Itanium spells has to. Returns how many vtables were labelled.
+         */
+        fun restoreOnce(program: Program, sink: DiagnosticSink): Int {
+            if (program[RTTI_SYMBOLS_RESTORED]) return 0
+            program[RTTI_SYMBOLS_RESTORED] = true
+            val abi = program.symbolTable.prevailingAbi()
+            if (abi != null && abi != Itanium) return 0
+            return RttiSymbols(program, sink, itaniumUnproven = abi == null).restore()
+        }
     }
 
     /** Labels every class typeinfo, its name, and its vtable that lack one; returns how many vtables. */
     fun restore(): Int {
-        val names = HashMap<Long, String?>()
+        val names = HashMap<Address, String?>()
         val typeinfos = sitesByTarget.flatMap { (target, sites) ->
             val name = names.getOrPut(target) { className(target) } ?: return@flatMap emptyList()
-            sites.filter { site -> word(site - ptr)?.let(::isData) == true }
-                .map { site -> Triple(site - ptr, target, name) }
+            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { pointer(it)?.let(::isData) == true } }
+                .map { typeinfo -> Triple(typeinfo, target, name) }
         }.filter { (_, _, name) -> Demangler.of(Itanium.TYPEINFO_PREFIX + name) != null }
+        if (itaniumUnproven && typeinfos.none { ITANIUM_ONLY_NAME.matches(it.third) }) return 0
         // A name two typeinfos claim can't say which is the class's own; neither is labelled.
         val unique = typeinfos.groupBy { it.third }.values.mapNotNull { it.singleOrNull() }
         for ((typeinfo, nameAt, name) in unique) {
@@ -106,33 +138,32 @@ class RttiSymbols(private val program: Program, sink: DiagnosticSink) : Diagnost
         }
         val tops = unique.associate { (typeinfo, _, name) -> name to (typeinfo to primaryCandidates(typeinfo)) }
         val settled = tops.values.mapNotNull { (_, candidates) -> candidates.singleOrNull() }
-        val among = (settled.minOrNull() ?: 0L)..(settled.maxOrNull() ?: 0L)
+        val among = settled.minOrNull()?.let { lo -> lo..settled.max() }
         val laid = tops.mapNotNull { (name, found) ->
             val (typeinfo, candidates) = found
-            val top = candidates.singleOrNull() ?: candidates.filter { it in among }.singleOrNull() ?: run {
-                if (candidates.isNotEmpty()) {
-                    debug("vtable-rtti-ambiguous", "$name: ${candidates.map(::at)}", at(typeinfo))
+            val top =
+                candidates.singleOrNull() ?: candidates.filter { among != null && it in among }.singleOrNull() ?: run {
+                    if (candidates.isNotEmpty()) debug("vtable-rtti-ambiguous", "$name: $candidates", typeinfo)
+                    return@mapNotNull null
                 }
-                return@mapNotNull null
-            }
             if (!label(prefixStart(top), Itanium.VTABLE_PREFIX + name)) return@mapNotNull null
             Triple(name, typeinfo, top)
         }
         // Once every typeinfo and vtable is labelled, the typeinfos can be read for where they put their
         // vbase offsets, which a run of zeros in front of offset_to_top hides. Where the true start was
         // named all along (an unstripped binary), the label just laid is a duplicate and goes.
-        val reader = Rtti.Reader(program)
+        val rtti = Rtti.Reader(program)
         val kept = laid.filter { (name, typeinfo, top) ->
             val start = prefixStart(top)
-            val lowest = reader.virtualBasesOf(at(typeinfo)).minOfOrNull { it.offset }
-            val vbaseStart = lowest?.let { top + 2L * ptr + it }?.takeIf { it < start }
+            val lowest = rtti.virtualBasesOf(typeinfo).minOfOrNull { it.offset }
+            val vbaseStart = lowest?.let { top.plusWords(2)?.plusOrNull(it) }?.takeIf { it < start }
             if (vbaseStart == null) {
-                debug("vtable-from-rtti", name, at(start))
+                debug("vtable-from-rtti", name, start)
                 return@filter true
             }
-            program.symbolTable.getSymbol(Itanium.VTABLE_PREFIX + name, at(start), null)?.delete()
+            program.symbolTable.getSymbol(Itanium.VTABLE_PREFIX + name, start, null)?.delete()
             label(vbaseStart, Itanium.VTABLE_PREFIX + name).also {
-                if (it) debug("vtable-rtti-zero-vbase", name, at(vbaseStart))
+                if (it) debug("vtable-rtti-zero-vbase", name, vbaseStart)
             }
         }
         return kept.size
@@ -144,24 +175,24 @@ class RttiSymbols(private val program: Program, sink: DiagnosticSink) : Diagnost
      * table's entry for a class with no vtable at all (`std::string` on crypto_mi), so a class whose
      * only virtual parts are its bases, and whose record has no slots, isn't found this way.
      */
-    private fun primaryCandidates(typeinfo: Long): List<Long> = sitesByTarget[typeinfo].orEmpty()
-        .map { it - ptr }
-        .filter { top -> word(top) == 0L && word(top + 2L * ptr)?.let(::isCode) == true }
+    private fun primaryCandidates(typeinfo: Address): List<Address> = sitesByTarget[typeinfo].orEmpty()
+        .mapNotNull { it.plusWords(-1) }
+        .filter { top -> word(top) == 0L && top.plusWords(2)?.let(::pointer)?.let(::isCode) == true }
 
     /** Where the record whose `offset_to_top` is at [top] starts: in front of the vbase offsets it can see. */
-    private fun prefixStart(top: Long) = generateSequence(top) { it - ptr }
+    private fun prefixStart(top: Address) = generateSequence(top) { it.plusWords(-1) }
         .drop(1)
-        .takeWhile { at -> signedWord(at)?.let { it != 0L && abs(it) < MAX_VBASE_OFFSET && !isCode(it) } == true }
+        .takeWhile { at -> signedWord(at)?.let { it != 0L && abs(it) < MAX_VBASE_OFFSET && !isCodeOffset(it) } == true }
         .lastOrNull() ?: top
 
-    private fun at(offset: Long): Address = space.getAddress(offset)
+    /** Whether a vbase-offset-sized [value] is rather a pointer into code. */
+    private fun isCodeOffset(value: Long) = runCatching { space.getAddress(value) }.getOrNull()?.let(::isCode) == true
 
     /**
-     * Labels [offset] with [name] unless something already named it — mangled or, once the loader
+     * Labels [addr] with [name] unless something already named it — mangled or, once the loader
      * demangled it, `vtable` — so only what stripping lost is put back. Whether it did.
      */
-    private fun label(offset: Long, name: String): Boolean {
-        val addr = at(offset)
+    private fun label(addr: Address, name: String): Boolean {
         if (program.symbolTable.getSymbols(addr).any { it.source != SourceType.DEFAULT }) return false
         program.symbolTable.createLabel(addr, name, SourceType.ANALYSIS)
         return true

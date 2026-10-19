@@ -12,6 +12,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
+import ghistabs.entrypoints.RttiSymbolsAnalyzer
 import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
@@ -183,8 +184,8 @@ class ClassApplier(
      */
     fun applyAll(): Int {
         // A stripped binary's vtables and typeinfos are only found by their symbols once these are back.
-        // Itanium only: gcc 2.x builds its typeinfo at run time, so a name string in its data proves nothing.
-        if (symtab.prevailingAbi() == Itanium) RttiSymbols(program, this).restore()
+        // Early analysis has put them back already, unless the import runs first.
+        if (RttiSymbolsAnalyzer.isEnabled(program)) RttiSymbols.restoreOnce(program, this)
         val classes = registry.classesBasesFirst()
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
