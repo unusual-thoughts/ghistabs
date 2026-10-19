@@ -108,11 +108,8 @@ class ClassApplier(
         // (no enclosing struct — see buildAndApplyVtable).
         val vftableCategory by lazy { ClassNaming.vftableCategory(ns) }
         val vftable: Structure by lazy { registry.vftableOf(located.vftablePath(types)).refiledUnder(vftableCategory) }
-        fun physnames(m: Method<*>) = abi.physnameCandidates(m, qualifiedClassName)
 
-        /** The first of [m]'s physnames that demangles, linked or not: a pure virtual has no symbol. */
-        fun demangledPhysname(m: Method<GlobalTypeId>) =
-            physnames(m).firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
+        fun physnames(m: Method<*>) = abi.physnameCandidates(m, qualifiedClassName)
 
         /**
          * The symbol [m] was emitted as and where it landed, or null if none of the ABI's spellings
@@ -127,7 +124,24 @@ class ClassApplier(
             physnames(m).firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { ResolvedMember(name, it) } }
                 .also { members[m] = it }
         }
+
+        /** The first of [m]'s physnames that demangles, linked or not: a pure virtual has no symbol. */
+        fun demangledPhysname(m: Method<GlobalTypeId>) =
+            physnames(m).firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
+
+        /**
+         * [stubParams] for a virtual slot, whose member need not be linked: a pure virtual has no symbol,
+         * but the physname it would have still demangles. Null when none does, which leaves the slot `this`-only.
+         */
+        fun slotStubParams(m: Method<GlobalTypeId>, at: String): List<DataType>? =
+            demangledPhysname(m)?.formalTypes(at) ?: run {
+                degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
+                null
+            }
     }
+
+    private fun DemangledFunction.formalTypes(at: String) =
+        formals.map { parameterTypeOrUndefined(it, dtm, "method-stub-param-untyped", at) }
 
     private inner class ResolvedMember(val mangledName: String, val addr: Address) {
         fun func(): Function? = program.functionManager.getFunctionAt(addr)
@@ -360,19 +374,6 @@ class ClassApplier(
             source,
         )
     }
-
-    private fun DemangledFunction.formalTypes(at: String) =
-        formals.map { parameterTypeOrUndefined(it, dtm, "method-stub-param-untyped", at) }
-
-    /**
-     * [stubParams] for a virtual slot, whose member need not be linked: a pure virtual has no symbol,
-     * but the physname it would have still demangles. Null when none does, which leaves the slot `this`-only.
-     */
-    private fun LocatedClass.slotStubParams(m: Method<GlobalTypeId>, at: String): List<DataType>? =
-        demangledPhysname(m)?.formalTypes(at) ?: run {
-            degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
-            null
-        }
 
     private fun LocatedClass.buildAndApplyVtable() {
         val declared = types.collectAllVirtuals(body)
