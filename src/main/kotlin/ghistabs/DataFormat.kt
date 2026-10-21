@@ -31,8 +31,7 @@ import ghidra.program.model.data.Enum as GhidraEnum
  * fields by name, a nested class reads the nested composite, a list reads an array's (or any
  * composite's) components in order. A primitive reads the field's [Scalar], a char also a `Character`
  * and a boolean also a `Boolean`; an enum takes the name a Ghidra enum gives the value, else the
- * value as its ordinal. An [Address] or the field's own [Data] reads through [AddressSerializer] and
- * [DataSerializer], which `@Contextual` reaches.
+ * value as its ordinal. An [Address] or the field's own [Data] reads as a [SerialAddress] or [SerialData].
  *
  * A field the composite lacks falls back to the property's default, then to null; one it has but the
  * class doesn't name is ignored.
@@ -136,6 +135,16 @@ object DataFormat {
         }
     }
 }
+
+/** A pointer field's [Address], as a property type the serialization plugin accepts. */
+typealias SerialAddress =
+    @Serializable(with = DataFormat.AddressSerializer::class)
+    Address
+
+/** A field's own [Data], as a property type the serialization plugin accepts. */
+typealias SerialData =
+    @Serializable(with = DataFormat.DataSerializer::class)
+    Data
 
 /**
  * A structure whose data's [Data.getValue] is its layout decoded as a [T] through [DataFormat], so
