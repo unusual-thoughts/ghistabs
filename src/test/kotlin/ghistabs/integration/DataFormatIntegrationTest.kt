@@ -16,6 +16,7 @@ import ghistabs.read
 import ghistabs.readAs
 import ghistabs.readAt
 import ghistabs.test.mustBe
+import ghistabs.test.mustBeNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import org.junit.jupiter.api.AfterEach
@@ -147,5 +148,18 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         builder.setBytes("0x401000", "02")
         val plain = laid(ByteDataType.dataType)
         plain.decode<Kind>() mustBe Kind.VIRTUAL
+    }
+
+    @Serializable
+    data class Probe(val ptr: Ptr<Inner>)
+
+    @Test
+    fun `a pointee that is unmapped, runs off its block or off the address space is null`() {
+        builder.createMemory(".top", "0xffffff00", 0x100)
+        val probe = SerialStructure<Probe>("Probe") { add(PointerDataType(inner, 4), "ptr", null) }
+        listOf("00 00 50 00", "fc 10 40 00", "fc ff ff ff").forEach {
+            builder.setBytes("0x401000", it)
+            program.read<Probe>(builder.addr(0x401000), probe)?.ptr?.deref().mustBeNull(it)
+        }
     }
 }

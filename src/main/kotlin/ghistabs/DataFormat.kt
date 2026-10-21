@@ -146,14 +146,19 @@ object DataFormat {
     }
 }
 
-/** What the pointer [this] holds points at, laid as its pointee type; null for a null or unmapped pointer. */
+/**
+ * What the pointer [this] holds points at, laid as its pointee type; null for a null pointer, or one
+ * whose pointee doesn't lie wholly in initialized memory, which past a block's end would read as zeros.
+ */
 private fun Data.deref(): Data? {
     val pointee = (baseDataType as? Pointer)?.dataType
         ?: throw SerializationException("'$fieldName' is no typed pointer, so has nothing to dereference")
-    return (value as? Address)?.takeIf { it.offset != 0L }?.let { program.readAt(it, pointee) }
+    val to = (value as? Address)?.takeIf { it.offset != 0L } ?: return null
+    val end = runCatching { to.addNoWrap(pointee.length.coerceAtLeast(1) - 1L) }.getOrNull() ?: return null
+    return program.readAt(to, pointee).takeIf { program.memory.loadedAndInitializedAddressSet.contains(to, end) }
 }
 
-/** A pointer field marked so reads as what it points at, null for a null pointer. Each read follows it again. */
+/** A pointer field marked so reads as what it points at, null where [Ptr.deref] would be. */
 @OptIn(ExperimentalSerializationApi::class)
 @SerialInfo
 @Target(AnnotationTarget.PROPERTY)
@@ -167,7 +172,7 @@ annotation class Deref
 class Ptr<T>(val address: Address, read: () -> T?) {
     private val pointee by lazy(read)
 
-    /** The pointee as a [T]; null for a null or unmapped pointer. */
+    /** The pointee as a [T]; null for a null pointer or one whose pointee doesn't lie wholly in initialized memory. */
     fun deref(): T? = pointee
 
     override fun equals(other: Any?) = other is Ptr<*> && other.address == address
