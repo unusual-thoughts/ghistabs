@@ -239,4 +239,15 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         value mustBe ExampleStruct.Value(7, "abc", Ptr(builder.addr(0x401040)) { null })
         (value as ExampleStruct.Value).c.deref() mustBe "hi"
     }
+
+    @Serializable
+    data class Box<V>(val v: V)
+
+    @Test
+    fun `a generic value class decodes, and still does once cloned into a manager`() {
+        builder.setBytes("0x401000", "07 00 00 00")
+        val box = SerialStructure<Box<Int>>("Box") { add(IntegerDataType.dataType, "v", null) }
+        program.dataAt(builder.addr(0x401000), box)?.value mustBe Box(7)
+        program.dataAt(builder.addr(0x401000), box.clone(program.dataTypeManager))?.value mustBe Box(7)
+    }
 }
