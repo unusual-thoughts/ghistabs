@@ -97,27 +97,33 @@ class RttiSymbols(
         }
     }
 
+    data class TypeInfoRecord(val address: Address, val nameAddress: Address, val name: String)
+
+    fun Address.pointsToData() = program.pointerAt(this)?.let(program::isData) == true
+
     /** Labels every class typeinfo, its name, and its vtable that lack one; returns how many vtables. */
     fun restore(): Int {
         val names = HashMap<Address, String?>()
         val typeinfos = sitesByTarget.flatMap { (target, sites) ->
             val name = names.getOrPut(target) { className(target) } ?: return@flatMap emptyList()
-            sites.mapNotNull { site ->
-                site.plusWords(-1)?.takeIf { program.pointerAt(it)?.let(program::isData) == true }
-            }
-                .map { typeinfo -> Triple(typeinfo, target, name) }
-        }.filter { (_, _, name) -> Demangler.of(Itanium.TYPEINFO_PREFIX + name) != null }
-        if (itaniumUnproven && typeinfos.none { Itanium.ITANIUM_ONLY_NAME.matches(it.third) }) return 0
+            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { it.pointsToData() } }
+                .map { typeinfo -> TypeInfoRecord(typeinfo, target, name) }
+        }.filter { Demangler.of(Itanium.TYPEINFO_PREFIX + it.name) != null }
+
+        if (itaniumUnproven && typeinfos.none { Itanium.ITANIUM_ONLY_NAME.matches(it.name) }) return 0
+
         // A name two typeinfos claim can't say which is the class's own; neither is labelled.
-        val unique = typeinfos.groupBy { it.third }.values.mapNotNull { it.singleOrNull() }
+        val unique = typeinfos.groupBy { it.name }.values.mapNotNull { it.singleOrNull() }
         for ((typeinfo, nameAt, name) in unique) {
             label(nameAt, Itanium.TYPEINFO_NAME_PREFIX + name)
             label(typeinfo, Itanium.TYPEINFO_PREFIX + name)
         }
-        val tops = unique.associate { (typeinfo, _, name) ->
-            name to
-                (typeinfo to program.primaryRecordsAt(sitesByTarget[typeinfo].orEmpty()))
-        }
+
+        val header = primaryHeader(dtm)
+        fun TypeInfoRecord.vtablesPointing() = sitesByTarget[address]?.mapNotNull { it.plusWords(-1) }
+            ?.filter { program.primaryRecordAt(it, header) != null }.orEmpty()
+
+        val tops = unique.associate { it.name to (it.address to it.vtablesPointing()) }
         val settled = tops.values.mapNotNull { (_, candidates) -> candidates.singleOrNull() }
         val among = settled.minOrNull()?.let { lo -> lo..settled.max() }
         val laid = tops.mapNotNull { (name, found) ->

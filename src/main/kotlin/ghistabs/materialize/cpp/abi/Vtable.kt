@@ -47,16 +47,12 @@ fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataTyp
 }
 
 /** What a primary vtable's address point starts with: `offset_to_top`, the rtti word, and its first slot. */
-private fun primaryHeader(dtm: DataTypeManager) = StructureDataType("PrimaryVtableHeader", 0).apply {
+fun primaryHeader(dtm: DataTypeManager) = StructureDataType("PrimaryVtableHeader", 0).apply {
     add(Itanium.offsetToTopType(dtm.dataOrganization.pointerSize), Itanium.OFFSET_TO_TOP, null)
     add(PointerDataType(dtm), Itanium.RTTI, null)
     add(PointerDataType(dtm), "slot0", null)
     isPackingEnabled = true
 }
-
-private fun Program.wordsFrom(a: Address, n: Int) = runCatching {
-    a.addNoWrap(n.toLong() * defaultPointerSize)
-}.getOrNull()
 
 /**
  * Finds a class's primary vtable from the words in memory that point at its typeinfo ([rttiSites]), for
@@ -81,14 +77,9 @@ private fun Program.wordsFrom(a: Address, n: Int) = runCatching {
  * - A base's construction vtable (`_ZTC`) has the same shape and holds the base's typeinfo, so a base can
  *   come back with more than one record; the caller decides between them.
  */
-fun Program.primaryRecordsAt(rttiSites: List<Address>): List<Address> {
-    val header = primaryHeader(dataTypeManager)
-    return rttiSites.mapNotNull { site -> wordsFrom(site, -1)?.takeIf(::isData) }
-        .mapNotNull { dataAt(it, header) }
-        .filter { it.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value == 0L }
-        .filter { it.valueOf<Address>("slot0")?.let(::isCode) == true }
-        .map { it.address }
-}
+fun Program.primaryRecordAt(addr: Address, header: Structure) = addr.takeIf(::isData)?.let { dataAt(it, header) }
+    ?.takeIf { it.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value == 0L }
+    ?.takeIf { it.valueOf<Address>("slot0")?.let(::isCode) == true }
 
 /**
  * Where the vtable record whose `offset_to_top` word is at [top] begins.
@@ -106,7 +97,7 @@ fun Program.recordStart(top: Address): Address {
     val word = IntegerDataType.getSignedDataType(defaultPointerSize, null)
     fun isVbaseOffset(v: Long) = v != 0L && abs(v) < MAX_VBASE_OFFSET &&
         runCatching { addressFactory.defaultAddressSpace.getAddress(v) }.getOrNull()?.let(::isCode) != true
-    return generateSequence(top) { wordsFrom(it, -1) }
+    return generateSequence(top) { runCatching { it - defaultPointerSize }.getOrNull() }
         .drop(1)
         .takeWhile { at -> valueAt<Scalar>(at, word)?.signedValue?.let(::isVbaseOffset) == true }
         .lastOrNull() ?: top
