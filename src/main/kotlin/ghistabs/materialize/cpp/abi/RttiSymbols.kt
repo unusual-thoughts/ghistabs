@@ -1,7 +1,6 @@
 package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghistabs.BoolOption
@@ -13,7 +12,7 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.get
 import ghistabs.isData
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.nextData
+import ghistabs.nextPointer
 import ghistabs.pointerAt
 import ghistabs.seek
 import ghistabs.set
@@ -51,10 +50,7 @@ class RttiSymbols(
     private val memory = program.memory
     private val dtm = program.dataTypeManager
 
-    private val pointer = PointerDataType(dtm)
-
     private fun Address.plusWords(n: Int): Address? = plusOrNull(n.toLong() * ptr)
-
     private fun Address.plusOrNull(by: Long): Address? = runCatching { addNoWrap(by) }.getOrNull()
 
     /** Every aligned word in the data blocks that points into them, by what it points at. */
@@ -63,10 +59,11 @@ class RttiSymbols(
         buildMap<Address, MutableList<Address>> {
             for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
                 buf.seek(b.start.alignTo(ptr.toLong()))
-                while (buf.address.plusOrNull(ptr - 1L)?.let(b::contains) == true) {
-                    val data = buf.nextData(pointer) ?: break
-                    val addr = (data.value as? Address)?.takeIf(program::isData) ?: continue
-                    getOrPut(addr) { mutableListOf() }.add(data.address)
+                while (buf.address in b) {
+                    val site = buf.address
+                    (buf.nextPointer() ?: break).takeIf(program::isData)?.let { target ->
+                        getOrPut(target) { mutableListOf() }.add(site)
+                    }
                 }
             }
         }
@@ -75,27 +72,6 @@ class RttiSymbols(
     /** The NUL-terminated class name at [addr], or null if what is there can't be one. */
     private fun className(addr: Address): String? =
         program.cStringAt(addr, 0..MAX_TYPE_NAME)?.takeIf(Itanium.CLASS_TYPE_NAME::matches)
-
-    companion object {
-        val RTTI_SYMBOLS_RESTORED = BoolOption("RTTI Symbols Restored", "Stripped RTTI labels already put back.", false)
-
-        /** Longest typeinfo name read; CryptoPP's deepest template instantiations run to a few hundred bytes. */
-        private const val MAX_TYPE_NAME = 4096
-
-        /**
-         * [restore] on an Itanium binary, once: early analysis does it ([ghistabs.entrypoints.RttiSymbolsAnalyzer]),
-         * and a stabs import run before analysis does it itself. gcc 2.x builds its typeinfo at run time, so a
-         * name string in its data proves nothing; a stripped binary may have no mangled symbol left to say which
-         * ABI it is, and then a name only Itanium spells has to. Returns how many vtables were labelled.
-         */
-        fun restoreOnce(program: Program, sink: DiagnosticSink): Int {
-            if (program[RTTI_SYMBOLS_RESTORED]) return 0
-            program[RTTI_SYMBOLS_RESTORED] = true
-            val abi = program.symbolTable.prevailingAbi()
-            if (abi != null && abi != Itanium) return 0
-            return RttiSymbols(program, sink, itaniumUnproven = abi == null).restore()
-        }
-    }
 
     /** A class typeinfo at [address], whose `__type_name` is the [name] at [nameAddress]. */
     private data class TypeInfoRecord(val address: Address, val nameAddress: Address, val name: String)
@@ -167,5 +143,26 @@ class RttiSymbols(
         if (program.symbolTable.getSymbols(addr).any { it.source != SourceType.DEFAULT }) return false
         program.symbolTable.createLabel(addr, name, SourceType.ANALYSIS)
         return true
+    }
+
+    companion object {
+        val RTTI_SYMBOLS_RESTORED = BoolOption("RTTI Symbols Restored", "Stripped RTTI labels already put back.", false)
+
+        /** Longest typeinfo name read; CryptoPP's deepest template instantiations run to a few hundred bytes. */
+        private const val MAX_TYPE_NAME = 4096
+
+        /**
+         * [restore] on an Itanium binary, once: early analysis does it ([ghistabs.entrypoints.RttiSymbolsAnalyzer]),
+         * and a stabs import run before analysis does it itself. gcc 2.x builds its typeinfo at run time, so a
+         * name string in its data proves nothing; a stripped binary may have no mangled symbol left to say which
+         * ABI it is, and then a name only Itanium spells has to. Returns how many vtables were labelled.
+         */
+        fun restoreOnce(program: Program, sink: DiagnosticSink): Int {
+            if (program[RTTI_SYMBOLS_RESTORED]) return 0
+            program[RTTI_SYMBOLS_RESTORED] = true
+            val abi = program.symbolTable.prevailingAbi()
+            if (abi != null && abi != Itanium) return 0
+            return RttiSymbols(program, sink, itaniumUnproven = abi == null).restore()
+        }
     }
 }
