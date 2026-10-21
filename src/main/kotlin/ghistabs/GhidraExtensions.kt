@@ -254,15 +254,15 @@ private val MemBuffer.pointerType get() = PointerDataType(memory.program.dataTyp
 /** Moves the buffer to [addr], so the next `next…` call reads there. */
 fun MutableMemBuffer.seek(addr: Address) = apply { setPosition(addr) }
 
-/** Moves the buffer past [length] bytes, or leaves it where it is if that would leave the address space. */
-fun MutableMemBuffer.skip(length: Int) = apply { runCatching { advance(length) } }
+/** Moves the buffer past [length] bytes; false, leaving it where it is, if that would leave the address space. */
+fun MutableMemBuffer.skip(length: Int) = runCatching { advance(length) }.isSuccess
 
-/** [valueHere], then past it. */
+/** [valueHere], then past it; null if the buffer can't move past it, so a read loop always moves on or stops. */
 inline fun <reified T> MutableMemBuffer.nextValue(dt: DataType): T? =
-    valueHere<T>(dt)?.also { lengthHere(dt)?.let(::skip) }
+    valueHere<T>(dt)?.takeIf { lengthHere(dt)?.let(::skip) == true }
 
-/** [dataHere], then past it. */
-fun MutableMemBuffer.nextData(dt: DataType): Data? = dataHere(dt)?.also { skip(it.length) }
+/** [dataHere], then past it; null if the buffer can't move past it. */
+fun MutableMemBuffer.nextData(dt: DataType): Data? = dataHere(dt)?.takeIf { skip(it.length) }
 
 fun MutableMemBuffer.nextPointerData(): Data? = nextData(pointerType)
 
