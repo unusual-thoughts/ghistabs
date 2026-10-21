@@ -29,6 +29,8 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
+import java.nio.ByteBuffer
+import java.nio.charset.Charset
 import ghidra.program.model.data.Enum as GhidraEnum
 
 /**
@@ -40,7 +42,8 @@ import ghidra.program.model.data.Enum as GhidraEnum
  * value as its ordinal. An [Address] or the field's own [Data] reads as a [SerialAddress] or [SerialData].
  *
  * A char pointer field reads as a string: the NUL-terminated UTF-8, UTF-16 or UTF-32 it points at, by the
- * char's width, found within [MAX_STRING_BYTES]; a null pointer or no terminator in reach reads as null.
+ * char's width, or the charset [Text] names, found within [MAX_STRING_BYTES] or [Text.maxBytes]. A null
+ * pointer, no terminator in reach, or bytes the charset can't decode read as null.
  * Any other typed pointer field reads as a [Ptr] to dereference later, or, marked [Deref], as what it points at.
  *
  * A field the composite lacks falls back to the property's default, then to null; one it has but the
@@ -80,8 +83,10 @@ object DataFormat {
         val field = reader(decoder).element
         val to = field.value as? Address ?: throw reader(decoder).mismatch("an address")
         val text = target.descriptor.kind == PrimitiveKind.STRING && field.charWidth != null
+        val spec = reader(decoder).spec
         return Ptr(to) {
-            (if (text) field.takeIf { it.pointedString() != null } else field.deref())?.let { decode(target, it) }
+            val pointee = if (text) field.takeIf { it.pointedString(spec) != null } else field.deref()
+            pointee?.let { Reader(it, spec).decodeSerializableValue(target) }
         }
     }
 
@@ -93,7 +98,7 @@ object DataFormat {
     /** Reads the composite [data]; before its structure begins, [data] is the value itself. */
     // A decodeX per primitive is the decoder's contract, not a class doing too much.
     @Suppress("TooManyFunctions")
-    private class Reader(private val data: Data) : AbstractDecoder() {
+    private class Reader(private val data: Data, var spec: Text? = null) : AbstractDecoder() {
         override val serializersModule = DataFormat.serializersModule
         private var index = -1
         private var name = data.fieldName ?: data.dataType.name
@@ -113,6 +118,7 @@ object DataFormat {
             while (++index < if (list) data.numComponents else descriptor.elementsCount) {
                 name = if (list) "[$index]" else descriptor.getElementName(index)
                 current = if (list) data.getComponent(index) else byName[name]
+                if (!list) spec = descriptor.getElementAnnotations(index).filterIsInstance<Text>().singleOrNull()
                 text = descriptor.getElementDescriptor(index).kind == PrimitiveKind.STRING && current?.charWidth != null
                 val deref = !list && !text && descriptor.getElementAnnotations(index).any { it is Deref }
                 if (deref) current = current?.deref()
@@ -124,11 +130,11 @@ object DataFormat {
 
         override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
             if (descriptor.kind == StructureKind.MAP) throw SerializationException("A composite holds no map")
-            return Reader(element)
+            return Reader(element, spec)
         }
 
         override fun decodeNotNullMark() =
-            current?.let { if (text) it.pointedString() != null else it.isAggregate || it.value != null } == true
+            current?.let { if (text) it.pointedString(spec) != null else it.isAggregate || it.value != null } == true
 
         override fun decodeNull(): Nothing? = null
 
@@ -150,7 +156,8 @@ object DataFormat {
         override fun decodeFloat() = double().toFloat()
         override fun decodeDouble() = double()
         override fun decodeChar() = element.value as? Char ?: long().toInt().toChar()
-        override fun decodeString() = element.value as? String ?: element.pointedString() ?: throw mismatch("a string")
+        override fun decodeString() =
+            element.value as? String ?: element.pointedString(spec) ?: throw mismatch("a string")
 
         override fun decodeEnum(enumDescriptor: SerialDescriptor): Int {
             val value = long()
@@ -186,24 +193,34 @@ private val Data.charWidth: Int? get() {
 
 private val Data.isAggregate get() = baseDataType.let { it is Composite || it is Array }
 
-/** The NUL-terminated string the char pointer [this] points at; see [DataFormat]. */
-private fun Data.pointedString(): String? {
+/** The NUL-terminated string the char pointer [this] points at, read as [spec] says; see [DataFormat]. */
+private fun Data.pointedString(spec: Text?): String? {
     val width = charWidth ?: return null
     val to = (value as? Address)?.takeIf { it.offset != 0L } ?: return null
     // getBytes stops at the first byte it can't read, past a block or the address space's end.
-    val bytes = ByteArray(DataFormat.MAX_STRING_BYTES).let {
+    val bytes = ByteArray(spec?.maxBytes ?: DataFormat.MAX_STRING_BYTES).let {
         it.copyOf(runCatching { program.memory.getBytes(to, it) }.getOrDefault(0))
     }
     val end = (0..bytes.size - width step width).firstOrNull { at -> (at..<at + width).all { bytes[it] == 0.toByte() } }
         ?: return null
     val big = program.memory.isBigEndian
-    val charset = when (width) {
+    val charset = spec?.charset?.takeIf { it.isNotEmpty() }?.let(Charset::forName) ?: when (width) {
         1 -> Charsets.UTF_8
         2 -> if (big) Charsets.UTF_16BE else Charsets.UTF_16LE
         else -> if (big) Charsets.UTF_32BE else Charsets.UTF_32LE
     }
-    return String(bytes, 0, end, charset)
+    return runCatching { charset.newDecoder().decode(ByteBuffer.wrap(bytes, 0, end)).toString() }.getOrNull()
 }
+
+/**
+ * How a char pointer field's string is read: in [charset] (a Java charset name, `US-ASCII` to refuse
+ * anything else) instead of by the char's width, and within [maxBytes] instead of [DataFormat.MAX_STRING_BYTES].
+ * On a list it holds for every element.
+ */
+@OptIn(ExperimentalSerializationApi::class)
+@SerialInfo
+@Target(AnnotationTarget.PROPERTY)
+annotation class Text(val charset: String = "", val maxBytes: Int = DataFormat.MAX_STRING_BYTES)
 
 /** A pointer field marked so reads as what it points at, null where [Ptr.deref] would be. */
 @OptIn(ExperimentalSerializationApi::class)

@@ -11,6 +11,7 @@ import ghistabs.Ptr
 import ghistabs.SerialAddress
 import ghistabs.SerialData
 import ghistabs.SerialStructure
+import ghistabs.Text
 import ghistabs.decode
 import ghistabs.get
 import ghistabs.read
@@ -190,5 +191,30 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val read = program.read<Strings>(builder.addr(0x401000), strings)
         read mustBe Strings("hé", "hé", "hé", null, null, Ptr(builder.addr(0x401041)) { null })
         read?.ptr?.deref() mustBe "é"
+    }
+
+    @Serializable
+    data class Checked(
+        val malformed: String?,
+        @Text("US-ASCII") val ascii: String?,
+        @Text("US-ASCII") val plain: String,
+        @Text(maxBytes = 3) val short: String?,
+        @Text("US-ASCII") val ptr: Ptr<String>,
+    )
+
+    @Test
+    fun `a string its charset can't decode, or too long for its bound, is null`() {
+        val checked = SerialStructure<Checked>("Checked") {
+            listOf("malformed", "ascii", "plain", "short", "ptr").forEach {
+                add(PointerDataType(CharDataType.dataType, 4), it, null)
+            }
+        }
+        builder.setBytes("0x401000", "40 10 40 00 50 10 40 00 60 10 40 00 50 10 40 00 50 10 40 00")
+        builder.setBytes("0x401040", "68 ff 00")
+        builder.setBytes("0x401050", "68 c3 a9 00")
+        builder.setBytes("0x401060", "68 69 00")
+        val read = program.read<Checked>(builder.addr(0x401000), checked)
+        read mustBe Checked(null, null, "hi", null, Ptr(builder.addr(0x401050)) { null })
+        read?.ptr?.deref().mustBeNull()
     }
 }
