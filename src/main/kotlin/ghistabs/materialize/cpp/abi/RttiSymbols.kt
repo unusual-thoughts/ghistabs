@@ -23,15 +23,6 @@ import ghistabs.valueAt
 import ghistabs.valueOf
 import kotlin.math.abs
 
-/** Longest typeinfo name read; CryptoPP's deepest template instantiations run to a few hundred bytes. */
-private const val MAX_TYPE_NAME = 4096
-
-/** Bound on a vbase offset, past which a word in front of `offset_to_top` is taken to be something else. */
-private const val MAX_VBASE_OFFSET = 0x10000L
-
-/** What an Itanium typeinfo name can spell for a class: `9TiXmlNode`, `N8CryptoPP3AESE`, `St9exception`. */
-private val CLASS_TYPE_NAME = Regex("[0-9NS][A-Za-z0-9_]*")
-
 /**
  * Puts back the `_ZTS`/`_ZTI`/`_ZTV` labels a stripped binary lost, from the RTTI it kept (§99). Everything
  * downstream finds a class's vtable by its `_ZTV` symbol and a record's rtti word by a `_ZTI` one, so a
@@ -95,13 +86,16 @@ class RttiSymbols(
 
     /** The NUL-terminated class name at [addr], or null if what is there can't be one. */
     private fun className(addr: Address): String? =
-        program.cStringAt(addr, 0..MAX_TYPE_NAME)?.takeIf(CLASS_TYPE_NAME::matches)
+        program.cStringAt(addr, 0..MAX_TYPE_NAME)?.takeIf(Itanium.CLASS_TYPE_NAME::matches)
 
     companion object {
         val RTTI_SYMBOLS_RESTORED = BoolOption("RTTI Symbols Restored", "Stripped RTTI labels already put back.", false)
 
-        /** Typeinfo names only Itanium spells: a nested name, or one in `std`. gcc 2.x writes `Q2…`, `9type_info`. */
-        private val ITANIUM_ONLY_NAME = Regex("N.*E|St.*")
+        /** Longest typeinfo name read; CryptoPP's deepest template instantiations run to a few hundred bytes. */
+        private const val MAX_TYPE_NAME = 4096
+
+        /** Bound on a vbase offset, past which a word in front of `offset_to_top` is taken to be something else. */
+        private const val MAX_VBASE_OFFSET = 0x10000L
 
         /**
          * [restore] on an Itanium binary, once: early analysis does it ([ghistabs.entrypoints.RttiSymbolsAnalyzer]),
@@ -126,7 +120,7 @@ class RttiSymbols(
             sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { program.pointerAt(it)?.isData() == true } }
                 .map { typeinfo -> Triple(typeinfo, target, name) }
         }.filter { (_, _, name) -> Demangler.of(Itanium.TYPEINFO_PREFIX + name) != null }
-        if (itaniumUnproven && typeinfos.none { ITANIUM_ONLY_NAME.matches(it.third) }) return 0
+        if (itaniumUnproven && typeinfos.none { Itanium.ITANIUM_ONLY_NAME.matches(it.third) }) return 0
         // A name two typeinfos claim can't say which is the class's own; neither is labelled.
         val unique = typeinfos.groupBy { it.third }.values.mapNotNull { it.singleOrNull() }
         for ((typeinfo, nameAt, name) in unique) {
