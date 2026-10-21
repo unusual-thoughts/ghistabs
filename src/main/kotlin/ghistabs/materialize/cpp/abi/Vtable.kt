@@ -2,21 +2,27 @@ package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
+import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
 import ghistabs.materialize.DtmRegistry
 import ghistabs.materialize.cpp.ClassNaming
+import kotlin.math.abs
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64
+
+/** Bound on a vbase offset, past which a word in front of `offset_to_top` is taken to be something else. */
+private const val MAX_VBASE_OFFSET = 0x10000L
 
 /**
  * The pointer at [a], or null if it is unmapped or does not point into executable memory. The one test
@@ -53,12 +59,49 @@ fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataTyp
     }
 }
 
-fun potentialVtable(dtm: DataTypeManager) = StructureDataType("PossibleVtable", 0).apply {
-    val word = Itanium.offsetToTopType(dtm.dataOrganization.pointerSize)
-    add(word, Itanium.OFFSET_TO_TOP, "to top of complete object").showDecimal()
+/** What a primary record's address point starts with: `offset_to_top`, the rtti word, and its first slot. */
+private fun primaryHeader(dtm: DataTypeManager) = StructureDataType("PrimaryVtableHeader", 0).apply {
+    add(Itanium.offsetToTopType(dtm.dataOrganization.pointerSize), Itanium.OFFSET_TO_TOP, null)
     add(PointerDataType(dtm), Itanium.RTTI, null)
-    add(PointerDataType(dtm), "maybeMethod", null)
+    add(PointerDataType(dtm), "slot0", null)
     isPackingEnabled = true
+}
+
+private fun Program.isData(a: Address) = memory.getBlock(a)?.let { it.isInitialized && !it.isExecute } == true
+
+private fun Program.isCode(a: Address) = memory.getBlock(a)?.isExecute == true
+
+private fun Program.wordsFrom(a: Address, n: Int) = runCatching {
+    a.addNoWrap(n.toLong() * defaultPointerSize)
+}.getOrNull()
+
+/**
+ * The `offset_to_top` words, each one word ahead of an rtti word in [rttiSites], that start a primary record:
+ * a 0, then the rtti word, then a pointer into code. Without that slot, `{0, typeinfo}` is as likely an
+ * exception table's entry for a class with no vtable at all (`std::string` on crypto_mi), so a class whose
+ * only virtual parts are its bases, and whose record has no slots, isn't found this way.
+ */
+fun Program.primaryRecordsAt(rttiSites: List<Address>): List<Address> {
+    val header = primaryHeader(dataTypeManager)
+    return rttiSites.mapNotNull { site -> wordsFrom(site, -1)?.takeIf(::isData) }
+        .mapNotNull { dataAt(it, header) }
+        .filter { it.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value == 0L }
+        .filter { it.valueOf<Address>("slot0")?.let(::isCode) == true }
+        .map { it.address }
+}
+
+/**
+ * Where the record whose `offset_to_top` is at [top] starts: in front of the vbase offsets it can see, the
+ * small non-zero words that aren't pointers into code. A vbase offset of 0 can't be told from padding.
+ */
+fun Program.recordStart(top: Address): Address {
+    val word = IntegerDataType.getSignedDataType(defaultPointerSize, null)
+    fun isVbaseOffset(v: Long) = v != 0L && abs(v) < MAX_VBASE_OFFSET &&
+        runCatching { addressFactory.defaultAddressSpace.getAddress(v) }.getOrNull()?.let(::isCode) != true
+    return generateSequence(top) { wordsFrom(it, -1) }
+        .drop(1)
+        .takeWhile { at -> valueAt<Scalar>(at, word)?.signedValue?.let(::isVbaseOffset) == true }
+        .lastOrNull() ?: top
 }
 
 /**

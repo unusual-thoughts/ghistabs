@@ -1,17 +1,14 @@
 package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.listing.Program
-import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.SourceType
 import ghistabs.BoolOption
 import ghistabs.Demangler
 import ghistabs.alignTo
 import ghistabs.cStringAt
 import ghistabs.cursorAt
-import ghistabs.dataAt
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.get
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
@@ -19,9 +16,6 @@ import ghistabs.nextData
 import ghistabs.pointerAt
 import ghistabs.seek
 import ghistabs.set
-import ghistabs.valueAt
-import ghistabs.valueOf
-import kotlin.math.abs
 
 /**
  * Puts back the `_ZTS`/`_ZTI`/`_ZTV` labels a stripped binary lost, from the RTTI it kept (§99). Everything
@@ -60,14 +54,9 @@ class RttiSymbols(
 
     private fun Address.isData() = memory.getBlock(this)?.let { it.isInitialized && !it.isExecute } == true
 
-    private fun Address.isCode() = memory.getBlock(this)?.isExecute == true
-
     private fun Address.plusWords(n: Int): Address? = plusOrNull(n.toLong() * ptr)
 
     private fun Address.plusOrNull(by: Long): Address? = runCatching { addNoWrap(by) }.getOrNull()
-
-    private fun signedWord(addr: Address) =
-        program.valueAt<Scalar>(addr, IntegerDataType.getSignedDataType(ptr, null))?.signedValue
 
     /** Every aligned word in the data blocks that points into them, by what it points at. */
     private val sitesByTarget: Map<Address, List<Address>> by lazy {
@@ -93,9 +82,6 @@ class RttiSymbols(
 
         /** Longest typeinfo name read; CryptoPP's deepest template instantiations run to a few hundred bytes. */
         private const val MAX_TYPE_NAME = 4096
-
-        /** Bound on a vbase offset, past which a word in front of `offset_to_top` is taken to be something else. */
-        private const val MAX_VBASE_OFFSET = 0x10000L
 
         /**
          * [restore] on an Itanium binary, once: early analysis does it ([ghistabs.entrypoints.RttiSymbolsAnalyzer]),
@@ -127,7 +113,10 @@ class RttiSymbols(
             label(nameAt, Itanium.TYPEINFO_NAME_PREFIX + name)
             label(typeinfo, Itanium.TYPEINFO_PREFIX + name)
         }
-        val tops = unique.associate { (typeinfo, _, name) -> name to (typeinfo to primaryCandidates(typeinfo)) }
+        val tops = unique.associate { (typeinfo, _, name) ->
+            name to
+                (typeinfo to program.primaryRecordsAt(sitesByTarget[typeinfo].orEmpty()))
+        }
         val settled = tops.values.mapNotNull { (_, candidates) -> candidates.singleOrNull() }
         val among = settled.minOrNull()?.let { lo -> lo..settled.max() }
         val laid = tops.mapNotNull { (name, found) ->
@@ -137,7 +126,7 @@ class RttiSymbols(
                 if (candidates.isNotEmpty()) debug("vtable-rtti-ambiguous", "$name: $candidates", typeinfo)
                 return@mapNotNull null
             }
-            if (!label(prefixStart(top), Itanium.VTABLE_PREFIX + name)) return@mapNotNull null
+            if (!label(program.recordStart(top), Itanium.VTABLE_PREFIX + name)) return@mapNotNull null
             Triple(name, typeinfo, top)
         }
         // Once every typeinfo and vtable is labelled, the typeinfos can be read for where they put their
@@ -145,7 +134,7 @@ class RttiSymbols(
         // named all along (an unstripped binary), the label just laid is a duplicate and goes.
         val rtti = Rtti.Reader(program)
         val kept = laid.filter { (name, typeinfo, top) ->
-            val start = prefixStart(top)
+            val start = program.recordStart(top)
             val lowest = rtti.virtualBasesOf(typeinfo).minOfOrNull { it.offset }
             val vbaseStart = lowest?.let { top.plusWords(2)?.plusOrNull(it) }?.takeIf { it < start }
             if (vbaseStart == null) {
@@ -159,30 +148,6 @@ class RttiSymbols(
         }
         return kept.size
     }
-
-    private val vtable by lazy { potentialVtable(dtm) }
-
-    /**
-     * The `offset_to_top` words a record of [typeinfo] can start its address point behind: a 0, then
-     * a function pointer after the rtti word. Without that slot, `{0, typeinfo}` is as likely an exception
-     * table's entry for a class with no vtable at all (`std::string` on crypto_mi), so a class whose
-     * only virtual parts are its bases, and whose record has no slots, isn't found this way.
-     */
-    private fun primaryCandidates(typeinfo: Address): List<Address> = sitesByTarget[typeinfo].orEmpty()
-        .mapNotNull { it.plusWords(-1)?.takeIf { top -> top.isData() } }
-        .mapNotNull { program.dataAt(it, vtable) }
-        .filter { it.valueOf<Scalar>(0)?.value == 0L }
-        .filter { it.valueOf<Address>(2)?.isCode() == true }
-        .map { it.address }
-
-    /** Where the record whose `offset_to_top` is at [top] starts: in front of the vbase offsets it can see. */
-    private fun prefixStart(top: Address) = generateSequence(top) { it.plusWords(-1) }
-        .drop(1)
-        .takeWhile { at -> signedWord(at)?.let { it != 0L && abs(it) < MAX_VBASE_OFFSET && !isCodeOffset(it) } == true }
-        .lastOrNull() ?: top
-
-    /** Whether a vbase-offset-sized [value] is rather a pointer into code. */
-    private fun isCodeOffset(value: Long) = runCatching { space.getAddress(value) }.getOrNull()?.isCode() == true
 
     /**
      * Labels [addr] with [name] unless something already named it — mangled or, once the loader
