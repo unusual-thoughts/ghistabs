@@ -14,10 +14,12 @@ import ghistabs.Demangler
 import ghistabs.alignTo
 import ghistabs.dataAt
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.dumbBuffer
 import ghistabs.get
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.memBuffer
 import ghistabs.readAs
+import ghistabs.readAt
 import ghistabs.readPointer
 import ghistabs.set
 import ghistabs.valueOf
@@ -65,7 +67,6 @@ class RttiSymbols(
     private val memory = program.memory
     private val dtm = program.dataTypeManager
 
-    private val buf = program.memBuffer()
     private val pointer = PointerDataType(dtm)
 
     private fun Address.isData() = memory.getBlock(this)?.let { it.isInitialized && !it.isExecute } == true
@@ -77,10 +78,11 @@ class RttiSymbols(
     private fun Address.plusOrNull(by: Long): Address? = runCatching { addNoWrap(by) }.getOrNull()
 
     private fun signedWord(addr: Address) =
-        buf.readAs<Scalar>(IntegerDataType.getSignedDataType(ptr, null), addr)?.signedValue
+        program.readAs<Scalar>(addr, IntegerDataType.getSignedDataType(ptr, null))?.signedValue
 
     /** Every aligned word in the data blocks that points into them, by what it points at. */
     private val sitesByTarget: Map<Address, List<Address>> by lazy {
+        val buf = program.memBuffer()
         buildMap<Address, MutableList<Address>> {
             for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
                 buf.setPosition(b.start.alignTo(ptr.toLong()))
@@ -107,7 +109,7 @@ class RttiSymbols(
 
     /** The NUL-terminated class name at [addr], or null if what is there can't be one. */
     private fun className(addr: Address): String? =
-        buf.stringAt(addr, 0..MAX_TYPE_NAME)?.takeIf(CLASS_TYPE_NAME::matches)
+        program.dumbBuffer(addr).stringAt(lengthIn = 0..MAX_TYPE_NAME)?.takeIf(CLASS_TYPE_NAME::matches)
 
     companion object {
         val RTTI_SYMBOLS_RESTORED = BoolOption("RTTI Symbols Restored", "Stripped RTTI labels already put back.", false)
@@ -135,7 +137,7 @@ class RttiSymbols(
         val names = HashMap<Address, String?>()
         val typeinfos = sitesByTarget.flatMap { (target, sites) ->
             val name = names.getOrPut(target) { className(target) } ?: return@flatMap emptyList()
-            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { buf.readPointer(it)?.isData() == true } }
+            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { program.readPointer(it)?.isData() == true } }
                 .map { typeinfo -> Triple(typeinfo, target, name) }
         }.filter { (_, _, name) -> Demangler.of(Itanium.TYPEINFO_PREFIX + name) != null }
         if (itaniumUnproven && typeinfos.none { ITANIUM_ONLY_NAME.matches(it.third) }) return 0
@@ -188,7 +190,7 @@ class RttiSymbols(
      */
     private fun primaryCandidates(typeinfo: Address): List<Address> = sitesByTarget[typeinfo].orEmpty()
         .mapNotNull { it.plusWords(-1)?.takeIf { top -> top.isData() } }
-        .mapNotNull { buf.dataAt(vtable, it) }
+        .mapNotNull { program.readAt(it, vtable) }
         .filter { it.valueOf<Scalar>(0)?.value == 0L }
         .filter { it.valueOf<Address>(2)?.isCode() == true }
         .map { it.address }
