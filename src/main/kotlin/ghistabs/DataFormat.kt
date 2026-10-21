@@ -20,8 +20,11 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
 import java.lang.reflect.ParameterizedType
+import java.lang.reflect.Type
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
+import kotlin.reflect.javaType
+import kotlin.reflect.typeOf
 import ghidra.program.model.data.Enum as GhidraEnum
 
 /**
@@ -185,9 +188,9 @@ private val Data.isAggregate get() = baseDataType.let { it is Composite || it is
 /** The NUL-terminated string the char pointer [this] points at, read as [spec] says; see [DataFormat]. */
 private fun Data.pointedString(spec: Text?): String? {
     val width = charWidth ?: return null
-    val buf = target?.let { program.bytesAt(it) } ?: return null
-    val n = spec?.maxBytes ?: DataFormat.MAX_STRING_BYTES
-    val bytes = buf.cBytesHere(0..<n, width)
+    val to = target ?: return null
+    val limit = spec?.maxBytes ?: DataFormat.MAX_STRING_BYTES
+    val bytes = program.bytesAt(to).cBytesHere(0..<limit, width) ?: return null
     val big = program.memory.isBigEndian
     val charset = spec?.charset?.takeIf { it.isNotEmpty() }?.let(Charset::forName) ?: when (width) {
         1 -> Charsets.UTF_8
@@ -255,16 +258,16 @@ typealias SerialData =
  * A subclass that lays its fields in `init` takes the `(dtm)` constructor: the structure is named after
  * the subclass and decodes the type argument it passes, which must be `@Serializable`.
  */
-open class SerialStructure<T : Any>(dtm: DataTypeManager? = null, klass: Class<T>? = null, name: String? = null) :
+open class SerialStructure<T : Any>(dtm: DataTypeManager? = null, type: Type? = null, name: String? = null) :
     StructureDataType(name ?: "SerialStructure", 0, dtm) {
-    private val valueType = klass
+    private val valueType = type
         ?: (javaClass.genericSuperclass as? ParameterizedType)?.actualTypeArguments?.single()
         ?: error("${javaClass.simpleName} must extend SerialStructure<Value> directly")
 
     @Suppress("UNCHECKED_CAST")
     private val deserializer = DataFormat.serializersModule.serializer(valueType) as KSerializer<T>
 
-    private val valueClass = klass ?: ((valueType as? ParameterizedType)?.rawType ?: valueType) as Class<*>
+    private val valueClass = ((valueType as? ParameterizedType)?.rawType ?: valueType) as Class<*>
 
     init {
         if (name == null) setName(javaClass.simpleName)
@@ -278,18 +281,19 @@ open class SerialStructure<T : Any>(dtm: DataTypeManager? = null, klass: Class<T
     // Ghidra clones a structure into each manager or composite that takes it, which would drop the decoder.
     override fun clone(dtm: DataTypeManager?) = if (dtm == dataTypeManager) this else copy(dtm)
 
-    override fun copy(dtm: DataTypeManager?) = SerialStructure(dtm, valueClass, name).also {
+    override fun copy(dtm: DataTypeManager?) = SerialStructure<T>(dtm, valueType, name).also {
         it.description = description
         it.replaceWith(this)
     }
 
     companion object {
         /** A [SerialStructure] for [T], laid out by [layout]. */
+        @OptIn(ExperimentalStdlibApi::class)
         inline operator fun <reified T : Any> invoke(
             name: String,
             dtm: DataTypeManager? = null,
             layout: StructureDataType.() -> Unit,
-        ) = SerialStructure(dtm, T::class.java, name).apply(layout)
+        ) = SerialStructure<T>(dtm, typeOf<T>().javaType, name).apply(layout)
     }
 }
 
