@@ -4,6 +4,7 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.ascii.AsciiCharSetRecognizer
 import ghidra.util.ascii.CharSetRecognizer
+import ghistabs.cBytesAt
 import ghistabs.cStringAt
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterEach
@@ -13,7 +14,7 @@ import org.junit.jupiter.api.Test
 import java.nio.charset.Charset
 
 /**
- * [cStringAt] reads a NUL-terminated string no further than its length bound, and keeps it only when
+ * [cStringAt] and [cBytesAt] read a NUL-terminated string no further than its length bound, and keeps it only when
  * every character is in the charset: by default ASCII, so a UTF-8 string is turned down, not mangled,
  * unless the caller decodes as UTF-8.
  */
@@ -73,6 +74,13 @@ class CStringAtIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun `bytes that aren't UTF-8 are turned down rather than mangled`() =
         at("63 61 66 e9 00", charSet = decoded, charset = Charsets.UTF_8).mustBe(null) // Latin-1 "café"
+
+    @Test
+    fun `the raw bytes, NUL left off, whatever they decode to`() {
+        builder.setBytes("0x401000", "63 61 66 e9 00")
+        program.cBytesAt(builder.addr("0x401000"), 1..8)?.toList().mustBe(listOf<Byte>(0x63, 0x61, 0x66, 0xe9.toByte()))
+        program.cBytesAt(builder.addr("0x401000"), 1..3).mustBe(null)
+    }
 
     @Test
     fun `a run that reaches unmapped memory before any NUL`() = at("78 79 7a", where = "0x40103d").mustBe(null)

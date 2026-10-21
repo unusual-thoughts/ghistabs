@@ -235,23 +235,27 @@ fun MemBuffer.dataHere(dt: DataType): Data? = runCatching { PseudoData(memory.pr
     ?.takeIf { memory.allInitializedAddressSet.contains(it.minAddress, it.maxAddress) }
 
 /**
- * The NUL-terminated string where the buffer stands, decoded as [charset], if [lengths] holds its length in
- * bytes and [charSet] its characters. Read as a `char[]` element is, so the scan stops at the first NUL or after
- * [lengths]' last byte, whichever comes first. A byte [charset] can't decode becomes U+FFFD, which [charSet]
- * can turn down.
+ * The bytes of the NUL-terminated string where the buffer stands, NUL left off, if [lengths] holds how many.
+ * Scanned as a `char[]` element is, so the scan stops at the first NUL or after [lengths]' last byte,
+ * whichever comes first.
+ */
+fun MemBuffer.cBytesHere(lengths: IntRange): ByteArray? {
+    val scanned = StringDataInstance(StringDataType.dataType, SettingsImpl.NO_SETTINGS, this, lengths.last + 1, true)
+        .stringLength
+    val bytes = ByteArray(scanned).takeIf { getBytes(it, 0) == scanned } ?: return null
+    // A scan that hit the bound or unreadable memory first ends on something other than a NUL
+    return bytes.takeIf { it.lastOrNull() == 0.toByte() && it.size - 1 in lengths }?.copyOf(scanned - 1)
+}
+
+/**
+ * [cBytesHere] decoded as [charset], if [charSet] has every character. A byte [charset] can't decode
+ * becomes U+FFFD, which [charSet] can turn down.
  */
 fun MemBuffer.cStringHere(
     lengths: IntRange,
     charSet: CharSetRecognizer = AsciiCharSetRecognizer(),
     charset: Charset = Charsets.US_ASCII,
-): String? {
-    val settings = SettingsImpl().also { CharsetSettingsDefinition.CHARSET.setCharset(it, charset.name()) }
-    val string = StringDataInstance(StringDataType.dataType, settings, this, lengths.last + 1, true)
-    val length = string.stringLength - 1
-    // A scan that hit the bound or unreadable memory first ends on something other than a NUL
-    val terminated = runCatching { getByte(length) == 0.toByte() }.getOrDefault(false)
-    return string.stringValue?.takeIf { terminated && length in lengths && it.all { c -> charSet.contains(c.code) } }
-}
+): String? = cBytesHere(lengths)?.toString(charset)?.takeIf { it.all { c -> charSet.contains(c.code) } }
 
 private val MemBuffer.pointerType get() = PointerDataType(memory.program.dataTypeManager)
 
@@ -296,6 +300,9 @@ fun Program.lengthAt(addr: Address, dt: DataType): Int? = bytesAt(addr).lengthHe
  * holds, so this is the address it points at in the program as loaded.
  */
 fun Program.pointerAt(addr: Address): Address? = valueAt(addr, PointerDataType(dataTypeManager))
+
+/** The bytes of the NUL-terminated string at [addr] ([cBytesHere]). */
+fun Program.cBytesAt(addr: Address, lengths: IntRange) = bytesAt(addr).cBytesHere(lengths)
 
 /** The NUL-terminated string at [addr] ([cStringHere]). */
 fun Program.cStringAt(
