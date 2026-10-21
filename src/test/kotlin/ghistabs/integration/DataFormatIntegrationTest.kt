@@ -5,6 +5,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Data
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.DataFormat
 import ghistabs.Deref
 import ghistabs.Ptr
 import ghistabs.SerialAddress
@@ -161,5 +162,33 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             builder.setBytes("0x401000", it)
             program.read<Probe>(builder.addr(0x401000), probe)?.ptr?.deref().mustBeNull(it)
         }
+    }
+
+    @Serializable
+    data class Strings(
+        val name: String,
+        @Deref val nick: String,
+        val wide: String,
+        val none: String?,
+        val unterminated: String?,
+        val ptr: Ptr<String>,
+    )
+
+    @Test
+    fun `a char pointer reads the string it points at, null when null or unterminated within reach`() {
+        val strings = SerialStructure<Strings>("Strings") {
+            listOf("name", "nick").forEach { add(PointerDataType(CharDataType.dataType, 4), it, null) }
+            add(PointerDataType(WideChar16DataType.dataType, 4), "wide", null)
+            listOf("none", "unterminated").forEach { add(PointerDataType(CharDataType.dataType, 4), it, null) }
+            add(PointerDataType(CharDataType.dataType, 4), "ptr", null)
+        }
+        builder.createMemory(".str", "0x402000", DataFormat.MAX_STRING_BYTES + 0x100)
+        builder.setBytes("0x401000", "40 10 40 00 40 10 40 00 50 10 40 00 00 00 00 00 00 20 40 00 41 10 40 00")
+        builder.setBytes("0x401040", "68 c3 a9 00")
+        builder.setBytes("0x401050", "68 00 e9 00 00 00")
+        builder.setBytes("0x402000", List(DataFormat.MAX_STRING_BYTES) { "41" }.joinToString(" "))
+        val read = program.read<Strings>(builder.addr(0x401000), strings)
+        read mustBe Strings("hé", "hé", "hé", null, null, Ptr(builder.addr(0x401041)) { null })
+        read?.ptr?.deref() mustBe "é"
     }
 }
