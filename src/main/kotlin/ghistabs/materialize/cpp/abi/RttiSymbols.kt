@@ -97,9 +97,10 @@ class RttiSymbols(
         }
     }
 
-    data class TypeInfoRecord(val address: Address, val nameAddress: Address, val name: String)
+    /** A class typeinfo at [address], whose `__type_name` is the [name] at [nameAddress]. */
+    private data class TypeInfoRecord(val address: Address, val nameAddress: Address, val name: String)
 
-    fun Address.pointsToData() = program.pointerAt(this)?.let(program::isData) == true
+    private fun Address.pointsToData() = program.pointerAt(this)?.let(program::isData) == true
 
     /** Labels every class typeinfo, its name, and its vtable that lack one; returns how many vtables. */
     fun restore(): Int {
@@ -120,10 +121,12 @@ class RttiSymbols(
         }
 
         val header = primaryHeader(dtm)
-        fun TypeInfoRecord.vtablesPointing() = sitesByTarget[address]?.mapNotNull { it.plusWords(-1) }
+
+        // The offset_to_top words in front of a pointer to this typeinfo that start a primary vtable
+        fun TypeInfoRecord.primaryVtables() = sitesByTarget[address]?.mapNotNull { it.plusWords(-1) }
             ?.filter { program.primaryRecordAt(it, header) != null }.orEmpty()
 
-        val tops = unique.associate { it.name to (it.address to it.vtablesPointing()) }
+        val tops = unique.associate { it.name to (it.address to it.primaryVtables()) }
         val settled = tops.values.mapNotNull { (_, candidates) -> candidates.singleOrNull() }
         val among = settled.minOrNull()?.let { lo -> lo..settled.max() }
         val laid = tops.mapNotNull { (name, found) ->

@@ -46,7 +46,7 @@ fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataTyp
     }
 }
 
-/** What a primary vtable's address point starts with: `offset_to_top`, the rtti word, and its first slot. */
+/** What an Itanium primary vtable's address point starts with: `offset_to_top`, the rtti word, and slot 0. */
 fun primaryHeader(dtm: DataTypeManager) = StructureDataType("PrimaryVtableHeader", 0).apply {
     add(Itanium.offsetToTopType(dtm.dataOrganization.pointerSize), Itanium.OFFSET_TO_TOP, null)
     add(PointerDataType(dtm), Itanium.RTTI, null)
@@ -55,34 +55,33 @@ fun primaryHeader(dtm: DataTypeManager) = StructureDataType("PrimaryVtableHeader
 }
 
 /**
- * Finds a class's primary vtable from the words in memory that point at its typeinfo ([rttiSites]), for
- * a binary with no `_ZTV` symbol left to say where it is.
+ * The Itanium primary vtable whose `offset_to_top` word is at [addr], read through [header] ([primaryHeader]),
+ * or null if the words there don't have its shape. With no `_ZTV` symbol left to say where a class's vtable
+ * is, [RttiSymbols] tries the word in front of each pointer to the class's typeinfo.
  *
  * A class's `_ZTV` is a group of vtables, called records here ([VtableRecord]; the ABI's "virtual table
  * group", §2.5.2). The primary one comes first, at the `_ZTV` symbol: it serves the class and its primary
  * base, an object's first vptr points into it, and its `offset_to_top` is 0. A secondary one follows for
  * each other base with virtual functions, its `offset_to_top` the negated offset of that base in the object.
- *
  * A primary vtable's address point sits right after two header words:
  *
  *     [vbase/vcall offsets…]  offset_to_top  rtti       slot 0  slot 1 …
  *                             0              &typeinfo  &code
  *
- * so each site is tried as the `rtti` word. It is kept when the word before it is 0 and the word after it
- * points into code, and the address of that `offset_to_top` word is returned.
+ * so it matches when [addr] is in a data block, the word there is 0, and slot 0 points into code.
  *
- * - A site whose next word isn't a code pointer is turned down even after a 0: an exception table's
- *   catch entry stores `{0, typeinfo}` too (`std::string`'s on crypto_mi, a class with no vtable at all).
- *   That costs a record with no slots of its own, a class whose only virtual parts are its bases.
- * - A base's construction vtable (`_ZTC`) has the same shape and holds the base's typeinfo, so a base can
- *   come back with more than one record; the caller decides between them.
+ * - Slot 0 is required because a 0 then a typeinfo pointer isn't enough: an exception table's catch entry
+ *   stores `{0, typeinfo}` too (`std::string`'s on crypto_mi, a class with no vtable at all). That costs a
+ *   vtable with no slots of its own, a class whose only virtual parts are its bases.
+ * - A base's construction vtable (`_ZTC`) has the same shape and holds the base's typeinfo, so one typeinfo
+ *   can match more than one address; the caller decides between them.
  */
 fun Program.primaryRecordAt(addr: Address, header: Structure) = addr.takeIf(::isData)?.let { dataAt(it, header) }
     ?.takeIf { it.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value == 0L }
     ?.takeIf { it.valueOf<Address>("slot0")?.let(::isCode) == true }
 
 /**
- * Where the vtable record whose `offset_to_top` word is at [top] begins.
+ * Where the Itanium vtable record whose `offset_to_top` word is at [top] begins.
  *
  * A class with virtual bases puts a vbase or vcall offset per base in front of `offset_to_top`, so its
  * record starts before [top]. This walks back from [top] a word at a time while the word reads as such an
@@ -293,13 +292,13 @@ fun Program.vtableRecord(ztv: Address, abi: CxxAbi = Itanium): VtableRecord {
     return recordAt(ztv, rttiSlot, abi)
 }
 
-/** A record of a `_ZTV` group: where its fixed words sit, and the function pointers it holds. */
+/** A record of an Itanium `_ZTV` group: where its fixed words sit, and the function pointers it holds. */
 data class SubVtable(val record: VtableRecord, val targets: List<Address>) {
     fun endOfSlots(ptrSize: Int): Address = record.addressPoint.add(targets.size.toLong() * ptrSize)
 }
 
 /**
- * The sub-vtable beginning at [start], or null if what is there does not belong to [rtti]'s group. One
+ * The Itanium sub-vtable beginning at [start], or null if what is there does not belong to [rtti]'s group. One
  * with no slots is still a record: a base with no virtuals of its own keeps its vptr and header
  * (`Right` in `Diamond`, ahead of `Named`'s), and stopping at it would lose every record after it.
  */
@@ -314,7 +313,7 @@ private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? =
         ?.let { record -> SubVtable(record, record.vtableSlotTargets(this)) }
 
 /**
- * The secondary sub-vtables following the primary record, whose slots end at [afterPrimary] — one per
+ * The secondary sub-vtables following an Itanium primary record, whose slots end at [afterPrimary] — one per
  * virtual base, each its own `[vcall offsets…] offset_to_top rtti [thunks]` (ABI §2.5.2), none bearing
  * a symbol. Nothing delimits the group, so the walk is bounded by the one invariant that does: every
  * record in it describes the same complete object, hence carries the same [rtti] pointer. That alone
