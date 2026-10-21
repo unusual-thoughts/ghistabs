@@ -4,27 +4,11 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
-import ghidra.program.model.mem.Memory
-import ghidra.util.ascii.AsciiCharSetRecognizer
+import ghistabs.cStringAt
 import ghistabs.forceCreateData
 
-/**
- * Length (including the terminator) of the NUL-terminated run of characters Ghidra's string
- * charset ([AsciiCharSetRecognizer], the recognizer its StringSearcher wraps) accepts at [addr],
- * or null if [addr] doesn't begin one. A point query — we already hold the exact address, so
- * there's nothing to search for.
- */
-private fun Memory.utf8StringLen(addr: Address, max: Int = 4096): Int? {
-    val charSet = AsciiCharSetRecognizer()
-    val bytes = ByteArray(max)
-    val n = runCatching { getBytes(addr, bytes) }.getOrNull() ?: return null
-    for (i in 0 until n) {
-        val b = bytes[i].toInt() and 0xff
-        if (b == 0) return if (i > 0) i + 1 else null
-        if (!charSet.contains(b)) return null
-    }
-    return null
-}
+/** Longest string a pointee is chased into, terminator included. */
+private const val MAX_POINTEE_STRING = 4096
 
 /**
  * A pointee to chase into a string rather than lay verbatim: a `char*`/`byte*` target is
@@ -45,7 +29,9 @@ private fun DataType?.isStringPointee(): Boolean {
 /** The type (and byte length to clear) to lay for a pointer whose pointee is [pointee]. */
 private fun Program.desiredPointee(addr: Address, pointee: DataType?): Pair<DataType, Int>? = when {
     !pointee.isStringPointee() && pointee!!.length > 0 -> pointee to pointee.length
-    else -> memory.utf8StringLen(addr)?.let { TerminatedStringDataType.dataType to it }
+
+    // A non-empty ASCII run, the charset Ghidra's StringSearcher accepts, with its NUL
+    else -> cStringAt(addr, 1..<MAX_POINTEE_STRING)?.let { TerminatedStringDataType.dataType to it.length + 1 }
 }
 
 /**
