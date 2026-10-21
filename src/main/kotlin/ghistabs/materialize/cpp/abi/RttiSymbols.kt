@@ -1,17 +1,28 @@
 package ghistabs.materialize.cpp.abi
 
-import ghidra.app.util.bin.BinaryReader
-import ghidra.app.util.bin.MemoryByteProvider
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.listing.Program
+import ghidra.program.model.mem.MutableMemBuffer
+import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.SourceType
+import ghidra.util.ascii.AsciiCharSetRecognizer
+import ghidra.util.ascii.CharSetRecognizer
 import ghistabs.BoolOption
 import ghistabs.Demangler
+import ghistabs.alignTo
+import ghistabs.dataAt
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.get
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.memBuffer
+import ghistabs.pointerAt
+import ghistabs.readAs
+import ghistabs.readPointer
 import ghistabs.set
+import ghistabs.valueOf
 import kotlin.math.abs
+import kotlin.ranges.rangeTo
 
 /** Longest typeinfo name read; CryptoPP's deepest template instantiations run to a few hundred bytes. */
 private const val MAX_TYPE_NAME = 4096
@@ -53,52 +64,49 @@ class RttiSymbols(
     private val ptr = program.defaultPointerSize
     private val space = program.addressFactory.defaultAddressSpace
     private val memory = program.memory
+    private val dtm = program.dataTypeManager
 
-    /** Reads memory where it lies, indexed by offset into the default space, with nothing copied out. */
-    private val reader = BinaryReader(MemoryByteProvider(memory, space), !program.language.isBigEndian)
+    val buf = program.memBuffer()
 
-    private fun isData(addr: Address) = memory.getBlock(addr)?.let { it.isInitialized && !it.isExecute } == true
+    private fun Address.isData() = memory.getBlock(this)?.let { it.isInitialized && !it.isExecute } == true
 
-    private fun isCode(addr: Address) = memory.getBlock(addr)?.isExecute == true
+    private fun Address.isCode() = memory.getBlock(this)?.isExecute == true
 
     private fun Address.plusWords(n: Int): Address? = plusOrNull(n.toLong() * ptr)
 
-    private fun Address.lastByteOfWord(): Address? = plusOrNull(ptr - 1L)
-
-    /** The word at [addr], unsigned, or null unless it lies whole in one data block. */
-    private fun word(addr: Address): Long? = memory.getBlock(addr)
-        ?.takeIf { it.isInitialized && !it.isExecute && addr.lastByteOfWord()?.let(it::contains) == true }
-        ?.let { reader.readUnsignedValue(addr.offset, ptr) }
-
-    /** [word], sign-extended from the pointer width. */
-    private fun signedWord(addr: Address) = word(addr)?.let { if (ptr == 4) it.toInt().toLong() else it }
-
-    /** [word] as the address it points at, if any. */
-    private fun pointer(addr: Address): Address? = word(addr)?.let { runCatching { space.getAddress(it) }.getOrNull() }
-
     private fun Address.plusOrNull(by: Long): Address? = runCatching { addNoWrap(by) }.getOrNull()
+
+    private fun signedWord(addr: Address) =
+        buf.readAs<Scalar>(IntegerDataType.getSignedDataType(ptr, null), addr)?.signedValue
 
     /** Every aligned word in the data blocks that points into them, by what it points at. */
     private val sitesByTarget: Map<Address, List<Address>> by lazy {
-        val sites = HashMap<Address, MutableList<Address>>()
-        for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
-            var site = b.start.add((ptr - b.start.offset % ptr) % ptr)
-            while (site.lastByteOfWord()?.let(b::contains) == true) {
-                val target = runCatching { space.getAddress(reader.readUnsignedValue(site.offset, ptr)) }.getOrNull()
-                if (target != null && isData(target)) sites.getOrPut(target) { mutableListOf() }.add(site)
-                site = site.plusWords(1) ?: break
+        buildMap<Address, MutableList<Address>> {
+            for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
+                buf.setPosition(b.start.alignTo(ptr.toLong()))
+                while (buf.address in b.addressRange) {
+                    val data = buf.pointerAt() ?: break
+                    val addr = (data.value as? Address)?.takeIf { it.isData() } ?: continue
+                    getOrPut(addr) { mutableListOf() }.add(data.address)
+                }
             }
         }
-        sites
     }
 
+    private fun MutableMemBuffer.stringAt(
+        addr: Address? = null,
+        lengthIn: IntRange = 0..256,
+        charSet: CharSetRecognizer = AsciiCharSetRecognizer(),
+    ) = runCatching {
+        addr?.let { setPosition(it) }
+        (0..<lengthIn.last).asSequence().map { getByte(it) }
+            .takeWhile { charSet.contains(it.toInt()) }.toList()
+            .takeIf { it.size >= lengthIn.first && getByte(it.size).toInt() == 0 }
+            ?.toByteArray()?.decodeToString()
+    }.getOrNull()
+
     /** The NUL-terminated class name at [addr], or null if what is there can't be one. */
-    private fun className(addr: Address): String? {
-        val block = memory.getBlock(addr) ?: return null
-        val length = (0 until minOf(MAX_TYPE_NAME.toLong(), block.end.subtract(addr) + 1))
-            .firstOrNull { reader.readByte(addr.offset + it) == 0.toByte() } ?: return null
-        return reader.readAsciiString(addr.offset, length.toInt()).takeIf(CLASS_TYPE_NAME::matches)
-    }
+    private fun className(addr: Address): String? = buf.stringAt(addr)?.takeIf(CLASS_TYPE_NAME::matches)
 
     companion object {
         val RTTI_SYMBOLS_RESTORED = BoolOption("RTTI Symbols Restored", "Stripped RTTI labels already put back.", false)
@@ -126,7 +134,7 @@ class RttiSymbols(
         val names = HashMap<Address, String?>()
         val typeinfos = sitesByTarget.flatMap { (target, sites) ->
             val name = names.getOrPut(target) { className(target) } ?: return@flatMap emptyList()
-            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { pointer(it)?.let(::isData) == true } }
+            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { buf.readPointer(it)?.isData() == true } }
                 .map { typeinfo -> Triple(typeinfo, target, name) }
         }.filter { (_, _, name) -> Demangler.of(Itanium.TYPEINFO_PREFIX + name) != null }
         if (itaniumUnproven && typeinfos.none { ITANIUM_ONLY_NAME.matches(it.third) }) return 0
@@ -141,11 +149,11 @@ class RttiSymbols(
         val among = settled.minOrNull()?.let { lo -> lo..settled.max() }
         val laid = tops.mapNotNull { (name, found) ->
             val (typeinfo, candidates) = found
-            val top =
-                candidates.singleOrNull() ?: candidates.filter { among != null && it in among }.singleOrNull() ?: run {
-                    if (candidates.isNotEmpty()) debug("vtable-rtti-ambiguous", "$name: $candidates", typeinfo)
-                    return@mapNotNull null
-                }
+            val top = candidates.singleOrNull()
+                ?: candidates.singleOrNull { among != null && it in among } ?: run {
+                if (candidates.isNotEmpty()) debug("vtable-rtti-ambiguous", "$name: $candidates", typeinfo)
+                return@mapNotNull null
+            }
             if (!label(prefixStart(top), Itanium.VTABLE_PREFIX + name)) return@mapNotNull null
             Triple(name, typeinfo, top)
         }
@@ -169,6 +177,8 @@ class RttiSymbols(
         return kept.size
     }
 
+    private val vtable by lazy { potentialVtable(dtm) }
+
     /**
      * The `offset_to_top` words a record of [typeinfo] can start its address point behind: a 0, then
      * a function pointer after the rtti word. Without that slot, `{0, typeinfo}` is as likely an exception
@@ -177,7 +187,10 @@ class RttiSymbols(
      */
     private fun primaryCandidates(typeinfo: Address): List<Address> = sitesByTarget[typeinfo].orEmpty()
         .mapNotNull { it.plusWords(-1) }
-        .filter { top -> word(top) == 0L && top.plusWords(2)?.let(::pointer)?.let(::isCode) == true }
+        .mapNotNull { buf.dataAt(vtable, it) }
+        .filter { it.valueOf<Scalar>(0)?.value == 0L }
+        .filter { it.valueOf<Address>(2)?.isCode() == true }
+        .map { it.address }
 
     /** Where the record whose `offset_to_top` is at [top] starts: in front of the vbase offsets it can see. */
     private fun prefixStart(top: Address) = generateSequence(top) { it.plusWords(-1) }
@@ -186,7 +199,7 @@ class RttiSymbols(
         .lastOrNull() ?: top
 
     /** Whether a vbase-offset-sized [value] is rather a pointer into code. */
-    private fun isCodeOffset(value: Long) = runCatching { space.getAddress(value) }.getOrNull()?.let(::isCode) == true
+    private fun isCodeOffset(value: Long) = runCatching { space.getAddress(value) }.getOrNull()?.isCode() == true
 
     /**
      * Labels [addr] with [name] unless something already named it — mangled or, once the loader
