@@ -16,7 +16,9 @@ import java.io.File
  * A vtable the binary doesn't hold is no failure to find it. `stringbuf` comes in with libstdc++'s
  * headers, but nothing in xmltest links a member of it, so its vtable was never emitted; `tinyxml_aout_gcc295.o`
  * names `TiXmlDocument`'s vtable only as an external another object defines. A stripped binary's
- * `streambuf` is different: its members are linked, so its vtable is there and only its symbol is gone.
+ * `streambuf` has lost its vtable symbol, but its typeinfo still leads to the vtable. `TiXmlAttribute`
+ * in the same gcc 2.95 object has members linked yet its vtable lives with `Parse` in another object,
+ * so it is still counted as a failure.
  */
 @Tag("integration")
 class VtableUnlinkedIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -31,7 +33,8 @@ class VtableUnlinkedIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @CsvSource(
         "xmltest_gcc421_fullstabs.exe, stringbuf, false",
         "tinyxml_aout_gcc295.o, TiXmlDocument, false",
-        "xmltest_gcc421_fullstabs_stripped.exe, streambuf, true",
+        "xmltest_gcc421_fullstabs_stripped.exe, streambuf, false",
+        "tinyxml_aout_gcc295.o, TiXmlAttribute, true",
     )
     fun `only a vtable the binary holds is a failure to find it`(fixture: String, cls: String, failed: Boolean) {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")

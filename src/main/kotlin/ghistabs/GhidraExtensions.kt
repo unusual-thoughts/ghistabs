@@ -5,7 +5,6 @@ package ghistabs
 import ghidra.app.cmd.function.CallDepthChangeInfo
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.PseudoData
-import ghidra.app.util.PseudoDisassembler
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
@@ -17,20 +16,27 @@ import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.mem.DumbMemBufferImpl
+import ghidra.program.model.mem.MemBuffer
 import ghidra.program.model.mem.MemoryBlock
+import ghidra.program.model.mem.MemoryBufferImpl
+import ghidra.program.model.mem.MutableMemBuffer
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
+import ghidra.util.ascii.AsciiCharSetRecognizer
+import ghidra.util.ascii.CharSetRecognizer
 import ghidra.util.task.TaskMonitor
 import ghistabs.parse.dbxArch
 import ghistabs.parse.frameRegister
 import java.io.File
+import java.nio.charset.Charset
 import java.nio.file.AccessMode
 
 operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)
 operator fun Address.plus(rhs: Int): Address = addNoWrap(rhs.toLong())
+fun Address.alignTo(size: Long): Address = add((size - offset % size) % size)
 
 operator fun Address.minus(rhs: Long): Address = subtractNoWrap(rhs)
 operator fun Address.minus(rhs: Int): Address = subtractNoWrap(rhs.toLong())
@@ -58,9 +64,10 @@ operator fun AddressSetView.plus(addrs: AddressSetView): AddressSet = union(addr
 operator fun AddressSetView.plus(range: AddressRange): AddressSet = union(AddressSet(range))
 operator fun AddressSetView.plus(addr: Address): AddressSet = union(AddressSet(addr))
 
-operator fun Data.get(i: Int): Data? = this.getComponent(i)
+operator fun Data.get(i: Int): Data? = getComponent(i)
 operator fun Data.get(name: String): Data? =
-    (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(this::get)
+    (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(::get)
+inline fun <reified T> Data.valueOf(i: Int): T? = getComponent(i)?.value as? T
 inline fun <reified T> Data.valueOf(name: String): T? = get(name)?.value as? T
 fun Data.getScalar(name: String): Scalar? = valueOf(name)
 
@@ -209,34 +216,99 @@ fun Program.forceCreateData(
     return DataUtilities.createData(this, addr, dt, length, DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
 }
 
+/** How many bytes [dt] spans where the buffer stands: a [Dynamic] type's own decoded length, or null if unreadable. */
+fun MemBuffer.lengthHere(dt: DataType): Int? =
+    runCatching { if (dt is Dynamic) dt.getLength(this, -1) else dt.length }.getOrNull()?.takeIf { it > 0 }
+
+/**
+ * [dt] decoded where the buffer stands, as a [T]: a [Scalar] for an integer type, an [Address] for a pointer,
+ * a [String] for a string type. A [Dynamic] type is read at the length it sizes itself to: a LEB128 would
+ * otherwise be cut to a byte, and a string type decodes nothing at length -1.
+ */
+inline fun <reified T> MemBuffer.valueHere(dt: DataType): T? =
+    runCatching { dt.getValue(this, dt.defaultSettings, lengthHere(dt) ?: -1) as? T }.getOrNull()
+
+/** [dt] over the bytes where the buffer stands, laid nowhere, or null unless every byte is initialized memory. */
+fun MemBuffer.dataHere(dt: DataType): Data? = runCatching { PseudoData(memory.program, address, dt, this) }.getOrNull()
+    // PseudoData zero-fills bytes it can't read, so check they are all there
+    ?.takeIf { memory.allInitializedAddressSet.contains(it.minAddress, it.maxAddress) }
+
+/** The bytes of the NUL-terminated string where the buffer stands, NUL left off, if [lengths] holds how many. */
+fun MemBuffer.cBytesHere(lengths: IntRange): ByteArray? = ByteArray(lengths.last + 1).run {
+    // getBytes stops short at unreadable memory, so a NUL past what it read is never found
+    asSequence().take(getBytes(this, 0)).indexOf(0).takeIf { it in lengths }?.let(::copyOf)
+}
+
+/**
+ * [cBytesHere] decoded as [charset], if [charSet] has every character. A byte [charset] can't decode
+ * becomes U+FFFD, which [charSet] can turn down.
+ */
+fun MemBuffer.cStringHere(
+    lengths: IntRange,
+    charSet: CharSetRecognizer = AsciiCharSetRecognizer(),
+    charset: Charset = Charsets.US_ASCII,
+): String? = cBytesHere(lengths)?.toString(charset)?.takeIf { it.all { c -> charSet.contains(c.code) } }
+
+private val MemBuffer.pointerType get() = PointerDataType(memory.program.dataTypeManager)
+
+/** Moves the buffer to [addr], so the next `next…` call reads there. */
+fun MutableMemBuffer.seek(addr: Address) = apply { setPosition(addr) }
+
+/** Moves the buffer past [length] bytes; false, leaving it where it is, if that would leave the address space. */
+fun MutableMemBuffer.skip(length: Int) = runCatching { advance(length) }.isSuccess
+
+/** [valueHere], then past it; null if the buffer can't move past it, so a read loop always moves on or stops. */
+inline fun <reified T> MutableMemBuffer.nextValue(dt: DataType): T? =
+    valueHere<T>(dt)?.takeIf { lengthHere(dt)?.let(::skip) == true }
+
+/** [dataHere], then past it; null if the buffer can't move past it. */
+fun MutableMemBuffer.nextData(dt: DataType): Data? = dataHere(dt)?.takeIf { skip(it.length) }
+
+fun MutableMemBuffer.nextPointerData(): Data? = nextData(pointerType)
+
+fun MutableMemBuffer.nextPointer(): Address? = nextValue(pointerType)
+
+/** A buffer for reading forward from [start]: it caches a window of memory, so reads near the last are cheap. */
+fun Program.cursorAt(start: Address): MutableMemBuffer = MemoryBufferImpl(memory, start)
+
+/** A buffer that reads straight from memory at [addr], for a one-off read where a cached window would be wasted. */
+fun Program.bytesAt(addr: Address): MemBuffer = DumbMemBufferImpl(memory, addr)
+
 /**
  * [dt] read over the bytes at [addr] without laying anything in the listing, or null if they are not
  * all readable. The data type does the decoding — width, endianness, sign, which address space a
  * pointer lands in — so a caller never reassembles bytes by hand.
  */
-fun Program.readAt(addr: Address, dt: DataType): Data? = PseudoDisassembler(this).applyDataType(addr, dt)
+fun Program.dataAt(addr: Address, dt: DataType): Data? = bytesAt(addr).dataHere(dt)
 
-/**
- * [readAt]'s value as a [T]: a [Scalar] for an integer type, an [Address] for a pointer. A [Dynamic]
- * type such as a LEB128 is read at the length it sizes itself to, which [PseudoData]'s fixed one
- * would cut to a byte.
- */
-inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = when (dt) {
-    is Dynamic -> dt.getValue(DumbMemBufferImpl(memory, addr), dt.defaultSettings, -1)
-    else -> readAt(addr, dt)?.value
-} as? T
+/** [dt]'s value at [addr] ([valueHere]). */
+inline fun <reified T> Program.valueAt(addr: Address, dt: DataType): T? = bytesAt(addr).valueHere(dt)
 
-/** How many bytes [dt] spans at [addr]: a [Dynamic] type's own decoded length, or null if unreadable. */
-fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
-    is Dynamic -> dt.getLength(DumbMemBufferImpl(memory, addr), -1)
-    else -> dt.length
-}.takeIf { it > 0 }
+/** How many bytes [dt] spans at [addr] ([lengthHere]). */
+fun Program.lengthAt(addr: Address, dt: DataType): Int? = bytesAt(addr).lengthHere(dt)
 
 /**
  * The pointer stored at [addr], taken as it stands. The loader has already relocated what memory
  * holds, so this is the address it points at in the program as loaded.
  */
-fun Program.readPointer(addr: Address): Address? = readAs(addr, PointerDataType(dataTypeManager))
+fun Program.pointerAt(addr: Address): Address? = valueAt(addr, PointerDataType(dataTypeManager))
+
+/** Whether [addr] is in an executable block. */
+fun Program.isCode(addr: Address) = memory.getBlock(addr)?.isExecute == true
+
+/** Whether [addr] is in an initialized block that isn't executable. */
+fun Program.isData(addr: Address) = memory.getBlock(addr)?.let { it.isInitialized && !it.isExecute } == true
+
+/** The bytes of the NUL-terminated string at [addr] ([cBytesHere]). */
+fun Program.cBytesAt(addr: Address, lengths: IntRange) = bytesAt(addr).cBytesHere(lengths)
+
+/** The NUL-terminated string at [addr] ([cStringHere]). */
+fun Program.cStringAt(
+    addr: Address,
+    lengths: IntRange,
+    charSet: CharSetRecognizer = AsciiCharSetRecognizer(),
+    charset: Charset = Charsets.US_ASCII,
+) = bytesAt(addr).cStringHere(lengths, charSet, charset)
 
 val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
 

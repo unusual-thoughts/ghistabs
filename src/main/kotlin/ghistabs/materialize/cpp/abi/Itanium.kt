@@ -40,6 +40,19 @@ object Itanium : CxxAbi {
     /** The NTBS a typeinfo object's `__type_name` points at. */
     const val TYPEINFO_NAME_PREFIX = "_ZTS"
 
+    /**
+     * What a class's typeinfo name can spell: its mangled name without `_Z`, optionally opened by `N` (a
+     * nested name, closed by `E`). Then either one of the `std` abbreviations naming a class (`Sa`, `Sb`,
+     * `Ss`, `Si`, `So`, `Sd`), or an optional `St` (`std::`) and the first name as its length (no leading
+     * zero) and an identifier starting with a letter or `_`. Further names, template args and the closing
+     * `E` are only held to the mangling alphabet. Matches `9TiXmlNode`, `N8CryptoPP3AESE`, `St9exception`,
+     * `Sd`, `NSt8ios_base7failureE`; not a fundamental type (`i`) or a pointer (`P…`).
+     */
+    val CLASS_TYPE_NAME = Regex("""N?(?:S[abdios]|(?:St)?[1-9]\d*[A-Za-z_])\w*""")
+
+    /** Typeinfo names only Itanium spells: a nested name, or one in `std`. gcc 2.x writes `Q2…`, `9type_info`. */
+    val ITANIUM_ONLY_NAME = Regex("N.*E|St.*")
+
     /** A thunk adjusting `this` by a fixed offset. */
     const val NON_VIRTUAL_THUNK_PREFIX = "_ZTh"
 

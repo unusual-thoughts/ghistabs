@@ -741,7 +741,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 ?.removePrefix("${Itanium.RTTI}: ")?.substringBefore(" typeinfo")?.let { named ->
                     // Only a *contradiction* counts: with no symbol at the target there is nothing to
                     // name and the closed form is the honest fallback.
-                    val present = program.readPointer(rttiHeader)
+                    val present = program.pointerAt(rttiHeader)
                         ?.let { program.symbolTable.getSymbols(it).map { s -> s.name } }
                         .orEmpty()
                     if (present.isNotEmpty() && named !in present) {
@@ -795,7 +795,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 continue
             }
             for (item in lsda.items.filter { it.kind == ghistabs.eh.SjljLsda.Kind.POINTER }) {
-                val target = program.readPointer(item.at)?.takeIf { it.offset != 0L } ?: continue
+                val target = program.pointerAt(item.at)?.takeIf { it.offset != 0L } ?: continue
                 val symbols = program.symbolTable.getSymbols(target).filter { it.source != SourceType.DEFAULT }
                 when {
                     symbols.isEmpty() -> {}
@@ -1284,11 +1284,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             when {
                 !pointsIntoCode(at) ->
                     "vftable for $ns@$addr: slot '${slot0.fieldName}' at +${slot0.offset} " +
-                        "holds ${program.readPointer(at)}, not a code address"
+                        "holds ${program.pointerAt(at)}, not a code address"
 
                 before != null && pointsIntoCode(before) ->
                     "vftable for $ns@$addr: the word before slot '${slot0.fieldName}' at " +
-                        "+${slot0.offset} holds ${program.readPointer(before)}, a code address too " +
+                        "+${slot0.offset} holds ${program.pointerAt(before)}, a code address too " +
                         "(mislaid on the rtti or vbase-offset word?)"
 
                 else -> null
@@ -1312,7 +1312,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun noSubVtableInsideAGroupIsLeftUnlabelled() {
         val ptr = program.defaultPointerSize.toLong()
         fun labelsAt(a: Address) = program.symbolTable.getSymbols(a).map { it.name }
-        fun isRttiHeader(a: Address) = program.readPointer(a)
+        fun isRttiHeader(a: Address) = program.pointerAt(a)
             ?.let { target -> labelsAt(target).any(Itanium::looksLikeZti) } == true
 
         val primaries = program.symbolTable.symbolIterator.iterator().asSequence()
@@ -1535,9 +1535,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     @ExpectedToFail(
         fixtures = [
-            // Stripped: no symbol table at all, so neither the stab method list nor §25's `_ZTV`
-            // sweep has anything to read. Their unstripped twins pass on the sweep alone.
-            "crypto_mi_test_gcc421_stripped.exe", "xmltest_gcc421_stripped.exe",
             // a.out: these fixtures are plain C, so there are no classes and no vtables at all.
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
         ],
@@ -2414,7 +2411,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
     /** Whether the pointer stored at [a] targets executable memory — how the address point is told
      *  apart from the rtti / vbase-offset words in front of it. */
-    private fun pointsIntoCode(a: Address) = program.readPointer(a)
+    private fun pointsIntoCode(a: Address) = program.pointerAt(a)
         ?.takeIf { it.offset != 0L }
         ?.let { program.memory.getBlock(it)?.isExecute } == true
 

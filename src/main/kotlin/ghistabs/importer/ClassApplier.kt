@@ -12,6 +12,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
+import ghistabs.entrypoints.RttiSymbolsAnalyzer
 import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
@@ -21,7 +22,9 @@ import ghistabs.materialize.buildFunctionDefinition
 import ghistabs.materialize.cpp.*
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.abi.ResolvedVtable
+import ghistabs.materialize.cpp.abi.RttiSymbols
 import ghistabs.materialize.cpp.abi.vtableRecord
 import ghistabs.materialize.resolveRef
 import ghistabs.materialize.signatureParams
@@ -180,6 +183,9 @@ class ClassApplier(
      * sweep, which knows the ones laid here by their `vftable` labels.
      */
     fun applyAll(): Int {
+        // A stripped binary's vtables and typeinfos are only found by their symbols once these are back.
+        // Early analysis has put them back already, unless the import runs first.
+        if (RttiSymbolsAnalyzer.isEnabled(program)) RttiSymbols.restoreOnce(program, this)
         val classes = registry.classesBasesFirst()
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
