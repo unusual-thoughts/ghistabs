@@ -2,17 +2,8 @@ package ghistabs
 
 import ghidra.docking.settings.Settings
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
-import ghidra.program.model.data.CharDataType
-import ghidra.program.model.data.Composite
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.TypeDef
-import ghidra.program.model.data.WideChar16DataType
-import ghidra.program.model.data.WideChar32DataType
-import ghidra.program.model.data.WideCharDataType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemBuffer
@@ -29,7 +20,6 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
 import java.lang.reflect.ParameterizedType
-import java.lang.reflect.Type
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import ghidra.program.model.data.Enum as GhidraEnum
@@ -195,9 +185,9 @@ private val Data.isAggregate get() = baseDataType.let { it is Composite || it is
 /** The NUL-terminated string the char pointer [this] points at, read as [spec] says; see [DataFormat]. */
 private fun Data.pointedString(spec: Text?): String? {
     val width = charWidth ?: return null
-    val bytes =
-        target?.let { program.bytesAt(it).cBytesHere(0..<(spec?.maxBytes ?: DataFormat.MAX_STRING_BYTES), width) }
-            ?: return null
+    val buf = target?.let { program.bytesAt(it) } ?: return null
+    val n = spec?.maxBytes ?: DataFormat.MAX_STRING_BYTES
+    val bytes = buf.cBytesHere(0..<n, width)
     val big = program.memory.isBigEndian
     val charset = spec?.charset?.takeIf { it.isNotEmpty() }?.let(Charset::forName) ?: when (width) {
         1 -> Charsets.UTF_8
@@ -265,29 +255,16 @@ typealias SerialData =
  * A subclass that lays its fields in `init` takes the `(dtm)` constructor: the structure is named after
  * the subclass and decodes the type argument it passes, which must be `@Serializable`.
  */
-open class SerialStructure<T : Any> private constructor(
-    name: String?,
-    deserializer: DeserializationStrategy<T>?,
-    valueType: Type?,
-    dtm: DataTypeManager?,
-) : StructureDataType(name ?: "SerialStructure", 0, dtm) {
-    constructor(
-        name: String,
-        deserializer: DeserializationStrategy<T>,
-        valueClass: Class<T>,
-        dtm: DataTypeManager? = null,
-    ) : this(name as String?, deserializer, valueClass, dtm)
-
-    protected constructor(dtm: DataTypeManager? = null) : this(null, null, null, dtm)
-
-    private val valueType = valueType
+open class SerialStructure<T : Any>(dtm: DataTypeManager? = null, klass: Class<T>? = null, name: String? = null) :
+    StructureDataType(name ?: "SerialStructure", 0, dtm) {
+    private val valueType = klass
         ?: (javaClass.genericSuperclass as? ParameterizedType)?.actualTypeArguments?.single()
         ?: error("${javaClass.simpleName} must extend SerialStructure<Value> directly")
 
     @Suppress("UNCHECKED_CAST")
-    private val deserializer = deserializer ?: DataFormat.serializersModule.serializer(this.valueType) as KSerializer<T>
+    private val deserializer = DataFormat.serializersModule.serializer(valueType) as KSerializer<T>
 
-    private val valueClass = ((this.valueType as? ParameterizedType)?.rawType ?: this.valueType) as Class<*>
+    private val valueClass = klass ?: ((valueType as? ParameterizedType)?.rawType ?: valueType) as Class<*>
 
     init {
         if (name == null) setName(javaClass.simpleName)
@@ -301,7 +278,7 @@ open class SerialStructure<T : Any> private constructor(
     // Ghidra clones a structure into each manager or composite that takes it, which would drop the decoder.
     override fun clone(dtm: DataTypeManager?) = if (dtm == dataTypeManager) this else copy(dtm)
 
-    override fun copy(dtm: DataTypeManager?) = SerialStructure(name, deserializer, valueClass, dtm).also {
+    override fun copy(dtm: DataTypeManager?) = SerialStructure(dtm, valueClass, name).also {
         it.description = description
         it.replaceWith(this)
     }
@@ -312,7 +289,7 @@ open class SerialStructure<T : Any> private constructor(
             name: String,
             dtm: DataTypeManager? = null,
             layout: StructureDataType.() -> Unit,
-        ) = SerialStructure(name, DataFormat.serializersModule.serializer<T>(), T::class.java, dtm).apply(layout)
+        ) = SerialStructure(dtm, T::class.java, name).apply(layout)
     }
 }
 
