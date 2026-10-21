@@ -5,8 +5,12 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Data
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.SerialStructure
 import ghistabs.decode
+import ghistabs.get
 import ghistabs.read
+import ghistabs.readAs
+import ghistabs.readAt
 import ghistabs.test.mustBe
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
@@ -46,7 +50,7 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private val program get() = builder.program
 
     private val inner by lazy {
-        StructureDataType("Inner", 0).apply {
+        SerialStructure<Inner>("Inner") {
             add(ShortDataType.dataType, "lo", null)
             add(UnsignedIntegerDataType.dataType, "hi", null)
             addBitField(ByteDataType.dataType, 1, "isVirtual", null)
@@ -61,7 +65,7 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             add("VIRTUAL", 7)
             add("PLAIN", 9)
         }
-        StructureDataType("Outer", 0).apply {
+        SerialStructure<Outer>("Outer") {
             add(IntegerDataType.dataType, "offset", null)
             add(PointerDataType(VoidDataType.dataType, 4), "target", null)
             add(TypedefDataType("Inner_t", inner), "inner", null)
@@ -104,9 +108,9 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
-    fun `a structure reads into its class, nested composites, arrays, bitfields and enums by name`() {
+    fun `a structure reads into its class by field name, as does a SerialStructure's value`() {
         lay()
-        program.read<Outer>(builder.addr(0x401000), outer) mustBe Outer(
+        val expected = Outer(
             offset = -4,
             target = builder.addr(0x402010),
             inner = Inner(-2, 0xffffffffL, isVirtual = true, access = 2),
@@ -114,6 +118,9 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             words = listOf<UShort>(1u, 2u, 0xffffu),
             pairs = listOf(Inner(1, 2, isVirtual = false, access = 0), Inner(3, 4, isVirtual = true, access = 3)),
         )
+        program.read<Outer>(builder.addr(0x401000), outer) mustBe expected
+        program.readAs<Outer>(builder.addr(0x401000), outer) mustBe expected
+        program.readAt(builder.addr(0x401000), outer)?.get("inner")?.value mustBe expected.inner
     }
 
     @Test

@@ -1,11 +1,16 @@
 package ghistabs
 
+import ghidra.app.util.PseudoData
+import ghidra.docking.settings.Settings
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Array
 import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
+import ghidra.program.model.mem.MemBuffer
 import ghidra.program.model.scalar.Scalar
 import kotlinx.serialization.*
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -129,6 +134,41 @@ object DataFormat {
             return index.takeIf { it in 0..<enumDescriptor.elementsCount }
                 ?: throw SerializationException("No ${enumDescriptor.serialName} for $value in '$name'")
         }
+    }
+}
+
+/**
+ * A structure whose data's [Data.getValue] is its layout decoded as a [T] through [DataFormat], so
+ * `program.readAt(addr, it)?.value` or [Program.readAs] hands back the class. That holds for pseudo data
+ * and for a field of another such structure; laid in a listing, it resolves to a plain structure,
+ * whose data [decode] still reads.
+ */
+class SerialStructure<T : Any>(
+    name: String,
+    private val deserializer: DeserializationStrategy<T>,
+    private val valueClass: Class<T>,
+    dtm: DataTypeManager? = null,
+) : StructureDataType(name, 0, dtm) {
+    override fun getValue(buf: MemBuffer, settings: Settings?, length: Int): T =
+        DataFormat.decode(deserializer, buf as? Data ?: PseudoData(buf.memory.program, buf.address, this, buf))
+
+    override fun getValueClass(settings: Settings?) = valueClass
+
+    // Ghidra clones a structure into each manager or composite that takes it, which would drop the decoder.
+    override fun clone(dtm: DataTypeManager?) = if (dtm == dataTypeManager) this else copy(dtm)
+
+    override fun copy(dtm: DataTypeManager?) = SerialStructure(name, deserializer, valueClass, dtm).also {
+        it.description = description
+        it.replaceWith(this)
+    }
+
+    companion object {
+        /** A [SerialStructure] for [T], laid out by [layout]. */
+        inline operator fun <reified T : Any> invoke(
+            name: String,
+            dtm: DataTypeManager? = null,
+            layout: StructureDataType.() -> Unit,
+        ) = SerialStructure(name, DataFormat.serializersModule.serializer<T>(), T::class.java, dtm).apply(layout)
     }
 }
 
