@@ -2,6 +2,7 @@ package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.IntegerDataType
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MutableMemBuffer
 import ghidra.program.model.scalar.Scalar
@@ -65,7 +66,12 @@ class RttiSymbols(
     private val space = program.addressFactory.defaultAddressSpace
     private val memory = program.memory
     private val dtm = program.dataTypeManager
+    // private val rtti by lazy { Rtti(dtm) }
 
+//    private val buf = MemoryBufferImpl(memory)
+
+    /** Reads memory where it lies, indexed by offset into the default space, with nothing copied out. */
+//    private val reader = BinaryReader(MemoryByteProvider(memory, space), !program.language.isBigEndian)
     val buf = program.memBuffer()
 
     private fun Address.isData() = memory.getBlock(this)?.let { it.isInitialized && !it.isExecute } == true
@@ -74,8 +80,35 @@ class RttiSymbols(
 
     private fun Address.plusWords(n: Int): Address? = plusOrNull(n.toLong() * ptr)
 
+    // private fun Address.lastByteOfWord(): Address? = plusOrNull(ptr - 1L)
+
+    // The word at [addr], unsigned, or null unless it lies whole in one data block. */
+//    private fun word(addr: Address): Long? = memory.getBlock(addr)
+//        ?.takeIf { it.isInitialized && !it.isExecute && addr.lastByteOfWord()?.let(it::contains) == true }
+//        ?.let { reader.readUnsignedValue(addr.offset, ptr) }
+
+//    private fun word(addr: Address=buf.address): Long? = buf.getVarLengthUnsignedInt()
+//        memory.getBlock(addr)
+//        ?.takeIf { it.isInitialized && !it.isExecute && addr.lastByteOfWord()?.let(it::contains) == true }
+//        ?.let { reader.readUnsignedValue(addr.offset, ptr) }
+//
+
+    // [word], sign-extended from the pointer width. */
+//    private fun signedWord(addr: Address) = word(addr)?.let { if (ptr == 4) it.toInt().toLong() else it }
+
+//    private fun pointer(addr: Address): Address? = word(addr)?.let { runCatching { space.getAddress(it) }.getOrNull() }
+
     private fun Address.plusOrNull(by: Long): Address? = runCatching { addNoWrap(by) }.getOrNull()
 
+//    private fun ref(from: Address, to: Address) = MemReferenceImpl(from, to, RefType.DATA, SourceType.ANALYSIS, 0, true)
+
+//    private fun MutableMemBuffer.curPointer() =
+//        address.let { from -> readAs<Address>(PointerDataType(program.dataTypeManager))?.let { to -> ref(from, to) } }
+
+    // fun pointerData(addr: Address? = null) = buf.dataAt(PointerDataType(dtm), addr)
+
+    // ** [word] as the address it points at, if any. */
+    // fun pointer(addr: Address? = null) = pointerData(addr)?.value as? Address
     private fun signedWord(addr: Address) =
         buf.readAs<Scalar>(IntegerDataType.getSignedDataType(ptr, null), addr)?.signedValue
 
@@ -93,6 +126,67 @@ class RttiSymbols(
         }
     }
 
+//    private val sitesByTarget: Map<Address, List<Address>> by lazy {
+//        buildMap<Address, MutableList<Address>> {
+//            for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
+// //                val buf = MemoryBufferImpl(memory, b.start)
+// //                val reader = BinaryReader(InputStreamByteProvider(buf.inputStream, b.size), !memory.isBigEndian)
+// //
+// //                class BlockReader(
+// //                    memory: Memory,
+// //                    val block: MemoryBlock,
+// //                    val buf: MemBuffer = MemoryBufferImpl(memory, block.start),
+// //                ) : BinaryReader(InputStreamByteProvider(buf.inputStream, b.size), !memory.isBigEndian) {
+// // //                    val addr get() = block.start.addressSpace.get currentIndex
+// //                    val addr get() = buf.address
+// //
+// // //                    val x get() =
+// //                    fun readAndAdvance(addr: Address, dt: DataType) {
+// // //                        buf.inputStream
+// //                        val x = PseudoData(program, addr, dt, buf)
+// //                        x.length
+// //                            .value
+// //                        buf.advance(dt.length)
+// //                    }
+// //                }
+//
+// //                PseudoData(program)
+// //                b.start.align()
+// //                val reader = BinaryReader(b.byteProvider, !memory.isBigEndian)
+//                val buf = program.memBuffer(b.start.alignTo(ptr.toLong()))
+// //                    NumericUtilities.getUnsignedAlignedValue(b.start, ptr))
+// //                val reader = buf.reader()
+// //                reader.align(ptr)
+// //                reader.pointerIndex
+// //                reader.pointerIndex
+// //                var site = b.start.add((ptr - b.start.offset % ptr) % ptr)
+//                while (true) {
+// //                    PseudoData(buf.address, PointerDataType(program.dataTypeManager), buf)
+//                    buf.pointerAt()?.takeIf { it.maxAddress in b }
+//                        ?.let { getOrPut(it.value as Address) { mutableListOf() }.add(it.address) }
+//                        ?: break
+// //                    buf.curPointer()
+// //                        .takeIf {
+// //                            buf.address.previous() in b.addressRange
+// //                        }?.let { getOrPut(it.toAddress) { mutableListOf() }.add(it.fromAddress) }
+// //                        ?: break
+// //                    val addr = buf.address
+// //                    buf.readAs<Address>(PointerDataType(program.dataTypeManager)).takeIf {
+// //                        buf.address.previous() in b.addressRange
+// //                    }?.let { getOrPut(it) { mutableListOf() }.add(addr) } ?: break
+//                }
+// //                while (site.lastByteOfWord()?.let(b::contains) == true) {
+// //                    runCatching {
+// //                        space.getAddress(reader.readUnsignedValue(site.offset, ptr))
+// //                    }.getOrNull()?.let {
+// //                        if (isData(it)) getOrPut(it) { mutableListOf() }.add(site)
+// //                    }
+// //                    site = site.plusWords(1) ?: break
+// //                }
+//            }
+//        }
+//    }
+
     private fun MutableMemBuffer.stringAt(
         addr: Address? = null,
         lengthIn: IntRange = 0..256,
@@ -107,6 +201,15 @@ class RttiSymbols(
 
     /** The NUL-terminated class name at [addr], or null if what is there can't be one. */
     private fun className(addr: Address): String? = buf.stringAt(addr)?.takeIf(CLASS_TYPE_NAME::matches)
+//    {
+//        buf.readAs<String>(TerminatedStringDataType(), addr)
+//        StringDataInstance(TerminatedStringDataType())
+//        val block = memory.getBlock(addr) ?: return null
+//        val length = (0 until minOf(MAX_TYPE_NAME.toLong(), block.end.subtract(addr) + 1))
+//            .firstOrNull { reader.readByte(addr.offset + it) == 0.toByte() } ?: return null
+//        return reader.readAsciiString(addr.offset, length.toInt()).takeIf(CLASS_TYPE_NAME::matches)
+//        return
+//    }
 
     companion object {
         val RTTI_SYMBOLS_RESTORED = BoolOption("RTTI Symbols Restored", "Stripped RTTI labels already put back.", false)
@@ -177,6 +280,8 @@ class RttiSymbols(
         return kept.size
     }
 
+//    val thing = StructureDataType("ti", 0).apply { add(PointerDataType(dtm)) }
+
     private val vtable by lazy { potentialVtable(dtm) }
 
     /**
@@ -191,6 +296,8 @@ class RttiSymbols(
         .filter { it.valueOf<Scalar>(0)?.value == 0L }
         .filter { it.valueOf<Address>(2)?.isCode() == true }
         .map { it.address }
+//        .filter {buf.readAs(rtti.)}
+//        .filter { top -> word(top) == 0L && top.plusWords(2)?.let(::pointer)?.let(::isCode) == true }
 
     /** Where the record whose `offset_to_top` is at [top] starts: in front of the vbase offsets it can see. */
     private fun prefixStart(top: Address) = generateSequence(top) { it.plusWords(-1) }

@@ -61,6 +61,115 @@ fun potentialVtable(dtm: DataTypeManager) = StructureDataType("PossibleVtable", 
     isPackingEnabled = true
 }
 
+// interface Structable {
+// //    val dt: StructureDataType
+//     val data: Data
+// }
+
+// class VtableHeader(dtm: DataTypeManager, prefixWords: Int) :
+//     StructureDataType(
+//         ClassNaming.classDataTypesRoot,
+//         "VtableHeaderStructure${if (prefixWords > 0) prefixWords else ""}",
+//         0,
+//         dtm,
+//     ) {
+//     init {
+//         val word = Itanium.offsetToTopType(dtm.dataOrganization.pointerSize)
+//         // One field a word, not an array: Ghidra shows no comment on a word inside an array inside a struct,
+//         // and each word gets its own saying which base it is for.
+//         repeat(prefixWords) { add(word, vtableOffsetField(it), null).showDecimal() }
+//         add(word, Itanium.OFFSET_TO_TOP, "to top of complete object").showDecimal()
+//         add(PointerDataType(dtm), Itanium.RTTI, null)
+//         isPackingEnabled = true
+//     }
+
+//     @Suppress("ktlint:standard:property-naming")
+//     class Value(override val data: Data) : Structable {
+//         val offset_to_top by field<Scalar>()
+//         val rtti by field<Address>()
+//     }
+// }
+
+// interface Prout<T> {
+//     operator fun getValue(thisRef: Structable, property: KProperty<*>): T?
+// }
+
+// inline fun <reified T> field() = object : Prout<T> {
+//     override operator fun getValue(thisRef: Structable, property: KProperty<*>): T? =
+//         thisRef.data[property.name]?.value as? T?
+// }
+
+// //
+// class StructFieldDelegate<T : Any> {
+//     operator fun getValue(thisRef: Structable, property: KProperty<*>): T? = thisRef.data[property.name]?.value as? T?
+// }
+
+// //    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: String) {
+// //        println("$value has been assigned to '${property.name}' in $thisRef.")
+// //    }
+// }
+//
+//
+//
+// class Thing(dtm: DataTypeManager) : StructureDataType(ClassNaming.classDataTypesRoot, "", 0, dtm) {
+//    init {
+//        add(Undefined2DataType(), "prout", null)
+//    }
+//    class Value(val dt: Thing)
+// //    data class ()
+// }
+//
+// abstract class StructDescriptor<T : Any>(val name: String, val desc: String, val default: T) :
+//    PropertyDelegateProvider<StructDescriptor.Structable, StructDescriptor<T>.Holder> {
+// //    abstract fun get(options: Options): T
+// //    abstract fun set(options: Options, value: T)
+// //    abstract fun read(option: Option): T
+// //    open fun register(options: Options) = options.registerOption(
+// //        name,
+// //        default,
+// //        null,
+// //        desc,
+// //    )
+//
+//    inner class Holder {
+// //        private var value = default
+// //        fun get() = value.asOption()
+// //        fun set(edited: Option) {
+// //            value = read(edited)
+// //        }
+// //        fun read(options: Options) {
+// //            value = options[option]
+// //        }
+// //        fun write(options: Options) {
+// //            options[option] = value
+// //        }
+//
+//        val option get() = this@StructDescriptor
+//        operator fun getValue(thisRef: Structable, property: KProperty<*>) =
+//    thisRef.dt.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(this::get)
+// //        operator fun setValue(thisRef: Any?, property: KProperty<*>, new: T) {
+// //            value = new
+// //        }
+//    }
+//
+// //    interface Container {
+// //        fun <T : Any> bind(option: OptionDescriptor<T>): OptionDescriptor<T>.Holder
+// //    }
+//
+// interface Structable {
+//    val dt: StructureDataType
+// //    val data: Data
+// }
+//
+//    /**
+//     * This option carrying [this], in the form an exporter hands the dialog. Per subclass rather
+//     * than one untyped default: since 12.2 an [Option] is built as the subclass matching its value
+//     * type, and there is none for an arbitrary value.
+//     */
+// //    abstract fun T.asOption(): Option
+//    override operator fun provideDelegate(thisRef: Structable, property: KProperty<*>) = thisRef.bind(this)
+// }
+
 /**
  * A vtable record, located: where it starts, the [header] laid there, and the [abi] that laid it out. An
  * Itanium record's header is a [vtableHeaderLayout], read back through it ([readHeader]), and its function

@@ -5,8 +5,11 @@ package ghistabs
 import ghidra.app.cmd.function.CallDepthChangeInfo
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.PseudoData
+import ghidra.app.util.PseudoDisassembler
+import ghidra.app.util.bin.BinaryReader
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
+import ghidra.app.util.bin.MemBufferByteProvider
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.opinion.LoaderTier
 import ghidra.program.database.data.DataTypeUtilities
@@ -24,6 +27,8 @@ import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
+import ghidra.util.ascii.AsciiCharSetRecognizer
+import ghidra.util.ascii.CharSetRecognizer
 import ghidra.util.task.TaskMonitor
 import ghistabs.parse.dbxArch
 import ghistabs.parse.frameRegister
@@ -59,6 +64,8 @@ operator fun AddressSetView.minus(addr: Address): AddressSet = subtract(AddressS
 operator fun AddressSetView.plus(addrs: AddressSetView): AddressSet = union(addrs)
 operator fun AddressSetView.plus(range: AddressRange): AddressSet = union(AddressSet(range))
 operator fun AddressSetView.plus(addr: Address): AddressSet = union(AddressSet(addr))
+
+val AddressSpace.range get() = minAddress..maxAddress
 
 operator fun Data.get(i: Int): Data? = getComponent(i)
 operator fun Data.get(name: String): Data? =
@@ -212,6 +219,8 @@ fun Program.forceCreateData(
     return DataUtilities.createData(this, addr, dt, length, DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
 }
 
+// fun MemBuffer.reader() = BinaryReader(MemBufferByteProvider(this), !isBigEndian)
+
 fun MutableMemBuffer.lengthOf(dt: DataType): Int? = when (dt) {
     is Dynamic -> dt.getLength(this, -1)
     else -> dt.length
@@ -234,6 +243,7 @@ fun MutableMemBuffer.pointerAt(addr: Address? = null, length: Int = address.poin
 fun MutableMemBuffer.readPointer(addr: Address? = null): Address? =
     readAs(PointerDataType(memory.program.dataTypeManager), addr)
 
+// fun Program.blockBuffer(block: MemoryBlock): MutableMemBuffer = MemoryBufferImpl(memory, block.start)
 fun Program.memBuffer(start: Address = memory.allInitializedAddressSet.minAddress): MutableMemBuffer =
     MemoryBufferImpl(memory, start)
 fun Program.smallBuffer(start: Address): MutableMemBuffer = DumbMemBufferImpl(memory, start)
@@ -258,6 +268,11 @@ fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
     else -> dt.length
 }.takeIf { it > 0 }
 
+// fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
+//    is Dynamic -> smallBuffer(addr).lengthOf(dt)
+//    else -> dt.length
+// }
+
 /**
  * The pointer stored at [addr], taken as it stands. The loader has already relocated what memory
  * holds, so this is the address it points at in the program as loaded.
@@ -265,6 +280,52 @@ fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
 fun Program.readPointer(addr: Address): Address? = readAs(addr, PointerDataType(dataTypeManager))
 
 val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
+//
+// class BlockBuffer(val program: Program, addresses: AddressSetView) :
+//    MemoryBufferImpl(program.memory, addresses.minAddress) {
+//    constructor(program: Program, block: MemoryBlock) : this(program, AddressSet(block.addressRange))
+//    constructor(program: Program) : this(program, program.memory.allInitializedAddressSet)
+//
+//    fun readAndAdvance(addr: Address, dt: DataType) = PseudoData(program, addr, dt, this).apply { advance(length) }
+//    inline fun <reified T> readAs(addr: Address, dt: DataType): T? =
+//        runCatching { readAndAdvance(addr, dt) }.getOrNull()?.value as? T
+// }
+//
+// fun Program.blockBuffer(block: MemoryBlock): MutableMemBuffer = MemoryBufferImpl(memory, block.start)
+// fun Program.memBuffer(): MutableMemBuffer = MemoryBufferImpl(memory, memory.allInitializedAddressSet.minAddress)
+//
+// fun MutableMemBuffer.lengthOf(dt: DataType): Int? = when (dt) {
+//    is Dynamic -> dt.getLength(this, -1)
+//    else -> dt.length
+// }.takeIf { it > 0 }
+//
+// //
+// // fun MutableMemBuffer.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
+// //    is Dynamic -> {
+// //        setPosition(addr)
+// //        dt.getLength(this, -1)
+// //    }
+// //
+// //    else -> dt.length
+// // }.takeIf { it > 0 }
+//
+// //    dt.getValueClass(dt.defaultSettings)
+//
+// inline fun <reified T> MutableMemBuffer.readAs(dt: DataType, addr: Address? = null) = runCatching {
+//    addr?.let { setPosition(it) }
+//    dt.getValue(this, dt.defaultSettings, -1) as T?
+// }.getOrNull()?.also { lengthOf(dt)?.let { runCatching { advance(it) } } }
+//
+// // inline fun <reified T> MutableMemBuffer.readAs(addr: Address, dt: DataType) = runCatching {
+// //    setPosition(addr)
+// //    dt.getValue(this, dt.defaultSettings, -1) as T?
+// // }.getOrNull()?.also { lengthAt(addr, dt)?.let { runCatching { advance(it) } } }
+//
+// // inline fun <reified T> MutableMemBuffer.readAs(program: Program, addr: Address, dt: DataType): T? =
+// //    PseudoData(program, addr, dt, this).run {
+// //        advance(length)
+// //        value
+// //    } as? T
 
 /**
  * Where the program's default calling convention starts its stack parameters — the bias between a
