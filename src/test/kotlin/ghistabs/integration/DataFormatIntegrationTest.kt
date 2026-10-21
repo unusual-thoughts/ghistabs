@@ -217,4 +217,26 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         read mustBe Checked(null, null, "hi", null, Ptr(builder.addr(0x401050)) { null })
         read?.ptr?.deref().mustBeNull()
     }
+
+    class ExampleStruct(dtm: DataTypeManager? = null) : SerialStructure<ExampleStruct.Value>(dtm) {
+        init {
+            add(IntegerDataType.dataType, "a", null)
+            add(StringDataType.dataType, 4, "b", null)
+            add(PointerDataType(CharDataType.dataType, 4, dtm), "c", null)
+        }
+
+        @Serializable
+        data class Value(val a: Int, val b: String, val c: Ptr<String>)
+    }
+
+    @Test
+    fun `a SerialStructure subclass is named after itself and decodes its type argument`() {
+        builder.setBytes("0x401000", "07 00 00 00 61 62 63 00 40 10 40 00")
+        builder.setBytes("0x401040", "68 69 00")
+        val example = ExampleStruct(program.dataTypeManager)
+        example.name mustBe "ExampleStruct"
+        val value = program.dataAt(builder.addr(0x401000), example)?.value
+        value mustBe ExampleStruct.Value(7, "abc", Ptr(builder.addr(0x401040)) { null })
+        (value as ExampleStruct.Value).c.deref() mustBe "hi"
+    }
 }
