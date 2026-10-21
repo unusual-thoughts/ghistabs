@@ -234,10 +234,9 @@ fun MemBuffer.dataHere(dt: DataType): Data? = runCatching { PseudoData(memory.pr
     ?.takeIf { memory.allInitializedAddressSet.contains(it.minAddress, it.maxAddress) }
 
 /** The bytes of the NUL-terminated string where the buffer stands, NUL left off, if [lengths] holds how many. */
-fun MemBuffer.cBytesHere(lengths: IntRange): ByteArray? {
-    // getBytes stops short at unreadable memory, so a NUL past that is never found
-    val window = ByteArray(lengths.last + 1).let { it.copyOf(getBytes(it, 0)) }
-    return window.indexOf(0).takeIf { it in lengths }?.let(window::copyOf)
+fun MemBuffer.cBytesHere(lengths: IntRange): ByteArray? = ByteArray(lengths.last + 1).run {
+    // getBytes stops short at unreadable memory, so a NUL past what it read is never found
+    asSequence().take(getBytes(this, 0)).indexOf(0).takeIf { it in lengths }?.let(::copyOf)
 }
 
 /**
