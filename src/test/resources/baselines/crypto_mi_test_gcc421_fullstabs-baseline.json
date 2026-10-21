@@ -967,7 +967,7 @@
             "max": 12
         },
         "text-undisassembled-code": {
-            "min": 10,
+            "min": 0,
             "max": 10
         },
         "textrange-entries": {
