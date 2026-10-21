@@ -2,6 +2,7 @@ package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.IntegerDataType
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MutableMemBuffer
 import ghidra.program.model.scalar.Scalar
@@ -16,13 +17,11 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.get
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.memBuffer
-import ghistabs.pointerAt
 import ghistabs.readAs
 import ghistabs.readPointer
 import ghistabs.set
 import ghistabs.valueOf
 import kotlin.math.abs
-import kotlin.ranges.rangeTo
 
 /** Longest typeinfo name read; CryptoPP's deepest template instantiations run to a few hundred bytes. */
 private const val MAX_TYPE_NAME = 4096
@@ -66,7 +65,8 @@ class RttiSymbols(
     private val memory = program.memory
     private val dtm = program.dataTypeManager
 
-    val buf = program.memBuffer()
+    private val buf = program.memBuffer()
+    private val pointer = PointerDataType(dtm)
 
     private fun Address.isData() = memory.getBlock(this)?.let { it.isInitialized && !it.isExecute } == true
 
@@ -84,8 +84,8 @@ class RttiSymbols(
         buildMap<Address, MutableList<Address>> {
             for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
                 buf.setPosition(b.start.alignTo(ptr.toLong()))
-                while (buf.address in b.addressRange) {
-                    val data = buf.pointerAt() ?: break
+                while (buf.address.plusOrNull(ptr - 1L)?.let(b::contains) == true) {
+                    val data = buf.dataAt(pointer) ?: break
                     val addr = (data.value as? Address)?.takeIf { it.isData() } ?: continue
                     getOrPut(addr) { mutableListOf() }.add(data.address)
                 }
@@ -106,7 +106,8 @@ class RttiSymbols(
     }.getOrNull()
 
     /** The NUL-terminated class name at [addr], or null if what is there can't be one. */
-    private fun className(addr: Address): String? = buf.stringAt(addr)?.takeIf(CLASS_TYPE_NAME::matches)
+    private fun className(addr: Address): String? =
+        buf.stringAt(addr, 0..MAX_TYPE_NAME)?.takeIf(CLASS_TYPE_NAME::matches)
 
     companion object {
         val RTTI_SYMBOLS_RESTORED = BoolOption("RTTI Symbols Restored", "Stripped RTTI labels already put back.", false)
@@ -186,7 +187,7 @@ class RttiSymbols(
      * only virtual parts are its bases, and whose record has no slots, isn't found this way.
      */
     private fun primaryCandidates(typeinfo: Address): List<Address> = sitesByTarget[typeinfo].orEmpty()
-        .mapNotNull { it.plusWords(-1) }
+        .mapNotNull { it.plusWords(-1)?.takeIf { top -> top.isData() } }
         .mapNotNull { buf.dataAt(vtable, it) }
         .filter { it.valueOf<Scalar>(0)?.value == 0L }
         .filter { it.valueOf<Address>(2)?.isCode() == true }

@@ -223,9 +223,12 @@ inline fun <reified T> MutableMemBuffer.readAs(dt: DataType, addr: Address? = nu
     dt.getValue(this, dt.defaultSettings, -1) as T?
 }.getOrNull()?.also { lengthOf(dt)?.let { runCatching { advance(it) } } }
 
+/** [dt] read at [addr] (or where the buffer stands), or null unless every byte it spans is initialized memory. */
 fun MutableMemBuffer.dataAt(dt: DataType, addr: Address? = null) = runCatching {
     addr?.let { setPosition(it) }
+    // PseudoData zero-fills bytes it can't read, so check they are all there
     PseudoData(memory.program, address, dt, this)
+        .takeIf { memory.allInitializedAddressSet.contains(it.minAddress, it.maxAddress) }
 }.getOrNull()?.also { runCatching { advance(it.length) } }
 
 fun MutableMemBuffer.pointerAt(addr: Address? = null) = dataAt(PointerDataType(memory.program.dataTypeManager), addr)
@@ -235,25 +238,25 @@ fun MutableMemBuffer.readPointer(addr: Address? = null): Address? =
 
 fun Program.memBuffer(start: Address = memory.allInitializedAddressSet.minAddress): MutableMemBuffer =
     MemoryBufferImpl(memory, start)
-fun Program.smallBuffer(start: Address): MutableMemBuffer = DumbMemBufferImpl(memory, start)
+fun Program.dumbBuffer(start: Address): MutableMemBuffer = DumbMemBufferImpl(memory, start)
 
 /**
  * [dt] read over the bytes at [addr] without laying anything in the listing, or null if they are not
  * all readable. The data type does the decoding — width, endianness, sign, which address space a
  * pointer lands in — so a caller never reassembles bytes by hand.
  */
-fun Program.readAt(addr: Address, dt: DataType): Data? = smallBuffer(addr).dataAt(dt, addr)
+fun Program.readAt(addr: Address, dt: DataType): Data? = dumbBuffer(addr).dataAt(dt, addr)
 
 /**
  * [readAt]'s value as a [T]: a [Scalar] for an integer type, an [Address] for a pointer. A [Dynamic]
  * type such as a LEB128 is read at the length it sizes itself to, which [PseudoData]'s fixed one
  * would cut to a byte.
  */
-inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = smallBuffer(addr).readAs(dt)
+inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = dumbBuffer(addr).readAs(dt)
 
 /** How many bytes [dt] spans at [addr]: a [Dynamic] type's own decoded length, or null if unreadable. */
 fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
-    is Dynamic -> dt.getLength(smallBuffer(addr), -1)
+    is Dynamic -> dt.getLength(dumbBuffer(addr), -1)
     else -> dt.length
 }.takeIf { it > 0 }
 
