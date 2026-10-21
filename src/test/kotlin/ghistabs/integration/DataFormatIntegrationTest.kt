@@ -5,6 +5,8 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Data
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.SerialAddress
+import ghistabs.SerialData
 import ghistabs.SerialStructure
 import ghistabs.decode
 import ghistabs.get
@@ -12,7 +14,6 @@ import ghistabs.read
 import ghistabs.readAs
 import ghistabs.readAt
 import ghistabs.test.mustBe
-import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import org.junit.jupiter.api.AfterEach
@@ -31,7 +32,7 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Serializable
     data class Outer(
         val offset: Int,
-        @Contextual val target: Address,
+        val target: SerialAddress,
         val inner: Inner,
         val kind: Kind,
         val words: List<UShort>,
@@ -41,7 +42,7 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     )
 
     @Serializable
-    data class Raw(@Contextual val inner: Data)
+    data class Raw(val inner: SerialData)
 
     @Serializable
     data class Wrong(val nope: Int)
