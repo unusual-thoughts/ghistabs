@@ -9,7 +9,6 @@ import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.opinion.LoaderTier
-import ghidra.docking.settings.SettingsImpl
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.*
 import ghidra.program.model.data.*
@@ -234,17 +233,11 @@ fun MemBuffer.dataHere(dt: DataType): Data? = runCatching { PseudoData(memory.pr
     // PseudoData zero-fills bytes it can't read, so check they are all there
     ?.takeIf { memory.allInitializedAddressSet.contains(it.minAddress, it.maxAddress) }
 
-/**
- * The bytes of the NUL-terminated string where the buffer stands, NUL left off, if [lengths] holds how many.
- * Scanned as a `char[]` element is, so the scan stops at the first NUL or after [lengths]' last byte,
- * whichever comes first.
- */
+/** The bytes of the NUL-terminated string where the buffer stands, NUL left off, if [lengths] holds how many. */
 fun MemBuffer.cBytesHere(lengths: IntRange): ByteArray? {
-    val scanned = StringDataInstance(StringDataType.dataType, SettingsImpl.NO_SETTINGS, this, lengths.last + 1, true)
-        .stringLength
-    val bytes = ByteArray(scanned).takeIf { getBytes(it, 0) == scanned } ?: return null
-    // A scan that hit the bound or unreadable memory first ends on something other than a NUL
-    return bytes.takeIf { it.lastOrNull() == 0.toByte() && it.size - 1 in lengths }?.copyOf(scanned - 1)
+    // getBytes stops short at unreadable memory, so a NUL past that is never found
+    val window = ByteArray(lengths.last + 1).let { it.copyOf(getBytes(it, 0)) }
+    return window.indexOf(0).takeIf { it in lengths }?.let(window::copyOf)
 }
 
 /**
