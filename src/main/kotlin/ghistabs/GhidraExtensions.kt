@@ -5,7 +5,6 @@ package ghistabs
 import ghidra.app.cmd.function.CallDepthChangeInfo
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.PseudoData
-import ghidra.app.util.PseudoDisassembler
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
@@ -18,6 +17,8 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.mem.DumbMemBufferImpl
 import ghidra.program.model.mem.MemoryBlock
+import ghidra.program.model.mem.MemoryBufferImpl
+import ghidra.program.model.mem.MutableMemBuffer
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
@@ -31,6 +32,7 @@ import java.nio.file.AccessMode
 
 operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)
 operator fun Address.plus(rhs: Int): Address = addNoWrap(rhs.toLong())
+fun Address.alignTo(size: Long): Address = add((size - offset % size) % size)
 
 operator fun Address.minus(rhs: Long): Address = subtractNoWrap(rhs)
 operator fun Address.minus(rhs: Int): Address = subtractNoWrap(rhs.toLong())
@@ -58,9 +60,10 @@ operator fun AddressSetView.plus(addrs: AddressSetView): AddressSet = union(addr
 operator fun AddressSetView.plus(range: AddressRange): AddressSet = union(AddressSet(range))
 operator fun AddressSetView.plus(addr: Address): AddressSet = union(AddressSet(addr))
 
-operator fun Data.get(i: Int): Data? = this.getComponent(i)
+operator fun Data.get(i: Int): Data? = getComponent(i)
 operator fun Data.get(name: String): Data? =
-    (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(this::get)
+    (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(::get)
+inline fun <reified T> Data.valueOf(i: Int): T? = getComponent(i)?.value as? T
 inline fun <reified T> Data.valueOf(name: String): T? = get(name)?.value as? T
 fun Data.getScalar(name: String): Scalar? = valueOf(name)
 
@@ -209,26 +212,49 @@ fun Program.forceCreateData(
     return DataUtilities.createData(this, addr, dt, length, DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
 }
 
+fun MutableMemBuffer.lengthOf(dt: DataType): Int? = when (dt) {
+    is Dynamic -> dt.getLength(this, -1)
+    else -> dt.length
+}.takeIf { it > 0 }
+
+inline fun <reified T> MutableMemBuffer.readAs(dt: DataType, addr: Address? = null) = runCatching {
+    addr?.let { setPosition(it) }
+    // StringDataType returns null for length == -1
+    dt.getValue(this, dt.defaultSettings, -1) as T?
+}.getOrNull()?.also { lengthOf(dt)?.let { runCatching { advance(it) } } }
+
+fun MutableMemBuffer.dataAt(dt: DataType, addr: Address? = null) = runCatching {
+    addr?.let { setPosition(it) }
+    PseudoData(memory.program, address, dt, this)
+}.getOrNull()?.also { runCatching { advance(it.length) } }
+
+fun MutableMemBuffer.pointerAt(addr: Address? = null, length: Int = address.pointerSize) =
+    dataAt(PointerDataType(memory.program.dataTypeManager), addr)
+
+fun MutableMemBuffer.readPointer(addr: Address? = null): Address? =
+    readAs(PointerDataType(memory.program.dataTypeManager), addr)
+
+fun Program.memBuffer(start: Address = memory.allInitializedAddressSet.minAddress): MutableMemBuffer =
+    MemoryBufferImpl(memory, start)
+fun Program.smallBuffer(start: Address): MutableMemBuffer = DumbMemBufferImpl(memory, start)
+
 /**
  * [dt] read over the bytes at [addr] without laying anything in the listing, or null if they are not
  * all readable. The data type does the decoding — width, endianness, sign, which address space a
  * pointer lands in — so a caller never reassembles bytes by hand.
  */
-fun Program.readAt(addr: Address, dt: DataType): Data? = PseudoDisassembler(this).applyDataType(addr, dt)
+fun Program.readAt(addr: Address, dt: DataType): Data? = smallBuffer(addr).dataAt(dt, addr)
 
 /**
  * [readAt]'s value as a [T]: a [Scalar] for an integer type, an [Address] for a pointer. A [Dynamic]
  * type such as a LEB128 is read at the length it sizes itself to, which [PseudoData]'s fixed one
  * would cut to a byte.
  */
-inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = when (dt) {
-    is Dynamic -> dt.getValue(DumbMemBufferImpl(memory, addr), dt.defaultSettings, -1)
-    else -> readAt(addr, dt)?.value
-} as? T
+inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = smallBuffer(addr).readAs(dt)
 
 /** How many bytes [dt] spans at [addr]: a [Dynamic] type's own decoded length, or null if unreadable. */
 fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
-    is Dynamic -> dt.getLength(DumbMemBufferImpl(memory, addr), -1)
+    is Dynamic -> dt.getLength(smallBuffer(addr), -1)
     else -> dt.length
 }.takeIf { it > 0 }
 

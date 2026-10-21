@@ -53,6 +53,14 @@ fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataTyp
     }
 }
 
+fun potentialVtable(dtm: DataTypeManager) = StructureDataType("PossibleVtable", 0).apply {
+    val word = Itanium.offsetToTopType(dtm.dataOrganization.pointerSize)
+    add(word, Itanium.OFFSET_TO_TOP, "to top of complete object").showDecimal()
+    add(PointerDataType(dtm), Itanium.RTTI, null)
+    add(PointerDataType(dtm), "maybeMethod", null)
+    isPackingEnabled = true
+}
+
 /**
  * A vtable record, located: where it starts, the [header] laid there, and the [abi] that laid it out. An
  * Itanium record's header is a [vtableHeaderLayout], read back through it ([readHeader]), and its function
