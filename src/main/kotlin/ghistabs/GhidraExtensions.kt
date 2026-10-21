@@ -9,6 +9,7 @@ import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.opinion.LoaderTier
+import ghidra.docking.settings.SettingsImpl
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.*
 import ghidra.program.model.data.*
@@ -232,10 +233,16 @@ fun MemBuffer.dataHere(dt: DataType): Data? = runCatching { PseudoData(memory.pr
     // PseudoData zero-fills bytes it can't read, so check they are all there
     ?.takeIf { memory.allInitializedAddressSet.contains(it.minAddress, it.maxAddress) }
 
-/** The NUL-terminated string where the buffer stands, if [lengths] holds its length and [charSet] its characters. */
-fun MemBuffer.cStringHere(lengths: IntRange, charSet: CharSetRecognizer = AsciiCharSetRecognizer()): String? =
-    valueHere<String>(TerminatedStringDataType.dataType)
-        ?.takeIf { it.length in lengths && it.all { c -> charSet.contains(c.code) } }
+/**
+ * The NUL-terminated string where the buffer stands, if [lengths] holds its length and [charSet] its characters.
+ * Read as a `char[]` element is, so the scan stops at the first NUL or after [lengths]' last, whichever comes first.
+ */
+fun MemBuffer.cStringHere(lengths: IntRange, charSet: CharSetRecognizer = AsciiCharSetRecognizer()): String? {
+    val string = StringDataInstance(StringDataType.dataType, SettingsImpl.NO_SETTINGS, this, lengths.last + 1, true)
+    // A scan that hit the bound or unreadable memory first ends on something other than a NUL
+    val terminated = runCatching { getByte(string.stringLength - 1) == 0.toByte() }.getOrDefault(false)
+    return string.stringValue?.takeIf { terminated && it.length in lengths && it.all { c -> charSet.contains(c.code) } }
+}
 
 private val MemBuffer.pointerType get() = PointerDataType(memory.program.dataTypeManager)
 
