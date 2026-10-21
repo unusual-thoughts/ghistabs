@@ -1,6 +1,5 @@
 package ghistabs
 
-import ghidra.app.util.PseudoData
 import ghidra.docking.settings.Settings
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Array
@@ -169,16 +168,14 @@ object DataFormat {
     }
 }
 
-/**
- * What the pointer [this] holds points at, laid as its pointee type; null for a null pointer, or one
- * whose pointee doesn't lie wholly in initialized memory, which past a block's end would read as zeros.
- */
+/** The non-null address the pointer [this] holds. */
+private val Data.target get() = (value as? Address)?.takeIf { it.offset != 0L }
+
+/** What the pointer [this] holds points at, laid as its pointee type ([Program.dataAt]); null for a null pointer. */
 private fun Data.deref(): Data? {
     val pointee = (baseDataType as? Pointer)?.dataType
         ?: throw SerializationException("'$fieldName' is no typed pointer, so has nothing to dereference")
-    val to = (value as? Address)?.takeIf { it.offset != 0L } ?: return null
-    val end = runCatching { to.addNoWrap(pointee.length.coerceAtLeast(1) - 1L) }.getOrNull() ?: return null
-    return program.readAt(to, pointee).takeIf { program.memory.loadedAndInitializedAddressSet.contains(to, end) }
+    return target?.let { program.dataAt(it, pointee) }
 }
 
 /** The width of the char [this] points at, if it is a char pointer. */
@@ -196,20 +193,16 @@ private val Data.isAggregate get() = baseDataType.let { it is Composite || it is
 /** The NUL-terminated string the char pointer [this] points at, read as [spec] says; see [DataFormat]. */
 private fun Data.pointedString(spec: Text?): String? {
     val width = charWidth ?: return null
-    val to = (value as? Address)?.takeIf { it.offset != 0L } ?: return null
-    // getBytes stops at the first byte it can't read, past a block or the address space's end.
-    val bytes = ByteArray(spec?.maxBytes ?: DataFormat.MAX_STRING_BYTES).let {
-        it.copyOf(runCatching { program.memory.getBytes(to, it) }.getOrDefault(0))
-    }
-    val end = (0..bytes.size - width step width).firstOrNull { at -> (at..<at + width).all { bytes[it] == 0.toByte() } }
-        ?: return null
+    val bytes =
+        target?.let { program.bytesAt(it).cBytesHere(0..<(spec?.maxBytes ?: DataFormat.MAX_STRING_BYTES), width) }
+            ?: return null
     val big = program.memory.isBigEndian
     val charset = spec?.charset?.takeIf { it.isNotEmpty() }?.let(Charset::forName) ?: when (width) {
         1 -> Charsets.UTF_8
         2 -> if (big) Charsets.UTF_16BE else Charsets.UTF_16LE
         else -> if (big) Charsets.UTF_32BE else Charsets.UTF_32LE
     }
-    return runCatching { charset.newDecoder().decode(ByteBuffer.wrap(bytes, 0, end)).toString() }.getOrNull()
+    return runCatching { charset.newDecoder().decode(ByteBuffer.wrap(bytes)).toString() }.getOrNull()
 }
 
 /**
@@ -263,7 +256,7 @@ typealias SerialData =
 
 /**
  * A structure whose data's [Data.getValue] is its layout decoded as a [T] through [DataFormat], so
- * `program.readAt(addr, it)?.value` or [Program.readAs] hands back the class. That holds for pseudo data
+ * `program.dataAt(addr, it)?.value` or [Program.valueAt] hands back the class. That holds for pseudo data
  * and for a field of another such structure; laid in a listing, it resolves to a plain structure,
  * whose data [decode] still reads.
  */
@@ -273,8 +266,8 @@ class SerialStructure<T : Any>(
     private val valueClass: Class<T>,
     dtm: DataTypeManager? = null,
 ) : StructureDataType(name, 0, dtm) {
-    override fun getValue(buf: MemBuffer, settings: Settings?, length: Int): T =
-        DataFormat.decode(deserializer, buf as? Data ?: PseudoData(buf.memory.program, buf.address, this, buf))
+    override fun getValue(buf: MemBuffer, settings: Settings?, length: Int): T? =
+        (buf as? Data ?: buf.dataHere(this))?.let { DataFormat.decode(deserializer, it) }
 
     override fun getValueClass(settings: Settings?) = valueClass
 
@@ -299,5 +292,5 @@ class SerialStructure<T : Any>(
 /** This composite as a [T]; see [DataFormat]. */
 inline fun <reified T> Data.decode(): T = DataFormat.decode(this)
 
-/** [dt] laid at [addr] as a [T], or null if it can't be read there. */
-inline fun <reified T> Program.read(addr: Address, dt: DataType): T? = readAt(addr, dt)?.decode()
+/** [dt] laid at [addr] ([dataAt]) as a [T], or null if it can't be read there. */
+inline fun <reified T> Program.decodeAt(addr: Address, dt: DataType): T? = dataAt(addr, dt)?.decode()

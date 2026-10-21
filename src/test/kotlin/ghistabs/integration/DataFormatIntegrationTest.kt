@@ -12,13 +12,13 @@ import ghistabs.SerialAddress
 import ghistabs.SerialData
 import ghistabs.SerialStructure
 import ghistabs.Text
+import ghistabs.dataAt
 import ghistabs.decode
+import ghistabs.decodeAt
 import ghistabs.get
-import ghistabs.read
-import ghistabs.readAs
-import ghistabs.readAt
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
+import ghistabs.valueAt
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import org.junit.jupiter.api.AfterEach
@@ -132,9 +132,9 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             pointed = Inner(3, 4, isVirtual = true, access = 3),
             nothing = null,
         )
-        program.read<Outer>(builder.addr(0x401000), outer) mustBe expected
-        program.readAs<Outer>(builder.addr(0x401000), outer)?.ptr?.deref() mustBe expected.pointed
-        program.readAt(builder.addr(0x401000), outer)?.get("inner")?.value mustBe expected.inner
+        program.decodeAt<Outer>(builder.addr(0x401000), outer) mustBe expected
+        program.valueAt<Outer>(builder.addr(0x401000), outer)?.ptr?.deref() mustBe expected.pointed
+        program.dataAt(builder.addr(0x401000), outer)?.get("inner")?.value mustBe expected.inner
     }
 
     @Test
@@ -161,7 +161,7 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val probe = SerialStructure<Probe>("Probe") { add(PointerDataType(inner, 4), "ptr", null) }
         listOf("00 00 50 00", "fc 10 40 00", "fc ff ff ff").forEach {
             builder.setBytes("0x401000", it)
-            program.read<Probe>(builder.addr(0x401000), probe)?.ptr?.deref().mustBeNull(it)
+            program.decodeAt<Probe>(builder.addr(0x401000), probe)?.ptr?.deref().mustBeNull(it)
         }
     }
 
@@ -188,7 +188,7 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         builder.setBytes("0x401040", "68 c3 a9 00")
         builder.setBytes("0x401050", "68 00 e9 00 00 00")
         builder.setBytes("0x402000", List(DataFormat.MAX_STRING_BYTES) { "41" }.joinToString(" "))
-        val read = program.read<Strings>(builder.addr(0x401000), strings)
+        val read = program.decodeAt<Strings>(builder.addr(0x401000), strings)
         read mustBe Strings("hé", "hé", "hé", null, null, Ptr(builder.addr(0x401041)) { null })
         read?.ptr?.deref() mustBe "é"
     }
@@ -213,7 +213,7 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         builder.setBytes("0x401040", "68 ff 00")
         builder.setBytes("0x401050", "68 c3 a9 00")
         builder.setBytes("0x401060", "68 69 00")
-        val read = program.read<Checked>(builder.addr(0x401000), checked)
+        val read = program.decodeAt<Checked>(builder.addr(0x401000), checked)
         read mustBe Checked(null, null, "hi", null, Ptr(builder.addr(0x401050)) { null })
         read?.ptr?.deref().mustBeNull()
     }
