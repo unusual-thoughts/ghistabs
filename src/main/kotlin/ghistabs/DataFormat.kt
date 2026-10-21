@@ -28,6 +28,8 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
+import java.lang.reflect.ParameterizedType
+import java.lang.reflect.Type
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import ghidra.program.model.data.Enum as GhidraEnum
@@ -259,13 +261,38 @@ typealias SerialData =
  * `program.dataAt(addr, it)?.value` or [Program.valueAt] hands back the class. That holds for pseudo data
  * and for a field of another such structure; laid in a listing, it resolves to a plain structure,
  * whose data [decode] still reads.
+ *
+ * A subclass that lays its fields in `init` takes the `(dtm)` constructor: the structure is named after
+ * the subclass and decodes the type argument it passes, which must be `@Serializable`.
  */
-class SerialStructure<T : Any>(
-    name: String,
-    private val deserializer: DeserializationStrategy<T>,
-    private val valueClass: Class<T>,
-    dtm: DataTypeManager? = null,
-) : StructureDataType(name, 0, dtm) {
+open class SerialStructure<T : Any> private constructor(
+    name: String?,
+    deserializer: DeserializationStrategy<T>?,
+    valueType: Type?,
+    dtm: DataTypeManager?,
+) : StructureDataType(name ?: "SerialStructure", 0, dtm) {
+    constructor(
+        name: String,
+        deserializer: DeserializationStrategy<T>,
+        valueClass: Class<T>,
+        dtm: DataTypeManager? = null,
+    ) : this(name as String?, deserializer, valueClass, dtm)
+
+    protected constructor(dtm: DataTypeManager? = null) : this(null, null, null, dtm)
+
+    private val valueType = valueType
+        ?: (javaClass.genericSuperclass as? ParameterizedType)?.actualTypeArguments?.single()
+        ?: error("${javaClass.simpleName} must extend SerialStructure<Value> directly")
+
+    @Suppress("UNCHECKED_CAST")
+    private val deserializer = deserializer ?: DataFormat.serializersModule.serializer(this.valueType) as KSerializer<T>
+
+    private val valueClass = ((this.valueType as? ParameterizedType)?.rawType ?: this.valueType) as Class<*>
+
+    init {
+        if (name == null) setName(javaClass.simpleName)
+    }
+
     override fun getValue(buf: MemBuffer, settings: Settings?, length: Int): T? =
         (buf as? Data ?: buf.dataHere(this))?.let { DataFormat.decode(deserializer, it) }
 
