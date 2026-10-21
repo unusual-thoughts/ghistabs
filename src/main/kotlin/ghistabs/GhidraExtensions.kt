@@ -293,6 +293,12 @@ fun Program.lengthAt(addr: Address, dt: DataType): Int? = bytesAt(addr).lengthHe
  */
 fun Program.pointerAt(addr: Address): Address? = valueAt(addr, PointerDataType(dataTypeManager))
 
+/** Whether [addr] is in an executable block. */
+fun Program.isCode(addr: Address) = memory.getBlock(addr)?.isExecute == true
+
+/** Whether [addr] is in an initialized block that isn't executable. */
+fun Program.isData(addr: Address) = memory.getBlock(addr)?.let { it.isInitialized && !it.isExecute } == true
+
 /** The bytes of the NUL-terminated string at [addr] ([cBytesHere]). */
 fun Program.cBytesAt(addr: Address, lengths: IntRange) = bytesAt(addr).cBytesHere(lengths)
 

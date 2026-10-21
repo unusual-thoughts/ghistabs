@@ -24,19 +24,6 @@ private const val MAX_VTABLE_PREFIX_WORDS = 64
 /** Bound on a vbase offset, past which a word in front of `offset_to_top` is taken to be something else. */
 private const val MAX_VBASE_OFFSET = 0x10000L
 
-/**
- * The pointer at [a], or null if it is unmapped or does not point into executable memory. The one test
- * that separates a vtable's function pointers from its header words — both scans below turn on it, and
- * neither can use symbol presence, which auto-analysis sprays `PTR_` labels across. An rtti word can
- * pass it too: an old i386 ELF links `.rodata`, typeinfo and all, into the R-X text segment, so the
- * scans exempt the rtti word before asking.
- *
- * Read as it stands, never through [ghistabs.harvest.AddressResolver.buildAddress]: that fixup is for
- * stab values, which nothing relocated, while the loader has already relocated what memory holds — a
- * PIE loaded at 0x10000 would otherwise have every vtable pointer moved another 0x10000 off its target.
- */
-private fun Program.codeTargetAt(a: Address) = pointerAt(a)?.takeIf { memory.getBlock(it)?.isExecute == true }
-
 /** The header field holding an Itanium record's vbase/vcall-offset word [i], counted from the record start. */
 fun vtableOffsetField(i: Int) = "vcall_vbase_offset_$i"
 
@@ -59,7 +46,7 @@ fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataTyp
     }
 }
 
-/** What a primary record's address point starts with: `offset_to_top`, the rtti word, and its first slot. */
+/** What a primary vtable's address point starts with: `offset_to_top`, the rtti word, and its first slot. */
 private fun primaryHeader(dtm: DataTypeManager) = StructureDataType("PrimaryVtableHeader", 0).apply {
     add(Itanium.offsetToTopType(dtm.dataOrganization.pointerSize), Itanium.OFFSET_TO_TOP, null)
     add(PointerDataType(dtm), Itanium.RTTI, null)
@@ -67,19 +54,32 @@ private fun primaryHeader(dtm: DataTypeManager) = StructureDataType("PrimaryVtab
     isPackingEnabled = true
 }
 
-private fun Program.isData(a: Address) = memory.getBlock(a)?.let { it.isInitialized && !it.isExecute } == true
-
-private fun Program.isCode(a: Address) = memory.getBlock(a)?.isExecute == true
-
 private fun Program.wordsFrom(a: Address, n: Int) = runCatching {
     a.addNoWrap(n.toLong() * defaultPointerSize)
 }.getOrNull()
 
 /**
- * The `offset_to_top` words, each one word ahead of an rtti word in [rttiSites], that start a primary record:
- * a 0, then the rtti word, then a pointer into code. Without that slot, `{0, typeinfo}` is as likely an
- * exception table's entry for a class with no vtable at all (`std::string` on crypto_mi), so a class whose
- * only virtual parts are its bases, and whose record has no slots, isn't found this way.
+ * Finds a class's primary vtable from the words in memory that point at its typeinfo ([rttiSites]), for
+ * a binary with no `_ZTV` symbol left to say where it is.
+ *
+ * A class's `_ZTV` is a group of vtables, called records here ([VtableRecord]; the ABI's "virtual table
+ * group", §2.5.2). The primary one comes first, at the `_ZTV` symbol: it serves the class and its primary
+ * base, an object's first vptr points into it, and its `offset_to_top` is 0. A secondary one follows for
+ * each other base with virtual functions, its `offset_to_top` the negated offset of that base in the object.
+ *
+ * A primary vtable's address point sits right after two header words:
+ *
+ *     [vbase/vcall offsets…]  offset_to_top  rtti       slot 0  slot 1 …
+ *                             0              &typeinfo  &code
+ *
+ * so each site is tried as the `rtti` word. It is kept when the word before it is 0 and the word after it
+ * points into code, and the address of that `offset_to_top` word is returned.
+ *
+ * - A site whose next word isn't a code pointer is turned down even after a 0: an exception table's
+ *   catch entry stores `{0, typeinfo}` too (`std::string`'s on crypto_mi, a class with no vtable at all).
+ *   That costs a record with no slots of its own, a class whose only virtual parts are its bases.
+ * - A base's construction vtable (`_ZTC`) has the same shape and holds the base's typeinfo, so a base can
+ *   come back with more than one record; the caller decides between them.
  */
 fun Program.primaryRecordsAt(rttiSites: List<Address>): List<Address> {
     val header = primaryHeader(dataTypeManager)
@@ -91,8 +91,16 @@ fun Program.primaryRecordsAt(rttiSites: List<Address>): List<Address> {
 }
 
 /**
- * Where the record whose `offset_to_top` is at [top] starts: in front of the vbase offsets it can see, the
- * small non-zero words that aren't pointers into code. A vbase offset of 0 can't be told from padding.
+ * Where the vtable record whose `offset_to_top` word is at [top] begins.
+ *
+ * A class with virtual bases puts a vbase or vcall offset per base in front of `offset_to_top`, so its
+ * record starts before [top]. This walks back from [top] a word at a time while the word reads as such an
+ * offset: signed, non-zero, smaller than [MAX_VBASE_OFFSET] either way, and not an address in code.
+ * Anything else (the previous record's last slot, a typeinfo, padding) ends the walk. It returns the
+ * last word that passed, or [top] when none did.
+ *
+ * An offset of 0 can't be told from padding, so the walk stops short of a record whose first offset is 0.
+ * [RttiSymbols] moves such a start back once the class's typeinfo says where its vbases are.
  */
 fun Program.recordStart(top: Address): Address {
     val word = IntegerDataType.getSignedDataType(defaultPointerSize, null)
@@ -182,7 +190,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
      */
     fun vtableSlotTargets(program: Program): List<Address> =
         generateSequence(addressPoint) { it.add(abi.stride(program.defaultPointerSize)) }
-            .map { program.codeTargetAt(it.add(abi.pfnOffset(program.defaultPointerSize))) }
+            .map { program.pointerAt(it.add(abi.pfnOffset(program.defaultPointerSize)))?.takeIf(program::isCode) }
             .takeWhile { it != null }
             .filterNotNull()
             .toList()
@@ -289,7 +297,7 @@ fun Program.vtableRecord(ztv: Address, abi: CxxAbi = Itanium): VtableRecord {
 
     val rttiSlot = generateSequence(ztv) { it.add(ptr) }
         .take(MAX_VTABLE_PREFIX_WORDS)
-        .takeWhile { holdsTypeinfo(it) || codeTargetAt(it) == null }
+        .takeWhile { holdsTypeinfo(it) || pointerAt(it)?.let(::isCode) != true }
         .firstOrNull(::holdsTypeinfo)
     return recordAt(ztv, rttiSlot, abi)
 }
@@ -307,7 +315,7 @@ data class SubVtable(val record: VtableRecord, val targets: List<Address>) {
 private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? =
     generateSequence(start) { it.add(defaultPointerSize.toLong()) }
         .take(MAX_VTABLE_PREFIX_WORDS)
-        .takeWhile { pointerAt(it) == rtti || codeTargetAt(it) == null }
+        .takeWhile { pointerAt(it) == rtti || pointerAt(it)?.let(::isCode) != true }
         // offset_to_top precedes rtti, so a match on the first word would put the top slot back
         // inside the primary's function array.
         .firstOrNull { it > start && pointerAt(it) == rtti }

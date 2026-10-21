@@ -11,6 +11,7 @@ import ghistabs.cStringAt
 import ghistabs.cursorAt
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.get
+import ghistabs.isData
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.nextData
 import ghistabs.pointerAt
@@ -52,8 +53,6 @@ class RttiSymbols(
 
     private val pointer = PointerDataType(dtm)
 
-    private fun Address.isData() = memory.getBlock(this)?.let { it.isInitialized && !it.isExecute } == true
-
     private fun Address.plusWords(n: Int): Address? = plusOrNull(n.toLong() * ptr)
 
     private fun Address.plusOrNull(by: Long): Address? = runCatching { addNoWrap(by) }.getOrNull()
@@ -66,7 +65,7 @@ class RttiSymbols(
                 buf.seek(b.start.alignTo(ptr.toLong()))
                 while (buf.address.plusOrNull(ptr - 1L)?.let(b::contains) == true) {
                     val data = buf.nextData(pointer) ?: break
-                    val addr = (data.value as? Address)?.takeIf { it.isData() } ?: continue
+                    val addr = (data.value as? Address)?.takeIf(program::isData) ?: continue
                     getOrPut(addr) { mutableListOf() }.add(data.address)
                 }
             }
@@ -103,7 +102,9 @@ class RttiSymbols(
         val names = HashMap<Address, String?>()
         val typeinfos = sitesByTarget.flatMap { (target, sites) ->
             val name = names.getOrPut(target) { className(target) } ?: return@flatMap emptyList()
-            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { program.pointerAt(it)?.isData() == true } }
+            sites.mapNotNull { site ->
+                site.plusWords(-1)?.takeIf { program.pointerAt(it)?.let(program::isData) == true }
+            }
                 .map { typeinfo -> Triple(typeinfo, target, name) }
         }.filter { (_, _, name) -> Demangler.of(Itanium.TYPEINFO_PREFIX + name) != null }
         if (itaniumUnproven && typeinfos.none { Itanium.ITANIUM_ONLY_NAME.matches(it.third) }) return 0
