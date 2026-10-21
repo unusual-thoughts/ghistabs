@@ -57,7 +57,7 @@ class SjljLsda private constructor(
     private class Cursor(val program: Program, var at: Address) {
         private fun scalar(dt: DataType): Scalar = at.let { here ->
             at += program.lengthAt(here, dt) ?: throw Malformed()
-            program.readAs<Scalar>(here, dt) ?: throw Malformed()
+            program.valueAt<Scalar>(here, dt) ?: throw Malformed()
         }
 
         fun u8() = scalar(ByteDataType.dataType).unsignedValue.toInt()
@@ -69,7 +69,7 @@ class SjljLsda private constructor(
         }
 
         fun isNull(): Boolean {
-            val value = program.readPointer(at) ?: throw Malformed()
+            val value = program.pointerAt(at) ?: throw Malformed()
             at += program.defaultPointerSize
             return value.offset == 0L
         }

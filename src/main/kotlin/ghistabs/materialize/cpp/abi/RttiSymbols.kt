@@ -4,24 +4,22 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.listing.Program
-import ghidra.program.model.mem.MutableMemBuffer
 import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.SourceType
-import ghidra.util.ascii.AsciiCharSetRecognizer
-import ghidra.util.ascii.CharSetRecognizer
 import ghistabs.BoolOption
 import ghistabs.Demangler
 import ghistabs.alignTo
+import ghistabs.cStringAt
+import ghistabs.cursorAt
 import ghistabs.dataAt
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.dumbBuffer
 import ghistabs.get
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.memBuffer
-import ghistabs.readAs
-import ghistabs.readAt
-import ghistabs.readPointer
+import ghistabs.nextData
+import ghistabs.pointerAt
+import ghistabs.seek
 import ghistabs.set
+import ghistabs.valueAt
 import ghistabs.valueOf
 import kotlin.math.abs
 
@@ -78,16 +76,16 @@ class RttiSymbols(
     private fun Address.plusOrNull(by: Long): Address? = runCatching { addNoWrap(by) }.getOrNull()
 
     private fun signedWord(addr: Address) =
-        program.readAs<Scalar>(addr, IntegerDataType.getSignedDataType(ptr, null))?.signedValue
+        program.valueAt<Scalar>(addr, IntegerDataType.getSignedDataType(ptr, null))?.signedValue
 
     /** Every aligned word in the data blocks that points into them, by what it points at. */
     private val sitesByTarget: Map<Address, List<Address>> by lazy {
-        val buf = program.memBuffer()
+        val buf = program.cursorAt(memory.minAddress)
         buildMap<Address, MutableList<Address>> {
             for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
-                buf.setPosition(b.start.alignTo(ptr.toLong()))
+                buf.seek(b.start.alignTo(ptr.toLong()))
                 while (buf.address.plusOrNull(ptr - 1L)?.let(b::contains) == true) {
-                    val data = buf.dataAt(pointer) ?: break
+                    val data = buf.nextData(pointer) ?: break
                     val addr = (data.value as? Address)?.takeIf { it.isData() } ?: continue
                     getOrPut(addr) { mutableListOf() }.add(data.address)
                 }
@@ -95,21 +93,9 @@ class RttiSymbols(
         }
     }
 
-    private fun MutableMemBuffer.stringAt(
-        addr: Address? = null,
-        lengthIn: IntRange = 0..256,
-        charSet: CharSetRecognizer = AsciiCharSetRecognizer(),
-    ) = runCatching {
-        addr?.let { setPosition(it) }
-        (0..<lengthIn.last).asSequence().map { getByte(it) }
-            .takeWhile { charSet.contains(it.toInt()) }.toList()
-            .takeIf { it.size >= lengthIn.first && getByte(it.size).toInt() == 0 }
-            ?.toByteArray()?.decodeToString()
-    }.getOrNull()
-
     /** The NUL-terminated class name at [addr], or null if what is there can't be one. */
     private fun className(addr: Address): String? =
-        program.dumbBuffer(addr).stringAt(lengthIn = 0..MAX_TYPE_NAME)?.takeIf(CLASS_TYPE_NAME::matches)
+        program.cStringAt(addr, 0..MAX_TYPE_NAME)?.takeIf(CLASS_TYPE_NAME::matches)
 
     companion object {
         val RTTI_SYMBOLS_RESTORED = BoolOption("RTTI Symbols Restored", "Stripped RTTI labels already put back.", false)
@@ -137,7 +123,7 @@ class RttiSymbols(
         val names = HashMap<Address, String?>()
         val typeinfos = sitesByTarget.flatMap { (target, sites) ->
             val name = names.getOrPut(target) { className(target) } ?: return@flatMap emptyList()
-            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { program.readPointer(it)?.isData() == true } }
+            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { program.pointerAt(it)?.isData() == true } }
                 .map { typeinfo -> Triple(typeinfo, target, name) }
         }.filter { (_, _, name) -> Demangler.of(Itanium.TYPEINFO_PREFIX + name) != null }
         if (itaniumUnproven && typeinfos.none { ITANIUM_ONLY_NAME.matches(it.third) }) return 0
@@ -190,7 +176,7 @@ class RttiSymbols(
      */
     private fun primaryCandidates(typeinfo: Address): List<Address> = sitesByTarget[typeinfo].orEmpty()
         .mapNotNull { it.plusWords(-1)?.takeIf { top -> top.isData() } }
-        .mapNotNull { program.readAt(it, vtable) }
+        .mapNotNull { program.dataAt(it, vtable) }
         .filter { it.valueOf<Scalar>(0)?.value == 0L }
         .filter { it.valueOf<Address>(2)?.isCode() == true }
         .map { it.address }

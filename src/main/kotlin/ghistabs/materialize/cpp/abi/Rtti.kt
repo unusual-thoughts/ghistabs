@@ -138,7 +138,7 @@ class Rtti(private val dtm: DataTypeManager) {
 
     /**
      * Reads a class's direct bases off its Itanium `_ZTI` typeinfo object (ABI §2.9.5): [Rtti]'s
-     * layouts, read off memory with [readAt] whether or
+     * layouts, read off memory with [dataAt] whether or
      * not anything typed the object.
      *
      * The object's first word is the address point of one of three `__cxxabiv1` vtables, which says the
@@ -176,7 +176,7 @@ class Rtti(private val dtm: DataTypeManager) {
             when (kindOf(zti)) {
                 TypeinfoKind.CLASS -> emptyList()
 
-                TypeinfoKind.SI -> program.readAt(zti, layouts.siClassTi)?.get(BASE_TYPE)
+                TypeinfoKind.SI -> program.dataAt(zti, layouts.siClassTi)?.get(BASE_TYPE)
                     ?.let { classAt(it.address) }
                     ?.let { (name, at) -> listOf(Base(name, at, isVirtual = false, access = Access.PUBLIC)) }
 
@@ -206,11 +206,11 @@ class Rtti(private val dtm: DataTypeManager) {
             null -> null
         }
 
-        private fun vmiCount(zti: Address) = program.readAt(zti, layouts.vmiClassTypeInfo(1))
+        private fun vmiCount(zti: Address) = program.dataAt(zti, layouts.vmiClassTypeInfo(1))
             ?.getScalar(NUM_BASES)?.unsignedValue?.toInt()
 
         private fun vmiBases(zti: Address): List<Base>? {
-            val array = structFor(zti)?.let { program.readAt(zti, it)?.get(BASES) } ?: return null
+            val array = structFor(zti)?.let { program.dataAt(zti, it)?.get(BASES) } ?: return null
             return (0 until array.numComponents).map { i ->
                 val entry = array[i] ?: return null
                 val (name, at) = entry[BASE_TYPE_IN_ENTRY]?.let { classAt(it.address) } ?: return null
@@ -243,7 +243,7 @@ class Rtti(private val dtm: DataTypeManager) {
                 .filter { it.isExternalReference || it.toAddress.isExternalAddress }
                 .mapNotNull { symtab.getPrimarySymbol(it.toAddress) }
             val symbols = external.ifEmpty {
-                val target = runCatching { program.readPointer(at) }.getOrNull() ?: return null
+                val target = runCatching { program.pointerAt(at) }.getOrNull() ?: return null
                 runCatching { symtab.getSymbols(target.subtract(back)).toList() }.getOrNull() ?: return null
             }
             return symbols.firstNotNullOfOrNull(of)

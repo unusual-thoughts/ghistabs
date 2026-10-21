@@ -16,6 +16,7 @@ import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.mem.DumbMemBufferImpl
+import ghidra.program.model.mem.MemBuffer
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.program.model.mem.MemoryBufferImpl
 import ghidra.program.model.mem.MutableMemBuffer
@@ -24,6 +25,8 @@ import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
+import ghidra.util.ascii.AsciiCharSetRecognizer
+import ghidra.util.ascii.CharSetRecognizer
 import ghidra.util.task.TaskMonitor
 import ghistabs.parse.dbxArch
 import ghistabs.parse.frameRegister
@@ -212,59 +215,75 @@ fun Program.forceCreateData(
     return DataUtilities.createData(this, addr, dt, length, DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
 }
 
-fun MutableMemBuffer.lengthOf(dt: DataType): Int? = when (dt) {
-    is Dynamic -> dt.getLength(this, -1)
-    else -> dt.length
-}.takeIf { it > 0 }
+/** How many bytes [dt] spans where the buffer stands: a [Dynamic] type's own decoded length, or null if unreadable. */
+fun MemBuffer.lengthHere(dt: DataType): Int? =
+    runCatching { if (dt is Dynamic) dt.getLength(this, -1) else dt.length }.getOrNull()?.takeIf { it > 0 }
 
-inline fun <reified T> MutableMemBuffer.readAs(dt: DataType, addr: Address? = null) = runCatching {
-    addr?.let { setPosition(it) }
-    // StringDataType returns null for length == -1
-    dt.getValue(this, dt.defaultSettings, -1) as T?
-}.getOrNull()?.also { lengthOf(dt)?.let { runCatching { advance(it) } } }
+/**
+ * [dt] decoded where the buffer stands, as a [T]: a [Scalar] for an integer type, an [Address] for a pointer,
+ * a [String] for a string type. A [Dynamic] type is read at the length it sizes itself to: a LEB128 would
+ * otherwise be cut to a byte, and a string type decodes nothing at length -1.
+ */
+inline fun <reified T> MemBuffer.valueHere(dt: DataType): T? =
+    runCatching { dt.getValue(this, dt.defaultSettings, lengthHere(dt) ?: -1) as? T }.getOrNull()
 
-/** [dt] read at [addr] (or where the buffer stands), or null unless every byte it spans is initialized memory. */
-fun MutableMemBuffer.dataAt(dt: DataType, addr: Address? = null) = runCatching {
-    addr?.let { setPosition(it) }
+/** [dt] over the bytes where the buffer stands, laid nowhere, or null unless every byte is initialized memory. */
+fun MemBuffer.dataHere(dt: DataType): Data? = runCatching { PseudoData(memory.program, address, dt, this) }.getOrNull()
     // PseudoData zero-fills bytes it can't read, so check they are all there
-    PseudoData(memory.program, address, dt, this)
-        .takeIf { memory.allInitializedAddressSet.contains(it.minAddress, it.maxAddress) }
-}.getOrNull()?.also { runCatching { advance(it.length) } }
+    ?.takeIf { memory.allInitializedAddressSet.contains(it.minAddress, it.maxAddress) }
 
-fun MutableMemBuffer.pointerAt(addr: Address? = null) = dataAt(PointerDataType(memory.program.dataTypeManager), addr)
+/** The NUL-terminated string where the buffer stands, if [lengths] holds its length and [charSet] its characters. */
+fun MemBuffer.cStringHere(lengths: IntRange, charSet: CharSetRecognizer = AsciiCharSetRecognizer()): String? =
+    valueHere<String>(TerminatedStringDataType.dataType)
+        ?.takeIf { it.length in lengths && it.all { c -> charSet.contains(c.code) } }
 
-fun MutableMemBuffer.readPointer(addr: Address? = null): Address? =
-    readAs(PointerDataType(memory.program.dataTypeManager), addr)
+private val MemBuffer.pointerType get() = PointerDataType(memory.program.dataTypeManager)
 
-fun Program.memBuffer(start: Address = memory.allInitializedAddressSet.minAddress): MutableMemBuffer =
-    MemoryBufferImpl(memory, start)
-fun Program.dumbBuffer(start: Address): MutableMemBuffer = DumbMemBufferImpl(memory, start)
+/** Moves the buffer to [addr], so the next `next…` call reads there. */
+fun MutableMemBuffer.seek(addr: Address) = apply { setPosition(addr) }
+
+/** Moves the buffer past [length] bytes, or leaves it where it is if that would leave the address space. */
+fun MutableMemBuffer.skip(length: Int) = apply { runCatching { advance(length) } }
+
+/** [valueHere], then past it. */
+inline fun <reified T> MutableMemBuffer.nextValue(dt: DataType): T? =
+    valueHere<T>(dt)?.also { lengthHere(dt)?.let(::skip) }
+
+/** [dataHere], then past it. */
+fun MutableMemBuffer.nextData(dt: DataType): Data? = dataHere(dt)?.also { skip(it.length) }
+
+fun MutableMemBuffer.nextPointerData(): Data? = nextData(pointerType)
+
+fun MutableMemBuffer.nextPointer(): Address? = nextValue(pointerType)
+
+/** A buffer for reading forward from [start]: it caches a window of memory, so reads near the last are cheap. */
+fun Program.cursorAt(start: Address): MutableMemBuffer = MemoryBufferImpl(memory, start)
+
+/** A buffer that reads straight from memory at [addr], for a one-off read where a cached window would be wasted. */
+fun Program.bytesAt(addr: Address): MemBuffer = DumbMemBufferImpl(memory, addr)
 
 /**
  * [dt] read over the bytes at [addr] without laying anything in the listing, or null if they are not
  * all readable. The data type does the decoding — width, endianness, sign, which address space a
  * pointer lands in — so a caller never reassembles bytes by hand.
  */
-fun Program.readAt(addr: Address, dt: DataType): Data? = dumbBuffer(addr).dataAt(dt, addr)
+fun Program.dataAt(addr: Address, dt: DataType): Data? = bytesAt(addr).dataHere(dt)
 
-/**
- * [readAt]'s value as a [T]: a [Scalar] for an integer type, an [Address] for a pointer. A [Dynamic]
- * type such as a LEB128 is read at the length it sizes itself to, which [PseudoData]'s fixed one
- * would cut to a byte.
- */
-inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = dumbBuffer(addr).readAs(dt)
+/** [dt]'s value at [addr] ([valueHere]). */
+inline fun <reified T> Program.valueAt(addr: Address, dt: DataType): T? = bytesAt(addr).valueHere(dt)
 
-/** How many bytes [dt] spans at [addr]: a [Dynamic] type's own decoded length, or null if unreadable. */
-fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
-    is Dynamic -> dt.getLength(dumbBuffer(addr), -1)
-    else -> dt.length
-}.takeIf { it > 0 }
+/** How many bytes [dt] spans at [addr] ([lengthHere]). */
+fun Program.lengthAt(addr: Address, dt: DataType): Int? = bytesAt(addr).lengthHere(dt)
 
 /**
  * The pointer stored at [addr], taken as it stands. The loader has already relocated what memory
  * holds, so this is the address it points at in the program as loaded.
  */
-fun Program.readPointer(addr: Address): Address? = readAs(addr, PointerDataType(dataTypeManager))
+fun Program.pointerAt(addr: Address): Address? = valueAt(addr, PointerDataType(dataTypeManager))
+
+/** The NUL-terminated string at [addr] ([cStringHere]). */
+fun Program.cStringAt(addr: Address, lengths: IntRange, charSet: CharSetRecognizer = AsciiCharSetRecognizer()) =
+    bytesAt(addr).cStringHere(lengths, charSet)
 
 val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
 

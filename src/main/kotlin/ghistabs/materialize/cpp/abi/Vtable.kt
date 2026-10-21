@@ -29,7 +29,7 @@ private const val MAX_VTABLE_PREFIX_WORDS = 64
  * stab values, which nothing relocated, while the loader has already relocated what memory holds — a
  * PIE loaded at 0x10000 would otherwise have every vtable pointer moved another 0x10000 off its target.
  */
-private fun Program.codeTargetAt(a: Address) = readPointer(a)?.takeIf { memory.getBlock(it)?.isExecute == true }
+private fun Program.codeTargetAt(a: Address) = pointerAt(a)?.takeIf { memory.getBlock(it)?.isExecute == true }
 
 /** The header field holding an Itanium record's vbase/vcall-offset word [i], counted from the record start. */
 fun vtableOffsetField(i: Int) = "vcall_vbase_offset_$i"
@@ -83,7 +83,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     private fun StructureDataType.field(name: String) = components.firstOrNull { it.fieldName == name }
 
     /** [header] as memory holds it, read through its layout; null for a gcc 2.x record. */
-    fun readHeader(program: Program): Data? = header?.let { program.readAt(address, it) }
+    fun readHeader(program: Program): Data? = header?.let { program.dataAt(address, it) }
 
     /**
      * The vbase offset `this` keeps for virtual [base]: where [base] sits in the class `this` is the
@@ -242,7 +242,7 @@ fun Program.vtableRecord(ztv: Address, abi: CxxAbi = Itanium): VtableRecord {
     if (!abi.hasRttiHeader) return VtableRecord(ztv, null, abi)
     val ptr = defaultPointerSize.toLong()
     fun holdsTypeinfo(slot: Address) =
-        readPointer(slot)?.let { pointee -> symbolTable.getSymbols(pointee).any { it.isTypeinfo } } == true
+        pointerAt(slot)?.let { pointee -> symbolTable.getSymbols(pointee).any { it.isTypeinfo } } == true
 
     val rttiSlot = generateSequence(ztv) { it.add(ptr) }
         .take(MAX_VTABLE_PREFIX_WORDS)
@@ -264,10 +264,10 @@ data class SubVtable(val record: VtableRecord, val targets: List<Address>) {
 private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? =
     generateSequence(start) { it.add(defaultPointerSize.toLong()) }
         .take(MAX_VTABLE_PREFIX_WORDS)
-        .takeWhile { readPointer(it) == rtti || codeTargetAt(it) == null }
+        .takeWhile { pointerAt(it) == rtti || codeTargetAt(it) == null }
         // offset_to_top precedes rtti, so a match on the first word would put the top slot back
         // inside the primary's function array.
-        .firstOrNull { it > start && readPointer(it) == rtti }
+        .firstOrNull { it > start && pointerAt(it) == rtti }
         ?.let { recordAt(start, it, Itanium) }
         ?.let { record -> SubVtable(record, record.vtableSlotTargets(this)) }
 
