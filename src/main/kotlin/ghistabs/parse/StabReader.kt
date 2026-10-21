@@ -7,6 +7,7 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
+import ghistabs.SerialStructure
 import ghistabs.byteProvider
 
 /**
@@ -250,7 +251,7 @@ val CATEGORY = CategoryPath("/stabs")
 /**
  * Get-or-create the `/stabs` Ghidra datatypes on this manager — `resolve` is idempotent under
  * `KEEP_HANDLER`, so this is safe to call repeatedly. Builds the `StabType` 1-byte enum and the
- * 12-byte `StabRecord` layout (single source, mirroring [StabHeader]'s fields), for the .stab overlay.
+ * 12-byte `StabRecord` layout for the .stab overlay, a [SerialStructure] of [StabHeader]: its data decodes to one.
  */
 fun DataTypeManager.stabRecordDataType(): DataType = getDataType(CATEGORY, "StabRecord") ?: run {
     val nType = resolve(
@@ -260,7 +261,8 @@ fun DataTypeManager.stabRecordDataType(): DataType = getDataType(CATEGORY, "Stab
         DataTypeConflictHandler.KEEP_HANDLER,
     )
     resolve(
-        StructureDataType(CATEGORY, "StabRecord", 0).apply {
+        SerialStructure<StabHeader>("StabRecord", this) {
+            categoryPath = CATEGORY
             add(DWordDataType.dataType, "n_strx", "index into .stabstr (per-CU)")
             add(nType, "n_type", "stab type code")
             add(ByteDataType.dataType, "n_other", null)

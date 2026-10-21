@@ -9,12 +9,12 @@ import ghidra.program.model.data.LongLongDataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
+import ghistabs.decode
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.isTemplated
 import ghistabs.cpp.member
 import ghistabs.cpp.nameSegments
 import ghistabs.cpp.qualifiedName
-import ghistabs.getScalar
 import ghistabs.namespaces
 
 /**
@@ -146,7 +146,7 @@ object Itanium : CxxAbi {
         if (ptrSize == 8) LongLongDataType.dataType else IntegerDataType.dataType
 
     override fun VtableRecord.vfptrOffset(program: Program): Long? =
-        readHeader(program)?.getScalar(OFFSET_TO_TOP)?.signedValue?.let { -it }
+        readHeader(program)?.decode<VtableHeader>()?.offsetToTop?.let { -it }
 
     fun zti(className: String) = "$TYPEINFO_PREFIX${mangleClassName(className)}"
 

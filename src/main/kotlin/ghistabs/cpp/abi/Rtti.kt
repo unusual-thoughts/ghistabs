@@ -6,8 +6,12 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
-import ghistabs.cpp.Access
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.Access
+import ghistabs.materialize.DtmRegistry
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import ghidra.program.model.data.Array as DataArray
 
 /**
  * Authoritative Itanium `__cxxabiv1` typeinfo struct layouts, adapted from Ghidra's
@@ -204,23 +208,31 @@ class Rtti(private val dtm: DataTypeManager) {
             null -> null
         }
 
-        private fun vmiCount(zti: Address) = program.dataAt(zti, layouts.vmiClassTypeInfo(1))
-            ?.getScalar(NUM_BASES)?.unsignedValue?.toInt()
+        /** `__base_class_type_info`, as [bClassTi] lays it. [type] stays a field: [classAt] reads from where it is. */
+        @Serializable
+        private data class BaseInfo(
+            @SerialName(BASE_TYPE_IN_ENTRY) val type: SerialData,
+            @SerialName(IS_VIRTUAL) val isVirtual: Boolean,
+            @SerialName(IS_PUBLIC) val isPublic: Boolean,
+            @SerialName(BASE_OFFSET) val offset: Long,
+        )
 
-        private fun vmiBases(zti: Address): List<Base>? {
-            val array = structFor(zti)?.let { program.dataAt(zti, it)?.get(BASES) } ?: return null
-            return (0 until array.numComponents).map { i ->
-                val entry = array[i] ?: return null
-                val (name, at) = entry[BASE_TYPE_IN_ENTRY]?.let { classAt(it.address) } ?: return null
-                Base(
-                    name,
-                    at,
-                    isVirtual = entry.flag(IS_VIRTUAL),
-                    access = if (entry.flag(IS_PUBLIC)) Access.PUBLIC else Access.PRIVATE,
-                    offset = entry.getScalar(BASE_OFFSET)?.signedValue ?: return null,
-                )
+        /** `__vmi_class_type_info`'s base count and, laid by [vmiClassTypeInfo] at that count, its bases. */
+        @Serializable
+        private data class VmiTypeInfo(
+            @SerialName(NUM_BASES) val count: UInt,
+            @SerialName(BASES) val bases: List<BaseInfo>,
+        )
+
+        private fun vmiCount(zti: Address) =
+            program.decodeAt<VmiTypeInfo>(zti, layouts.vmiClassTypeInfo(1))?.count?.toInt()
+
+        private fun vmiBases(zti: Address): List<Base>? =
+            structFor(zti)?.let { program.decodeAt<VmiTypeInfo>(zti, it) }?.bases?.map { base ->
+                val (name, at) = classAt(base.type.address) ?: return null
+                val access = if (base.isPublic) Access.PUBLIC else Access.PRIVATE
+                Base(name, at, isVirtual = base.isVirtual, access = access, offset = base.offset)
             }
-        }
 
         // The vptr is the vtable's address point, two words past its `_ZTV` label.
         internal fun kindOf(zti: Address) =

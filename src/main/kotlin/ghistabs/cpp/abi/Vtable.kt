@@ -50,7 +50,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     }
 
     /** The typeinfo the rtti word points at. */
-    fun rttiOf(program: Program): Address? = readHeader(program)?.valueOf<Address>(Itanium.RTTI)
+    fun rttiOf(program: Program): Address? = readHeader(program)?.decode<VtableHeader>()?.rtti
 
     /**
      * What prefix word [i] of [total] is, given the class's [virtualBases]. The ABI orders the words
