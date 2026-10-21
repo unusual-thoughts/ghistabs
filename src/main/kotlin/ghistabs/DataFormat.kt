@@ -7,6 +7,7 @@ import ghidra.program.model.data.Array
 import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
@@ -32,6 +33,8 @@ import ghidra.program.model.data.Enum as GhidraEnum
  * composite's) components in order. A primitive reads the field's [Scalar], a char also a `Character`
  * and a boolean also a `Boolean`; an enum takes the name a Ghidra enum gives the value, else the
  * value as its ordinal. An [Address] or the field's own [Data] reads as a [SerialAddress] or [SerialData].
+ *
+ * A typed pointer field reads as a [Ptr] to dereference later, or, marked [Deref], as what it points at.
  *
  * A field the composite lacks falls back to the property's default, then to null; one it has but the
  * class doesn't name is ignored.
@@ -63,7 +66,13 @@ object DataFormat {
         override fun serialize(encoder: Encoder, value: Data) = decodeOnly()
     }
 
-    private fun decodeOnly(): Nothing = throw SerializationException("DataFormat only decodes")
+    internal fun <T> pointer(decoder: Decoder, target: DeserializationStrategy<T>): Ptr<T> {
+        val field = reader(decoder).element
+        val to = field.value as? Address ?: throw reader(decoder).mismatch("an address")
+        return Ptr(to) { field.deref()?.let { decode(target, it) } }
+    }
+
+    internal fun decodeOnly(): Nothing = throw SerializationException("DataFormat only decodes")
 
     private fun reader(decoder: Decoder) =
         decoder as? Reader ?: throw SerializationException("${decoder::class.simpleName} is no DataFormat decoder")
@@ -90,6 +99,7 @@ object DataFormat {
             while (++index < if (list) data.numComponents else descriptor.elementsCount) {
                 name = if (list) "[$index]" else descriptor.getElementName(index)
                 current = if (list) data.getComponent(index) else byName[name]
+                if (!list && descriptor.getElementAnnotations(index).any { it is Deref }) current = current?.deref()
                 if (current == null && !list && descriptor.isElementOptional(index)) continue
                 return index
             }
@@ -133,6 +143,42 @@ object DataFormat {
             return index.takeIf { it in 0..<enumDescriptor.elementsCount }
                 ?: throw SerializationException("No ${enumDescriptor.serialName} for $value in '$name'")
         }
+    }
+}
+
+/** What the pointer [this] holds points at, laid as its pointee type; null for a null or unmapped pointer. */
+private fun Data.deref(): Data? {
+    val pointee = (baseDataType as? Pointer)?.dataType
+        ?: throw SerializationException("'$fieldName' is no typed pointer, so has nothing to dereference")
+    return (value as? Address)?.takeIf { it.offset != 0L }?.let { program.readAt(it, pointee) }
+}
+
+/** A pointer field marked so reads as what it points at, null for a null pointer. Each read follows it again. */
+@OptIn(ExperimentalSerializationApi::class)
+@SerialInfo
+@Target(AnnotationTarget.PROPERTY)
+annotation class Deref
+
+/**
+ * A typed pointer field: the [address] it holds, and what it points at decoded on first [deref], so a
+ * cycle in memory is no infinite read. Two are equal when they hold the same address.
+ */
+@Serializable(with = Ptr.Serializer::class)
+class Ptr<T>(val address: Address, read: () -> T?) {
+    private val pointee by lazy(read)
+
+    /** The pointee as a [T]; null for a null or unmapped pointer. */
+    fun deref(): T? = pointee
+
+    override fun equals(other: Any?) = other is Ptr<*> && other.address == address
+    override fun hashCode() = address.hashCode()
+    override fun toString() = "Ptr($address)"
+
+    class Serializer<T>(private val target: KSerializer<T>) : KSerializer<Ptr<T>> {
+        override val descriptor =
+            PrimitiveSerialDescriptor("ghistabs.Ptr<${target.descriptor.serialName}>", PrimitiveKind.LONG)
+        override fun deserialize(decoder: Decoder) = DataFormat.pointer(decoder, target)
+        override fun serialize(encoder: Encoder, value: Ptr<T>) = DataFormat.decodeOnly()
     }
 }
 

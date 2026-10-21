@@ -5,6 +5,8 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Data
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.Deref
+import ghistabs.Ptr
 import ghistabs.SerialAddress
 import ghistabs.SerialData
 import ghistabs.SerialStructure
@@ -37,6 +39,9 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val kind: Kind,
         val words: List<UShort>,
         val pairs: List<Inner>,
+        val ptr: Ptr<Inner>,
+        @Deref val pointed: Inner,
+        @Deref val nothing: Inner?,
         val missing: Int? = null,
         val defaulted: String = "d",
     )
@@ -73,6 +78,7 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             add(kind, "kind", null)
             add(ArrayDataType(UnsignedShortDataType.dataType, 3, 2), "words", null)
             add(ArrayDataType(inner, 2, inner.length), "pairs", null)
+            listOf("ptr", "pointed", "nothing").forEach { add(PointerDataType(inner, 4), it, null) }
         }
     }
 
@@ -104,12 +110,13 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 "01 00 02 00 ff ff",
                 inner(1, "02 00 00 00", 0),
                 inner(3, "04 00 00 00", 0b111),
+                "27 10 40 00 27 10 40 00 00 00 00 00",
             ).joinToString(" "),
         )
     }
 
     @Test
-    fun `a structure reads into its class by field name, as does a SerialStructure's value`() {
+    fun `a structure reads into its class by field name, pointers followed, as does a SerialStructure's value`() {
         lay()
         val expected = Outer(
             offset = -4,
@@ -118,9 +125,12 @@ class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             kind = Kind.PLAIN,
             words = listOf<UShort>(1u, 2u, 0xffffu),
             pairs = listOf(Inner(1, 2, isVirtual = false, access = 0), Inner(3, 4, isVirtual = true, access = 3)),
+            ptr = Ptr(builder.addr(0x401027)) { null },
+            pointed = Inner(3, 4, isVirtual = true, access = 3),
+            nothing = null,
         )
         program.read<Outer>(builder.addr(0x401000), outer) mustBe expected
-        program.readAs<Outer>(builder.addr(0x401000), outer) mustBe expected
+        program.readAs<Outer>(builder.addr(0x401000), outer)?.ptr?.deref() mustBe expected.pointed
         program.readAt(builder.addr(0x401000), outer)?.get("inner")?.value mustBe expected.inner
     }
 
