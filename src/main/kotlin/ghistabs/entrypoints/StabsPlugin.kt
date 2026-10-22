@@ -7,27 +7,54 @@ import ghidra.app.CorePluginPackage
 import ghidra.app.plugin.PluginCategoryNames
 import ghidra.app.plugin.ProgramPlugin
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
+import ghidra.app.services.GoToService
 import ghidra.framework.plugintool.PluginInfo
 import ghidra.framework.plugintool.PluginTool
 import ghidra.framework.plugintool.util.PluginStatus
+import ghidra.program.model.listing.Program
+import ghidra.program.util.ProgramLocation
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
+import ghistabs.cpp.ClassHierarchyRecords.Companion.areClassesRecorded
+import ghistabs.cpp.gui.ClassTree
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.parse.StabReader
 
 /**
  * `Tools > Stabs > Re-import`: clears the persistent done-flag and re-runs the StabsAnalyzer.
+ * `Window > Class Hierarchy`: the read-only class tree ([ClassTree]).
  * The render is exported through [StabsDecompExporter] (`File > Export Program…`), not from here.
  */
 @PluginInfo(
     status = PluginStatus.RELEASED,
     packageName = CorePluginPackage.NAME,
     category = PluginCategoryNames.ANALYSIS,
-    shortDescription = "Re-run the STABS importer on the current program.",
+    shortDescription = "Re-run the STABS importer; show the C++ class hierarchy.",
     description = "Adds 'Tools > Stabs > Re-import', which clears the 'Stabs Imported' flag and " +
-        "re-runs auto-analysis so the StabsAnalyzer executes again.",
+        "re-runs auto-analysis so the StabsAnalyzer executes again, and a 'Class Hierarchy' window: " +
+        "each C++ class under its namespace, expanding into its direct bases (from the stabs, or " +
+        "from the typeinfo of a class the stabs don't describe).",
+    servicesRequired = [GoToService::class],
 )
 class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
+    // Stabs but no record: imported before the record existed, so the stabs classes count as from
+    // typeinfo or vtables until a re-import.
+    private val classHierarchy = ClassTree(this) { p ->
+        val unrecorded = StabReader.hasStabs(p) && !p.areClassesRecorded()
+        "no stabs record: Tools > Stabs > Re-import to add it".takeIf { unrecorded }
+    }
+
+    override fun programActivated(program: Program) = classHierarchy.setProgram(program)
+
+    override fun programDeactivated(program: Program) = classHierarchy.setProgram(null)
+
+    override fun locationChanged(loc: ProgramLocation?) = classHierarchy.locationChanged(loc)
+
+    override fun dispose() {
+        classHierarchy.dispose()
+        super.dispose()
+    }
+
     init {
         tool.addAction(
             object : DockingAction("Stabs Re-import", getName()) {
