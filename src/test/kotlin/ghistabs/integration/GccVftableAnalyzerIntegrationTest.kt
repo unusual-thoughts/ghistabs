@@ -3,7 +3,6 @@ package ghistabs.integration
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
-import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.FunctionDefinition
@@ -16,8 +15,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.buildClassNamespaces
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.Level
+import ghistabs.diagnose.CountingSink
 import ghistabs.entrypoints.GccVftableAnalyzer
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.VtableSweeper
@@ -237,23 +235,10 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
     @Test
     fun leavesAnImportedVtable() {
         builder.createLabel(hex(externalBlock()), "_ZTVN10__cxxabiv117__class_type_infoE")
-        val logged = mutableListOf<String>()
-        val sink = object : DiagnosticSink {
-            override fun log(
-                category: String,
-                message: String?,
-                level: Level,
-                address: Address?,
-                degrades: String?,
-                count: Long,
-            ) {
-                logged += category
-            }
-        }
-
+        val sink = CountingSink()
         val sweeper = VtableSweeper(DtmRegistry(program.dataTypeManager), program, TaskMonitor.DUMMY, sink)
         program.runTransaction("sweep") { sweeper.sweepUnclaimedVtables() }.mustBe(1)
-        logged.mustNot("swept the import") { contains("vtable-swept-empty") }
+        sink.counts["vtable-swept-empty"].mustBe(null, "swept the import")
     }
 
     /** What `RecoveredClassHelper.getClassNamespace` makes of [vftable]'s category. */
