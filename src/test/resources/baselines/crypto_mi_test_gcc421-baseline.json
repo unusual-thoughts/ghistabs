@@ -1449,6 +1449,10 @@
             "min": 703,
             "max": 703
         },
+        "vtt-laid": {
+            "min": 67,
+            "max": 67
+        },
         "xref-undefined": {
             "min": 47,
             "max": 47
