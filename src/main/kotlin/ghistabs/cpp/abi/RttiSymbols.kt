@@ -116,18 +116,21 @@ class RttiSymbols(
 
         val candidates = typeinfos.associateWith { it.primaryVtables() }
         val rtti = Rtti.Reader(program)
-        val vtts = VttReader(
+        val reader = VttReader(
             program,
             rtti,
             names = typeinfos.associate { it.address to it.name },
             dynamic = candidates.filterValues { it.isNotEmpty() }.keys.mapTo(HashSet()) { it.address },
-            sitesByTarget = sitesByTarget,
         )
+
+        // A class's VTT is the lowest data word pointing at its address point: only a VTT stores a vtable address
+        // in data, and a virtual primary base reusing the class's vptr puts the same address further into it.
+        fun vttOf(top: Address) = top.plusWords(2)?.let(sitesByTarget::get)?.min()?.let(reader::vttAt)
 
         val settled = candidates.mapNotNull { (ti, found) -> found.singleOrNull()?.let { ti to it } }.toMap()
         var kept = labelVtables(settled, rtti)
-        val vttOf = settled.mapNotNull { (ti, top) -> vtts.vttOf(ti.address, top)?.let { ti to it } }.toMap(HashMap())
-        val construction = vttOf.values.flatMap { vtt -> vtt.constructionVtables.map { it.second } }.toSet()
+        val vtts = settled.mapNotNull { (ti, top) -> vttOf(top)?.let { ti to it } }.toMap(HashMap())
+        val construction = vtts.values.flatMap { vtt -> vtt.constructionVtables.map { it.second } }.toSet()
         val among = settled.values.minOrNull()?.let { lo -> lo..settled.values.max() }
         val rest = candidates.filterKeys { it !in settled }.mapNotNull { (ti, found) ->
             val left = found - construction
@@ -138,8 +141,8 @@ class RttiSymbols(
             ti to top
         }.toMap()
         kept += labelVtables(rest, rtti)
-        rest.forEach { (ti, top) -> vtts.vttOf(ti.address, top)?.let { vttOf[ti] = it } }
-        vttOf.forEach { (ti, vtt) -> labelVtt(ti.name, vtt, rtti) }
+        rest.forEach { (ti, top) -> vttOf(top)?.let { vtts[ti] = it } }
+        vtts.forEach { (ti, vtt) -> labelVtt(ti.name, vtt, rtti) }
         return kept
     }
 

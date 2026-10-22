@@ -1,13 +1,17 @@
 package ghistabs.integration
 
 import ghidra.app.util.importer.MessageLog
+import ghidra.program.model.listing.CommentType
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
+import ghistabs.DtmRegistry
 import ghistabs.LoadedProgram
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.VtableSweeper
 import ghistabs.cpp.abi.vtableRecord
+import ghistabs.diagnose.DummySink
 import ghistabs.entrypoints.RttiSymbolsAnalyzer
 import ghistabs.loadProgram
 import ghistabs.runTransaction
@@ -97,6 +101,44 @@ class RttiSymbolsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val expected = File("src/test/resources/binaries/$twin").vttLabels(analyze = false)
         assumeTrue(expected.isNotEmpty(), "$twin has no VTT")
         File("src/test/resources/binaries/$stripped").vttLabels(analyze = true) mustBe expected
+    }
+
+    /**
+     * The vftable sweep lays every VTT as its vtable pointers, each word commented with the vtable it points into.
+     * `std::iostream`'s holds its own primary vtable, a sub-VTT for each of `istream` and `ostream` (their
+     * construction vtable, then `ios` in it), then `ios` and `ostream` in `iostream`: the virtual `ios` is
+     * reached through `istream`, ahead of `ostream`.
+     */
+    @ParameterizedTest
+    @MethodSource("strippedTwins")
+    fun `every VTT is laid word by word, each commented with what it points at`(stripped: String) {
+        loaded = loadProgram(File("src/test/resources/binaries/${stripped.replace("_stripped", "")}"))
+        program.runTransaction("sweep") {
+            val registry = DtmRegistry(program.dataTypeManager)
+            VtableSweeper(registry, program, TaskMonitor.DUMMY, DummySink).sweepUnclaimedVtables()
+        }
+        val ptr = program.defaultPointerSize
+        val vtts = program.symbolTable.getAllSymbols(false).filter { it.name.substringAfter("_ZT", "").startsWith("T") }
+            .distinctBy { it.address }.toList()
+        assumeTrue(vtts.isNotEmpty(), "no VTT")
+        val comments = vtts.associate { sym ->
+            sym.name.substringAfter("_ZT") to generateSequence(sym.address) { it.add(ptr.toLong()) }
+                .takeWhile { program.listing.getDataAt(it)?.isPointer == true }
+                .map { program.listing.getComment(CommentType.EOL, it) }
+                .toList()
+        }
+        comments.filterValues { it.isEmpty() || null in it }.keys mustBe emptySet()
+        comments["TSd"]?.let { words ->
+            words mustBe listOf(
+                "vtable for iostream",
+                "construction vtable for istream-in-iostream",
+                "vtable for ios-in-istream-in-iostream, in its construction vtable",
+                "construction vtable for ostream-in-iostream",
+                "vtable for ios-in-ostream-in-iostream, in its construction vtable",
+                "vtable for ios-in-iostream",
+                "vtable for ostream-in-iostream",
+            )
+        }
     }
 
     companion object {

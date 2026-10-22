@@ -4,6 +4,7 @@ import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
+import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
@@ -153,6 +154,7 @@ open class VtableSweeper(
             )
         }
         layConstructionVtables()
+        layVtts()
         layTypeinfoClassStubs()
         program.markVtablesSwept()
         return laid
@@ -209,6 +211,31 @@ open class VtableSweeper(
             val at = record.lay(registry, program, vftable, ns.name, ns, source = SWEPT, construction = true)
             debug("vtable-construction", "$name: ${targets.size} slot(s)", at)
             laySecondaryVtables(record, vftable, ns.name, ns, SWEPT, construction = true)
+        }
+    }
+
+    /**
+     * Lay every VTT (`_ZTT`, ABI §2.6.2) as the vtable pointers it is, each commented with the vtable it points
+     * into as the class's typeinfo lays the VTT out ([VttReader]): `vtable for Base-in-Diamond`, `construction
+     * vtable for Left-in-Diamond`. The Demangler analyzer only labels it. A `_ZTT` whose words don't match its
+     * typeinfo is left as it is.
+     */
+    private fun layVtts() {
+        val symbols = symtab.symbolIterator.toList()
+        val names = symbols.mapNotNull { sym -> typeinfoTypeOf(sym.name)?.let { sym.address to it } }.toMap()
+        val dynamic = symbols.filter { Itanium.looksLikeVtable(it.name) || looksLikeZtc(it.name) }
+            .mapNotNullTo(HashSet()) { program.vtableRecord(it.address).rttiOf(program) }
+        val reader = VttReader(program, Rtti.Reader(program), names, dynamic)
+        for (sym in symbols.filter { looksLikeZtt(it.name) }.distinctBy { it.address }) {
+            val vtt = reader.vttAt(sym.address) ?: run {
+                debug("vtt-unread", sym.name, sym.address)
+                continue
+            }
+            for (word in vtt.words) {
+                program.forceCreateData(word.address, PointerDataType(dtm))
+                program.listing.setComment(word.address, CommentType.EOL, word.comment)
+            }
+            debug("vtt-laid", "${vtt.words.size} word(s)", sym.address, sym.name)
         }
     }
 
