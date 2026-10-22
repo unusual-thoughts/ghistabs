@@ -128,30 +128,27 @@ private fun Instructions.codeRuns(range: AddressRange): AddressSetView = Address
  */
 private fun Program.deadTails(fn: Function, pseudo: PseudoDisassembler): List<AddressSetView> {
     val end = fn.body.maxAddress
-    return (listing.getInstructions(fn.body, true) as Iterable<Instruction>).asSequence()
-        .filter { it.flowType.isCall && it.callsNoReturn(this) }
+    fun Instruction.callsNoReturn() = flows.singleOrNull()
+        ?.let { functionManager.getFunctionAt(it) }?.hasNoReturn() == true
+    fun PseudoInstruction.isUndefined() = listing.isUndefined(minAddress, maxAddress)
+    fun PseudoInstruction.backInFn() = minAddress in fn.body && listing.getInstructionAt(minAddress) != null
+
+    return listing.getInstructions(fn.body, true).iterator().asSequence()
+        .filter { it.flowType.isCall && it.callsNoReturn() }
         .mapNotNull { call -> call.maxAddress.next()?.takeIf { it > end && listing.isUndefined(it, it) } }
         .mapNotNull { start ->
-            var ok = true
-            var seen = 0
             val walk = object : PseudoFlowProcessor {
-                override fun process(instr: PseudoInstruction?): Boolean {
-                    // Undefined goes on; code already there only as an instruction of fn, the join.
-                    val at = instr?.minAddress ?: return false.also { ok = false }
-                    val join = at in fn.body && listing.getInstructionAt(at) != null
-                    ok = ++seen < MAX_TAIL && (join || listing.isUndefined(at, instr.maxAddress))
-                    return ok
-                }
+                var ok = true
+                private var seen = 0
+                override fun process(instr: PseudoInstruction) = (
+                    ++seen < MAX_TAIL && (instr.isUndefined() || instr.backInFn())
+                    ).also { ok = it }
 
-                override fun followFlows(instr: PseudoInstruction) =
-                    listing.isUndefined(instr.minAddress, instr.maxAddress) && !instr.callsNoReturn(this@deadTails)
+                override fun followFlows(instr: PseudoInstruction) = instr.isUndefined() && !instr.callsNoReturn()
             }
-            pseudo.followSubFlows(start, MAX_TAIL, walk).subtract(fn.body).takeIf { ok && start in it }
+            pseudo.followSubFlows(start, MAX_TAIL, walk).subtract(fn.body).takeIf { walk.ok && start in it }
         }.toList()
 }
-
-private fun Instruction.callsNoReturn(program: Program) =
-    flows.singleOrNull()?.let { program.functionManager.getFunctionAt(it) }?.hasNoReturn() == true
 
 /** Only a bound on a walk gone wrong: an SJLJ landing pad behind a noreturn call runs past 64 instructions. */
 private const val MAX_TAIL = 512
