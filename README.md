@@ -192,7 +192,7 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   jump-over-fill form) into `Alignment` data, so it isn't mistaken for undescribed data.
 - **GCC C++ vftables** - lays a `<Class>_vftable` at every gcc vtable symbol, Itanium `_ZTV…` (gcc 3+) or
   gcc 2.x `_vt…`, each slot typed off the function it points at, under the class
-  namespace with the `vftable` label Ghidra's RTTI scripts expect, so virtual calls resolve to
+  namespace with the labels Ghidra's RTTI scripts use (`vftable`, `vftable_for_<Base>`, …), so virtual calls resolve to
   named slots even with no stabs. On a binary with stabs the importer runs this sweep as soon
   as its class pass has laid the classes the stabs describe, and the sweep leaves those alone.
   Ghidra's `RecoverClassesFromRTTIScript` skips any vtable that already has a struct under
@@ -213,6 +213,10 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   `fc.call_site = 2` and `fc.jbuf.resume = …` instead of raw stack slots, and `--elide-sjlj`
   drops those stores by the context's type. On a binary with stabs, the importer runs it itself
   after applying its symbols, so a type or signature the stabs give is the one kept.
+- **Itanium typeinfo** - lays a typed struct at every gcc 3+ typeinfo symbol (`_ZTI…`): the
+  `__class_type_info`, `__si_class_type_info` or `__vmi_class_type_info` layout its vtable
+  pointer names, with a vmi one's base array sized to its base count and the base offsets shown
+  in decimal. A typeinfo that already carries a struct is left alone.
 - **Itanium virtual bases** - runs after GCC C++ vftables and lays the virtual bases a class
   struct lacks, at the offset its `_ZTV` gives. The class's typeinfo names the virtual bases,
   and its demangled `vtable` label's namespace finds its struct. A class deriving from a
@@ -222,6 +226,17 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   reports one that would overrun the struct or cover laid fields. On a binary with stabs, the
   importer runs it itself once its labels are demangled; turning the analyzer off turns that
   off too.
+- **Class-method this-pointer** - gives class methods back the automatic `this` that Ghidra's
+  *Decompiler Parameter ID* takes away when it commits a signature in custom storage. It
+  re-applies the parameters with dynamic storage, so Ghidra derives `this` from the class
+  struct again. It also helps C++ binaries with no stabs, and can be re-run alone after
+  Decompiler Parameter ID.
+- **Non-returning functions (reachability)** - marks a function non-returning when every path
+  through it ends in a call to a non-returning function, such as a project `error()` that
+  calls `exit`. Ghidra's own walk only examines a function when its call sites look damaged,
+  which `error()`'s never do. Anything the control-flow graph can't resolve counts as
+  returning. It runs after the importer, since on a stripped binary most of these functions
+  only exist once the import has created them.
 
 The Gap Disassembler, Filler Byte Condenser and SJLJ exception tables run before the importer, mostly so its data-coverage report doesn't flag
 compiler scaffolding as missing.
