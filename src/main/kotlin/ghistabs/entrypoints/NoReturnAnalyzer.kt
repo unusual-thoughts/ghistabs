@@ -130,6 +130,10 @@ fun markNoReturn(program: Program, set: AddressSetView?, monitor: TaskMonitor = 
 
     val todo = ArrayDeque(funMgr.getFunctions(set, true).toList())
     return buildList {
+        for (import in mingwNoReturnImports(program)) {
+            import.setNoReturn(true)
+            add(import)
+        }
         while (todo.isNotEmpty()) {
             val func = todo.removeFirst()
             if (func.hasNoReturn() || func.isThunk || func.isExternal || !cannotReturn(func)) continue
@@ -139,3 +143,28 @@ fun markNoReturn(program: Program, set: AddressSetView?, monitor: TaskMonitor = 
         }
     }
 }
+
+/**
+ * msvcrt imports that MinGW's headers declare `__MINGW_ATTRIB_NORETURN` and Ghidra's
+ * `PEFunctionsThatDoNotReturn` leaves out, not yet marked. `_assert` is the one: MSVC's can come back
+ * (the debug dialog's Ignore), so Ghidra is right not to list it, but against MinGW's `assert.h` gcc
+ * compiles every `call __assert` as never returning: the bytes it pushed for the call are never popped,
+ * and what follows the call is the next block, reached from elsewhere. Followed as a fall-through,
+ * that path arrives with ESP deeper than every other way in.
+ *
+ * Only under the gcc compiler spec, which Ghidra's PE loader picks for MinGW: an MSVC binary
+ * importing the same `_assert` keeps Ghidra's reading. The PE loader strips the leading underscore
+ * from the external's name (`MSVCRT.DLL::assert`), so the import is matched by its original name.
+ */
+private fun mingwNoReturnImports(program: Program): List<Function> {
+    if (program.compilerSpec.compilerSpecID.idAsString != "gcc") return emptyList()
+    return program.functionManager.externalFunctions.filter { f ->
+        val location = f.externalLocation
+        !f.hasNoReturn() &&
+            location.libraryName.equals(MSVCRT, ignoreCase = true) &&
+            (location.originalImportedName ?: location.label) in MINGW_NO_RETURN
+    }
+}
+
+private const val MSVCRT = "MSVCRT.DLL"
+private val MINGW_NO_RETURN = setOf("_assert")
