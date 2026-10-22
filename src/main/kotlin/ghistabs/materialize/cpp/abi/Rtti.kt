@@ -178,8 +178,8 @@ class Rtti(private val dtm: DataTypeManager) {
             when (kindOf(zti)) {
                 TypeinfoKind.CLASS -> emptyList()
 
-                TypeinfoKind.SI -> program.dataAt(zti, layouts.siClassTi)?.get(BASE_TYPE)
-                    ?.let { classAt(it.address) }
+                TypeinfoKind.SI -> program.decodeAt<SiTypeInfo>(zti, layouts.siClassTi)
+                    ?.let { classAt(it.base.address) }
                     ?.let { (name, at) -> listOf(Base(name, at, isVirtual = false, access = Access.PUBLIC)) }
 
                 TypeinfoKind.VMI -> vmiBases(zti)
@@ -216,6 +216,10 @@ class Rtti(private val dtm: DataTypeManager) {
             @SerialName(IS_PUBLIC) val isPublic: Boolean,
             @SerialName(BASE_OFFSET) val offset: Long,
         )
+
+        /** `__si_class_type_info`'s one base. [base] stays a field, as [BaseInfo.type] does. */
+        @Serializable
+        private data class SiTypeInfo(@SerialName(BASE_TYPE) val base: SerialData)
 
         /** `__vmi_class_type_info`'s base count and, laid by [vmiClassTypeInfo] at that count, its bases. */
         @Serializable
