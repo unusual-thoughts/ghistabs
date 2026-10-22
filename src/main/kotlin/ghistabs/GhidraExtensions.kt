@@ -65,9 +65,6 @@ inline fun <reified T> Data.valueOf(i: Int): T? = getComponent(i)?.value as? T
 inline fun <reified T> Data.valueOf(name: String): T? = get(name)?.value as? T
 fun Data.getScalar(name: String): Scalar? = valueOf(name)
 
-/** Whether the one-bit field [name] is set. */
-fun Data.flag(name: String) = getScalar(name)?.unsignedValue == 1L
-
 fun Iterable<AddressRange>.gapsIn(range: AddressRange, action: (AddressRange) -> Unit = { }) = sequence {
     var start = range.minAddress
     for (r in this@gapsIn) {
