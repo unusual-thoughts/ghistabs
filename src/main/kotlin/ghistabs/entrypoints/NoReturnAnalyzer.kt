@@ -10,6 +10,7 @@ import ghidra.program.model.block.CodeBlockReference
 import ghidra.program.model.block.SimpleBlockModel
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.ExternalLocation
 import ghidra.util.task.TaskMonitor
 
 const val NO_RETURN_ANALYZER_NAME = "Non-returning functions (reachability)"
@@ -130,6 +131,10 @@ fun markNoReturn(program: Program, set: AddressSetView?, monitor: TaskMonitor = 
 
     val todo = ArrayDeque(funMgr.getFunctions(set, true).toList())
     return buildList {
+        for (import in program.mingwNoReturnImports()) {
+            import.setNoReturn(true)
+            add(import)
+        }
         while (todo.isNotEmpty()) {
             val func = todo.removeFirst()
             if (func.hasNoReturn() || func.isThunk || func.isExternal || !cannotReturn(func)) continue
@@ -139,3 +144,22 @@ fun markNoReturn(program: Program, set: AddressSetView?, monitor: TaskMonitor = 
         }
     }
 }
+
+/**
+ * msvcrt imports that MinGW's headers declare no return and `PEFunctionsThatDoNotReturn` leaves out.
+ * MSVC `_assert` is technically not noreturn (dialog box has an ignore button) but mingw marks it
+ * `__MINGW_ATTRIB_NORETURN`
+ */
+private fun Program.mingwNoReturnImports() = functionManager.externalFunctions.takeIf {
+    compilerSpec.compilerSpecID.idAsString == "gcc"
+}?.filter { !it.hasNoReturn() && it.externalLocation.isMingwNoReturn }.orEmpty()
+
+/**
+ * The PE loader strips the leading underscore from the external's name (`MSVCRT.DLL::assert`),
+ * so the import is matched by its original name.
+ */
+private val MINGW_NO_RETURN = setOf("_assert", "_wassert")
+private const val MSVCRT = "MSVCRT.DLL"
+
+private val ExternalLocation.isMingwNoReturn get() = libraryName.equals(MSVCRT, ignoreCase = true) &&
+    (originalImportedName ?: label) in MINGW_NO_RETURN
