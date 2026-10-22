@@ -34,7 +34,7 @@ fun Instruction.isNopEquivalent() = when (mnemonicString) {
 }
 
 /** Where the NOP-equivalent run starting at [from] ends, never past [limit]; [from] if none starts there. */
-fun Instructions.nopRunEnd(from: Address, limit: Address): Address {
+fun Instructions.nopRunLength(from: Address, limit: Address): Long? {
     var addr = from
     while (addr < limit) {
         val insn = at(addr)?.takeIf { it.isNopEquivalent() } ?: break
@@ -42,7 +42,7 @@ fun Instructions.nopRunEnd(from: Address, limit: Address): Address {
         if (next > limit) break
         addr = next
     }
-    return addr
+    return (addr - from).takeIf { it > 0 }
 }
 
 /**
@@ -56,7 +56,7 @@ fun Instructions.fillJumpLength(jmp: Instruction, limit: Address): Long? {
     if (!jmp.flowType.isJump || jmp.flowType.isConditional) return null
     val target = jmp.flows.singleOrNull()?.takeIf { it > jmp.address && it <= limit } ?: return null
     val afterJmp = jmp.address.add(jmp.length.toLong())
-    return target.subtract(jmp.address).takeIf { nopRunEnd(afterJmp, target) == target }
+    return (target - jmp.address).takeIf { nopRunLength(afterJmp, target) == target - afterJmp }
 }
 
 /** A jump-over-fill skips to the next alignment boundary, so 16 bytes bounds the whole idiom. */

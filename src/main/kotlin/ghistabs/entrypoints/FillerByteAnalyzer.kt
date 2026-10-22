@@ -97,9 +97,9 @@ class FillerByteAnalyzer :
     private fun Program.fillSpans(code: Instructions, range: AddressRange): List<Pair<Address, Long>> = buildList {
         val limit = range.maxAddress.next() ?: return@buildList
         var addr = range.minAddress
-        code.nopRunEnd(addr, limit).takeIf { it > addr }?.let {
-            add(addr to it.subtract(addr))
-            addr = it
+        code.nopRunLength(addr, limit)?.let {
+            add(addr to it)
+            addr += it
         }
         while (addr < limit) {
             val fill = code.at(addr)
