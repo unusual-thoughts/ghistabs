@@ -37,6 +37,19 @@ import org.junit.jupiter.api.Test
  *
  * In [DEFERRED] the two paths reach `merge` with ESP 4 apart, which is gcc's deferred pop in its
  * smallest form, and the decompiler turns `push 2` into a store through a pointer.
+ *
+ * [STRAY] meets with ESP 4 apart too, but no call left the extra bytes: a bare `push` did. The one
+ * call on the way in returns at that same depth, and its own `add esp,4` pops its argument right after:
+ *
+ * ```
+ *   push ebp / mov ebp,esp / sub esp,0x18
+ *   push 1 / call g / add esp,4
+ *   test eax,eax / je merge
+ *   push 3
+ * merge:
+ *   push 2 / call g
+ *   leave / ret
+ * ```
  */
 @Tag("integration")
 class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -47,13 +60,18 @@ class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     fun setUp() {
         builder = ProgramBuilder("deferredpop", ProgramBuilder._X86, "gcc", this)
         builder.createMemory(".text", "0x400000", 0x100)
-        listOf(DEFERRED to DEFERRED_BYTES, CALLEE to "c3", BALANCED to BALANCED_BYTES).forEach { (at, bytes) ->
+        listOf(
+            DEFERRED to DEFERRED_BYTES,
+            CALLEE to "c3",
+            BALANCED to BALANCED_BYTES,
+            STRAY to STRAY_BYTES,
+        ).forEach { (at, bytes) ->
             builder.setBytes(at, bytes, true)
             builder.createFunction(at)
         }
         // ProgramBuilder's transactions run ambient auto-analysis, this analyzer included: rewind it.
         program.runTransaction("rewind ambient analysis") {
-            listOf(DEFERRED, BALANCED).forEach { at ->
+            listOf(DEFERRED, BALANCED, STRAY).forEach { at ->
                 HighFunction.findOverrideSpace(function(at))?.let { space ->
                     program.symbolTable.getSymbols(space).forEach { it.delete() }
                 }
@@ -84,7 +102,7 @@ class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         bookmarks(CALL_BOOKMARK).getValue(FIRST_CALL).mustNot("names the merge it evens out") { MERGE !in this }
         bookmarks(MERGE_BOOKMARK).keys mustBe setOf(MERGE)
         bookmarks(MERGE_BOOKMARK).getValue(MERGE).mustNot("names the call that pops") { FIRST_CALL !in this }
-        bookmarks(UNFIXED_BOOKMARK) mustBe emptyMap()
+        bookmarks(UNFIXED_BOOKMARK).keys.filter { it < STRAY_START } mustBe emptyList()
     }
 
     private fun bookmarks(category: String) = program.bookmarkManager.bookmarksIterator.asSequence()
@@ -96,7 +114,17 @@ class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         runAnalyzer()
         overrides(BALANCED) mustBe emptyMap()
         listOf(CALL_BOOKMARK, MERGE_BOOKMARK, UNFIXED_BOOKMARK).flatMap { bookmarks(it).keys }
-            .filter { it >= BALANCED.removePrefix("0x").padStart(8, '0') } mustBe emptyList()
+            .filter { it >= BALANCED.removePrefix("0x").padStart(8, '0') && it < STRAY_START } mustBe emptyList()
+    }
+
+    /** A call whose argument is popped later in its own block is no culprit, however its depth matches. */
+    @Test
+    fun aCallWhoseArgumentsArePoppedIsNotMadeToPop() {
+        runAnalyzer()
+        overrides(STRAY) mustBe emptyMap()
+        bookmarks(CALL_BOOKMARK).keys.filter { it >= STRAY_START } mustBe emptyList()
+        bookmarks(UNFIXED_BOOKMARK).getValue(STRAY_MERGE)
+            .mustNot("says no call accounts for the bytes") { "no call's arguments account" !in this }
     }
 
     @Test
@@ -140,10 +168,15 @@ class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         const val BALANCED = "0x400030"
         const val FIRST_CALL = "0040000c"
         const val MERGE = "00400011"
+        const val STRAY = "0x400060"
+        const val STRAY_START = "00400060"
+        const val STRAY_MERGE = "00400076"
 
         // push ebp / mov ebp,esp / sub esp,0x18 / test eax,eax
         const val PROLOGUE = "55 89 e5 83 ec 18 85 c0"
         const val DEFERRED_BYTES = "$PROLOGUE 74 07 6a 01 e8 0f 00 00 00 6a 02 e8 08 00 00 00 c9 c3"
         const val BALANCED_BYTES = "$PROLOGUE 74 0a 6a 01 e8 df ff ff ff 83 c4 04 6a 02 e8 d5 ff ff ff c9 c3"
+        const val STRAY_BYTES =
+            "55 89 e5 83 ec 18 6a 01 e8 b3 ff ff ff 83 c4 04 85 c0 74 02 6a 03 6a 02 e8 a3 ff ff ff c9 c3"
     }
 }
