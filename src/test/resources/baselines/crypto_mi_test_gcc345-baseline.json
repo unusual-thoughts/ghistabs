@@ -36,12 +36,12 @@
             "max": 108
         },
         "demangle-applied": {
-            "min": 27993,
-            "max": 27993
+            "min": 27994,
+            "max": 27994
         },
         "demangle-attempted": {
-            "min": 27993,
-            "max": 27993
+            "min": 27994,
+            "max": 27994
         },
         "demangle-displaced-function-renamed": {
             "min": 1,
@@ -136,8 +136,8 @@
             "max": 7
         },
         "global-applied": {
-            "min": 3140,
-            "max": 3140
+            "min": 3142,
+            "max": 3142
         },
         "harvest-collisions-divergent": {
             "min": 1,
@@ -838,8 +838,8 @@
             "max": 9323
         },
         "sourcemap-entries": {
-            "min": 44016,
-            "max": 44016
+            "min": 44017,
+            "max": 44017
         },
         "sourcemap-files": {
             "min": 396,
@@ -868,10 +868,6 @@
         "static-member-unresolved": {
             "min": 379,
             "max": 379
-        },
-        "static-skipped": {
-            "min": 2,
-            "max": 2
         },
         "struct-longer-than-stab": {
             "min": 1,
@@ -923,8 +919,8 @@
             "max": 1
         },
         "unresolved-symbol": {
-            "min": 1259,
-            "max": 1259
+            "min": 1257,
+            "max": 1257
         },
         "unresolved-xref": {
             "min": 67,
