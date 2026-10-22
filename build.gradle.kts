@@ -37,8 +37,9 @@ repositories {
 kotlin {
     jvmToolchain(ghidraJavaVersion)
     // Ghidra shares one classpath across installed extensions, so the oldest kotlin-stdlib wins —
-    // GhidraJupyterKotlin pins 1.9.23. Binding above it fails at runtime in the GUI only.
-    compilerOptions { apiVersion.set(KotlinVersion.KOTLIN_1_9) }
+    // GhidraJupyterKotlin pins 1.9.23. Binding above it fails at runtime in the GUI only. Kotlin 2.4
+    // dropped API version 1.9, so 2.0 is now the lowest we can bind to.
+    compilerOptions { apiVersion.set(KotlinVersion.KOTLIN_2_0) }
 }
 
 ktlint {
