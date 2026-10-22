@@ -44,7 +44,7 @@ open class VtableSweeper(
         /** How the demangler spells a construction vtable's owner: `Left-in-Diamond`. */
         private const val CONSTRUCTION_INFIX = "-in-"
 
-        val VTABLES_SWEPT = BoolOption("Vtables Swept", "Unclaimed vtables already swept.", false)
+        val VTABLES_SWEPT = BoolOption("Vtables Swept", "Vtables no class claimed already laid.", false)
 
         /** Whether a sweep already ran here: the stabs import's, or [ghistabs.entrypoints.GccVftableAnalyzer]'s. */
         val Program.isVtablesSwept get() = this[VTABLES_SWEPT]
@@ -89,7 +89,7 @@ open class VtableSweeper(
             .filterNot { (_, addr, abi) -> program.isVtableClaimed(program.vtableRecord(addr, abi)) }
             .toList()
 
-        monitor.initialize(unclaimed.size.toLong(), "Sweeping unclaimed vtables")
+        monitor.initialize(unclaimed.size.toLong(), "Laying vtables no class claimed")
         var laid = 0
         for ((qualified, addr, abi) in unclaimed) {
             monitor.increment()
