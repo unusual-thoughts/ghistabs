@@ -86,6 +86,9 @@ open class VtableSweeper(
         val unclaimed = symtab.symbolIterator
             .mapNotNull { sym -> ResolvedVtable.fromSymbol(sym) }
             .distinctBy { it.address }
+            // A dynamic link's `_ZTVN10__cxxabiv117__class_type_infoE` is an import, labelled in the
+            // loader's EXTERNAL block, which holds no bytes: the shared library has the table.
+            .filter { (_, addr, _) -> program.memory.getBlock(addr)?.isInitialized == true }
             .filterNot { (_, addr, abi) -> program.isVtableClaimed(program.vtableRecord(addr, abi)) }
             .toList()
 
