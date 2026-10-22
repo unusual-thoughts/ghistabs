@@ -191,7 +191,8 @@ open class VtableSweeper(
      * Lay every VTT (`_ZTT`, ABI §2.6.2) as the vtable pointers it is, each commented with the vtable it points
      * into as the class's typeinfo lays the VTT out ([VttReader]): `vtable for Base-in-Diamond`, `construction
      * vtable for Left-in-Diamond`. The Demangler analyzer only labels it. A `_ZTT` whose words don't match its
-     * typeinfo is left as it is.
+     * typeinfo is left as it is, and so is a word something already laid over: a stab-typed vftable can run
+     * past its record into the VTT behind it (`Diamond_vftable_for_Named` on hello_elf_gcc34).
      */
     private fun layVtts() {
         val symbols = symtab.symbolIterator.toList()
@@ -205,7 +206,12 @@ open class VtableSweeper(
                 continue
             }
             for (word in vtt.words) {
-                program.forceCreateData(word.address, PointerDataType(dtm))
+                val laid = program.listing.getDefinedDataContaining(word.address)
+                if (laid == null || (laid.isPointer && laid.address == word.address)) {
+                    program.forceCreateData(word.address, PointerDataType(dtm))
+                } else {
+                    degradation("vtt-overlapped", sym.name, "${laid.dataType.name} at ${laid.address}", word.address)
+                }
                 program.listing.setComment(word.address, CommentType.EOL, word.comment)
             }
             debug("vtt-laid", "${vtt.words.size} word(s)", sym.address, sym.name)
