@@ -10,7 +10,6 @@ import ghidra.app.util.PseudoInstruction
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
-import ghidra.program.model.address.AddressRangeImpl
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.BookmarkType
@@ -18,12 +17,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.Instructions
-import ghistabs.MAX_FILL
-import ghistabs.fillJumpLength
-import ghistabs.instructions
-import ghistabs.isNopEquivalent
-import ghistabs.tiles
+import ghistabs.*
 
 /**
  * Recovers code Ghidra left undisassembled *inside* a function's extent — hot/cold split holes and
@@ -107,23 +101,22 @@ class HullDisassemblyAnalyzer :
  * [range] without its alignment fill — NOP-equivalents and jump-over-fill idioms — as the runs of
  * code left between them. [range] must already tile.
  */
-private fun Instructions.codeRuns(range: AddressRange): List<AddressRange> = buildList {
-    val limit = range.maxAddress.next() ?: return@buildList
+private fun Instructions.codeRuns(range: AddressRange): AddressSetView = AddressSet().apply {
+    val limit = range.maxAddress.next() ?: return@apply
     var start: Address? = null
-    var addr = range.minAddress
-    while (addr < limit) {
-        val insn = at(addr) ?: break
-        // The idiom may run past the gap: a stray reference can disassemble a NOP of its fill.
-        val fill = if (insn.isNopEquivalent()) insn.length.toLong() else fillJumpLength(insn, addr.add(MAX_FILL))
-        if (fill != null) {
-            start?.let { add(AddressRangeImpl(it, addr.previous())) }
-            start = null
-        } else if (start == null) {
-            start = addr
-        }
-        addr = addr.add(fill ?: insn.length.toLong())
+    var cur = range.minAddress
+    fun nextRun() = start?.let {
+        add(it..<cur)
+        start = null
     }
-    start?.let { add(AddressRangeImpl(it, addr.previous())) }
+    while (cur < limit) {
+        val insn = at(cur) ?: break
+        // The idiom may run past the gap: a stray reference can disassemble a NOP of its fill.
+        val fill = nopRunLength(cur, limit) ?: fillJumpLength(insn, cur.add(MAX_FILL))
+        if (fill == null) start = start ?: cur else nextRun()
+        cur += fill ?: insn.length.toLong()
+    }
+    nextRun()
 }
 
 /**
