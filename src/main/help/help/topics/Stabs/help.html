@@ -299,7 +299,12 @@
           signatures wherever nothing more definite than analysis typed them. The decompiler
           then shows <CODE>fc.call_site = 2</CODE> and <CODE>fc.jbuf.resume = &hellip;</CODE>
           instead of raw stack slots, and the exporters' <I>Elide gcc SjLj exception
-          scaffolding</I> option drops those stores by the context's type. On a binary with
+          scaffolding</I> option drops those stores by the context's type. Each
+          <CODE>fc.call_site</CODE> store also gets a pre comment, shown in the decompiler,
+          saying what its LSDA entry does if the call throws, such as <CODE>SJLJ call site 2,
+          landing pad 1: catch (CryptoPP::InvalidArgument), cleanup</CODE>, and the receiver's
+          comment lists every landing pad the same way, as Ghidra's own analyzer comments a
+          DWARF function's try and catch ranges. On a binary with
           stabs the importer runs it itself after applying its symbols, so a type or signature
           the stabs give is the one kept.</TD>
         </TR>

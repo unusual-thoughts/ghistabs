@@ -76,11 +76,15 @@ class SjljContextAnalyzer :
             set: AddressSetView,
         ): Pair<Int, Int> {
             if (!SjljLsdaAnalyzer().canAnalyze(program)) return 0 to 0
-            val all = SjljLsdaAnalyzer.lsdas(program, program.memory, monitor).values.flatMap { it.second }
+            val found = SjljLsdaAnalyzer.lsdas(program, program.memory, monitor)
+            val all = found.values.flatMap { it.second }
             if (all.isEmpty()) return 0 to 0
             val regs = all.filter { set.contains(it.store) }
             // Again after the import, which can recreate a function and with it drop the labels in it.
             regs.forEach { SjljLsdaAnalyzer.layResume(program, it, monitor, sink) }
+            for (reg in regs) {
+                found[reg.lsda]?.first?.let { SjljHandlerComments.comment(program, reg, it, monitor) }
+            }
             val abi = SjljAbi(program.dataTypeManager)
             val contexts = typeContexts(program, regs, abi, monitor, sink)
             return contexts to typeEntryPoints(program, all, abi, monitor, sink) { set.contains(it) }
@@ -113,7 +117,7 @@ class SjljContextAnalyzer :
         }
 
         /** The `%ebp` displacement the LSDA store writes. */
-        private fun lsdaDisplacement(program: Program, reg: SjljLsdaAnalyzer.Registration): Long? {
+        internal fun lsdaDisplacement(program: Program, reg: SjljLsdaAnalyzer.Registration): Long? {
             val insn = program.listing.getInstructionAt(reg.store) ?: return null
             return insn.getOpObjects(0).filterIsInstance<Scalar>().singleOrNull()?.signedValue
         }
