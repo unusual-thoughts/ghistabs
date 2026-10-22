@@ -1,6 +1,7 @@
 package ghistabs.importer
 
 import ghidra.app.util.demangler.DemangledFunction
+import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.*
@@ -23,6 +24,7 @@ import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
 import ghistabs.materialize.*
+import ghistabs.materialize.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
@@ -188,13 +190,43 @@ class ClassApplier(
             try {
                 group.resolve()?.apply {
                     buildAndApply()
+                    recordEntry()
                     built++
                 }
             } catch (t: Throwable) {
                 err("class-apply-error", "${group.location}: ${t.message}")
             }
         }
+        program.writeClassRecord(hierarchy)
         return built
+    }
+
+    // The namespace each class struct was built under, for its derived classes' base entries: bases
+    // come first ([classesBasesFirst]), so a base built at all is here by the time anything names it.
+    private val namespaceByStruct = mutableMapOf<DataTypePath, GhidraClass>()
+    private val hierarchy = linkedMapOf<Long, ClassHierarchyRecords.Entry>()
+
+    /**
+     * [ClassHierarchyRecords]'s entry for this class. Two groups can build one namespace (a class the
+     * stabs spell two ways, refiled under the same demangled scope); their bases are merged, the first
+     * one's struct kept.
+     */
+    private fun LocatedClass.recordEntry() {
+        namespaceByStruct[structDt.dataTypePath] = ns
+        val bases = body.bases.map { base ->
+            val dt = registry.resolveRef(base.type)?.let { DataTypeUtilities.getBaseDataType(it) }
+            val baseNs = dt?.let { namespaceByStruct[it.dataTypePath] }
+            ClassHierarchyRecords.Base(
+                baseNs?.id,
+                if (baseNs == null) dt?.name ?: "?" else null,
+                base.isVirtual,
+                base.access,
+            )
+        }
+        val structId = program.dataTypeManager.getID(structDt).takeIf { it >= 0 }
+        hierarchy.merge(ns.id, ClassHierarchyRecords.Entry(structId, bases)) { old, new ->
+            ClassHierarchyRecords.Entry(old.structId ?: new.structId, (old.bases + new.bases).distinct())
+        }
     }
 
     private fun LocatedType.resolve(): LocatedClass? = when (val structDt = registry.dataTypeFor(type.id)) {
