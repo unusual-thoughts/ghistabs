@@ -5,8 +5,11 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.decode
 import ghistabs.importer.StabSectionOverlay
 import ghistabs.parse.STAB_RECORD_SIZE
+import ghistabs.parse.StabHeader
+import ghistabs.parse.StabReader
 import ghistabs.test.defaultContext
 import ghistabs.test.mustBe
 import ghistabs.test.mustNotBeNull
@@ -68,6 +71,11 @@ class StabSectionOverlayIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
             val data = program.listing.getDataAt(addr(stabBase + i * STAB_RECORD_SIZE))
             data.mustNotBeNull("data at record $i")
             (data!!.dataType as? Structure)?.name.mustBe("StabRecord", "record $i is StabRecord")
+        }
+
+        // The laid layout decodes to the header the reader read off the same bytes.
+        StabReader.fromProgram(program)?.physicalRecords()?.forEach {
+            program.listing.getDataAt(addr(stabBase + it.index * STAB_RECORD_SIZE)).decode<StabHeader>() mustBe it.raw
         }
 
         val funRec = stabBase + STAB_RECORD_SIZE

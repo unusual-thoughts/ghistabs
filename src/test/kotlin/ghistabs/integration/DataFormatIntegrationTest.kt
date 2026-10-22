@@ -1,0 +1,253 @@
+package ghistabs.integration
+
+import ghidra.program.database.ProgramBuilder
+import ghidra.program.model.address.Address
+import ghidra.program.model.data.*
+import ghidra.program.model.listing.Data
+import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.DataFormat
+import ghistabs.Deref
+import ghistabs.Ptr
+import ghistabs.SerialAddress
+import ghistabs.SerialData
+import ghistabs.SerialStructure
+import ghistabs.Text
+import ghistabs.dataAt
+import ghistabs.decode
+import ghistabs.decodeAt
+import ghistabs.get
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeNull
+import ghistabs.valueAt
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+
+@Tag("integration")
+class DataFormatIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+    enum class Kind { NONE, PLAIN, VIRTUAL }
+
+    @Serializable
+    data class Inner(val lo: Short, val hi: Long, val isVirtual: Boolean, val access: Int)
+
+    @Serializable
+    data class Outer(
+        val offset: Int,
+        val target: SerialAddress,
+        val inner: Inner,
+        val kind: Kind,
+        val words: List<UShort>,
+        val pairs: List<Inner>,
+        val ptr: Ptr<Inner>,
+        @Deref val pointed: Inner,
+        @Deref val nothing: Inner?,
+        val missing: Int? = null,
+        val defaulted: String = "d",
+    )
+
+    @Serializable
+    data class Raw(val inner: SerialData)
+
+    @Serializable
+    data class Wrong(val nope: Int)
+
+    private lateinit var builder: ProgramBuilder
+    private val program get() = builder.program
+
+    private val inner by lazy {
+        SerialStructure<Inner>("Inner") {
+            add(ShortDataType.dataType, "lo", null)
+            add(UnsignedIntegerDataType.dataType, "hi", null)
+            addBitField(ByteDataType.dataType, 1, "isVirtual", null)
+            addBitField(ByteDataType.dataType, 2, "access", null)
+            setToDefaultPacking()
+        }
+    }
+
+    private val outer by lazy {
+        val kind = EnumDataType("Kind", 1).apply {
+            add("NONE", 0)
+            add("VIRTUAL", 7)
+            add("PLAIN", 9)
+        }
+        SerialStructure<Outer>("Outer") {
+            add(IntegerDataType.dataType, "offset", null)
+            add(PointerDataType(VoidDataType.dataType, 4), "target", null)
+            add(TypedefDataType("Inner_t", inner), "inner", null)
+            add(kind, "kind", null)
+            add(ArrayDataType(UnsignedShortDataType.dataType, 3, 2), "words", null)
+            add(ArrayDataType(inner, 2, inner.length), "pairs", null)
+            listOf("ptr", "pointed", "nothing").forEach { add(PointerDataType(inner, 4), it, null) }
+        }
+    }
+
+    @BeforeEach
+    fun setUp() {
+        builder = ProgramBuilder("test", ProgramBuilder._X86)
+        builder.createMemory(".data", "0x401000", 0x100)
+    }
+
+    @AfterEach
+    fun tearDown() = builder.dispose()
+
+    private fun laid(dt: DataType): Data {
+        builder.applyDataType("0x401000", dt)
+        return program.listing.getDataAt(builder.addr(0x401000))
+    }
+
+    private fun inner(lo: Int, hi: String, bits: Int) =
+        "%02x %02x 00 00 %s %02x 00 00 00".format(lo and 0xff, lo shr 8 and 0xff, hi, bits)
+
+    private fun lay() {
+        builder.setBytes(
+            "0x401000",
+            listOf(
+                "fc ff ff ff",
+                "10 20 40 00",
+                inner(0xfffe, "ff ff ff ff", 0b101),
+                "09",
+                "01 00 02 00 ff ff",
+                inner(1, "02 00 00 00", 0),
+                inner(3, "04 00 00 00", 0b111),
+                "27 10 40 00 27 10 40 00 00 00 00 00",
+            ).joinToString(" "),
+        )
+    }
+
+    @Test
+    fun `a structure reads into its class by field name, pointers followed, as does a SerialStructure's value`() {
+        lay()
+        val expected = Outer(
+            offset = -4,
+            target = builder.addr(0x402010),
+            inner = Inner(-2, 0xffffffffL, isVirtual = true, access = 2),
+            kind = Kind.PLAIN,
+            words = listOf<UShort>(1u, 2u, 0xffffu),
+            pairs = listOf(Inner(1, 2, isVirtual = false, access = 0), Inner(3, 4, isVirtual = true, access = 3)),
+            ptr = Ptr(builder.addr(0x401027)) { null },
+            pointed = Inner(3, 4, isVirtual = true, access = 3),
+            nothing = null,
+        )
+        program.decodeAt<Outer>(builder.addr(0x401000), outer) mustBe expected
+        program.valueAt<Outer>(builder.addr(0x401000), outer)?.ptr?.deref() mustBe expected.pointed
+        program.dataAt(builder.addr(0x401000), outer)?.get("inner")?.value mustBe expected.inner
+    }
+
+    @Test
+    fun `listing data decodes too, a field may stay Data, and a field the class needs but the type lacks throws`() {
+        lay()
+        val data = laid(outer)
+        data.decode<Raw>().inner.decode<Inner>().hi mustBe 0xffffffffL
+        assertThrows<SerializationException> { data.decode<Wrong>() }
+    }
+
+    @Test
+    fun `a plain integer reads an enum by ordinal`() {
+        builder.setBytes("0x401000", "02")
+        val plain = laid(ByteDataType.dataType)
+        plain.decode<Kind>() mustBe Kind.VIRTUAL
+    }
+
+    @Serializable
+    data class Probe(val ptr: Ptr<Inner>)
+
+    @Test
+    fun `a pointee that is unmapped, runs off its block or off the address space is null`() {
+        builder.createMemory(".top", "0xffffff00", 0x100)
+        val probe = SerialStructure<Probe>("Probe") { add(PointerDataType(inner, 4), "ptr", null) }
+        listOf("00 00 50 00", "fc 10 40 00", "fc ff ff ff").forEach {
+            builder.setBytes("0x401000", it)
+            program.decodeAt<Probe>(builder.addr(0x401000), probe)?.ptr?.deref().mustBeNull(it)
+        }
+    }
+
+    @Serializable
+    data class Strings(
+        val name: String,
+        @Deref val nick: String,
+        val wide: String,
+        val none: String?,
+        val unterminated: String?,
+        val ptr: Ptr<String>,
+    )
+
+    @Test
+    fun `a char pointer reads the string it points at, null when null or unterminated within reach`() {
+        val strings = SerialStructure<Strings>("Strings") {
+            listOf("name", "nick").forEach { add(PointerDataType(CharDataType.dataType, 4), it, null) }
+            add(PointerDataType(WideChar16DataType.dataType, 4), "wide", null)
+            listOf("none", "unterminated").forEach { add(PointerDataType(CharDataType.dataType, 4), it, null) }
+            add(PointerDataType(CharDataType.dataType, 4), "ptr", null)
+        }
+        builder.createMemory(".str", "0x402000", DataFormat.MAX_STRING_BYTES + 0x100)
+        builder.setBytes("0x401000", "40 10 40 00 40 10 40 00 50 10 40 00 00 00 00 00 00 20 40 00 41 10 40 00")
+        builder.setBytes("0x401040", "68 c3 a9 00")
+        builder.setBytes("0x401050", "68 00 e9 00 00 00")
+        builder.setBytes("0x402000", List(DataFormat.MAX_STRING_BYTES) { "41" }.joinToString(" "))
+        val read = program.decodeAt<Strings>(builder.addr(0x401000), strings)
+        read mustBe Strings("hé", "hé", "hé", null, null, Ptr(builder.addr(0x401041)) { null })
+        read?.ptr?.deref() mustBe "é"
+    }
+
+    @Serializable
+    data class Checked(
+        val malformed: String?,
+        @Text("US-ASCII") val ascii: String?,
+        @Text("US-ASCII") val plain: String,
+        @Text(maxBytes = 3) val short: String?,
+        @Text("US-ASCII") val ptr: Ptr<String>,
+    )
+
+    @Test
+    fun `a string its charset can't decode, or too long for its bound, is null`() {
+        val checked = SerialStructure<Checked>("Checked") {
+            listOf("malformed", "ascii", "plain", "short", "ptr").forEach {
+                add(PointerDataType(CharDataType.dataType, 4), it, null)
+            }
+        }
+        builder.setBytes("0x401000", "40 10 40 00 50 10 40 00 60 10 40 00 50 10 40 00 50 10 40 00")
+        builder.setBytes("0x401040", "68 ff 00")
+        builder.setBytes("0x401050", "68 c3 a9 00")
+        builder.setBytes("0x401060", "68 69 00")
+        val read = program.decodeAt<Checked>(builder.addr(0x401000), checked)
+        read mustBe Checked(null, null, "hi", null, Ptr(builder.addr(0x401050)) { null })
+        read?.ptr?.deref().mustBeNull()
+    }
+
+    class ExampleStruct(dtm: DataTypeManager? = null) : SerialStructure<ExampleStruct.Value>(dtm) {
+        init {
+            add(IntegerDataType.dataType, "a", null)
+            add(StringDataType.dataType, 4, "b", null)
+            add(PointerDataType(CharDataType.dataType, 4, dtm), "c", null)
+        }
+
+        @Serializable
+        data class Value(val a: Int, val b: String, val c: Ptr<String>)
+    }
+
+    @Test
+    fun `a SerialStructure subclass is named after itself and decodes its type argument`() {
+        builder.setBytes("0x401000", "07 00 00 00 61 62 63 00 40 10 40 00")
+        builder.setBytes("0x401040", "68 69 00")
+        val example = ExampleStruct(program.dataTypeManager)
+        example.name mustBe "ExampleStruct"
+        val value = program.dataAt(builder.addr(0x401000), example)?.value
+        value mustBe ExampleStruct.Value(7, "abc", Ptr(builder.addr(0x401040)) { null })
+        (value as ExampleStruct.Value).c.deref() mustBe "hi"
+    }
+
+    @Serializable
+    data class Box<V>(val v: V)
+
+    @Test
+    fun `a generic value class decodes, and still does once cloned into a manager`() {
+        builder.setBytes("0x401000", "07 00 00 00")
+        val box = SerialStructure<Box<Int>>("Box") { add(IntegerDataType.dataType, "v", null) }
+        program.dataAt(builder.addr(0x401000), box)?.value mustBe Box(7)
+        program.dataAt(builder.addr(0x401000), box.clone(program.dataTypeManager))?.value mustBe Box(7)
+    }
+}
