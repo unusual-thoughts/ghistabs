@@ -813,6 +813,32 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
+     * The In-Function Gap Disassembler leaves no gap it would take inside a function's hull, and
+     * bookmarks each one it took. It once took none at all: Ghidra hands a function analyzer the entry
+     * points of the functions added, never a gap, and every fixture's baseline had simply recorded that.
+     *
+     * CONCURRENT only: AFTER runs the import outside auto-analysis, so the functions it creates from
+     * N_FUN stabs (a `.o`'s uncalled ones) never get a function-analyzer pass at all.
+     */
+    @Test
+    fun hullGapsAreDisassembled() {
+        assumeTrue(mode == Mode.CONCURRENT, "Skipping: only CONCURRENT runs auto-analysis over the import's functions")
+        val code = ghidra.app.util.PseudoDisassembler(program).instructions
+        val executable = program.memory.executeSet
+        val left = program.functionManager.functionsIterable.filterNot { it.isThunk }.flatMap { fn ->
+            program.listing.getUndefinedRanges(
+                ghidra.program.model.address.AddressSet(fn.entryPoint, fn.body.maxAddress).intersect(executable),
+                false,
+                TaskMonitor.DUMMY,
+            ).filter { code.tiles(it) && !code.isAllPadding(it) }.map { "$it in ${fn.name}" }
+        }
+        val bookmarks = program.bookmarkManager.bookmarksIterator.asSequence()
+            .count { it.category == ghistabs.entrypoints.HullDisassemblyAnalyzer.NAME }
+        println("hullGapsAreDisassembled[$binaryName/$mode]: $bookmarks bookmarks, ${left.size} gaps left")
+        left.take(10).mustBeEmpty("${left.size} decodable gaps left inside function hulls")
+    }
+
+    /**
      * A register local lands in the register its stab names. The number is the record's n_value —
      * `w:r(0,5)` carries no register in the descriptor — and `readTrailingReg()` used to return a
      * hardcoded 0, so every register local in every fixture was placed in dbx 0 = EAX. Nothing

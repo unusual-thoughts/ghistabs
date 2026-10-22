@@ -777,12 +777,12 @@
             "max": 1
         },
         "text-data-no-coverage": {
-            "min": 53,
-            "max": 67
+            "min": 51,
+            "max": 65
         },
         "text-undisassembled-code": {
-            "min": 32,
-            "max": 43
+            "min": 0,
+            "max": 1
         },
         "textrange-entries": {
             "min": 3173,
