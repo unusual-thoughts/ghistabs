@@ -4,6 +4,7 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.Demangler
 import ghistabs.LoadedProgram
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.vtableRecord
@@ -18,7 +19,9 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.MethodSource
 import java.io.File
+import java.util.stream.Stream
 
 /**
  * A stripped twin finds its vtables where the unstripped one's symbols put them (§99). The two link
@@ -66,5 +69,42 @@ class RttiSymbolsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val vtable = named.firstOrNull { it == ClassNaming.VTABLE || it.startsWith("_ZTV") }
         checkNotNull(vtable) { "no vtable at $at: $named" }
         program.vtableRecord(at).addressPoint.toString() mustBe addressPoint.removePrefix("0x").padStart(8, '0')
+    }
+
+    /**
+     * Every VTT and construction vtable the unstripped twin names, the stripped one gets back from its VTTs,
+     * at the same address and nothing else: the twins link `.rdata` byte for byte. Compared demangled: the
+     * `_ZTC` names put back spell the base out in full where gcc's substitute what the class already said
+     * (`_ZTCSt13basic_fstreamIwSt11char_traitsIwEE0_St13basic_istreamIwS1_E`).
+     */
+    @ParameterizedTest
+    @MethodSource("strippedTwins")
+    fun `a stripped binary's VTTs and construction vtables are found through its typeinfo`(stripped: String) {
+        val twin = stripped.replace("_stripped", "")
+        fun File.vttLabels(analyze: Boolean) = loadProgram(this).use { loaded ->
+            val program = loaded.program
+            if (analyze) {
+                program.runTransaction("rtti-symbols") {
+                    RttiSymbolsAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog())
+                }
+            }
+            program.symbolTable.getAllSymbols(false)
+                .map { it.address.toString() to it.name.substringAfter("_ZT", "").let { n -> "_ZT$n" } }
+                .filter { (_, name) -> name.startsWith("_ZTT") || name.startsWith("_ZTC") }
+                .map { (at, name) -> at to (Demangler.of(name)?.originalDemangled ?: name) }
+                .toSet()
+        }
+        val expected = File("src/test/resources/binaries/$twin").vttLabels(analyze = false)
+        assumeTrue(expected.isNotEmpty(), "$twin has no VTT")
+        File("src/test/resources/binaries/$stripped").vttLabels(analyze = true) mustBe expected
+    }
+
+    companion object {
+        @JvmStatic
+        fun strippedTwins(): Stream<String> = Fixtures.all()
+            .filter {
+                it.contains("_stripped") &&
+                    File("src/test/resources/binaries/${it.replace("_stripped", "")}").exists()
+            }
     }
 }
