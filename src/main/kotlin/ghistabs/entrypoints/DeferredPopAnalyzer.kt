@@ -271,6 +271,8 @@ private class EspWalk(private val program: Program, private val f: Function) {
     } ?: emptyMap()
     private lateinit var entry: MutableMap<Address, Long>
     private lateinit var depthAtCall: MutableMap<Address, Long>
+    private lateinit var exit: MutableMap<Address, Long>
+    private lateinit var espBefore: MutableMap<Address, Long>
     private lateinit var incoming: MutableMap<Address, MutableMap<Address, Long>>
     private var conflict: Address? = null
 
@@ -310,15 +312,23 @@ private class EspWalk(private val program: Program, private val f: Function) {
 
     /**
      * Make the path out of block [from] pop [extra] more, at the last call before it whose own
-     * arguments are what is still pushed — the call at which ESP stood at [deep]. A call that pushes
-     * and pops its own arguments in between is passed over: the bytes predate it. [join] is the merge
-     * this evens out.
+     * arguments are what is still pushed — the call at which ESP stood at [deep]. ESP is traced back
+     * from the merge: a way in that leaves at another depth brings no such bytes, and a point where ESP
+     * stood above [deep] means they were pushed after it, by something other than a call's arguments
+     * left behind. A call that pushes and pops its own arguments below [deep] in between is passed
+     * over: the bytes predate it. [join] is the merge this evens out.
      */
     private fun popAt(from: Address, extra: Int, deep: Long, join: Address, seen: MutableSet<Address>): Boolean {
         if (!seen.add(from)) return true
+        if (exit[from] != deep) return false
         val block = blocks.getCodeBlockAt(from, TaskMonitor.DUMMY) ?: return false
-        val culprit = program.listing.getInstructions(block, true).toList().lastOrNull {
-            depthAtCall[it.address]?.plus(4) == deep
+        var culprit: Instruction? = null
+        for (insn in program.listing.getInstructions(block, true).toList().asReversed()) {
+            if (depthAtCall[insn.address]?.plus(4) == deep) {
+                culprit = insn
+                break
+            }
+            if ((espBefore[insn.address] ?: return false) > deep) return false
         }
         if (culprit != null) {
             if (culprit.flows.size != 1 || program.functionManager.getFunctionAt(culprit.flows.single()) == null) {
@@ -335,6 +345,8 @@ private class EspWalk(private val program: Program, private val f: Function) {
     private fun walk() {
         entry = mutableMapOf()
         depthAtCall = mutableMapOf()
+        exit = mutableMapOf()
+        espBefore = mutableMapOf()
         incoming = mutableMapOf()
         conflict = null
         val work = ArrayDeque<Triple<Address, Map<Varnode, Long>, Address?>>()
@@ -352,6 +364,7 @@ private class EspWalk(private val program: Program, private val f: Function) {
             entry[at] = sp
             val block = blocks.getCodeBlockAt(at, TaskMonitor.DUMMY) ?: continue
             val out = run(block, state) ?: continue
+            out[esp]?.let { exit[at] = it }
             block.destinations().filterNot {
                 it.first.isCall
             }.forEach { work.add(Triple(it.second, out, block.firstStartAddress)) }
@@ -364,6 +377,7 @@ private class EspWalk(private val program: Program, private val f: Function) {
     /** [state] after [block], or null where the path ends there. */
     private fun run(block: CodeBlock, state: Map<Varnode, Long>): Map<Varnode, Long>? = state.toMutableMap().apply {
         for (insn in program.listing.getInstructions(block, true)) {
+            get(esp)?.let { espBefore.putIfAbsent(insn.address, it) }
             for (op in insn.pcode) if (!step(insn, op)) return null
         }
     }
