@@ -214,7 +214,7 @@ open class VtableSweeper(
                 }
                 program.listing.setComment(word.address, CommentType.EOL, word.comment)
             }
-            debug("vtt-laid", "${vtt.words.size} word(s)", sym.address, sym.name)
+            debug("vtt-laid", "${sym.name}: ${vtt.words.size} word(s)", sym.address)
         }
     }
 
