@@ -140,8 +140,10 @@ private fun Program.deadTails(fn: Function, pseudo: PseudoDisassembler): List<Ad
             val walk = object : PseudoFlowProcessor {
                 var ok = true
                 private var seen = 0
-                override fun process(instr: PseudoInstruction) = (
-                    ++seen < MAX_TAIL && (instr.isUndefined() || instr.backInFn())
+
+                // Ghidra hands null for a bad decode (followSubFlows' UnknownInstructionException).
+                override fun process(instr: PseudoInstruction?) = (
+                    instr != null && ++seen < MAX_TAIL && (instr.isUndefined() || instr.backInFn())
                     ).also { ok = it }
 
                 override fun followFlows(instr: PseudoInstruction) = instr.isUndefined() && !instr.callsNoReturn()
