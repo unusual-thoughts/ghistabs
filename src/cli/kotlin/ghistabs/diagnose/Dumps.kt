@@ -33,6 +33,13 @@ val dumpJson by lazy {
     }
 }
 
+fun File.writeDump(text: () -> String) {
+    parentFile?.mkdirs()
+    writeText(text())
+}
+
+inline fun <reified T> File.writeDump(obj: T) = writeDump { dumpJson.encodeToString(obj) }
+
 /**
  * Snapshot what the importer actually produced — compromised DataTypes (anonymous / empty-placeholder
  * / all-Undefined / xref-stub), canonical groups, divergent collisions — to [outFile] as JSON. Lets us
