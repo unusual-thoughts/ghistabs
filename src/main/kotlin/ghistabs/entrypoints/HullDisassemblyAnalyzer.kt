@@ -140,8 +140,8 @@ private fun Program.deadTails(fn: Function, pseudo: PseudoDisassembler): List<Ad
 private fun Instruction.callsNoReturn(program: Program) =
     flows.singleOrNull()?.let { program.functionManager.getFunctionAt(it) }?.hasNoReturn() == true
 
-/** A tail is a few blocks of cleanup; a walk that long has run off into something else. */
-private const val MAX_TAIL = 64
+/** Only a bound on a walk gone wrong: an SJLJ landing pad behind a noreturn call runs past 64 instructions. */
+private const val MAX_TAIL = 512
 
 private class DeadTailWalk(private val program: Program, private val fn: Function) : PseudoFlowProcessor {
     val joins = AddressSet()
