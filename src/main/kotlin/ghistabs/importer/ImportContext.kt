@@ -77,33 +77,12 @@ class ImportContext<Terminal : DiagnosticSink>(
     fun hints(harvest: Harvest) = SourceHints(harvest, types(harvest), sources(harvest), this)
     fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
     fun classApplier(registry: DataTypeRegistry) = ClassApplier(registry, program, resolver, monitor, this)
-
-    /**
-     * Pass A's input, the raw records: null when the program carries none. Either way, says why a read
-     * that comes back empty-handed did: a linker index in place of the stabs, a string table the
-     * records have lost, names pointing past it.
-     */
-    fun readStabs(): StabReader.Result? {
-        StabReader.verdictOf(program)?.let { (category, message) -> warn(category, message) }
-        return StabReader.fromProgram(program)?.readAll(monitor)?.also { stabs ->
-            stabs.unresolvedNames.takeIf { it > 0 }?.let {
-                warn(
-                    "stabstr-out-of-range",
-                    "$it records name an offset past the string table; read as nameless",
-                    count = it.toLong(),
-                )
-            }
-        } ?: run {
-            warn("no-stabs", "No .stab/.stabstr block found.")
-            null
-        }
-    }
 }
 
 /**
  * Everything a completed stabs import materialized, for post-hoc introspection: the registry/record/
  * harvest dumps, and re-running [ghistabs.importer.DemanglerReplacer] against the analyzer's own
- * `byCanonicalKey` indices. Produced by [StabsImporter]; absent when the program carried no stabs.
+ * `byCanonicalKey` indices. Produced by [runOnRecords]; absent when the program carried no stabs.
  */
 data class ImportArtifacts(val registry: DataTypeRegistry, val records: List<StabRecord>) {
     val hints get() = registry.hints

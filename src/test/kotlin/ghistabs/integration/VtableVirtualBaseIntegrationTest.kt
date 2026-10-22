@@ -13,7 +13,7 @@ import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.applyDemangling
 import ghistabs.diagnose.DummySink
-import ghistabs.importer.StabsImporter
+import ghistabs.importer.runOnRecords
 import ghistabs.materialize.cpp.VtableVirtualBases
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
@@ -88,7 +88,7 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
             stabs.mapIndexed { i, stab -> StabRecord(i + 1, StabType.N_LSYM, 0, 0, 0, stab) }
         val program = builder.program
         val ctx = program.defaultContext()
-        StabsImporter(ctx).runOnRecords(StabReader.Result(records))
+        ctx.runOnRecords(StabReader.Result(records))
         val structs = program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
         return structs.single { it.name == "Derived" } to ctx.diagnostics.degradationTargets()
     }

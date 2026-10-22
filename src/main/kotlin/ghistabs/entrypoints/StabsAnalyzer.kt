@@ -121,7 +121,11 @@ class StabsAnalyzer :
                 program.markOverlayDone()
             }
 
-            val results = StabsImporter(this).run()
+            val results = readStabs()?.let(::runOnRecords) ?: run {
+                diagnostics.writeSummary(terminal)
+                ImportResult()
+            }
+
             log("import", "import complete: $results")
             program.markStabsDone(true)
             return results

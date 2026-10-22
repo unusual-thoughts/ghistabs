@@ -5,7 +5,7 @@ import ghidra.program.model.data.Array
 import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.UnsignedIntegerDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.importer.StabsImporter
+import ghistabs.importer.runOnRecords
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test
  *
  * These tests use real Ghidra DataTypeManager to verify actual type deduplication,
  * conflict handling, and cycle detection against the actual Ghidra database
- * via the full StabsImporter pipeline.
+ * via the full import pipeline ([ghistabs.importer.runOnRecords]).
  */
 @Tag("integration")
 class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -89,8 +89,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
         // Run importer
         val ctx = program.defaultContext()
-        val importer = StabsImporter(ctx)
-        val result = importer.runOnRecords(StabReader.Result(records))
+        val result = ctx.runOnRecords(StabReader.Result(records))
 
         // Verify types were materialized (dedup happens internally)
         result.types.harvested.must(
@@ -136,8 +135,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
         // Run importer
         val ctx = program.defaultContext()
-        val importer = StabsImporter(ctx)
-        val result = importer.runOnRecords(StabReader.Result(records))
+        val result = ctx.runOnRecords(StabReader.Result(records))
 
         // Importer should complete successfully, handling conflicts internally
         result.types.must("Conflict handling should preserve both struct definitions") { harvested > 0 }
@@ -169,8 +167,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
         // Run importer
         val ctx = program.defaultContext()
-        val importer = StabsImporter(ctx)
-        val result = importer.runOnRecords(StabReader.Result(records))
+        val result = ctx.runOnRecords(StabReader.Result(records))
 
         // Verify types were materialized with attribution
         result.types.must("Types should be materialized with category attribution") { harvested > 0 }
@@ -204,8 +201,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
         // Run importer - should not hang
         val ctx = program.defaultContext()
-        val importer = StabsImporter(ctx)
-        val result = importer.runOnRecords(StabReader.Result(records))
+        val result = ctx.runOnRecords(StabReader.Result(records))
 
         // Importer should complete successfully without infinite loop
 
@@ -249,8 +245,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
         // Run importer - should not hang
         val ctx = program.defaultContext()
-        val importer = StabsImporter(ctx)
-        val result = importer.runOnRecords(StabReader.Result(records))
+        val result = ctx.runOnRecords(StabReader.Result(records))
 
         // Both structures should be materialized without infinite loop
         result.types.must("Mutually referential types should be handled correctly") { harvested >= 2 }
@@ -265,7 +260,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             StabRecord(1, StabType.N_LSYM, 0, 0, 0, "unsigned int:t(0,4)=r(0,4);0000000000000;0037777777777;"),
         )
         val ctx = program.defaultContext()
-        StabsImporter(ctx).runOnRecords(StabReader.Result(records))
+        ctx.runOnRecords(StabReader.Result(records))
 
         val dtm = program.dataTypeManager
         val found = dtm.allDataTypes.asSequence().filter { it.name == "unsigned_int" }.toList()
@@ -304,7 +299,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             StabRecord(3, StabType.N_GSYM, 0, 0, 0, "_ZN1C3idsE:G(0,5)=ar(0,1);0;4;(0,4)"),
         )
         val ctx = program.defaultContext()
-        StabsImporter(ctx).runOnRecords(StabReader.Result(records))
+        ctx.runOnRecords(StabReader.Result(records))
 
         ctx.diagnostics["array-count-substituted"] mustBe 0L
         (program.listing.getDefinedDataAt(builder.addr("0x401000"))?.dataType as? Array)?.numElements mustBe 5

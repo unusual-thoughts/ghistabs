@@ -1599,7 +1599,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // Structure stubs, except the bare-template/builtin artifacts with no concrete
         // type (see DemanglerWhitelist.ALLOWED).
         //
-        // Only meaningful in AFTER. DemanglerReplacer runs in both modes (StabsImporter pass C),
+        // Only meaningful in AFTER. DemanglerReplacer runs in both modes (runOnRecords pass C),
         // but in CONCURRENT our analyzer fires alongside Ghidra's demangler and finishes before it
         // has created the /Demangler stubs, so replace() has nothing to replace yet (0 vs 169
         // `replaced-demangler`); the stubs are then created later and never revisited. That leaves
@@ -1904,7 +1904,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     // ---- Mangling / execution-order assertions, shared between modes. ----
 
     /**
-     * A function's stab params reach it. The lookup in [ghistabs.importer.StabsImporter] is by
+     * A function's stab params reach it. The lookup in [ghistabs.importer.runOnRecords] is by
      * address, not by name, so it must succeed whether or not the symbol has been demangled yet —
      * i.e. in both modes. Checked over every free function whose stabs declare stack params and
      * whose Ghidra function was resolved; a class method's `this` is Ghidra's to inject, so those

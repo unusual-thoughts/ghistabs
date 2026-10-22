@@ -3,7 +3,7 @@ package ghistabs.integration
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.importer.StabsImporter
+import ghistabs.importer.runOnRecords
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
@@ -38,7 +38,7 @@ class StabSizeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             (listOf("int:t(0,1)=r(0,1);-2147483648;2147483647;", "char:t(0,3)=r(0,3);0;127;") + stabs)
                 .mapIndexed { i, stab -> StabRecord(i + 1, StabType.N_LSYM, 0, 0, 0, stab) }
         val program = builder.program
-        StabsImporter(program.defaultContext()).runOnRecords(StabReader.Result(records))
+        program.defaultContext().runOnRecords(StabReader.Result(records))
         return program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
             .single { it.name == name }.length
     }
