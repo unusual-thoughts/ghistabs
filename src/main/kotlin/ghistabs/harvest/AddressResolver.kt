@@ -1,6 +1,11 @@
 package ghistabs.harvest
 
+import ghidra.app.util.bin.FileBytesProvider
+import ghidra.app.util.bin.format.pe.PortableExecutable
+import ghidra.app.util.bin.format.pe.PortableExecutable.SectionLayout
+import ghidra.app.util.bin.format.pe.debug.DebugCOFFSymbol
 import ghidra.app.util.opinion.ElfLoader
+import ghidra.app.util.opinion.PeLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
@@ -90,11 +95,15 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
      */
     private val linkSymbols: Map<String, Long> by lazy { StabReader.linkSymbolsOf(program) }
 
+    /** A PE's symbols at section offset 0, which Ghidra's loader leaves out; see [peSectionStartSymbols]. */
+    private val sectionStartSymbols: Map<String, Address> by lazy { program.peSectionStartSymbols() }
+
     /**
-     * Resolve [name]: link table → symbol table, each tried bare then `_`-prefixed (MinGW/PE cdecl and
-     * SunOS both prefix — `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`). The link table has to try both as
-     * well, or an underscoring a.out drops through to Ghidra's symbols — the very ones [linkSymbols]
-     * exists to overrule (1084 globals on `graphcnv.SUN4`, every one landing outside the image).
+     * Resolve [name]: link table → symbol table → a PE's section-start symbols, each tried bare then
+     * `_`-prefixed (MinGW/PE cdecl and SunOS both prefix — `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`). The
+     * link table has to try both as well, or an underscoring a.out drops through to Ghidra's symbols —
+     * the very ones [linkSymbols] exists to overrule (1084 globals on `graphcnv.SUN4`, every one landing
+     * outside the image).
      * Several symbols carrying one name is common — 169 on one PE fixture, 1991 on locale_test — and
      * nothing here can tell them apart, so the first stands.
      *
@@ -111,7 +120,7 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
                 program.symbolTable.getSymbols("_$name").map { it.address }
             ).filter { it.isMemoryAddress }
         if (candidates.size > 1) sink.debug("resolve-ambiguous", name)
-        return candidates.firstOrNull()
+        return candidates.firstOrNull() ?: sectionStartSymbols[name] ?: sectionStartSymbols["_$name"]
     }
 
     override fun blockEnd(addr: Address) = program.memory.getBlock(addr)?.end
@@ -131,5 +140,24 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
         )
 
         null -> super.forSymbol(sym)
+    }
+}
+
+/**
+ * The external COFF symbols of a PE that Ghidra's loader drops: `AbstractPeDebugLoader.processDebugCoffSymbol`
+ * skips every symbol whose value is 0, which is any that heads its section (`__ZN5Shape5countE` at the start of
+ * `.bss` on `hello_gcc323_fullstabs.exe`). Read from the file's own symbol table; empty for anything but a PE.
+ */
+internal fun Program.peSectionStartSymbols(): Map<String, Address> = buildMap {
+    if (executableFormat != PeLoader.PE_NAME) return emptyMap()
+    val bytes = memory.allFileBytes.firstOrNull() ?: return emptyMap()
+    val header = runCatching {
+        PortableExecutable(FileBytesProvider(bytes), SectionLayout.FILE).ntHeader.fileHeader
+    }.getOrNull() ?: return emptyMap()
+    for (sym in header.symbols.orEmpty()) {
+        if (sym.value != 0 || sym.sectionNumber <= 0) continue
+        if (sym.storageClass != DebugCOFFSymbol.IMAGE_SYM_CLASS_EXTERNAL.toInt()) continue
+        val section = header.getSectionHeader(sym.sectionNumber - 1) ?: continue
+        putIfAbsent(sym.name ?: continue, imageBase.add(Integer.toUnsignedLong(section.virtualAddress)))
     }
 }

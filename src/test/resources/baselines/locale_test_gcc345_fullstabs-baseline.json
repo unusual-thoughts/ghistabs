@@ -21,16 +21,16 @@
             "max": 4
         },
         "data-no-coverage": {
-            "min": 41,
-            "max": 41
+            "min": 40,
+            "max": 40
         },
         "demangle-applied": {
-            "min": 3635,
-            "max": 3635
+            "min": 3636,
+            "max": 3636
         },
         "demangle-attempted": {
-            "min": 3635,
-            "max": 3635
+            "min": 3636,
+            "max": 3636
         },
         "demangle-displaced-function-renamed": {
             "min": 0,
@@ -97,8 +97,8 @@
             "max": 5
         },
         "global-applied": {
-            "min": 469,
-            "max": 469
+            "min": 471,
+            "max": 471
         },
         "harvest-collisions-divergent": {
             "min": 1,
@@ -407,8 +407,8 @@
             "max": 454
         },
         "sourcemap-entries": {
-            "min": 9551,
-            "max": 9551
+            "min": 9553,
+            "max": 9553
         },
         "sourcemap-files": {
             "min": 236,
@@ -437,10 +437,6 @@
         "static-member-unresolved": {
             "min": 379,
             "max": 379
-        },
-        "static-skipped": {
-            "min": 2,
-            "max": 2
         },
         "struct-mostly-undefined": {
             "min": 1,
@@ -478,8 +474,8 @@
             "max": 1
         },
         "unresolved-symbol": {
-            "min": 1225,
-            "max": 1225
+            "min": 1223,
+            "max": 1223
         },
         "unresolved-xref": {
             "min": 34,
