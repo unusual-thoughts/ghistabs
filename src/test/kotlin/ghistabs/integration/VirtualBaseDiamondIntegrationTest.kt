@@ -2,7 +2,7 @@ package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.importer.StabsImporter
+import ghistabs.importer.runOnRecords
 import ghistabs.materialize.cpp.virtualBaseStructs
 import ghistabs.materialize.cpp.virtualBases
 import ghistabs.parse.StabReader
@@ -54,9 +54,7 @@ class VirtualBaseDiamondIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         )
         val records = listOf(StabRecord(0, StabType.N_SO, 0, 0, 0, "crypto_mi_test.cpp")) +
             stabs.mapIndexed { i, stab -> StabRecord(i + 1, StabType.N_LSYM, 0, 0, 0, stab) }
-        val artifacts = StabsImporter(
-            builder.program.defaultContext(),
-        ).runOnRecords(StabReader.Result(records)).artifacts!!
+        val artifacts = builder.program.defaultContext().runOnRecords(StabReader.Result(records)).artifacts!!
         val iostream = artifacts.harvest.types.values.single { it.name?.startsWith("basic_iostream") == true }
             .body as TypeDecl.Aggregate
 

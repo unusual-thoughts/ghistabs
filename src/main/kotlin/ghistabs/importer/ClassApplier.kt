@@ -354,7 +354,7 @@ class ClassApplier(
         val explicitThis = ParameterImpl(Function.THIS_PARAM_NAME, dtm.getPointer(structDt), program, source)
             .takeIf { ghidraInjectsThis }
 
-        // Preserve N_PSYM-derived names set in StabsImporter.passB — the only source-level
+        // Preserve N_PSYM-derived names set in runOnRecords pass B — the only source-level
         // names we have. Index them by their own position, not func.parameters', which by now
         // also holds injected `this` and (for by-value struct returns) StructReturnAnalyzer's
         // `__return_storage_ptr__` — a fixed offset misaligns and stamps `this` onto formal 0.
