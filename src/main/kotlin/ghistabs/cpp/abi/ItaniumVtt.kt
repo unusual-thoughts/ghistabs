@@ -5,14 +5,21 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
 import ghistabs.Demangler
+import ghistabs.parse.leafName
 import ghistabs.pointerAt
 import ghistabs.valueAt
 
 /**
- * A class's VTT as its typeinfo lays it out: where it is, and the construction vtables its sub-VTTs start
- * with, each as its `_ZTC` name ([constructionVtableName]) and the `offset_to_top` word of its primary record.
+ * One VTT word at [address]: what the vtable it points into is for, as an EOL comment, and for the first word
+ * of a sub-VTT, the `_ZTC` name of that construction vtable ([constructionVtableName]) and the `offset_to_top`
+ * word of its primary record.
  */
-internal data class Vtt(val address: Address, val constructionVtables: List<Pair<String, Address>>)
+internal data class VttWord(val address: Address, val comment: String, val construction: Pair<String, Address>?)
+
+/** A class's VTT as its typeinfo lays it out: where it is, and each word. */
+internal data class Vtt(val address: Address, val words: List<VttWord>) {
+    val constructionVtables get() = words.mapNotNull { it.construction }
+}
 
 /**
  * Reads VTTs (ABI §2.6.2) off typeinfo alone. A VTT is fixed by the class hierarchy: given which classes
@@ -31,9 +38,8 @@ internal data class Vtt(val address: Address, val constructionVtables: List<Pair
  * with a vptr has one, and a class with only virtuals of its own is known by a primary vtable pointing at
  * its typeinfo ([dynamic]). Gcc's VTTs follow these rules on every crypto_mi, xmltest and locale_test VTT.
  *
- * The VTT is the lowest data word pointing at D's address point: only a VTT stores a vtable address in data,
- * and a virtual primary base reusing D's vptr puts the same address a few words further into it. Each word
- * is checked against what the rules say it is for, by the rtti word in front of what it points at.
+ * A VTT's first word points at D's primary vtable, which names D by its rtti word. Each word after it is
+ * checked against what the rules say it is for, by the rtti word in front of what it points at.
  */
 internal class VttReader(
     private val program: Program,
@@ -42,8 +48,6 @@ internal class VttReader(
     private val names: Map<Address, String>,
     /** The typeinfos a primary vtable points at, its own or a construction one. */
     private val dynamic: Set<Address>,
-    /** Every data word pointing into data, by what it points at. */
-    private val sitesByTarget: Map<Address, List<Address>>,
 ) {
     private val ptr = program.defaultPointerSize.toLong()
     private val word = IntegerDataType.getSignedDataType(program.defaultPointerSize, null)
@@ -51,6 +55,9 @@ internal class VttReader(
     /** One subobject of the class a VTT is for, at [delta] from the nearest virtual one ([anchor]) or the class. */
     private inner class Subobject(val typeinfo: Address, val isVirtual: Boolean, val parent: Subobject?, delta: Long) {
         val name = names[typeinfo]
+        val shown by lazy {
+            Demangler.of(Itanium.TYPEINFO_NAME_PREFIX + name)?.originalDemangled?.substringAfter(" for ")?.leafName
+        }
         val anchor: Subobject = if (isVirtual || parent == null) this else parent.anchor
         val delta: Long = if (isVirtual) 0 else delta
         val bases = mutableListOf<Subobject>()
@@ -116,13 +123,24 @@ internal class VttReader(
 
     private fun offsetToTop(top: Address) = program.valueAt<Scalar>(top, word)?.signedValue
 
+    /** What [entry] points at, said the ABI's way: the vtable for `X-in-D`, or the construction vtable for `B-in-D`. */
+    private fun comment(entry: Entry, root: Subobject): String {
+        val owner = if (entry.owner === root) "${root.shown}" else "${entry.owner.shown}-in-${root.shown}"
+        return when {
+            entry.head && entry.owner === root -> "vtable for $owner"
+            entry.head -> "construction vtable for $owner"
+            entry.owner === root -> "vtable for ${entry.subobject.shown}-in-$owner"
+            else -> "vtable for ${entry.subobject.shown}-in-$owner, in its construction vtable"
+        }
+    }
+
     /**
-     * The VTT of the class with [typeinfo], whose primary vtable has its `offset_to_top` at [top], or null if
-     * it has none, or what is there isn't the VTT its typeinfo describes.
+     * The VTT at [at], or null if what is there isn't the VTT of the class whose primary vtable its first word
+     * points at, as that class's typeinfo describes it.
      */
-    fun vttOf(typeinfo: Address, top: Address): Vtt? {
+    fun vttAt(at: Address): Vtt? {
+        val typeinfo = recordOf(at)?.second ?: return null
         val root = hierarchy(typeinfo)?.takeIf { it.hasVirtualBases } ?: return null
-        val at = sitesByTarget[top.add(2 * ptr)]?.min() ?: return null
         val entries = buildList { addVtt(root, top = true) }
 
         val anchorOffset = hashMapOf(root to 0L)
@@ -133,13 +151,17 @@ internal class VttReader(
             if (entry.owner === root && entry.subobject.isVirtual) anchorOffset[entry.subobject] = -offset
             record
         }
-        val constructions = entries.zip(records).filter { (entry, _) -> entry.head && entry.owner !== root }
-            .mapNotNull { (entry, record) ->
-                val sub = entry.subobject
+        val words = entries.zip(records).mapIndexed { i, (entry, record) ->
+            val sub = entry.subobject
+            val construction = if (entry.head && entry.owner !== root) {
                 val offset = (anchorOffset[sub.anchor] ?: return null) + sub.delta
                 constructionVtableName(root.name ?: return null, offset, sub.name ?: return null)?.let { it to record }
+            } else {
+                null
             }
-        return Vtt(at, constructions)
+            VttWord(at.add(i * ptr), comment(entry, root), construction)
+        }
+        return Vtt(at, words)
     }
 }
 
