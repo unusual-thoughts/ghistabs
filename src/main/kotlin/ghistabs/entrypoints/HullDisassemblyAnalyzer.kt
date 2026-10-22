@@ -136,10 +136,10 @@ private fun Program.deadTails(fn: Function, pseudo: PseudoDisassembler): List<Ad
             var seen = 0
             val walk = object : PseudoFlowProcessor {
                 override fun process(instr: PseudoInstruction?): Boolean {
-                    ok = instr != null && ++seen < MAX_TAIL && (
-                        listing.isUndefined(instr.minAddress, instr.maxAddress) ||
-                            listing.getInstructionAt(instr.minAddress)?.let { it.address in fn.body } == true
-                        )
+                    // Undefined goes on; code already there only as an instruction of fn, the join.
+                    val at = instr?.minAddress ?: return false.also { ok = false }
+                    val join = at in fn.body && listing.getInstructionAt(at) != null
+                    ok = ++seen < MAX_TAIL && (join || listing.isUndefined(at, instr.maxAddress))
                     return ok
                 }
 
