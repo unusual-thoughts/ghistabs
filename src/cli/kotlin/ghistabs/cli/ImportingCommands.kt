@@ -148,9 +148,8 @@ internal class DumpCommand : ImportingCommand(name = "dump") {
         "Import and write the requested dumps only (at least one of --records/--harvest/--registry/" +
             "--degradation-log/--save-db/--save-db-full)."
 
-    override fun validate() = with(shared) {
-        val saves = listOfNotNull(this@DumpCommand.saveDb, this@DumpCommand.saveDbFull)
-        if (listOfNotNull(recordsJson, harvestJson, registryJson, degradationLog).isEmpty() && saves.isEmpty()) {
+    override fun validate() {
+        if (shared.dumps.isEmpty() && listOfNotNull(saveDb, saveDbFull).isEmpty()) {
             throw UsageError(
                 "nothing to dump: pass --records, --harvest, --registry, --degradation-log, --save-db or --save-db-full",
             )
