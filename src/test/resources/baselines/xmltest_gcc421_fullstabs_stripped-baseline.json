@@ -72,16 +72,9 @@
             "min": 143,
             "max": 143
         },
-        "dtm-conflicts-created": {
-            "min": 1,
-            "max": 3,
-            "degrades": [
-                "/wchar_t.conflict"
-            ]
-        },
         "dtm-conflicts-post": {
-            "min": 1,
-            "max": 1
+            "min": 0,
+            "max": 0
         },
         "dtm-conflicts-pre": {
             "min": 0,

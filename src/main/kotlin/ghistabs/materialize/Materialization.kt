@@ -445,11 +445,11 @@ private fun DataTypeRegistry.materializeTypedefs() {
     for ((ghidraName, asts) in types.namedTypedefs) {
         // Per-ast: gcc reuses one name for many types — `_ValueType:t(1,169)=(0,9)` in one CU,
         // `=(0,11)` in the next — so a shared typedef would give the wrong size and a `.conflict`.
-        val targets = asts.associate { it.id to (resolveBuiltin(it.body) ?: resolveRef(it.body)) }
+        val targets = asts.associate { it.id to (namedBuiltin(ghidraName, it.body) ?: resolveRef(it.body)) }
         // One shared typedef under /stabs (or root for primitives) for
         // DemanglerReplacer to substitute into `/Demangler/*` stubs.
         val firstBody = asts.first().body
-        val typedefTarget = resolveBuiltin(firstBody) ?: resolveRef(firstBody) ?: run {
+        val typedefTarget = namedBuiltin(ghidraName, firstBody) ?: resolveRef(firstBody) ?: run {
             warn("named-typedef-unresolved", "$ghidraName: no target type, typedef not registered")
             for ((id, target) in targets) cacheIfAbsent(id, target)
             continue
@@ -463,7 +463,7 @@ private fun DataTypeRegistry.materializeTypedefs() {
             for ((id, target) in targets) cacheIfAbsent(id, target)
             continue
         }
-        val category = if (resolveBuiltin(firstBody) != null) {
+        val category = if (resolveBuiltin(firstBody) != null && builtinNamed(ghidraName) == null) {
             CategoryPath.ROOT
         } else {
             CATEGORY
@@ -477,6 +477,24 @@ private fun DataTypeRegistry.materializeTypedefs() {
         for ((id, target) in targets) cacheIfAbsent(id, if (target === typedefTarget) typedef else target)
     }
 }
+
+/**
+ * The primitive [body] resolves to, or Ghidra's own builtin of that [name] where it has the same width.
+ * gcc emits C++'s `wchar_t` as a plain range, `wchar_t:t(0,21)=r(0,21);0;65535;` on mingw, and Ghidra
+ * roots its `wchar_t` as a WideCharDataType sized by the compiler spec.
+ */
+private fun DataTypeRegistry.namedBuiltin(name: String, body: GlobalTypeDecl): DataType? =
+    resolveBuiltin(body)?.let { primitive ->
+        builtinNamed(name)?.takeIf { it.length == primitive.length } ?: primitive
+    }
+
+/**
+ * Ghidra's builtin called [name], at this program's widths. Where it disagrees with the stab, a root typedef
+ * of the same name forks `.conflict` against it: Ghidra opens mingw PEs with the gcc spec, whose 4-byte
+ * `wchar_t` is not mingw's 2.
+ */
+private fun DataTypeRegistry.builtinNamed(name: String): DataType? =
+    BuiltInDataTypeManager.getDataTypeManager().getDataType(CategoryPath.ROOT, name)?.clone(dtm)
 
 /** Materialize a non-registerable top-level ast (XRef alias, FunctionT, Method). */
 internal fun DataTypeRegistry.materializeTopLevel(ast: Type): DataType = cacheIfAbsent(ast.id) {
