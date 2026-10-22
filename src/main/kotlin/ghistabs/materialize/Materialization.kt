@@ -463,7 +463,7 @@ private fun DataTypeRegistry.materializeTypedefs() {
             for ((id, target) in targets) cacheIfAbsent(id, target)
             continue
         }
-        val category = if (resolveBuiltin(firstBody) != null) {
+        val category = if (resolveBuiltin(firstBody) != null && builtinNamed(ghidraName) == null) {
             CategoryPath.ROOT
         } else {
             CATEGORY
@@ -480,15 +480,21 @@ private fun DataTypeRegistry.materializeTypedefs() {
 
 /**
  * The primitive [body] resolves to, or Ghidra's own builtin of that [name] where it has the same width.
- * gcc 4.2.1 emits C++'s `wchar_t:t(0,21)=r(0,21);0;65535;`, the same range as `short unsigned int`;
- * Ghidra roots its `wchar_t` as a WideCharDataType, and a root typedef of that name to ushort beside
- * it forks `/wchar_t.conflict`.
+ * gcc emits C++'s `wchar_t` as a plain range, `wchar_t:t(0,21)=r(0,21);0;65535;` on mingw, and Ghidra
+ * roots its `wchar_t` as a WideCharDataType sized by the compiler spec.
  */
 private fun DataTypeRegistry.namedBuiltin(name: String, body: GlobalTypeDecl): DataType? =
     resolveBuiltin(body)?.let { primitive ->
-        BuiltInDataTypeManager.getDataTypeManager().getDataType(CategoryPath.ROOT, name)?.clone(dtm)
-            ?.takeIf { it.length == primitive.length } ?: primitive
+        builtinNamed(name)?.takeIf { it.length == primitive.length } ?: primitive
     }
+
+/**
+ * Ghidra's builtin called [name], at this program's widths. Where it disagrees with the stab, a root typedef
+ * of the same name forks `.conflict` against it: Ghidra opens mingw PEs with the gcc spec, whose 4-byte
+ * `wchar_t` is not mingw's 2.
+ */
+private fun DataTypeRegistry.builtinNamed(name: String): DataType? =
+    BuiltInDataTypeManager.getDataTypeManager().getDataType(CategoryPath.ROOT, name)?.clone(dtm)
 
 /** Materialize a non-registerable top-level ast (XRef alias, FunctionT, Method). */
 internal fun DataTypeRegistry.materializeTopLevel(ast: Type): DataType = cacheIfAbsent(ast.id) {
