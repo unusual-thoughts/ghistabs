@@ -19,6 +19,7 @@ import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.Instructions
+import ghistabs.MAX_FILL
 import ghistabs.fillJumpLength
 import ghistabs.instructions
 import ghistabs.isNopEquivalent
@@ -112,7 +113,8 @@ private fun Instructions.codeRuns(range: AddressRange): List<AddressRange> = bui
     var addr = range.minAddress
     while (addr < limit) {
         val insn = at(addr) ?: break
-        val fill = if (insn.isNopEquivalent()) insn.length.toLong() else fillJumpLength(insn, limit)
+        // The idiom may run past the gap: a stray reference can disassemble a NOP of its fill.
+        val fill = if (insn.isNopEquivalent()) insn.length.toLong() else fillJumpLength(insn, addr.add(MAX_FILL))
         if (fill != null) {
             start?.let { add(AddressRangeImpl(it, addr.previous())) }
             start = null

@@ -816,10 +816,13 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * The In-Function Gap Disassembler leaves no gap it would take inside a function's hull, and
      * bookmarks each one it took. It once took none at all: Ghidra hands a function analyzer the entry
      * points of the functions added, never a gap, and every fixture's baseline had simply recorded that.
+     *
+     * CONCURRENT only: AFTER runs the import outside auto-analysis, so the functions it creates from
+     * N_FUN stabs (a `.o`'s uncalled ones) never get a function-analyzer pass at all.
      */
     @Test
     fun hullGapsAreDisassembled() {
-        assumeTrue(mode != Mode.BEFORE, "Skipping: the gaps are disassembled by auto-analysis")
+        assumeTrue(mode == Mode.CONCURRENT, "Skipping: only CONCURRENT runs auto-analysis over the import's functions")
         val code = ghidra.app.util.PseudoDisassembler(program).instructions
         val executable = program.memory.executeSet
         val left = program.functionManager.functionsIterable.filterNot { it.isThunk }.flatMap { fn ->
