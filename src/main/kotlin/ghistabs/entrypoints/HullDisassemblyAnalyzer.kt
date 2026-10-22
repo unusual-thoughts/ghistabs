@@ -5,6 +5,8 @@ import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
 import ghidra.app.util.PseudoDisassembler
+import ghidra.app.util.PseudoFlowProcessor
+import ghidra.app.util.PseudoInstruction
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
@@ -35,8 +37,8 @@ import ghistabs.tiles
  * One more run past the hull: the return path a caller's compiler wrote after a call it did not know
  * cannot return, `call __throw_out_of_range; add $0x10,%esp; jmp <join>`. Once the callee is marked
  * non-returning nothing reaches it, and gcc puts that out-of-line block last, so it trails the body's
- * last instruction. Taken up to its first unconditional jump back into the function, or its return,
- * when every byte of that decodes.
+ * last instruction. Ghidra's pseudo flow walk ([PseudoDisassembler.followSubFlows]) takes it from the
+ * call to every jump back into the function and every return, and it is kept only if it gets there.
  *
  * Runs after Ghidra's function analysis (hulls exist) and before [StabsAnalyzer] / its data-coverage
  * report, which would otherwise flag these fragments as undescribed data. Re-runnable.
@@ -68,7 +70,8 @@ class HullDisassemblyAnalyzer :
     override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
         program ?: return false
         monitor ?: return false
-        val code = PseudoDisassembler(program).instructions
+        val pseudo = PseudoDisassembler(program)
+        val code = pseudo.instructions
         val executable = program.memory.executeSet
 
         val recover = mutableMapOf<AddressRange, String>()
@@ -79,7 +82,9 @@ class HullDisassemblyAnalyzer :
             for (range in program.listing.getUndefinedRanges(hull, false, monitor)) {
                 if (code.tiles(range)) code.codeRuns(range).forEach { recover[it] = "inside $fn 's hull" }
             }
-            for (range in program.deadTails(fn, code)) recover[range] = "dead return path after a call in $fn"
+            for (tail in program.deadTails(fn, pseudo)) {
+                for (range in tail) recover[range] = "dead return path after a call in $fn"
+            }
         }
         if (recover.isNotEmpty()) {
             val all = AddressSet().apply { recover.keys.forEach(::add) }
@@ -120,32 +125,51 @@ private fun Instructions.codeRuns(range: AddressRange): List<AddressRange> = bui
 }
 
 /**
- * The undefined runs right after [fn]'s calls to non-returning functions, past its last instruction,
- * up to and including the first unconditional jump back into [fn] or return; none where a byte of that
- * fails to decode or the jump goes elsewhere.
+ * The undefined code right after [fn]'s calls to non-returning functions, past its last instruction:
+ * Ghidra's own pseudo flow walk from there, following only flows through undefined bytes. Every way
+ * out must be a return or a jump to an instruction of [fn] (the join), and one must exist; anything
+ * else it reaches — a bad decode, the middle of an instruction, another function — rejects the tail.
  */
-private fun Program.deadTails(fn: Function, code: Instructions): List<AddressRange> {
+private fun Program.deadTails(fn: Function, pseudo: PseudoDisassembler): List<AddressSetView> {
     val end = fn.body.maxAddress
     return (listing.getInstructions(fn.body, true) as Iterable<Instruction>).asSequence()
-        .filter { insn ->
-            insn.flowType.isCall && insn.flows.singleOrNull()?.let { functionManager.getFunctionAt(it) }
-                ?.hasNoReturn() == true
-        }
+        .filter { it.flowType.isCall && it.callsNoReturn(this) }
         .mapNotNull { call -> call.maxAddress.next()?.takeIf { it > end && listing.isUndefined(it, it) } }
         .mapNotNull { start ->
-            var at = start
-            while (listing.isUndefined(at, at)) {
-                val insn = code.at(at) ?: return@mapNotNull null
-                val last = at.add(insn.length - 1L)
-                if (!listing.isUndefined(at, last)) return@mapNotNull null
-                val flow = insn.flowType
-                if (flow.isTerminal && !flow.isCall) return@mapNotNull AddressRangeImpl(start, last)
-                if (flow.isJump && flow.isUnConditional) {
-                    val back = insn.flows.singleOrNull()?.takeIf { it in fn.body } ?: return@mapNotNull null
-                    return@mapNotNull AddressRangeImpl(start, last).takeIf { back != start }
-                }
-                at = last.next() ?: return@mapNotNull null
-            }
-            null
+            val walk = DeadTailWalk(this, fn)
+            val reached = pseudo.followSubFlows(start, MAX_TAIL, walk)
+            reached.subtract(walk.joins).takeIf { walk.ok && walk.exits && it.minAddress == start }
         }.toList()
+}
+
+private fun Instruction.callsNoReturn(program: Program) =
+    flows.singleOrNull()?.let { program.functionManager.getFunctionAt(it) }?.hasNoReturn() == true
+
+/** A tail is a few blocks of cleanup; a walk that long has run off into something else. */
+private const val MAX_TAIL = 64
+
+private class DeadTailWalk(private val program: Program, private val fn: Function) : PseudoFlowProcessor {
+    val joins = AddressSet()
+    var ok = true
+    var exits = false
+    private var seen = 0
+
+    override fun process(instr: PseudoInstruction?): Boolean {
+        if (instr == null || ++seen >= MAX_TAIL) return false.also { ok = false }
+        if (program.listing.isUndefined(instr.minAddress, instr.maxAddress)) return true
+        // Already code: fine only where it is an instruction of fn, the join the tail goes back to.
+        val join = program.listing.getInstructionAt(instr.minAddress)?.takeIf { it.address in fn.body }
+        if (join == null) ok = false else joins.add(instr.minAddress, instr.maxAddress).also { exits = true }
+        return ok
+    }
+
+    override fun followFlows(instr: PseudoInstruction): Boolean {
+        if (instr.minAddress in joins) return false
+        val flow = instr.flowType
+        if ((flow.isTerminal && !flow.isCall) || (flow.isCall && instr.callsNoReturn(program))) {
+            exits = true
+            return false
+        }
+        return true
+    }
 }
