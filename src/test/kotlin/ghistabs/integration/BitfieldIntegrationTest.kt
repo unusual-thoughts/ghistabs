@@ -4,7 +4,7 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.BitFieldDataType
 import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.importer.StabsImporter
+import ghistabs.importer.runOnRecords
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
@@ -27,7 +27,7 @@ class BitfieldIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             .apply { createMemory(".text", "0x400000", 1024) }.program
         val records = listOf(StabRecord(0, StabType.N_SO, 0, 0, 0, "hello.cc")) +
             stabs.mapIndexed { i, s -> StabRecord(i + 1, StabType.N_LSYM, 0, 0, 0, s) }
-        StabsImporter(program.defaultContext()).runOnRecords(StabReader.Result(records))
+        program.defaultContext().runOnRecords(StabReader.Result(records))
         return program.dataTypeManager.allStructures.asSequence().single { it.name == name }
     }
 

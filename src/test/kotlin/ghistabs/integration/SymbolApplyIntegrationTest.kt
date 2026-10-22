@@ -4,7 +4,7 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.importer.StabsImporter
+import ghistabs.importer.runOnRecords
 import ghistabs.importer.sweepPointees
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
@@ -74,8 +74,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Run importer with synthetic records
         val ctx = program.defaultContext()
-        val importer = StabsImporter(ctx)
-        val result = importer.runOnRecords(StabReader.Result(records))
+        val result = ctx.runOnRecords(StabReader.Result(records))
 
         // Verify that the importer processes records without exceptions.
         // With minimal synthetic stabs, globalsApplied may be 0 (no type info),
@@ -131,9 +130,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Run importer - should complete even with malformed input
         val ctx = program.defaultContext()
-        val importer = StabsImporter(ctx)
-        val result =
-            importer.runOnRecords(StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0))
+        val result = ctx.runOnRecords(StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0))
 
         // Importer should complete without throwing (robustness test)
         result.parsed.must("Importer should have parsed some records") { parsed > 0 }
@@ -158,7 +155,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
 
         val ctx = program.defaultContext()
-        val result = StabsImporter(ctx).runOnRecords(
+        val result = ctx.runOnRecords(
             StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0),
         )
 
@@ -192,7 +189,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             StabRecord(5, StabType.N_FUN, 0, 0, 0x10, ""),
         )
 
-        StabsImporter(program.defaultContext()).runOnRecords(
+        program.defaultContext().runOnRecords(
             StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0),
         )
 
@@ -218,7 +215,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             StabRecord(4, StabType.N_FUN, 0, 0, 0x10, ""),
         )
 
-        StabsImporter(program.defaultContext()).runOnRecords(
+        program.defaultContext().runOnRecords(
             StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0),
         )
 
@@ -245,7 +242,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             StabRecord(6, StabType.N_FUN, 0, 0, 0x10, ""),
         )
 
-        StabsImporter(program.defaultContext()).runOnRecords(
+        program.defaultContext().runOnRecords(
             StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0),
         )
 

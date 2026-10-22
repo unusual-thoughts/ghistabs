@@ -23,6 +23,7 @@ import ghistabs.harvest.Symbol
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
+import ghistabs.importer.readStabs
 import ghistabs.isPackedProgram
 import ghistabs.loadPackedProgram
 import ghistabs.loadProgram

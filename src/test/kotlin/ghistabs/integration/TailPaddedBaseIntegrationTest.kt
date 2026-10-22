@@ -3,7 +3,7 @@ package ghistabs.integration
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.importer.StabsImporter
+import ghistabs.importer.runOnRecords
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
@@ -46,7 +46,7 @@ class TailPaddedBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             stabs.mapIndexed { i, stab -> StabRecord(i + 1, StabType.N_LSYM, 0, 0, 0, stab) }
         val program = builder.program
         val ctx = program.defaultContext()
-        StabsImporter(ctx).runOnRecords(StabReader.Result(records))
+        ctx.runOnRecords(StabReader.Result(records))
         val struct = program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
             .single { it.name == "Derived" }
         return struct to ctx.diagnostics.degradationTargets()

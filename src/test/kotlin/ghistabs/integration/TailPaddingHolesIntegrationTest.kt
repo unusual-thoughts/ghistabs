@@ -2,7 +2,7 @@ package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.importer.StabsImporter
+import ghistabs.importer.runOnRecords
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
@@ -41,7 +41,7 @@ class TailPaddingHolesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val records = listOf(StabRecord(0, StabType.N_SO, 0, 0, 0, "pad.c")) +
             stabs.mapIndexed { i, stab -> StabRecord(i + 1, StabType.N_LSYM, 0, 0, 0, stab) }
         val ctx = builder.program.defaultContext()
-        StabsImporter(ctx).runOnRecords(StabReader.Result(records))
+        ctx.runOnRecords(StabReader.Result(records))
         return ctx.diagnostics.degradationTargets()["struct-mostly-undefined"].orEmpty().toList()
     }
 

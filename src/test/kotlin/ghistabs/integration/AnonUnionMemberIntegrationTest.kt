@@ -3,7 +3,7 @@ package ghistabs.integration
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.importer.StabsImporter
+import ghistabs.importer.runOnRecords
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
@@ -51,7 +51,7 @@ class AnonUnionMemberIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             cu("hrtimer.cpp", *variant(165, 164, 163))
         val program = builder.program
         val ctx = program.defaultContext()
-        StabsImporter(ctx).runOnRecords(StabReader.Result(records))
+        ctx.runOnRecords(StabReader.Result(records))
 
         val variant = program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
             .single { it.name == "tagVARIANT" }
