@@ -6,6 +6,7 @@ import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
 import ghidra.app.util.PseudoDisassembler
 import ghidra.app.util.importer.MessageLog
+import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
 import ghidra.program.model.address.AddressRangeImpl
 import ghidra.program.model.address.AddressSet
@@ -16,8 +17,9 @@ import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.Instructions
+import ghistabs.fillJumpLength
 import ghistabs.instructions
-import ghistabs.isAllPadding
+import ghistabs.isNopEquivalent
 import ghistabs.tiles
 
 /**
@@ -39,12 +41,13 @@ import ghistabs.tiles
  * Runs after Ghidra's function analysis (hulls exist) and before [StabsAnalyzer] / its data-coverage
  * report, which would otherwise flag these fragments as undescribed data. Re-runnable.
  *
- * A gap that is nothing but alignment fill is left to [FillerByteAnalyzer], which runs later and
+ * The alignment fill in a gap is left to [FillerByteAnalyzer], which runs later and
  * collapses it to one Alignment. gcc 2.x aligns the jump target inside a function — the epilogue a
  * body's `JMP` skips to — so its fill lands in the hull, unreachable but surrounded by code, and
  * disassembling it buried the Alignment under a couple of dozen orphan NOPs (89 of 249 sites on
  * `iostream_test_aout_gcc263_fullstabs`). gcc 3.x pads between functions, outside every hull, which
- * is why this never showed up on the mingw corpus.
+ * is why this never showed up on the mingw corpus. A gap can hold both: gcc 2.x's dead `xor %eax,%eax;
+ * jmp` between two runs of fill, so only the runs between the fill are disassembled.
  */
 class HullDisassemblyAnalyzer :
     AbstractAnalyzer(
@@ -74,7 +77,7 @@ class HullDisassemblyAnalyzer :
             if (fn.isExternal || fn.isThunk) continue
             val hull = AddressSet(fn.entryPoint, fn.body.maxAddress).intersect(executable)
             for (range in program.listing.getUndefinedRanges(hull, false, monitor)) {
-                if (code.tiles(range) && !code.isAllPadding(range)) recover[range] = "inside $fn 's hull"
+                if (code.tiles(range)) code.codeRuns(range).forEach { recover[it] = "inside $fn 's hull" }
             }
             for (range in program.deadTails(fn, code)) recover[range] = "dead return path after a call in $fn"
         }
@@ -92,6 +95,28 @@ class HullDisassemblyAnalyzer :
     companion object {
         const val NAME = "In-Function Gap Disassembler"
     }
+}
+
+/**
+ * [range] without its alignment fill — NOP-equivalents and jump-over-fill idioms — as the runs of
+ * code left between them. [range] must already tile.
+ */
+private fun Instructions.codeRuns(range: AddressRange): List<AddressRange> = buildList {
+    val limit = range.maxAddress.next() ?: return@buildList
+    var start: Address? = null
+    var addr = range.minAddress
+    while (addr < limit) {
+        val insn = at(addr) ?: break
+        val fill = if (insn.isNopEquivalent()) insn.length.toLong() else fillJumpLength(insn, limit)
+        if (fill != null) {
+            start?.let { add(AddressRangeImpl(it, addr.previous())) }
+            start = null
+        } else if (start == null) {
+            start = addr
+        }
+        addr = addr.add(fill ?: insn.length.toLong())
+    }
+    start?.let { add(AddressRangeImpl(it, addr.previous())) }
 }
 
 /**
