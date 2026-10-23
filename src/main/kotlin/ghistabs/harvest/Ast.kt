@@ -305,6 +305,13 @@ data class Func(
     val demangledName by lazy { Demangler.name(decl.name) }
 
     /**
+     * The names of [params], before any `this` filter. A function-scope local of one of these names is gcc
+     * re-describing the parameter (a `:p` + `:r` pair, or `-O0`'s `this` copy); a nested block's `this` is
+     * an inline expansion's own.
+     */
+    val paramNames by lazy { params.mapTo(mutableSetOf()) { it.body.name } }
+
+    /**
      * The locals of the function's own scope: its outermost blocks' and those no bracket claimed, which
      * include the register homes `dbxout_reg_parms` emits at depth 0. A local of a nested block is not.
      */
