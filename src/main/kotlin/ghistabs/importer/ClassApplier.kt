@@ -144,7 +144,7 @@ class ClassApplier(
     }
 
     private fun DemangledFunction.formalTypes(at: String) =
-        formals.map { parameterTypeOrUndefined(it, dtm, "method-stub-param-untyped", at) }
+        formals.map { it.slotParameterType("method-stub-param-untyped", at) }
 
     private inner class ResolvedMember(val mangledName: String, val addr: Address) {
         fun func(): Function? = program.functionManager.getFunctionAt(addr)
