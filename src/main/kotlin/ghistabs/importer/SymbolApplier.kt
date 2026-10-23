@@ -65,7 +65,6 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
      * `this` is not among either list: the demangler lists a member's formals only.
      */
     private fun Func.parameters(): List<ParameterImpl> {
-        val dtm = ctx.program.dataTypeManager
         // gcc 3.x often mistypes the `this` N_PSYM (seen `int` instead of `<Class>*`), and keeping it
         // beside the one the convention injects makes a duplicate-`this` signature Ghidra can't evict.
         // ClassApplier.reparentMethod types it from the class struct.
@@ -334,7 +333,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
      * already sitting in [isSameSlot] is gcc re-describing one variable, and suffixing that would
      * manufacture a twin.
      */
-    private fun scopedName(func: Function, base: String, isSameSlot: (Variable) -> Boolean): String? {
+    private fun scopedName(func: Function, base: String, isSameSlot: (Variable) -> Boolean = { false }): String? {
         val sameBase = Regex("${Regex.escape(base)}(_\\d+)?")
         val existing = func.localVariables
         if (existing.any { sameBase.matches(it.name) && isSameSlot(it) }) return null
@@ -402,128 +401,121 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         Undefined4DataType.dataType
     }
 
-    private fun Function.addRegister(sym: LocalSymbol, name: String, firstUse: Int, reg: Register): Variable {
-        val dt = sym.resolvedDataType(this)
-        val storage = registerStorage(reg, dt)
-        return addLocalVariable(LocalVariableImpl(name, firstUse, dt, storage, false, ctx.program, source), source)
-    }
-
     /**
      * [low] alone, or — for a two-word value, which the stab files under its low register only — the
      * register pair, high word first as Ghidra orders compound storage.
      */
-    private fun registerStorage(low: Register, dt: DataType): VariableStorage {
+    private fun registerStorage(low: Register, dt: DataType) = when (
         val high = ctx.program.dbxArch
             ?.takeIf { dt.length == 2 * low.minimumByteSize }
             ?.nextRegister(low.name)
             ?.let { ctx.program.getRegister(it) }
-        return if (high == null) VariableStorage(ctx.program, low) else VariableStorage(ctx.program, high, low)
-    }
-
-    private fun Function.addStack(sym: LocalSymbol, offset: Int) = addLocalVariable(
-        LocalVariableImpl(sym.body.name, sym.resolvedDataType(this), offset, ctx.program, source),
-        source,
-    )
-
-    /** The name a register local takes, or null for a function-scope `this`, which re-describes the parameter. */
-    private fun LocalSymbol.registerLocalName(open: Func) = when {
-        body.name !in open.paramNames -> body.name
-        body.name != "this" -> "${body.name}$REGISTER_HOME_SUFFIX"
-        isFunctionScope(open) -> null.also { debug("reglocal-skipped-dup-param") }
-        else -> body.name
+    ) {
+        null -> VariableStorage(ctx.program, low)
+        else -> VariableStorage(ctx.program, high, low)
     }
 
     private fun LocalSymbol.isFunctionScope(open: Func) = open.functionScopeLocals.any { it.recordIndex == recordIndex }
 
-    /**
-     * A stack local of a nested block named like a parameter — an inline expansion's `this` — is the
-     * inlinee's own variable. It takes a suffix, and only a slot no imported variable holds: a stack
-     * variable added over another evicts it, and gcc reuses one slot for every expansion.
-     */
-    private fun LocalSymbol.addParamNamedStack(func: Function, open: Func, offset: Int) {
-        if (isFunctionScope(open)) {
-            debug("local-var-skipped-dup-param")
+    private fun LocalSymbol.applyRegisterLocal(func: Function, open: Func, firstUse: Int) {
+        // The dbx register number is the stab's n_value, not part of the descriptor
+        // (`w:r(0,5)` ends at the type) — same field the stack offset above comes from.
+        val dbxNum = rawValue.toInt()
+        val regName = ctx.program.dbxRegisterName(dbxNum)
+        val reg = regName?.let { ctx.program.getRegister(it) } ?: run {
+            degradation(
+                "reglocal-unmapped-regnum",
+                "${func.name}.${body.name}",
+                "dbx-reg=$dbxNum",
+                func.entryPoint,
+            )
             return
         }
+        // A `:p` + `:r` pair: the argument came in on the stack and was then loaded into
+        // this register. The parameter owns the name and the stack slot, so the register
+        // home can only be a second variable (suffixed to avoid collision). Except a
+        // function-scope `this` that really does shadow a parameter — ClassApplier synthesises
+        // a typed one already. A nested block's `this` is an inline expansion's, and a plain
+        // function whose own local is called `this` has no such N_PSYM: both keep the local.
+        val reglocalName = when {
+            body.name !in open.paramNames -> body.name
+            body.name != "this" -> "${body.name}$REGISTER_HOME_SUFFIX"
+            isFunctionScope(open) -> null.also { debug("reglocal-skipped-dup-param") }
+            else -> body.name
+        } ?: return
+
+        val name = scopedName(func, reglocalName) {
+            // Base registers: Ghidra narrows a register variable to its type's width, so the
+            // `CL` an earlier import left for a `char` in ECX is this same slot. The last register,
+            // because a register pair lists its low word, the one the stab names, last.
+            val low = it.lastStorageVarnode?.let { vn -> ctx.program.getRegister(vn) }
+            it.firstUseOffset == firstUse && low?.baseRegister == reg.baseRegister
+        } ?: run {
+            debug("reglocal-skipped-dup-local")
+            return
+        }
+        // [firstUse] is the local's block, i.e. the range it is actually live over — a
+        // register local declared from entry claims the register for the whole function.
         val dt = resolvedDataType(func)
-        val slot = offset until offset + dt.length
-        val held = func.localVariables.any {
-            it.source == source && it.isStackVariable && (it.stackOffset until it.stackOffset + it.length).let { v ->
-                v.first in slot || slot.first in v
+        val storage = registerStorage(reg, dt)
+        func.addLocalVariable(LocalVariableImpl(name, firstUse, dt, storage, false, ctx.program, source), source)
+        debug("reglocal-add-success", "firstUse=$firstUse")
+        // Which of the two renames happened, if either — the `:p`/`:r` shadow, or scope disambiguation.
+        if (reglocalName != body.name) debug("reglocal-param-home", "${body.name} → $reglocalName")
+        if (name != reglocalName) debug("reglocal-renamed-scope", "$reglocalName → $name")
+    }
+
+    private fun Int.withLength(len: Int) = this..<this + len
+    private fun IntRange.overlaps(other: IntRange) = other.first in this || first in other
+
+    private fun LocalSymbol.applyStackLocal(func: Function, open: Func) {
+        val offset = rawValue.toInt() - open.frameBias(ctx.program)
+        val dt = resolvedDataType(func)
+        val name = when (body.name) {
+            // A stack local of a nested block named like a parameter — an inline expansion's `this` — is the
+            // inlinee's own variable. It takes a suffix, and only a slot no imported variable holds: a stack
+            // variable added over another evicts it, and gcc reuses one slot for every expansion.
+            in open.paramNames -> {
+                if (isFunctionScope(open)) {
+                    debug("local-var-skipped-dup-param")
+                    return
+                }
+                val slot = offset.withLength(dt.length)
+                val held = func.localVariables.any {
+                    it.source == source && it.isStackVariable && it.stackOffset.withLength(it.length).overlaps(slot)
+                }
+                val name = if (held) null else scopedName(func, body.name)
+                name?.also { debug("local-var-inlinee-param-name", "${body.name} → $name") } ?: run {
+                    debug("local-var-skipped-slot-taken")
+                    return
+                }
             }
+
+            // Stack locals keep the drop-on-collision rule. They can't carry a scope — Ghidra
+            // rejects a non-zero firstUseOffset on stack storage ("Stack-based variable must
+            // have firstUseOffset of 0") — and suffixing them by slot instead is destructive:
+            // the extra copies land at offsets inside a real variable's footprint and Ghidra
+            // silently evicts it (one fixture's `main` lost a whole struct local outright).
+            in func.localVariables.map { it.name } -> {
+                debug("local-var-skipped-dup-local")
+                return
+            }
+
+            else -> body.name
         }
-        val name = if (held) null else scopedName(func, body.name) { false }
-        if (name == null) {
-            debug("local-var-skipped-slot-taken")
-            return
-        }
+        // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
+        // prologue-derived [Func.frameBias] (NSA/ghidra#223, #5485), which carries gcc >= 4.8's
+        // stale frame layout too.
         func.addLocalVariable(LocalVariableImpl(name, dt, offset, ctx.program, source), source)
-        debug("local-var-inlinee-param-name", "${body.name} → $name")
+        if (open.staleFrameShift(ctx.program) != 0) debug("local-var-stale-frame-shifted")
+        debug("local-var-add-success")
     }
 
     private fun LocalSymbol.applyLocal(func: Function, open: Func, firstUse: Int) {
         try {
             when (body.location) {
-                VariableLocation.STACK -> {
-                    val offset = rawValue.toInt() - open.frameBias(ctx.program)
-                    if (body.name in open.paramNames) return addParamNamedStack(func, open, offset)
-                    // Stack locals keep the drop-on-collision rule. They can't carry a scope — Ghidra
-                    // rejects a non-zero firstUseOffset on stack storage ("Stack-based variable must
-                    // have firstUseOffset of 0") — and suffixing them by slot instead is destructive:
-                    // the extra copies land at offsets inside a real variable's footprint and Ghidra
-                    // silently evicts it (one fixture's `main` lost a whole struct local outright).
-                    if (body.name in func.localVariables.map { it.name }) {
-                        debug("local-var-skipped-dup-local")
-                        return
-                    }
-                    // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
-                    // prologue-derived [Func.frameBias] (NSA/ghidra#223, #5485), which carries gcc >= 4.8's
-                    // stale frame layout too.
-                    func.addStack(this, offset)
-                    if (open.staleFrameShift(ctx.program) != 0) debug("local-var-stale-frame-shifted")
-                    debug("local-var-add-success")
-                }
-
-                VariableLocation.REGISTER -> {
-                    // The dbx register number is the stab's n_value, not part of the descriptor
-                    // (`w:r(0,5)` ends at the type) — same field the stack offset above comes from.
-                    val dbxNum = rawValue.toInt()
-                    val regName = ctx.program.dbxRegisterName(dbxNum)
-                    val reg = regName?.let { ctx.program.getRegister(it) } ?: run {
-                        degradation(
-                            "reglocal-unmapped-regnum",
-                            "${func.name}.${body.name}",
-                            "dbx-reg=$dbxNum",
-                            func.entryPoint,
-                        )
-                        return
-                    }
-                    // A `:p` + `:r` pair: the argument came in on the stack and was then loaded into
-                    // this register. The parameter owns the name and the stack slot, so the register
-                    // home can only be a second variable (suffixed to avoid collision). Except a
-                    // function-scope `this` that really does shadow a parameter — ClassApplier synthesises
-                    // a typed one already. A nested block's `this` is an inline expansion's, and a plain
-                    // function whose own local is called `this` has no such N_PSYM: both keep the local.
-                    val reglocalName = registerLocalName(open) ?: return
-
-                    val name = scopedName(func, reglocalName) {
-                        // Base registers: Ghidra narrows a register variable to its type's width, so the
-                        // `CL` an earlier import left for a `char` in ECX is this same slot. The last register,
-                        // because a register pair lists its low word, the one the stab names, last.
-                        val low = it.lastStorageVarnode?.let { vn -> ctx.program.getRegister(vn) }
-                        it.firstUseOffset == firstUse && low?.baseRegister == reg.baseRegister
-                    } ?: run {
-                        debug("reglocal-skipped-dup-local")
-                        return
-                    }
-                    // [firstUse] is the local's block, i.e. the range it is actually live over — a
-                    // register local declared from entry claims the register for the whole function.
-                    func.addRegister(this, name, firstUse, reg)
-                    debug("reglocal-add-success", "firstUse=$firstUse")
-                    // Which of the two renames happened, if either — the `:p`/`:r` shadow, or scope disambiguation.
-                    if (reglocalName != body.name) debug("reglocal-param-home", "${body.name} → $reglocalName")
-                    if (name != reglocalName) debug("reglocal-renamed-scope", "$reglocalName → $name")
-                }
+                VariableLocation.STACK -> applyStackLocal(func, open)
+                VariableLocation.REGISTER -> applyRegisterLocal(func, open, firstUse)
             }
         } catch (e: Exception) {
             degradation("local-dropped", "${func.name}.${body.name}", e.message, func.entryPoint)
