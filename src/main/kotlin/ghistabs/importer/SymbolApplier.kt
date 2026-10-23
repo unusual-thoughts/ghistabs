@@ -165,10 +165,9 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // gcc also emits `this` as a register local at -O0, and that copy is redundant
                 // once ClassApplier has synthesised a typed one. A plain function whose own local
                 // is called `this` has no such N_PSYM, so it keeps the local.
-                val paramNames = open.params.mapTo(mutableSetOf()) { it.body.name }
                 val firstUse = open.firstUseOffsets(func.entryPoint)
                 for (loc in open.locals) {
-                    loc.applyLocal(func, open, paramNames, firstUse[loc.recordIndex] ?: 0)
+                    loc.applyLocal(func, open, firstUse[loc.recordIndex] ?: 0)
                 }
 
                 // Apply scope plate comments.
@@ -427,8 +426,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     )
 
     /** The name a register local takes, or null for a function-scope `this`, which re-describes the parameter. */
-    private fun LocalSymbol.registerLocalName(open: Func, paramNames: Set<String>) = when {
-        body.name !in paramNames -> body.name
+    private fun LocalSymbol.registerLocalName(open: Func) = when {
+        body.name !in open.paramNames -> body.name
         body.name != "this" -> "${body.name}$REGISTER_HOME_SUFFIX"
         isFunctionScope(open) -> null.also { debug("reglocal-skipped-dup-param") }
         else -> body.name
@@ -462,12 +461,12 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         debug("local-var-inlinee-param-name", "${body.name} → $name")
     }
 
-    private fun LocalSymbol.applyLocal(func: Function, open: Func, paramNames: Set<String>, firstUse: Int) {
+    private fun LocalSymbol.applyLocal(func: Function, open: Func, firstUse: Int) {
         try {
             when (body.location) {
                 VariableLocation.STACK -> {
                     val offset = rawValue.toInt() - open.frameBias(ctx.program)
-                    if (body.name in paramNames) return addParamNamedStack(func, open, offset)
+                    if (body.name in open.paramNames) return addParamNamedStack(func, open, offset)
                     // Stack locals keep the drop-on-collision rule. They can't carry a scope — Ghidra
                     // rejects a non-zero firstUseOffset on stack storage ("Stack-based variable must
                     // have firstUseOffset of 0") — and suffixing them by slot instead is destructive:
@@ -505,7 +504,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                     // function-scope `this` that really does shadow a parameter — ClassApplier synthesises
                     // a typed one already. A nested block's `this` is an inline expansion's, and a plain
                     // function whose own local is called `this` has no such N_PSYM: both keep the local.
-                    val reglocalName = registerLocalName(open, paramNames) ?: return
+                    val reglocalName = registerLocalName(open) ?: return
 
                     val name = scopedName(func, reglocalName) {
                         // Base registers: Ghidra narrows a register variable to its type's width, so the

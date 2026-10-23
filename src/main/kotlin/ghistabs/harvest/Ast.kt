@@ -304,6 +304,8 @@ data class Func(
 
     val demangledName by lazy { Demangler.name(decl.name) }
 
+    val paramNames by lazy { params.mapTo(mutableSetOf()) { it.body.name } }
+
     /**
      * The locals of the function's own scope: its outermost blocks' and those no bracket claimed, which
      * include the register homes `dbxout_reg_parms` emits at depth 0. A local of a nested block is not.
