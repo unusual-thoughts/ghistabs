@@ -157,13 +157,10 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 )
                 if (ctx.options.applyPlateComments) commentRegisterParamHomes(func, open)
 
-                // Apply locals. Dedupe against the stabs parameter list, not a re-read of
-                // func.parameters: in CONCURRENT mode another analyzer can mutate the function
-                // between updateFunction above and this loop, which flipped locals between added
-                // and skipped from run to run. This is `open.params`, before the `this` filter —
-                // gcc also emits `this` as a register local at -O0, and that copy is redundant
-                // once ClassApplier has synthesised a typed one. A plain function whose own local
-                // is called `this` has no such N_PSYM, so it keeps the local.
+                // Apply locals. They dedupe against the stabs parameter list ([Func.paramNames]), not a
+                // re-read of func.parameters: in CONCURRENT mode another analyzer can mutate the function
+                // between updateFunction above and this loop, which flipped locals between added and
+                // skipped from run to run.
                 val firstUse = open.firstUseOffsets(func.entryPoint)
                 for (loc in open.locals) {
                     loc.applyLocal(func, open, firstUse[loc.recordIndex] ?: 0)
@@ -329,7 +326,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     /**
      * The name to give a local, or null when it is not a variable of its own. gcc names every inline
      * expansion's locals identically (`this` six times over in one function) and Ghidra's variable
-     * namespace is flat, so distinct copies get `this`, `this_1`, … — but a same-named variable
+     * namespace is flat, so distinct copies get `this`, `this_1`, … (a parameter's name counts as taken,
+     * so an inlinee's `this` in a member function starts at `this_1`) — but a same-named variable
      * already sitting in [isSameSlot] is gcc re-describing one variable, and suffixing that would
      * manufacture a twin.
      */
@@ -359,7 +357,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
      *
      *  - `:P`/`:R`, passed in a register, single symbol, rarer. This comment is the only record of the home.
      *  - `:p` + `:r`, two symbols, "passed in the argument list and then loaded into a register".
-     *    the more common one, passed through the stack, which is why [applyLocal] drops the `:r` half
+     *    the more common one, passed through the stack, which is why [applyRegisterLocal] drops the `:r` half
      *    (`reglocal-skipped-dup-param`) rather than fighting the parameter for the name.
      *    Their register home is discarded the same way, and could be recorded here too.
      *
@@ -417,9 +415,10 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
     private fun LocalSymbol.isFunctionScope(open: Func) = open.functionScopeLocals.any { it.recordIndex == recordIndex }
 
+    /** An `:r` local, live over its block from [firstUse]. */
     private fun LocalSymbol.applyRegisterLocal(func: Function, open: Func, firstUse: Int) {
         // The dbx register number is the stab's n_value, not part of the descriptor
-        // (`w:r(0,5)` ends at the type) — same field the stack offset above comes from.
+        // (`w:r(0,5)` ends at the type) — the same field [applyStackLocal] reads its offset from.
         val dbxNum = rawValue.toInt()
         val regName = ctx.program.dbxRegisterName(dbxNum)
         val reg = regName?.let { ctx.program.getRegister(it) } ?: return degradation(
@@ -464,7 +463,11 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     private fun Int.withLength(len: Int) = this..<this + len
     private fun IntRange.overlaps(other: IntRange) = other.first in this || first in other
 
+    /** A frame-pointer-relative local. Ghidra's stack variables carry no scope, so one slot holds one variable. */
     private fun LocalSymbol.applyStackLocal(func: Function, open: Func) {
+        // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
+        // prologue-derived [Func.frameBias] (NSA/ghidra#223, #5485), which carries gcc >= 4.8's
+        // stale frame layout too.
         val offset = rawValue.toInt() - open.frameBias(ctx.program)
         val dt by lazy { resolvedDataType(func) }
         val name = when (body.name) {
@@ -491,9 +494,6 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
             else -> body.name
         }
-        // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
-        // prologue-derived [Func.frameBias] (NSA/ghidra#223, #5485), which carries gcc >= 4.8's
-        // stale frame layout too.
         func.addLocalVariable(LocalVariableImpl(name, dt, offset, ctx.program, source), source)
         if (open.staleFrameShift(ctx.program) != 0) debug("local-var-stale-frame-shifted")
         debug("local-var-add-success")

@@ -304,6 +304,11 @@ data class Func(
 
     val demangledName by lazy { Demangler.name(decl.name) }
 
+    /**
+     * The names of [params], before any `this` filter. A function-scope local of one of these names is gcc
+     * re-describing the parameter (a `:p` + `:r` pair, or `-O0`'s `this` copy); a nested block's `this` is
+     * an inline expansion's own.
+     */
     val paramNames by lazy { params.mapTo(mutableSetOf()) { it.body.name } }
 
     /**
