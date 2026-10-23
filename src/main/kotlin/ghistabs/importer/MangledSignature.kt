@@ -54,14 +54,13 @@ internal fun DemangledDataType.decorated(base: DataType, dtm: DataTypeManager): 
     return (1..levels).fold(base) { dt, _ -> PointerDataType.getPointer(dt, dtm) }
 }
 
-/** [t] typed by [lookup], or `undefined4` with a [category] degradation against [degrades]. */
+/** [found], the type of demangled [t], or `undefined4` with a [category] degradation against [degrades]. */
 fun DiagnosticSink.parameterTypeOrUndefined(
     t: DemangledDataType,
-    dtm: DataTypeManager,
+    found: DataType?,
     category: String,
     degrades: String,
-    lookup: (DemangledDataType) -> DataType? = { it.parameterType(dtm) },
-): DataType = lookup(t) ?: Undefined4DataType.dataType
+): DataType = found ?: Undefined4DataType.dataType
     .also { degradation(category, degrades, "demangler gave no type for $t") }
 
 /**
