@@ -2,6 +2,7 @@ package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
+import ghistabs.componentsOverlapping
 import ghistabs.harvest.Type
 import ghistabs.materialize.cpp.*
 import ghistabs.parse.*

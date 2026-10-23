@@ -204,9 +204,8 @@ private fun DataTypeComponent.shortenBaseField(shortener: TemplateNameShortener)
  * typedef into [dt] first — [DataTypeManager.replaceDataType] redirects every reference and
  * drops the typedef — which frees the name.
  */
-private fun DataTypeRegistry.rename(dt: DataType, to: String): Boolean {
-    if (runCatching { dt.name = to }.isSuccess) return true
-    return when (val conflict = dtm.getDataType(dt.categoryPath, to)) {
+private fun DataTypeRegistry.rename(dt: DataType, to: String): Boolean = runCatching { dt.name = to }.isSuccess ||
+    when (val conflict = dtm.getDataType(dt.categoryPath, to)) {
         is TypeDef if conflict.dataType == dt -> {
             runCatching { dtm.replaceDataType(conflict, dt, false) }.onFailure {
                 debug("typedef-shorten-skip", "fold ${conflict.pathName}: ${it.message}")
@@ -219,4 +218,3 @@ private fun DataTypeRegistry.rename(dt: DataType, to: String): Boolean {
             false
         }
     }
-}

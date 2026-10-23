@@ -460,9 +460,6 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         if (name != reglocalName) debug("reglocal-renamed-scope", "$reglocalName → $name")
     }
 
-    private fun Int.withLength(len: Int) = this..<this + len
-    private fun IntRange.overlaps(other: IntRange) = other.first in this || first in other
-
     /** A frame-pointer-relative local. Ghidra's stack variables carry no scope, so one slot holds one variable. */
     private fun LocalSymbol.applyStackLocal(func: Function, open: Func) {
         // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the

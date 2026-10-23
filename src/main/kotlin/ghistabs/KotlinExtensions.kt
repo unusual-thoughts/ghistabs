@@ -33,6 +33,10 @@ class Once<T, R>(private val f: (T) -> R) : (T) -> R {
     override fun invoke(arg: T): R = value ?: f(arg).also { value = it }
 }
 
+fun Int.withLength(len: Int) = this..<this + len
+fun IntRange.overlaps(other: IntRange) = other.first in this || first in other
+val IntRange.length get() = endInclusive - start + 1
+
 /**
  * Runs past `E` for [Double]'s sake: a `Long` tops out at 9.22E
  * but zetta and yotta are ordinary magnitudes for a double

@@ -154,10 +154,9 @@ object Itanium : CxxAbi {
     fun mangleClassName(name: String): String {
         if (name.isTemplated) return name
         val parts = name.nameSegments
-        return if (parts.size == 1) {
-            "${parts[0].length}${parts[0]}"
-        } else {
-            "N" + parts.joinToString("") { "${it.length}$it" } + "E"
+        return when (parts.size) {
+            1 -> "${parts[0].length}${parts[0]}"
+            else -> "N" + parts.joinToString("") { "${it.length}$it" } + "E"
         }
     }
 

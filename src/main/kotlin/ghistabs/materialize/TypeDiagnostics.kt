@@ -183,10 +183,6 @@ internal fun DataType.widestScalar(): Int = when (this) {
 /** Where [this]'s data ends: the end of its last defined component, 0 with none. */
 internal val Structure.dataSize get() = definedComponents.maxOfOrNull { it.offset + it.length } ?: 0
 
-/** The defined components sharing a byte with the [length] bytes at [offset]. */
-internal fun Structure.componentsOverlapping(offset: Int, length: Int) =
-    definedComponents.filter { it.offset < offset + length && offset < it.offset + it.length }
-
 /**
  * Whether [gap] is the padding that rounds [this] up to its alignment: it ends the struct, follows a
  * defined component, and is shorter than its widest scalar. `_TAPE_SET_POSITION`'s 7 bytes after its

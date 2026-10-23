@@ -3,6 +3,7 @@ package ghistabs.materialize.cpp
 import ghidra.program.model.data.*
 import ghidra.program.model.data.DataOrganizationImpl.getAlignedOffset
 import ghidra.program.model.gclass.ClassUtils
+import ghistabs.componentsOverlapping
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
@@ -49,6 +50,12 @@ internal fun DataTypeRegistry.memberPointer(): DataType =
 /** [memberPointer] when a pointer to [pointee] is gcc ≤ 3.3's `int A::*`, else null. */
 internal fun DataTypeRegistry.memberPointerTo(pointee: GlobalTypeDecl): DataType? =
     if (types.isMemberPointee(pointee)) memberPointer() else null
+
+fun TypeDecl.Aggregate.Base<GlobalTypeId>.baseComment() = buildString {
+    append(access.name.lowercase())
+    if (isVirtual) append(" virtual")
+    append(" base")
+}
 
 /**
  * Splices each non-virtual base's fields into [placeholder] at the offset the stab's inheritance line
@@ -97,7 +104,7 @@ internal fun DataTypeRegistry.fillStructBases(
             offsetBytes,
             dt,
             base.isVirtual,
-            ClassNaming.baseComment(base),
+            base.baseComment(),
             ClassNaming.baseFieldName(false, dt.name, baseCount),
             qualifiedName,
         )
@@ -345,7 +352,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
                 offset,
                 dt,
                 base.isVirtual,
-                ClassNaming.baseComment(base),
+                base.baseComment(),
                 ClassNaming.baseFieldName(false, dt.name, count),
                 qualifiedName,
             )
@@ -383,7 +390,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
                 offset,
                 dt,
                 base.isVirtual,
-                ClassNaming.baseComment(base),
+                base.baseComment(),
                 ClassNaming.baseFieldName(true, dt.name, count),
                 qualifiedName,
             )

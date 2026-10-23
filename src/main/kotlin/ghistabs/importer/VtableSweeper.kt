@@ -335,14 +335,15 @@ open class VtableSweeper(
      * What [Rtti] says sits where in the class [primary] is the primary of: a direct base, or a virtual one
      * its primary chain inherits, per subobject offset.
      */
-    private fun baseSubobjects(primary: VtableRecord, rtti: Address): Map<Long, String> =
-        Rtti.Reader(program).run { basesOf(rtti).orEmpty() + virtualBasesOf(rtti) }.mapNotNull { base ->
-            // A virtual base's offset is where the vtable keeps its vbase offset, behind the address point.
-            when {
-                base.isVirtual -> primary.vbaseOffset(program, base)
-                else -> base.offset
-            }?.let { it to base.className }
-        }.distinctBy { it.first }.toMap()
+    private fun baseSubobjects(primary: VtableRecord, rtti: Address): Map<Long, String> = Rtti.Reader(program).run {
+        basesOf(rtti).orEmpty() + virtualBasesOf(rtti)
+    }.mapNotNull { base ->
+        // A virtual base's offset is where the vtable keeps its vbase offset, behind the address point.
+        when {
+            base.isVirtual -> primary.vbaseOffset(program, base)
+            else -> base.offset
+        }?.let { it to base.className }
+    }.distinctBy { it.first }.toMap()
 
     /**
      * The base each table at [offsets] serves, by [subobjects]' name for it shortened as Ghidra shortens
