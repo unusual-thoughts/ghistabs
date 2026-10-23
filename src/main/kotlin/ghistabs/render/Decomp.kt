@@ -3,10 +3,10 @@ package ghistabs.render
 import ghidra.app.decompiler.*
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.listing.Function
-import ghistabs.eh.SjljAbi
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.blockAt
+import ghistabs.materialize.cpp.eh.SjljAbi
 import ghistabs.parse.templateLeaf
 
 /** The fragments a wrapped logical line was rejoined from, each token at its offset in the join. */
@@ -62,10 +62,8 @@ private fun ClangLine.storesSjljContext(): Boolean {
     val toks = significant()
     val assign = toks.indexOfFirst { it is ClangOpToken && it.text == "=" }.takeIf { it > 0 } ?: return false
     val lhs = toks.subList(0, assign)
-    if (lhs.first() !is ClangVariableToken || lhs.drop(1).any { it !is ClangFieldToken && it.text != "." }) {
-        return false
-    }
-    return (lhs.firstOrNull { it is ClangFieldToken } as? ClangFieldToken)?.dataType?.name == SjljAbi.CONTEXT
+    return !(lhs.first() !is ClangVariableToken || lhs.drop(1).any { it !is ClangFieldToken && it.text != "." }) &&
+        (lhs.firstOrNull { it is ClangFieldToken } as? ClangFieldToken)?.dataType?.name == SjljAbi.CONTEXT
 }
 
 /**
