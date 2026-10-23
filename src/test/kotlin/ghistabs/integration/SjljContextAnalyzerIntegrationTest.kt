@@ -4,25 +4,18 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
-import ghidra.program.model.data.ArrayDataType
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.IntegerDataType
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.UnsignedIntegerDataType
-import ghidra.program.model.data.VoidDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.MessageLogSink
-import ghistabs.eh.SjljAbi
 import ghistabs.entrypoints.SjljContextAnalyzer
 import ghistabs.entrypoints.SjljLsdaAnalyzer
+import ghistabs.materialize.cpp.eh.SjljAbi
 import ghistabs.runTransaction
-import ghistabs.test.*
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeA
+import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
@@ -83,9 +76,8 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         builder.createFunction(hex(fn))
         // Its extent, as a stab's function range gives it: Ghidra's flow takes the far `jmp` for a tail call.
         program.runTransaction("extent") {
-            program.functionManager.getFunctionAt(addr(fn)).setBody(
-                AddressSet(addr(fn), addr(fn + head.size + 4 + 4)).apply { add(addr(epilogue), addr(epilogue + 1)) },
-            )
+            program.functionManager.getFunctionAt(addr(fn)).body =
+                AddressSet(addr(fn), addr(fn + head.size + 4 + 4)).apply { add(addr(epilogue), addr(epilogue + 1)) }
         }
     }
 

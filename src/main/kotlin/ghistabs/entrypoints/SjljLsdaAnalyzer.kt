@@ -33,11 +33,11 @@ import ghidra.util.bytesearch.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.MessageLogSink
-import ghistabs.eh.SjljAbi
-import ghistabs.eh.SjljLsda
 import ghistabs.entrypoints.SjljLsdaAnalyzer.Companion.layUnreferenced
 import ghistabs.entrypoints.SjljLsdaAnalyzer.Companion.traceStore
 import ghistabs.forceCreateData
+import ghistabs.materialize.cpp.eh.SjljAbi
+import ghistabs.materialize.cpp.eh.SjljLsda
 import ghistabs.plus
 import java.util.*
 import kotlin.math.abs

@@ -42,6 +42,7 @@ import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.abi.isPrimaryVftable
 import ghistabs.materialize.cpp.abi.isTypeinfo
 import ghistabs.materialize.cpp.abi.vftableStructAt
+import ghistabs.materialize.cpp.eh.SjljLsda
 import ghistabs.parse.*
 import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -794,7 +795,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 unlaid += "$at (stored at ${found.second.first().store})"
                 continue
             }
-            for (item in lsda.items.filter { it.kind == ghistabs.eh.SjljLsda.Kind.POINTER }) {
+            for (item in lsda.items.filter { it.kind == SjljLsda.Kind.POINTER }) {
                 val target = program.pointerAt(item.at)?.takeIf { it.offset != 0L } ?: continue
                 val symbols = program.symbolTable.getSymbols(target).filter { it.source != SourceType.DEFAULT }
                 when {

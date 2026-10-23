@@ -1,8 +1,8 @@
-package ghistabs.eh
+package ghistabs.materialize.cpp.eh
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.eh.SjljLsda.Kind
+import ghistabs.materialize.cpp.eh.SjljLsda.Kind
 import ghistabs.minus
 import ghistabs.plus
 import ghistabs.test.mustBe
