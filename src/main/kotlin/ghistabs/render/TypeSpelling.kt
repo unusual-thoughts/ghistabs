@@ -1,8 +1,8 @@
 package ghistabs.render
 
 import ghistabs.index.TypeGraph
+import ghistabs.index.resolveBuiltin
 import ghistabs.materialize.TemplateNameShortener
-import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl

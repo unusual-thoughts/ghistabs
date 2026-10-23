@@ -3,10 +3,10 @@ package ghistabs.materialize.cpp
 import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
+import ghistabs.cpp.abi.Gcc2
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.integration.Fixtures
 import ghistabs.loadProgram
-import ghistabs.materialize.cpp.abi.Gcc2
 import ghistabs.test.defaultContext
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull

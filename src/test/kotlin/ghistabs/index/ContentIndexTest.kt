@@ -2,7 +2,8 @@ package ghistabs.index
 
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
-import ghistabs.harvest.*
+import ghistabs.harvest.Type
+import ghistabs.harvest.binding
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.parse.TypeDecl.Aggregate.Method
@@ -423,7 +424,7 @@ class ContentIndexTest {
 
     /**
      * gcc spells `char` three ways across CUs — `Range(0,127)`, `Range(0,127)` with `@s8`,
-     * and the hoisted `Builtin(-2)` slot — all of which [ghistabs.materialize.resolveBuiltin]
+     * and the hoisted `Builtin(-2)` slot — all of which [resolveBuiltin]
      * materializes to `CharDataType`. They must share one content hash, else a struct carrying a
      * bare `char` (char_type/traits in `basic_ios<char>` &co.) forks a `.conflict` per spelling.
      * `signed char`'s `Range(-128,127)` is also `CharDataType` and collapses with them, exactly as

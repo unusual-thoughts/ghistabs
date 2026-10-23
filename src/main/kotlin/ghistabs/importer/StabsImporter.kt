@@ -9,9 +9,6 @@ import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.*
-import ghistabs.materialize.cpp.VtableVirtualBases
-import ghistabs.materialize.cpp.layClasses
-import ghistabs.materialize.cpp.uniqueStructTagged
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
 import ghistabs.parse.leafName

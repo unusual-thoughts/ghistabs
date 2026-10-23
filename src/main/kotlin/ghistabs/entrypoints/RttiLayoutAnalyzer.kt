@@ -10,14 +10,13 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghidra.program.model.util.CodeUnitInsertionException
 import ghidra.util.task.TaskMonitor
+import ghistabs.DtmRegistry
+import ghistabs.cpp.abi.Rtti
+import ghistabs.cpp.abi.isTypeinfo
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.forceCreateData
-import ghistabs.materialize.DtmRegistry
-import ghistabs.materialize.cpp.abi.Rtti
-import ghistabs.materialize.cpp.abi.isTypeinfo
-import ghistabs.materialize.cpp.abi.resolveLayout
 
 /**
  * Lays a typeinfo struct at every `_ZTI` symbol. The stabs import also calls [layTypeinfos] itself,

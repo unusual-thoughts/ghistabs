@@ -24,7 +24,7 @@ import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
-import ghistabs.materialize.cpp.VfptrModel
+import ghistabs.materialize.VfptrModel
 import ghistabs.runTransaction
 import java.io.File
 

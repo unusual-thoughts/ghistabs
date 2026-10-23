@@ -10,7 +10,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
-import ghistabs.materialize.cpp.VtableVirtualBases
+import ghistabs.materialize.VtableVirtualBases
 import ghistabs.parse.StabReader
 
 /**

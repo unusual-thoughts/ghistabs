@@ -8,12 +8,12 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.DtmRegistry
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.VtableSweeper
 import ghistabs.importer.VtableSweeper.Companion.isVtablesSwept
-import ghistabs.materialize.DtmRegistry
 import ghistabs.parse.StabReader
 
 /**
@@ -39,7 +39,7 @@ import ghistabs.parse.StabReader
  *   `this` retyped to a near-empty placeholder. Run it with this analyzer off, and without stabs.
  *
  * This is the one sweep. On a binary with stabs it has to come after the class pass, whose tables are
- * typed off the declared virtuals and which it must leave alone ([ghistabs.materialize.cpp.abi.isVtableClaimed]
+ * typed off the declared virtuals and which it must leave alone ([ghistabs.cpp.abi.isVtableClaimed]
  * knows them by their labels). So the stabs import calls [sweep] itself as soon as its classes are
  * laid, on its own registry and diagnostics, and the analyzer does nothing on a program whose stabs
  * are not imported yet, or one already swept ([isVtablesSwept]). Disabling this analyzer turns the

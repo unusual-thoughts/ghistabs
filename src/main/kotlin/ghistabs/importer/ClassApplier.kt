@@ -10,30 +10,24 @@ import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
+import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.cpp.abi.ResolvedVtable
+import ghistabs.cpp.abi.RttiSymbols
+import ghistabs.cpp.abi.vtableRecord
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.entrypoints.RttiSymbolsAnalyzer
 import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
-import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.TemplateNameShortener
-import ghistabs.materialize.buildFunctionDefinition
-import ghistabs.materialize.cpp.*
-import ghistabs.materialize.cpp.abi.CxxAbi
-import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.materialize.cpp.abi.Itanium
-import ghistabs.materialize.cpp.abi.ResolvedVtable
-import ghistabs.materialize.cpp.abi.RttiSymbols
-import ghistabs.materialize.cpp.abi.vtableRecord
-import ghistabs.materialize.resolveRef
-import ghistabs.materialize.signatureParams
-import ghistabs.materialize.typedefAliases
+import ghistabs.materialize.*
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
 /**
- * The C++ pass over the program, once [ghistabs.materialize.cpp.layClasses] has laid every class struct: a
+ * The C++ pass over the program, once [layClasses] has laid every class struct: a
  * class gets its Ghidra identity, a [GhidraClass] namespace with its methods reparented under it, and its
  * `<Class>_vftable` filled and applied at `_ZTV`'s address point so virtual calls resolve. It
  * writes no class struct.
@@ -603,7 +597,7 @@ class ClassApplier(
         }
 
         // Members resolve through [fallbackAbi]: [abi] is what this vtable's lookup is deciding.
-        fun TypeDecl.Aggregate.Method<*>.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
+        fun Method<*>.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
             resolver.resolve(it)?.isDefined() == true
         }
 

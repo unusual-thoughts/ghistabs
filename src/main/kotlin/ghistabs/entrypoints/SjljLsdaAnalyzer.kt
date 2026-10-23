@@ -31,13 +31,13 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.util.CodeUnitInsertionException
 import ghidra.util.bytesearch.*
 import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.eh.SjljAbi
+import ghistabs.cpp.eh.SjljLsda
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.entrypoints.SjljLsdaAnalyzer.Companion.layUnreferenced
 import ghistabs.entrypoints.SjljLsdaAnalyzer.Companion.traceStore
 import ghistabs.forceCreateData
-import ghistabs.materialize.cpp.eh.SjljAbi
-import ghistabs.materialize.cpp.eh.SjljLsda
 import ghistabs.plus
 import java.util.*
 import kotlin.math.abs

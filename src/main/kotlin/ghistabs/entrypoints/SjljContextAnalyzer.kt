@@ -16,10 +16,10 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.util.exception.DuplicateNameException
 import ghidra.util.exception.InvalidInputException
 import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.eh.SjljAbi
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.frameBias
-import ghistabs.materialize.cpp.eh.SjljAbi
 
 /**
  * Types gcc's SJLJ exception ABI ([SjljAbi]) where a program uses it: the `SjLj_Function_Context` each

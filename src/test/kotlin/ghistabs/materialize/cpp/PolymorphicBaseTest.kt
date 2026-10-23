@@ -2,10 +2,15 @@ package ghistabs.materialize.cpp
 
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
+import ghistabs.materialize.hasPolymorphicBaseSubobject
+import ghistabs.materialize.virtualBases
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import ghistabs.test.*
+import ghistabs.test.must
+import ghistabs.test.mustBe
+import ghistabs.test.mustNot
+import ghistabs.test.typesOf
 import org.junit.jupiter.api.Test
 
 class PolymorphicBaseTest {

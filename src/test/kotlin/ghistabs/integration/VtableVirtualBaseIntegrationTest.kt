@@ -2,19 +2,14 @@ package ghistabs.integration
 
 import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.database.ProgramBuilder
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.IntegerDataType
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.applyDemangling
 import ghistabs.diagnose.DummySink
 import ghistabs.importer.runOnRecords
-import ghistabs.materialize.cpp.VtableVirtualBases
+import ghistabs.materialize.VtableVirtualBases
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType

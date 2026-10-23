@@ -1,13 +1,7 @@
 package ghistabs.materialize
 
 import ghidra.program.database.data.DataTypeUtilities
-import ghidra.program.model.data.Composite
-import ghidra.program.model.data.DataOrganization
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.TypeDef
-import ghidra.program.model.data.Undefined
+import ghidra.program.model.data.*
 import ghistabs.DEMANGLER_CATEGORY
 import ghistabs.conflictBase
 import ghistabs.diagnose.GapRecord

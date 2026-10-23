@@ -2,9 +2,9 @@ package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghistabs.Demangler
+import ghistabs.cpp.abi.Gcc2
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.*
-import ghistabs.materialize.cpp.abi.Gcc2
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl

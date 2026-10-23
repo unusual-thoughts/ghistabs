@@ -19,6 +19,17 @@ import ghistabs.*
 import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.BaselineWriter
+import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.cpp.abi.Gcc2
+import ghistabs.cpp.abi.Gcc2Abi
+import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.abi.isPrimaryVftable
+import ghistabs.cpp.abi.isTypeinfo
+import ghistabs.cpp.abi.vftableStructAt
+import ghistabs.cpp.eh.SjljLsda
+import ghistabs.cpp.isBaseField
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
@@ -32,17 +43,10 @@ import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
+import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.conflictCount
-import ghistabs.materialize.cpp.*
-import ghistabs.materialize.cpp.abi.CxxAbi
-import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.materialize.cpp.abi.Gcc2
-import ghistabs.materialize.cpp.abi.Gcc2Abi
-import ghistabs.materialize.cpp.abi.Itanium
-import ghistabs.materialize.cpp.abi.isPrimaryVftable
-import ghistabs.materialize.cpp.abi.isTypeinfo
-import ghistabs.materialize.cpp.abi.vftableStructAt
-import ghistabs.materialize.cpp.eh.SjljLsda
+import ghistabs.materialize.hasPolymorphicBaseSubobject
+import ghistabs.materialize.vptrOffsetBytesOf
 import ghistabs.parse.*
 import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -1105,7 +1109,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * layout and any name identifies it. With two, the subobject's extent is guesswork — gcc's
      * inheritance line carries no size, so [ghistabs.materialize.fillStructBases] derives one from the
      * *next* base's offset, a step that only exists here — and the name only tells the two apart
-     * because [ghistabs.materialize.cpp.ClassNaming.baseFieldName] appends the base's own name when
+     * because [ClassNaming.baseFieldName] appends the base's own name when
      * `baseCount > 1`. An un-suffixed `_base_` in an MI class means both edges raced for one component.
      *
      * The placement check runs name-first, over the components that exist, since an unresolved base is
@@ -2393,7 +2397,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }
     }
 
-    /** The predicate [ghistabs.materialize.cpp.firstPolymorphicBase] applies to a base, asked of the class itself. */
+    /** The predicate [ghistabs.materialize.firstPolymorphicBase] applies to a base, asked of the class itself. */
     private fun isPolymorphic(body: TypeDecl.Aggregate<GlobalTypeId>): Boolean = body.hasVTablePointerMarker ||
         body.methods.any { it.virt == VirtKind.VIRTUAL } ||
         body.fields.any { isVptrFieldName(it.name) } ||

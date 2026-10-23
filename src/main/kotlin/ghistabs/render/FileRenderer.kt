@@ -3,6 +3,9 @@ package ghistabs.render
 import ghidra.program.model.address.Address
 import ghistabs.Demangler
 import ghistabs.chunkOf
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.Gcc2
+import ghistabs.cpp.abi.StructorVariant
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
@@ -11,9 +14,6 @@ import ghistabs.harvest.Type
 import ghistabs.index.EffectiveSource
 import ghistabs.index.hasHeaderExtension
 import ghistabs.index.includeSpelling
-import ghistabs.materialize.cpp.abi.CxxAbi
-import ghistabs.materialize.cpp.abi.Gcc2
-import ghistabs.materialize.cpp.abi.StructorVariant
 import ghistabs.parse.*
 
 /**
