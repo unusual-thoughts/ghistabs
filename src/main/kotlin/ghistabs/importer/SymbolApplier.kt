@@ -18,8 +18,14 @@ import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.harvest.*
+import ghistabs.importer.MemberAttrs.Companion.writeMember
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.cpp.abi.Itanium.isInlineStdMember
+import ghistabs.materialize.cpp.classBody
+import ghistabs.materialize.cpp.className
+import ghistabs.materialize.cpp.classesBasesFirst
+import ghistabs.materialize.cpp.statedClassPath
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
 import ghistabs.parse.*
@@ -606,6 +612,23 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     }
 
     /**
+     * Record each member function's [MemberAttrs] at its address, for the Class Hierarchy window: what
+     * the stabs say of its access, virtuality and cv-qualifiers is gone once the import ends, whether
+     * or not the class pass runs. Resolved as the class pass resolves it, through the prevailing ABI.
+     */
+    internal fun recordMemberFunctions() = symtab.prevailingAbi()?.let { abi ->
+        buildSet {
+            for (located in registry.classesBasesFirst()) {
+                val className = located.statedClassPath(registry.types)?.qualifiedName ?: located.className
+                for (m in located.classBody.methods) {
+                    val addr = abi.physnameCandidates(m, className).firstNotNullOfOrNull(ctx.resolver::resolve)
+                    if (addr != null && add(addr)) ctx.program.writeMember(addr, MemberAttrs(m))
+                }
+            }
+        }
+    }
+
+    /**
      * Apply C++ static data members (`alnum:/2(5,44):_ZNSt10ctype_base5alnumE;`). They carry no
      * `G`/`S` address stab, so [applyStatic] never sees them and this linkage name is their
      * only link to the emitted symbol. Symbol-table-bound: a stripped binary resolves none.
@@ -621,14 +644,14 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             for (field in body.fields) {
                 val mangled = field.mangled ?: continue
                 if (!field.isStatic || !seen.add(mangled)) continue
-                if (applyStaticMember(mangled, field.type)) applied++
+                if (applyStaticMember(mangled, field.type, MemberAttrs(field))) applied++
             }
         }
         return applied
     }
 
     /** One static member declared [type], at the address its linkage name [mangled] resolves to. */
-    private fun applyStaticMember(mangled: String, type: GlobalTypeDecl): Boolean {
+    private fun applyStaticMember(mangled: String, type: GlobalTypeDecl, attrs: MemberAttrs): Boolean {
         val addr = ctx.resolver.resolve(mangled) ?: run {
             debug("static-member-unresolved", mangled)
             return false
@@ -637,6 +660,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             degradation("static-member-untyped", mangled)
             return false
         }
+        ctx.program.writeMember(addr, attrs)
 
         // `static T x[];` states no size: its definition's `G` stab, applied before the members, does,
         // and without one its first element is all there is to go on.

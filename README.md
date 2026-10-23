@@ -138,6 +138,38 @@ end of the import.
   runs again over the current program. Use it after changing analyzer options. Enabled only
   when the program actually has `.stab`/`.stabstr` blocks.
 
+### `Window > Class Hierarchy`
+
+A read-only tree of the program's C++ classes, each under its namespace.
+
+![Class Hierarchy window on hello_elf_gcc34](src/main/help/help/topics/Stabs/images/ClassHierarchy.png)
+
+Each class expands into its direct bases, spelled as the base clause would (`virtual Base`,
+`private Impl`), and then its members: its vtables, its typeinfo, and its functions and labels.
+Overloads carry their parameter types, and constructors and destructors their variants
+(`[complete]`, `[base]`, `[deleting]`). The icons' colours say what kind of class each one is
+(abstract, virtual base, nested, found without stabs), and what is known of each member (access,
+virtual or static, const). The tree can also be inverted, so that each class expands into the
+classes derived from it.
+
+Where the information comes from:
+
+- **Classes and bases from the stabs.** These are exactly as gcc stated them, with virtuality and
+  access, gcc 2.x included. The import records them in the program, so programs imported before
+  this window existed need a **Re-import**.
+- **Classes found by the vtable sweep.** A class with no stabs, such as one from libstdc++ or a
+  binary with no stabs at all, takes its bases from its Itanium typeinfo where there is one.
+- **Members.** These are the class namespace's symbols. Access, virtuality and cv-qualifiers come
+  from the stabs' method lists. Without stabs, virtuality is read off the vtable slots and
+  const/volatile off the mangled name.
+- **Constructor and destructor variants.** These come from the Itanium mangled names.
+- **Abstract classes.** A class is abstract when one of its vtable slots holds
+  `__cxa_pure_virtual`.
+
+Vtables follow Ghidra's RTTI-script naming, so a class with several vftables has
+`vftable_for_<Base>` labels and `<Class>_vftable_for_<Base>` structs. The window's controls are
+described in its Ghidra help page.
+
 ### `File > Export Program…`
 
 Two formats write the reconstructed sources, one file per source file, and they answer different
@@ -299,6 +331,10 @@ command takes them after its own name, and `ghistabs --help` lists them as well 
 
 `--registry` and `--degradation-log` are products of materialization, so only `dump`, `skeleton` and `decomp` write them.
 
+`--class-hierarchy FILE` (on `dump`, `skeleton` and `decomp`) writes the classes the `Window > Class Hierarchy`
+tree shows as JSON: each class's namespace path and id, origin, vtable/typeinfo addresses, struct, abstractness,
+bases (by namespace id) and members.
+
 Import options, on the commands that actually import (`dump`, `skeleton`, `decomp`):
 
 | Option                    | Default      | Effect                                                                                                                                                                                        |
@@ -348,6 +384,8 @@ Settles what a real binary actually contains when the manuals disagree.
   format for most ELF platforms … has changed from stabs to DWARF2."
 
 ### Prior art
+- [astrelsky/Ghidra-Cpp-Class-Analyzer](https://github.com/astrelsky/Ghidra-Cpp-Class-Analyzer) -
+  its *ClassTypeInfo Tree* is the model for `Window > Class Hierarchy`.
 - [RidgeX/ghidra-gcc2-stabs](https://github.com/RidgeX/ghidra-gcc2-stabs) - a Ghidra script
   parsing GCC 2.x stabs.
 - [chaoticgd/ccc](https://github.com/chaoticgd/ccc) - library and tools for debugging symbols in

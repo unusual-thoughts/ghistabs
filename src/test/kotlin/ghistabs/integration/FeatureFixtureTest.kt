@@ -4,6 +4,7 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportArtifacts
+import ghistabs.importer.ImportOptions
 import ghistabs.loadProgram
 import ghistabs.test.defaultContext
 import org.junit.jupiter.api.AfterEach
@@ -16,10 +17,11 @@ abstract class FeatureFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
     protected lateinit var artifacts: ImportArtifacts
     protected val program get() = loaded.program
 
-    protected fun load(fixture: String) {
+    protected fun load(fixture: String, options: ImportOptions.() -> Unit = {}) {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loaded = loadProgram(File(FEATURES, fixture))
-        artifacts = checkNotNull(program.defaultContext().import().artifacts) { "$fixture carries no stabs" }
+        val ctx = program.defaultContext().apply { this.options.options() }
+        artifacts = checkNotNull(ctx.import().artifacts) { "$fixture carries no stabs" }
     }
 
     @AfterEach

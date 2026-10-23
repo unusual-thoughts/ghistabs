@@ -67,6 +67,7 @@ internal fun ImportContext<*>.runOnRecords(stabs: StabReader.Result): ImportResu
     // Pass C — apply symbols, then build classes/vtables, demangle, and replace demangler stubs
     val applied = program.runTransaction("Stabs: apply symbols") {
         SymbolApplier(this, registry).run {
+            recordMemberFunctions()
             ImportResult.ApplyResults(
                 functions = applyAllFunctions(),
                 globals = applyAllGlobals(),
