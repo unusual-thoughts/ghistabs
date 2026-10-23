@@ -345,8 +345,13 @@ class SjljLsdaAnalyzer :
             }
             // Within the function's extent: gcc puts the receiver and its landing pads there, and a flow
             // past it may be a function nothing has defined yet, which the stabs import would then find taken.
+            // The extent runs to the receiver's last instruction, the `call _Unwind_SjLj_Resume` it falls
+            // through to: when the try block's code ends in a jump back, gcc lays the pads and the receiver
+            // past the last instruction the entry reaches, and Ghidra's body stops there.
+            var last = listing.getInstructionAt(at)
+            while (last.hasFallthrough()) last = listing.getInstructionAt(last.fallThrough) ?: break
             val flow = CreateFunctionCmd.getFunctionBody(program, at, monitor)
-                .intersect(AddressSet(fn.entryPoint, fn.body.maxAddress))
+                .intersect(AddressSet(fn.entryPoint, maxOf(fn.body.maxAddress, last.maxAddress)))
             if (!fn.body.contains(flow)) {
                 try {
                     fn.body = fn.body.union(flow)
