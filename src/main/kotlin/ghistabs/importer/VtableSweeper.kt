@@ -44,8 +44,9 @@ open class VtableSweeper(
      */
     private val ours by lazy { (registry as? DataTypeRegistry)?.let { DemanglerReplacer(program, it, monitor, sink) } }
 
-    internal fun DemangledDataType.slotParameterType(category: String, degrades: String) =
-        parameterTypeOrUndefined(this, ours?.parameterType(this) ?: parameterType(dtm), category, degrades)
+    internal fun DemangledDataType.slotParameterType(category: String, degrades: String) = ours?.parameterType(this)
+        ?: parameterType(dtm)
+        ?: Undefined4DataType.dataType.also { degradation(category, degrades, "demangler gave no type for $this") }
 
     companion object {
         /** What a swept table's labels carry, so a class laying it later claims it ([isVtableClaimed]). */

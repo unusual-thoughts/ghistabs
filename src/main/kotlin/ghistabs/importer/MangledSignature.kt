@@ -54,15 +54,6 @@ internal fun DemangledDataType.decorated(base: DataType, dtm: DataTypeManager): 
     return (1..levels).fold(base) { dt, _ -> PointerDataType.getPointer(dt, dtm) }
 }
 
-/** [found], the type of demangled [t], or `undefined4` with a [category] degradation against [degrades]. */
-fun DiagnosticSink.parameterTypeOrUndefined(
-    t: DemangledDataType,
-    found: DataType?,
-    category: String,
-    degrades: String,
-): DataType = found ?: Undefined4DataType.dataType
-    .also { degradation(category, degrades, "demangler gave no type for $t") }
-
 /**
  * Which of [declared] slots each of [stabs] fills, as the stab index per slot (null for a slot no stab
  * fills). gcc emits no N_PSYM for an unnamed parameter, which can sit anywhere: `operator new(size_t,
