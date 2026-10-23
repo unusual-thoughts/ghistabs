@@ -292,8 +292,8 @@
             "max": 10219
         },
         "local-var-add-success": {
-            "min": 2983,
-            "max": 2983
+            "min": 3096,
+            "max": 3096
         },
         "local-var-inlinee-param-name": {
             "min": 113,
