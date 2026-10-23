@@ -5,8 +5,6 @@ import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.DataTypePath
 import ghidra.program.model.symbol.Namespace
 import ghistabs.at
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.TypeDecl
 
 /**
  * Names Ghidra's own class-recovery machinery round-trips on. None of it is an ABI's decision:
@@ -94,7 +92,7 @@ object ClassNaming {
      * among [count]: alone, [primary]'s own `<leaf>_vftable`; one of several, `<leaf>_vftable_for_<base>`,
      * or `<leaf>_vftable<index>` when the base it serves is unknown.
      */
-    fun vftableName(primary: DataTypePath, index: Int, count: Int, base: String?) = when {
+    fun vftableName(primary: DataTypePath, index: Int, count: Int, base: String?): String = when {
         count < 2 -> primary.dataTypeName
         base != null -> "${primary.dataTypeName}$FOR_INFIX$base"
         else -> "${primary.dataTypeName}$index"
@@ -105,12 +103,6 @@ object ClassNaming {
 
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
         (if (isVirtual) VBASE_PREFIX else BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()
-
-    fun baseComment(base: TypeDecl.Aggregate.Base<GlobalTypeId>) = buildString {
-        append(base.access.name.lowercase())
-        if (base.isVirtual) append(" virtual")
-        append(" base")
-    }
 }
 
 /** [ClassNaming.isBaseField], off a live component instead of a bare field name. */

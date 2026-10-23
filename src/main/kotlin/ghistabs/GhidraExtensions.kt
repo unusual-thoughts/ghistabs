@@ -177,6 +177,10 @@ fun DataType.isConflict() = nameWithoutConflict != name
 fun DataTypeManager.conflictBase(dt: DataType): DataType? = getDataType(dt.categoryPath, dt.nameWithoutConflict)
 fun CategoryPath.at(name: String) = DataTypePath(this, name)
 
+/** The defined components sharing a byte with the [length] bytes at [offset]. */
+internal fun Structure.componentsOverlapping(offset: Int, length: Int) =
+    definedComponents.filter { it.offset < offset + length && offset < it.offset + it.length }
+
 val CodeUnit.range get() = minAddress..maxAddress
 
 /**

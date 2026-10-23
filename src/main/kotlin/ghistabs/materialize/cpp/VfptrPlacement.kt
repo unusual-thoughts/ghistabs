@@ -4,11 +4,14 @@ import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghistabs.at
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.length
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.overlaps
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isVptrFieldName
 import ghistabs.parse.leafName
+import ghistabs.withLength
 
 /**
  * Where a polymorphic class's `{vfptr}` goes, and what happens to the base subobject that would
@@ -23,7 +26,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
      * Put `{vfptr}` where the stab says the vptr is, as a pointer to the own vftable of the class
      * [classPath] names, its namespace path with the class itself last.
      * [classBody] is the class being laid, [structDt] its Structure, and [polyBase] the caller's
-     * [ghistabs.index.TypeGraph.firstPolymorphicBase], so the base graph is walked once per class.
+     * [firstPolymorphicBase], so the base graph is walked once per class.
      */
     fun place(
         structDt: Structure,
@@ -152,7 +155,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
         listOfNotNull(split.head, split.tail)
             .mapNotNull { ownSpan(baseDt, it) }
             .forEachIndexed { i, own ->
-                val name = if (i == 0) ClassNaming.FIELDS else "${ClassNaming.FIELDS}_tail"
+                val name = ClassNaming.FIELDS + "_tail".takeIf { i > 0 }.orEmpty()
                 val run = own.baseFieldsRun(baseDt) ?: return@forEachIndexed
                 layouts.forEach { embed(it, own, run, name) }
             }
@@ -305,13 +308,13 @@ internal fun Structure.vfptrOffsetOfBase(base: String): Int? = definedComponents
     }
 }
 
-private val IntRange.length get() = endInclusive - start + 1
-
 /** Whether [c] lies wholly within these bytes. */
 private fun IntRange.holds(c: DataTypeComponent) = c.offset >= first && c.offset + c.length <= last + 1
 
+private val DataTypeComponent.range get() = offset.withLength(length)
+
 /** Whether [c] shares a byte with these. */
-private fun IntRange.overlaps(c: DataTypeComponent) = c.offset <= last && c.offset + c.length > first
+private fun IntRange.overlaps(c: DataTypeComponent) = overlaps(c.range)
 
 /** What a vptr leaves of a base subobject: the fields before it and the fields after it. */
 data class BaseSplit(val head: IntRange?, val tail: IntRange?)

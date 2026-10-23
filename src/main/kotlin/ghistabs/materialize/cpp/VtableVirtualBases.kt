@@ -7,8 +7,8 @@ import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
+import ghistabs.componentsOverlapping
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.materialize.componentsOverlapping
 import ghistabs.materialize.cpp.abi.*
 import ghistabs.parse.leafName
 import ghistabs.parse.member
