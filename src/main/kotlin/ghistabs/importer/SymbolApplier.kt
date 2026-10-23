@@ -14,12 +14,12 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.*
+import ghistabs.cpp.abi.Itanium.isInlineStdMember
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.cpp.abi.Itanium.isInlineStdMember
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
 import ghistabs.parse.*

@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
@@ -7,15 +7,16 @@ import ghistabs.BoolOption
 import ghistabs.Demangler
 import ghistabs.alignTo
 import ghistabs.cStringAt
+import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cursorAt
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.get
 import ghistabs.isData
-import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.nextPointer
 import ghistabs.pointerAt
 import ghistabs.seek
 import ghistabs.set
+import kotlin.ranges.rangeTo
 
 /**
  * Puts back the `_ZTS`/`_ZTI`/`_ZTV` labels a stripped binary lost, from the RTTI it kept (§99). Everything

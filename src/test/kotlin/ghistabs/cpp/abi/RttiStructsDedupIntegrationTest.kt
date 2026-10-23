@@ -1,9 +1,9 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataUtilities
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.materialize.DtmRegistry
+import ghistabs.DtmRegistry
 import ghistabs.runTransaction
 import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Tag
@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
  * gcc 3.4.5 emits each `_ZTI` typeinfo global as a per-CU COMDAT, so the same RttiStructs layout is
  * applied to that address dozens of times. Because the layout carries an auto-named PointerTypedef
  * field that never compares isEquivalent to its own resolved form, handing the unresolved template
- * to createData forked a `ClassTypeInfoStructure.conflict` on every reapply. [resolveLayout] hands out
+ * to createData forked a `ClassTypeInfoStructure.conflict` on every reapply. [cpp.abi.resolveLayout] hands out
  * the DTM-resident type, the one already at the layout's path when there is one.
  */
 @Tag("integration")

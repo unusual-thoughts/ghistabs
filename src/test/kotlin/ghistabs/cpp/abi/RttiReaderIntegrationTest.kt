@@ -1,10 +1,6 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
-import ghidra.program.model.listing.GhidraClass
-import ghistabs.Demangler
-import ghistabs.functions
 import ghistabs.integration.FeatureFixtureTest
-import ghistabs.isMethod
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag

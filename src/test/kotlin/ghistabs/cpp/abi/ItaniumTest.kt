@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction

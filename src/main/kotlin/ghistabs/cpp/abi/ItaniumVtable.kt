@@ -1,15 +1,11 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.data.IntegerDataType
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
 import ghistabs.*
-import ghistabs.materialize.cpp.ClassNaming
+import ghistabs.cpp.ClassNaming
 import kotlin.math.abs
 
 // The Itanium side of Vtable.kt: a record's header layout (ABI §2.5.2), finding a record's start

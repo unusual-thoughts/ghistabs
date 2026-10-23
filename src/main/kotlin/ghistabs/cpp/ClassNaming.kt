@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp
+package ghistabs.cpp
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeComponent

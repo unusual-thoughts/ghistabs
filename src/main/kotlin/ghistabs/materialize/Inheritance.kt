@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp
+package ghistabs.materialize
 
 import ghistabs.index.TypeGraph
 import ghistabs.parse.*
@@ -54,7 +54,7 @@ fun TypeGraph.isPolymorphic(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) =
  * vbase offset per *distinct* virtual base however deep it was inherited. `std::iostream` is the case
  * that forces it: `_ZTISd` declares `istream` and `ostream`, neither virtual, and `__ZTVSd` still has a
  * vbase offset, for the `basic_ios` both of them inherit virtually. Edges, not classes: that `basic_ios`
- * is two of them, and only [ghistabs.materialize.DataTypeRegistry] knows they lay as one struct, so its
+ * is two of them, and only [DataTypeRegistry] knows they lay as one struct, so its
  * [virtualBaseStructs] is what counts them.
  *
  * Not folded into [Virtuals], which walks the same edges: that one wants each struct once, bases-first,
@@ -100,7 +100,7 @@ fun TypeGraph.inheritanceDepth(
  * `DECL_VINDEX`. Counted from wherever the `{vfptr}` points, so the keys are address-point-based
  * under Itanium (`_ZTVSt9type_info` in `crypto_mi_test_gcc421_fullstabs` declares 0, 1 and 5 — its
  * dtor, deleting dtor and `__is_function_p` exactly) but record-start-based under gcc 2.x, where the
- * reserved entries are numbered too. [ghistabs.materialize.cpp.abi.CxxAbi.reservedEntries] is that difference;
+ * reserved entries are numbered too. [ghistabs.cpp.abi.CxxAbi.reservedEntries] is that difference;
  * rebasing by it is the caller's job, since only the vtable symbol states which ABI spelled the record.
  *
  * The index is the slot's identity, which settles both overriding (a derived method reuses its

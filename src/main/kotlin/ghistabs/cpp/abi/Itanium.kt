@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
@@ -9,8 +9,8 @@ import ghidra.program.model.data.LongLongDataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
+import ghistabs.cpp.ClassNaming
 import ghistabs.getScalar
-import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.namespaces
 import ghistabs.parse.isTemplated
 import ghistabs.parse.member

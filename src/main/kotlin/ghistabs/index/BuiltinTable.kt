@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.index
 
 import ghidra.program.model.data.*
 import ghistabs.parse.TypeDecl

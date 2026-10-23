@@ -1,6 +1,7 @@
 package ghistabs.materialize
 
 import ghidra.program.model.data.*
+import ghistabs.index.resolveBuiltin
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl

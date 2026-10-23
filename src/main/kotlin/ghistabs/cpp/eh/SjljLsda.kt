@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp.eh
+package ghistabs.cpp.eh
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.ByteDataType

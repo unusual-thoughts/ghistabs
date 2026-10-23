@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.docking.settings.FormatSettingsDefinition
 import ghidra.program.model.address.Address
@@ -6,10 +6,8 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
-import ghistabs.materialize.DtmRegistry
-import ghistabs.materialize.cpp.ClassNaming
+import ghistabs.cpp.ClassNaming
 import ghistabs.parse.Access
-import ghidra.program.model.data.Array as DataArray
 
 /**
  * Authoritative Itanium `__cxxabiv1` typeinfo struct layouts, adapted from Ghidra's
@@ -252,14 +250,6 @@ class Rtti(private val dtm: DataTypeManager) {
 }
 
 /**
- * [layout] as the DTM holds it: the one an earlier import or pass left at its path, else resolved in, the
- * layouts it points at kept as the DTM has them (KEEP_HANDLER), so nothing forks a `.conflict`.
- */
-internal fun DtmRegistry.resolveLayout(layout: StructureDataType): Structure =
-    getOrRegister<Structure>(layout.dataTypePath, DataTypeConflictHandler.KEEP_HANDLER) { layout }
-        .also { copyFormats(layout, it) }
-
-/**
  * Show [this] field's integer value in decimal: an offset reads as `-16`, not `0xfffffff0`. A layout's
  * component settings stay behind when the DTM resolves it, so [resolveLayout] copies them across.
  */
@@ -268,17 +258,3 @@ internal fun DataTypeComponent.showDecimal() = apply {
         FormatSettingsDefinition.DEF.setChoice(defaultSettings, FormatSettingsDefinition.DECIMAL)
     }
 }
-
-/** [from]'s field display formats, onto [to] and the layouts nested in it, array elements included. */
-private fun copyFormats(from: Composite, to: Composite) {
-    from.components.zip(to.components).forEach { (f, t) ->
-        val format = FormatSettingsDefinition.DEF
-        if (format.hasValue(f.defaultSettings) && !t.defaultSettings.isImmutableSettings) {
-            format.setChoice(t.defaultSettings, format.getChoice(f.defaultSettings))
-        }
-        val nested = f.dataType.element as? Composite ?: return@forEach
-        (t.dataType.element as? Composite)?.let { copyFormats(nested, it) }
-    }
-}
-
-private val DataType.element: DataType get() = (this as? DataArray)?.dataType?.element ?: this

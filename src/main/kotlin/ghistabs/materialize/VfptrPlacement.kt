@@ -1,11 +1,13 @@
-package ghistabs.materialize.cpp
+package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghistabs.at
+import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.isBaseField
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.length
-import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.cpp.createVxTableDescriptionOffsetTag
 import ghistabs.overlaps
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -15,7 +17,7 @@ import ghistabs.withLength
 
 /**
  * Where a polymorphic class's `{vfptr}` goes, and what happens to the base subobject that would
- * otherwise own it. See [VfptrModel] for what the choice costs a virtual call. [ClassLayout]'s, which
+ * otherwise own it. See [VfptrModel] for what the choice costs a virtual call. [cpp.ClassLayout]'s, which
  * runs it on each class in its turn.
  */
 internal class VfptrPlacement(private val registry: DataTypeRegistry, private val model: VfptrModel) :

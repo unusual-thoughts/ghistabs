@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Structure
@@ -10,8 +10,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
-import ghistabs.materialize.DtmRegistry
-import ghistabs.materialize.cpp.ClassNaming
+import ghistabs.cpp.ClassNaming
 
 /**
  * A vtable record, located: where it starts, the [header] laid there, and the [abi] that laid it out. An

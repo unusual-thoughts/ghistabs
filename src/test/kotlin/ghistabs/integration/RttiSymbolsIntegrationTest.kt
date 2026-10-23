@@ -5,13 +5,14 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.LoadedProgram
+import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.vtableRecord
 import ghistabs.entrypoints.RttiSymbolsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.loadProgram
-import ghistabs.materialize.cpp.ClassNaming
-import ghistabs.materialize.cpp.abi.vtableRecord
 import ghistabs.runTransaction
-import ghistabs.test.*
+import ghistabs.test.defaultContext
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag

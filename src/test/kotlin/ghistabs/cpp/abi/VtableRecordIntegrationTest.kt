@@ -1,12 +1,11 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.program.model.address.Address
+import ghistabs.cpp.ClassNaming
 import ghistabs.get
 import ghistabs.getScalar
 import ghistabs.integration.FeatureFixtureTest
-import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.test.mustBe
-import ghistabs.test.mustBeA
 import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag

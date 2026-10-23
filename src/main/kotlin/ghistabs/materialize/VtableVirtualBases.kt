@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp
+package ghistabs.materialize
 
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
@@ -8,8 +8,10 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghistabs.componentsOverlapping
+import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.*
+import ghistabs.cpp.isBaseField
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.materialize.cpp.abi.*
 import ghistabs.parse.leafName
 import ghistabs.parse.member
 

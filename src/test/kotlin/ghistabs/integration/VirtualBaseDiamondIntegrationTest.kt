@@ -3,8 +3,8 @@ package ghistabs.integration
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.importer.runOnRecords
-import ghistabs.materialize.cpp.virtualBaseStructs
-import ghistabs.materialize.cpp.virtualBases
+import ghistabs.materialize.virtualBaseStructs
+import ghistabs.materialize.virtualBases
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType

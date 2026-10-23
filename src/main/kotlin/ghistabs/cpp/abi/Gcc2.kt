@@ -1,11 +1,11 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
 import ghistabs.Demangler
-import ghistabs.materialize.cpp.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
+import ghistabs.cpp.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
 import ghistabs.namespaces
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.parse.leafName

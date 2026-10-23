@@ -1,6 +1,8 @@
-package ghistabs.materialize
+package ghistabs
 
+import ghidra.docking.settings.FormatSettingsDefinition
 import ghidra.program.model.data.*
+import ghidra.program.model.data.Array as DataArray
 import ghidra.program.model.data.Enum as GhidraEnum
 
 /**
@@ -99,5 +101,27 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
             val fd = (c.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
             if (fd.categoryPath.isAncestorOrSelf(it.categoryPath)) adopt(fd)
         }
+    }
+
+    /**
+     * [layout] as the DTM holds it: the one an earlier import or pass left at its path, else resolved in, the
+     * layouts it points at kept as the DTM has them (KEEP_HANDLER), so nothing forks a `.conflict`.
+     */
+    internal fun resolveLayout(layout: StructureDataType) =
+        getOrRegister<Structure>(layout.dataTypePath, DataTypeConflictHandler.KEEP_HANDLER) { layout }
+            .also { copyFormats(layout, it) }
+}
+
+private val DataType.element: DataType get() = (this as? DataArray)?.dataType?.element ?: this
+
+/** [from]'s field display formats, onto [to] and the layouts nested in it, array elements included. */
+private fun copyFormats(from: Composite, to: Composite) {
+    from.components.zip(to.components).forEach { (f, t) ->
+        val format = FormatSettingsDefinition.DEF
+        if (format.hasValue(f.defaultSettings) && !t.defaultSettings.isImmutableSettings) {
+            format.setChoice(t.defaultSettings, format.getChoice(f.defaultSettings))
+        }
+        val nested = f.dataType.element as? Composite ?: return@forEach
+        (t.dataType.element as? Composite)?.let { copyFormats(nested, it) }
     }
 }

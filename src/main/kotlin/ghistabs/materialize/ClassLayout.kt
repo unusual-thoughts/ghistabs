@@ -1,14 +1,14 @@
-package ghistabs.materialize.cpp
+package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghidra.program.model.data.DataOrganizationImpl.getAlignedOffset
 import ghidra.program.model.gclass.ClassUtils
 import ghistabs.componentsOverlapping
+import ghistabs.cpp.ClassNaming
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
 import ghistabs.index.demangledClassPath
-import ghistabs.materialize.*
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl

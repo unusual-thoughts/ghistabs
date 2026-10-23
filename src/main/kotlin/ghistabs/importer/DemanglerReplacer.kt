@@ -14,21 +14,15 @@ import ghidra.program.model.symbol.SymbolType
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
+import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.abi.Rtti
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.TemplateNameShortener
-import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.materialize.cpp.abi.Itanium
-import ghistabs.materialize.cpp.abi.Rtti
-import ghistabs.materialize.cpp.abi.resolveLayout
 import ghistabs.materialize.typedefAliases
-import ghistabs.parse.CATEGORY
-import ghistabs.parse.canonTemplateName
-import ghistabs.parse.isTemplated
-import ghistabs.parse.leafName
-import ghistabs.parse.nameSegments
-import ghistabs.parse.templateLeaf
+import ghistabs.parse.*
 import java.util.*
 
 sealed class Skip(open val reason: String) {

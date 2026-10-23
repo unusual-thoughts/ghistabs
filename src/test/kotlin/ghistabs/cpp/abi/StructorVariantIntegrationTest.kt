@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.test.mustBe
