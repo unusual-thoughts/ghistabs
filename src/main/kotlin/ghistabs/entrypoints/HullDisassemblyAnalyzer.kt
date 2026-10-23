@@ -1,6 +1,7 @@
 package ghistabs.entrypoints
 
 import ghidra.app.cmd.disassemble.DisassembleCommand
+import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -28,6 +29,13 @@ import ghistabs.*
  *
  * Ghidra hands a function analyzer the entry points of the functions added or changed, not their
  * bodies, and a gap is in no body: the hull of each of those functions is what gets searched.
+ *
+ * The hull runs on over an SJLJ function's landing pads when they lie past its body's last instruction.
+ * [SjljLsdaAnalyzer] adds them to the body, but Ghidra recomputes a body from its entry once a call in
+ * it turns out not to return, and drops them, leaving the bytes after a pad's own non-returning call
+ * (`call __throw_ios_failure; add $0x10,%esp` in libstdc++'s `ios_base::_M_grow_words`) in no hull.
+ * That recompute changes the body, so this runs again for the function and finds them through the
+ * receiver's address the body still stores.
  *
  * One more run past the hull: the return path a caller's compiler wrote after a call it did not know
  * cannot return, `call __throw_out_of_range; add $0x10,%esp; jmp <join>`. Once the callee is marked
@@ -73,11 +81,12 @@ class HullDisassemblyAnalyzer :
         for (fn in program.functionManager.getFunctions(set ?: executable, true)) {
             monitor.checkCancelled()
             if (fn.isExternal || fn.isThunk) continue
-            val hull = AddressSet(fn.entryPoint, fn.body.maxAddress).intersect(executable)
+            val body = program.unwoundBody(fn, monitor)
+            val hull = AddressSet(fn.entryPoint, body.maxAddress).intersect(executable)
             for (range in program.listing.getUndefinedRanges(hull, false, monitor)) {
                 if (code.tiles(range)) code.codeRuns(range).forEach { recover[it] = "inside $fn 's hull" }
             }
-            for (tail in program.deadTails(fn, pseudo)) {
+            for (tail in program.deadTails(body, pseudo)) {
                 for (range in tail) recover[range] = "dead return path after a call in $fn"
             }
         }
@@ -120,20 +129,36 @@ private fun Instructions.codeRuns(range: AddressRange): AddressSetView = Address
 }
 
 /**
- * The undefined code right after [fn]'s calls to non-returning functions, past its last instruction:
- * Ghidra's own pseudo flow walk from there, following flows only through undefined bytes and stopping
- * at another non-returning call. Code already there must be an instruction of [fn], the join the tail
- * goes back to; anything else it reaches — a bad decode, the middle of an instruction, another
- * function — rejects the tail.
+ * [fn]'s body and the SJLJ receiver past it whose address the body stores (`movl $resume, jbuf[1]`),
+ * as [SjljLsdaAnalyzer] labelled it, with the flow from there: the landing pads it dispatches to,
+ * which only the unwinder reaches. Ghidra recomputes a body from its entry whenever a call in it
+ * turns out not to return, which drops them again however [SjljLsdaAnalyzer] laid them.
  */
-private fun Program.deadTails(fn: Function, pseudo: PseudoDisassembler): List<AddressSetView> {
+private fun Program.unwoundBody(fn: Function, monitor: TaskMonitor): AddressSetView {
     val end = fn.body.maxAddress
+    return listing.getInstructions(fn.body, true).iterator().asSequence()
+        .flatMap { it.referencesFrom.asSequence() }
+        .map { it.toAddress }
+        .filter { it > end && functionManager.getFunctionContaining(it) == null }
+        .filter { at -> symbolTable.getSymbols(at).any { it.name == "${SjljLsdaAnalyzer.RESUME_LABEL}_$at" } }
+        .fold(fn.body) { body, at -> body.union(CreateFunctionCmd.getFunctionBody(this, at, monitor)) }
+}
+
+/**
+ * The undefined code right after the calls to non-returning functions in a function's [body] (with
+ * its pads, from [unwoundBody]), past its last instruction: Ghidra's own pseudo flow walk from there,
+ * following flows only through undefined bytes and stopping at another non-returning call. Code already
+ * there must be an instruction of [body], the join the tail goes back to; anything else it reaches — a
+ * bad decode, the middle of an instruction, another function — rejects the tail.
+ */
+private fun Program.deadTails(body: AddressSetView, pseudo: PseudoDisassembler): List<AddressSetView> {
+    val end = body.maxAddress
     fun Instruction.callsNoReturn() = flows.singleOrNull()
         ?.let { functionManager.getFunctionAt(it) }?.hasNoReturn() == true
     fun PseudoInstruction.isUndefined() = listing.isUndefined(minAddress, maxAddress)
-    fun PseudoInstruction.backInFn() = minAddress in fn.body && listing.getInstructionAt(minAddress) != null
+    fun PseudoInstruction.backInFn() = minAddress in body && listing.getInstructionAt(minAddress) != null
 
-    return listing.getInstructions(fn.body, true).iterator().asSequence()
+    return listing.getInstructions(body, true).iterator().asSequence()
         .filter { it.flowType.isCall && it.callsNoReturn() }
         .mapNotNull { call -> call.maxAddress.next()?.takeIf { it > end && listing.isUndefined(it, it) } }
         .mapNotNull { start ->
@@ -148,7 +173,7 @@ private fun Program.deadTails(fn: Function, pseudo: PseudoDisassembler): List<Ad
 
                 override fun followFlows(instr: PseudoInstruction) = instr.isUndefined() && !instr.callsNoReturn()
             }
-            pseudo.followSubFlows(start, MAX_TAIL, walk).subtract(fn.body).takeIf { walk.ok && start in it }
+            pseudo.followSubFlows(start, MAX_TAIL, walk).subtract(body).takeIf { walk.ok && start in it }
         }.toList()
 }
 

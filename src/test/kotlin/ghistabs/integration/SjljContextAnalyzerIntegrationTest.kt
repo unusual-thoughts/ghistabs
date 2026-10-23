@@ -1,5 +1,6 @@
 package ghistabs.integration
 
+import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
@@ -14,11 +15,13 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.data.UnsignedIntegerDataType
 import ghidra.program.model.data.VoidDataType
+import ghidra.program.model.symbol.RefType
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.eh.SjljAbi
+import ghistabs.entrypoints.HullDisassemblyAnalyzer
 import ghistabs.entrypoints.SjljContextAnalyzer
 import ghistabs.entrypoints.SjljLsdaAnalyzer
 import ghistabs.runTransaction
@@ -42,6 +45,7 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     private val receiver = 0x401080
     private val register = 0x401600
     private val resume = 0x401610
+    private val thrower = 0x401620
     private val personality = 0x401800
     private val lsda = 0x402000
     private val zti = 0x403000
@@ -89,6 +93,37 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         }
     }
 
+    /**
+     * The receiver and a landing pad past the body's last instruction, as gcc lays them when the code
+     * before them ends in a jump back: the pad's `je` skips a call to a non-returning `__throw_ios_failure`
+     * and the `add $0x10,%esp` after it, which nothing reaches. Returns that `add`'s address.
+     */
+    private fun functionWithPadsPastItsBody(): Int {
+        val head = code(0x55, 0x89, 0xe5, 0x83, 0xec, 0x40) +
+            code(0xc7, 0x45, 0xd8) + le(personality) + code(0xc7, 0x45, 0xdc) + le(lsda) + setjmpToSlots +
+            code(0x8d, 0x45, 0xc0, 0x50, 0xe8)
+        val epilogue = fn + head.size + 4
+        val body = head + le(register - epilogue) + code(0xc9, 0xc3)
+        builder.setBytes(hex(fn), body)
+        // `test %eax,%eax; je join; call thrower; add $0x10,%esp; join: jmp epilogue`, right before the receiver.
+        val pad = receiver - 17
+        builder.setBytes(hex(fn + body.size), ByteArray(pad - fn - body.size) { 0x90.toByte() })
+        builder.setBytes(
+            hex(pad),
+            code(0x85, 0xc0, 0x74, 0x08, 0xe8) + le(thrower - (pad + 9)) + code(0x83, 0xc4, 0x10, 0xe9) +
+                le(epilogue - (pad + 17)),
+        )
+        // The receiver: `mov -0x3c(%ebp),%eax; cmp $1,%eax; je pad; push %eax; call resume`.
+        builder.setBytes(
+            hex(receiver),
+            code(0x8b, 0x45, 0xc4, 0x83, 0xf8, 0x01, 0x74, pad - (receiver + 8), 0x50, 0xe8) +
+                le(resume - (receiver + 14)),
+        )
+        builder.disassemble(hex(fn), body.size)
+        builder.createFunction(hex(fn))
+        return pad + 9
+    }
+
     @BeforeEach
     fun setUp() {
         builder = ProgramBuilder("sjlj", ProgramBuilder._X86, "gcc", this)
@@ -97,6 +132,7 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         builder.createEmptyFunction("___gxx_personality_sj0", hex(personality), 1, VoidDataType.dataType)
         builder.createEmptyFunction("__Unwind_SjLj_Register", hex(register), 1, VoidDataType.dataType)
         builder.createEmptyFunction("__Unwind_SjLj_Resume", hex(resume), 1, VoidDataType.dataType)
+        builder.createEmptyFunction("__ZSt19__throw_ios_failurePKc", hex(thrower), 1, VoidDataType.dataType)
         builder.setBytes(hex(register), code(0xc3))
         // As the loader leaves a symbol table's functions: named, their signatures no one's.
         program.runTransaction("untyped") {
@@ -158,6 +194,61 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         // One label, global so the decompiler names it.
         program.symbolTable.getSymbols(addr(receiver)).map { it.name }.mustBe(listOf("sjlj_dispatch_00401080"))
         f.body.contains(addr(receiver)).mustBe(true)
+    }
+
+    /**
+     * Pads past the body are the function's too, so the In-Function Gap Disassembler, run again for the
+     * changed body, takes the dead `add` after the pad's non-returning call (libstdc++'s
+     * `ios_base::_M_grow_words`).
+     */
+    @Test
+    fun takesThePadsPastTheBodyIntoTheFunction() {
+        val dead = layPadsPastTheBody()
+        val f = program.functionManager.getFunctionAt(addr(fn))
+        f.body.contains(addr(receiver)).mustBe(true)
+        f.body.contains(addr(receiver - 17)).mustBe(true)
+        program.listing.getInstructionAt(addr(dead)).mustBeNull("nothing flows to the dead add")
+
+        runHullAnalyzer()
+        program.listing.getInstructionAt(addr(dead)).mustNotBeNull("the dead add inside the pads must be disassembled")
+    }
+
+    /**
+     * And when Ghidra recomputes the body from the entry, as it does for a function with a call it
+     * finds cannot return, the pads drop out of it again: the receiver whose address the body stores
+     * still brings them, and their gap, into the hull.
+     */
+    @Test
+    fun findsTheGapInPadsTheBodyLost() {
+        val dead = layPadsPastTheBody()
+        program.runTransaction("recompute") {
+            val f = program.functionManager.getFunctionAt(addr(fn))
+            CreateFunctionCmd.fixupFunctionBody(program, f, TaskMonitor.DUMMY)
+            // `movl $receiver, jbuf[1]`'s operand, as Ghidra's scalar operand analysis references it.
+            val store = program.listing.getInstructions(addr(fn), true).first { insn ->
+                (0 until insn.numOperands).any { insn.getScalar(it)?.unsignedValue == receiver.toLong() }
+            }
+            program.referenceManager
+                .addMemoryReference(store.address, addr(receiver), RefType.DATA, SourceType.ANALYSIS, 0)
+        }
+        program.functionManager.getFunctionAt(addr(fn)).body.contains(addr(receiver)).mustBe(false)
+
+        runHullAnalyzer()
+        program.listing.getInstructionAt(addr(dead)).mustNotBeNull("the dead add inside the pads must be disassembled")
+    }
+
+    /** [functionWithPadsPastItsBody], its callees known not to return, and the analyzers run. */
+    private fun layPadsPastTheBody(): Int {
+        val dead = functionWithPadsPastItsBody()
+        program.runTransaction("noreturn") {
+            listOf(resume, thrower).forEach { program.functionManager.getFunctionAt(addr(it)).setNoReturn(true) }
+        }
+        runAnalyzers()
+        return dead
+    }
+
+    private fun runHullAnalyzer() = program.runTransaction("hull") {
+        HullDisassemblyAnalyzer().added(program, AddressSet(addr(fn)), TaskMonitor.DUMMY, MessageLog())
     }
 
     @Test
