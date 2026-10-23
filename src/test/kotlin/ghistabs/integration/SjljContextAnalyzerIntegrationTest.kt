@@ -8,10 +8,10 @@ import ghidra.program.model.data.*
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.eh.SjljAbi
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.entrypoints.SjljContextAnalyzer
 import ghistabs.entrypoints.SjljLsdaAnalyzer
-import ghistabs.materialize.cpp.eh.SjljAbi
 import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeA

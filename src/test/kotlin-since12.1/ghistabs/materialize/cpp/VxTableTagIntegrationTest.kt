@@ -6,8 +6,12 @@ import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.integration.Fixtures
 import ghistabs.loadProgram
+import ghistabs.materialize.vptrOffsetBytesOf
 import ghistabs.parse.TypeDecl
-import ghistabs.test.*
+import ghistabs.test.defaultContext
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeEmpty
+import ghistabs.test.mustNotBeEmpty
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

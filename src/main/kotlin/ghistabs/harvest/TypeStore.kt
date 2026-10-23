@@ -152,7 +152,7 @@ class TypeStore(
         }
 
         /**
-         * Whether [this] is a dynamic class, with a vptr of its own or a base's: [ghistabs.materialize.cpp.isPolymorphic]
+         * Whether [this] is a dynamic class, with a vptr of its own or a base's: [ghistabs.materialize.isPolymorphic]
          * before there is a graph to resolve bases in, and with [outerRewrites], the bases still spelled as fields.
          * A class whose own vptr is at 0 has no non-virtual dynamic base, which would have shared it, so a
          * dynamic base there is a virtual one: gcc 4.2.1's `basic_ostream<char,…>:T(0,134)=s140basic_ios<char,…>:

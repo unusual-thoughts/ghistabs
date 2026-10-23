@@ -8,10 +8,10 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.abi.RttiSymbols
+import ghistabs.cpp.abi.RttiSymbols.Companion.RTTI_SYMBOLS_RESTORED
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.get
-import ghistabs.materialize.cpp.abi.RttiSymbols
-import ghistabs.materialize.cpp.abi.RttiSymbols.Companion.RTTI_SYMBOLS_RESTORED
 
 /**
  * Puts back the `_ZTS`/`_ZTI`/`_ZTV` labels a stripped gcc binary lost, from the RTTI it kept

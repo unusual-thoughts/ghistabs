@@ -4,7 +4,6 @@ import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.componentsOverlapping
 import ghistabs.harvest.Type
-import ghistabs.materialize.cpp.*
 import ghistabs.parse.*
 import ghistabs.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum

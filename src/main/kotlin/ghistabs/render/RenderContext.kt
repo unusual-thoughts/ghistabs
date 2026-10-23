@@ -3,15 +3,11 @@ package ghistabs.render
 import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
-import ghistabs.harvest.Func
-import ghistabs.harvest.GhidraSourceFile
-import ghistabs.harvest.StaticSymbol
-import ghistabs.harvest.Symbol
-import ghistabs.harvest.Type
+import ghistabs.cpp.abi.Itanium
+import ghistabs.harvest.*
 import ghistabs.index.TypeGraph
+import ghistabs.index.resolveBuiltin
 import ghistabs.materialize.TemplateNameShortener
-import ghistabs.materialize.cpp.abi.Itanium
-import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.*
 
 /**
