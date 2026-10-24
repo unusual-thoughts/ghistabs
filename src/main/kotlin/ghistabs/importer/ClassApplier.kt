@@ -1,13 +1,16 @@
 package ghistabs.importer
 
+import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
+import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
+import ghidra.program.model.symbol.SymbolType
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
@@ -15,11 +18,9 @@ import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.ResolvedVtable
-import ghistabs.cpp.abi.RttiSymbols
 import ghistabs.cpp.abi.vtableRecord
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
-import ghistabs.entrypoints.RttiSymbolsAnalyzer
 import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
@@ -179,9 +180,8 @@ class ClassApplier(
      * sweep, which knows the ones laid here by their `vftable` labels.
      */
     fun applyAll(): Int {
-        // A stripped binary's vtables and typeinfos are only found by their symbols once these are back.
-        // Early analysis has put them back already, unless the import runs first.
-        if (RttiSymbolsAnalyzer.isEnabled(program)) RttiSymbols.restoreOnce(program, this)
+        // A stripped binary's vtables and typeinfos are only found by their symbols, which the Itanium RTTI
+        // symbols analyzer has put back by now: it runs at FORMAT_ANALYSIS, well ahead of the import.
         val classes = registry.classesBasesFirst()
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
@@ -696,6 +696,15 @@ class ClassApplier(
  */
 internal fun Program.rehomeOntoShortenedClasses(shortener: TemplateNameShortener, sink: DiagnosticSink) {
     if (shortener.isEmpty) return
+    // The demangler files a member under a plain namespace of the long name. Where the short-named class
+    // stands beside it, that namespace is the same class: make it one, so it is rehomed with the rest.
+    for (ns in symbolTable.definedSymbols.iterator().asSequence().filter { it.symbolType == SymbolType.NAMESPACE }
+        .map { it.`object` as Namespace }.toList()) {
+        val short = shortener.shortenedNestedOrNull(ns.name) ?: continue
+        if (symbolTable.getNamespace(short, ns.parentNamespace) is GhidraClass) {
+            NamespaceUtils.convertNamespaceToClass(ns)
+        }
+    }
     for (long in symbolTable.classNamespaces.asSequence().toList()) {
         val short = shortener.shortenedNestedOrNull(long.name) ?: continue
         val longPath = long.getPathList(true).toList()

@@ -111,7 +111,8 @@ class TeeSink(private vararg val sinks: DiagnosticSink?) : DiagnosticSink {
 class MessageLogSink(
     private val messageLog: MessageLog,
     private val minLevel: Level = Level.INFO,
-    private val originator: String = "Stabs",
+    // The analyzer (or exporter) writing: a cli forwarding the log files each line under it.
+    private val originator: String,
 ) : DiagnosticSink {
     override fun log(
         category: String,

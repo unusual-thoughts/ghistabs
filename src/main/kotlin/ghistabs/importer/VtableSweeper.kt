@@ -4,6 +4,7 @@ import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
+import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
@@ -60,11 +61,12 @@ open class VtableSweeper(
 
         val VTABLES_SWEPT = BoolOption("Vtables Swept", "Vtables no class claimed already laid.", false)
 
-        /** Whether a sweep already ran here: the stabs import's, or [ghistabs.entrypoints.GccVftableAnalyzer]'s. */
+        /** Whether a sweep already ran here since the tables last changed hands. */
         val Program.isVtablesSwept get() = this[VTABLES_SWEPT]
 
-        fun Program.markVtablesSwept() {
-            this[VTABLES_SWEPT] = true
+        /** [value] false when a class pass has claimed tables since, so the next sweep looks again. */
+        fun Program.markVtablesSwept(value: Boolean = true) {
+            this[VTABLES_SWEPT] = value
         }
     }
 
@@ -113,8 +115,11 @@ open class VtableSweeper(
                 degradation("vtable-swept-empty", qualified, "no function pointers", record.addressPoint)
                 continue
             }
-            val leaf = canonTemplateName(qualified.leafName)
-            val ns = symtab.buildClassNamespaces(qualified.nameSegments)
+            // The class its demangled `vtable` label sits in, where one does: a stabs import may have moved
+            // it onto the class's shortened name, which the mangled name does not spell.
+            val labelled = labelledClass(addr)
+            val leaf = labelled?.name ?: canonTemplateName(qualified.leafName)
+            val ns = labelled ?: symtab.buildClassNamespaces(qualified.nameSegments)
             val path = ClassNaming.vftablePath(ns, leaf)
             val vftable = registry.getOrRegister<Structure>(path) {
                 StructureDataType(path.categoryPath, path.dataTypeName, 0, dtm)
@@ -148,9 +153,31 @@ open class VtableSweeper(
             )
         }
         layConstructionVtables()
+        layTypeinfoClassStubs()
         program.markVtablesSwept()
         return laid
     }
+
+    /**
+     * A slot typed off a method's signature has Ghidra create its class's struct, empty, for the `this`
+     * it injects. The libsupc++ typeinfo classes (`__cxxabiv1::__class_type_info`, …) no stab defines are
+     * replaced by their Itanium layout ([Rtti.typeInfoLayout]), as the stabs import does its demangler stubs.
+     */
+    private fun layTypeinfoClassStubs() {
+        val rtti = Rtti(dtm)
+        val stubs = dtm.allStructures.asSequence()
+            .filter { it.isZeroLength || it.numComponents == 0 }
+            .mapNotNull { stub -> rtti.typeInfoLayout(stub.name)?.let { stub to it } }
+            .toList()
+        for ((stub, layout) in stubs) {
+            dtm.replaceDataType(stub, registry.resolveLayout(layout), false)
+            debug("vtable-typeinfo-stub-laid", stub.pathName)
+        }
+    }
+
+    /** The class namespace the demangled `vtable` label at [addr] sits in, if any. */
+    private fun labelledClass(addr: Address): Namespace? = symtab.getSymbols(addr)
+        .firstOrNull { it.name == ClassNaming.VTABLE && it.parentNamespace is GhidraClass }?.parentNamespace
 
     /**
      * Lay every construction vtable group (`_ZTC`, ABI §2.6.4): a base's vtables as its constructor runs

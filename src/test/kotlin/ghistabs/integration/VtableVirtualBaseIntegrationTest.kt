@@ -8,13 +8,13 @@ import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.applyDemangling
 import ghistabs.diagnose.DummySink
-import ghistabs.importer.runOnRecords
 import ghistabs.materialize.VtableVirtualBases
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.runTransaction
 import ghistabs.test.defaultContext
+import ghistabs.test.importAndAnalyze
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterEach
@@ -83,7 +83,7 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
             stabs.mapIndexed { i, stab -> StabRecord(i + 1, StabType.N_LSYM, 0, 0, 0, stab) }
         val program = builder.program
         val ctx = program.defaultContext()
-        ctx.runOnRecords(StabReader.Result(records))
+        ctx.importAndAnalyze(StabReader.Result(records))
         val structs = program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
         return structs.single { it.name == "Derived" } to ctx.diagnostics.degradationTargets()
     }

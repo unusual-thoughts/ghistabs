@@ -4,10 +4,10 @@ import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
 import ghistabs.cpp.abi.Gcc2
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.integration.Fixtures
 import ghistabs.loadProgram
 import ghistabs.test.defaultContext
+import ghistabs.test.importAndAnalyze
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
 import ghistabs.test.mustBeTrue
@@ -52,7 +52,7 @@ class Gcc2SecondaryVtableIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     ) {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loaded = loadProgram(File("src/test/resources/binaries/$fixture"))
-        program.defaultContext().import()
+        program.defaultContext().importAndAnalyze()
         val st = program.symbolTable
 
         val at = st.getSymbols(symbol).single().address

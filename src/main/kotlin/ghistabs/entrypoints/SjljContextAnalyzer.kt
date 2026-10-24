@@ -20,6 +20,7 @@ import ghistabs.cpp.eh.SjljAbi
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.frameBias
+import ghistabs.importer.ImportProbe
 
 /**
  * Types gcc's SJLJ exception ABI ([SjljAbi]) where a program uses it: the `SjLj_Function_Context` each
@@ -29,9 +30,8 @@ import ghistabs.frameBias
  * nothing more definite than analysis has typed them.
  *
  * The registrations are [SjljLsdaAnalyzer]'s, which runs before the Stabs Importer and labels and
- * disassembles each function's receiver. The import runs this again once it has applied its symbols
- * ([typeAll]), so a type the stabs on libgcc define is the one used, and a signature they give is
- * left as it is, whichever order the two run in.
+ * disassembles each function's receiver. Its priority puts it after the Stabs Importer, so a type the
+ * stabs on libgcc define is the one used, and a signature they give is left as it is.
  */
 class SjljContextAnalyzer :
     AbstractAnalyzer(
@@ -49,11 +49,14 @@ class SjljContextAnalyzer :
     override fun canAnalyze(program: Program) = SjljLsdaAnalyzer().canAnalyze(program)
 
     override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
-        // Stabs still to import type libgcc themselves, and the import runs this after them.
-        if (StabsAnalyzer().canAnalyze(program)) return true
         // Byte analyzers run again on whatever code a later analyzer changes (call fixups re-add theirs),
         // so only what [set] covers: the whole program once, then just the changed code.
-        val (contexts, signatures) = typeAll(program, monitor, MessageLogSink(log, originator = NAME), set)
+        val (contexts, signatures) = typeAll(
+            program,
+            monitor,
+            ImportProbe.sinkFor(program, MessageLogSink(log, originator = NAME)),
+            set,
+        )
         if (contexts + signatures > 0) log.appendMsg(NAME, "typed $contexts context(s), $signatures entry point(s)")
         return true
     }
@@ -61,9 +64,6 @@ class SjljContextAnalyzer :
     companion object {
         const val NAME = "GCC SJLJ unwind context"
         const val LOCAL = "fc"
-
-        /** Whether the analyzer is on in [program]'s analysis options, which the stabs import honours too. */
-        fun isEnabled(program: Program) = program.getOptions(Program.ANALYSIS_PROPERTIES).getBoolean(NAME, true)
 
         /**
          * Type the context of every registering function whose store [set] holds, and the entry points it

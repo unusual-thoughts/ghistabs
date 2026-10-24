@@ -67,7 +67,7 @@ class StabsAnalyzer :
             // Bookmark every addressed diagnostic (unconditional); MessageLog gets output at/above minLevel.
             // Tee the emitting terminal onto the probe's raw CapturingSink so tests can inspect output;
             // counting is the shared probe.diagnostics accumulator, tee'd in ImportContext.
-            terminal = TeeSink(BookmarkSink(program), MessageLogSink(msg, options.minLogLevel), probe?.terminal),
+            terminal = TeeSink(BookmarkSink(program), MessageLogSink(msg, options.minLogLevel, NAME), probe?.terminal),
             options,
             diagnostics = probe?.diagnostics ?: StabsDiagnostics(),
         )

@@ -17,12 +17,11 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.forceCreateData
+import ghistabs.importer.ImportProbe
 
 /**
- * Lays a typeinfo struct at every `_ZTI` symbol. The stabs import also calls [layTypeinfos] itself,
- * before its vtable sweep and coverage report: a stab global can give a typeinfo its only `_ZTI` label,
- * which this analyzer, run before the import, would never see. Disabling this analyzer turns the
- * import's pass off too ([isEnabled]).
+ * Lays a typeinfo struct at every `_ZTI` symbol. After the Stabs Importer, whose globals give some
+ * typeinfos their only `_ZTI` label.
  */
 class RttiLayoutAnalyzer :
     AbstractAnalyzer(NAME, "Lay structs at every gcc Itanium typeinfo `_ZTI` symbol", AnalyzerType.BYTE_ANALYZER) {
@@ -35,16 +34,14 @@ class RttiLayoutAnalyzer :
     override fun canAnalyze(program: Program) = GnuDemangler().canDemangle(program)
 
     override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
-        val laid = layTypeinfos(program, DtmRegistry(program.dataTypeManager), MessageLogSink(log, Level.DEBUG, NAME))
+        val sink = ImportProbe.sinkFor(program, MessageLogSink(log, Level.DEBUG, NAME))
+        val laid = layTypeinfos(program, DtmRegistry(program.dataTypeManager), sink)
         if (laid > 0) log.appendMsg(NAME, "laid $laid typeinfo(s)")
         return true
     }
 
     companion object {
         const val NAME = "Itanium typeinfo"
-
-        /** Whether the analyzer is on in [program]'s analysis options, which the stabs import honours too. */
-        fun isEnabled(program: Program) = program.getOptions(Program.ANALYSIS_PROPERTIES).getBoolean(NAME, true)
 
         /** Lay a struct at every typeinfo symbol not already typed as one, into [registry]; returns how many. */
         fun layTypeinfos(program: Program, registry: DtmRegistry, sink: DiagnosticSink): Int {

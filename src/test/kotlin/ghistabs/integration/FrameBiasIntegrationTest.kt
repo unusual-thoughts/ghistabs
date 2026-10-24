@@ -3,7 +3,6 @@ package ghistabs.integration
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.loadProgram
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -39,7 +38,7 @@ class FrameBiasIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     ) {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loaded = loadProgram(File("src/test/resources/binaries/$fixture"))
-        program.defaultContext().import()
+        program.defaultContext().importAndAnalyze()
 
         val main = checkNotNull(program.functionManager.getFunctions(true).firstOrNull { it.name == "main" })
         val doc = checkNotNull(main.localVariables.firstOrNull { it.name == "doc" }) { "main has no local doc" }
