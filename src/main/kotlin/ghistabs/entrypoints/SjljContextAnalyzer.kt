@@ -79,8 +79,17 @@ class SjljContextAnalyzer :
             val all = SjljLsdaAnalyzer.lsdas(program, program.memory, monitor).values.flatMap { it.second }
             if (all.isEmpty()) return 0 to 0
             val regs = all.filter { set.contains(it.store) }
-            // Again after the import, which can recreate a function and with it drop the labels in it.
-            regs.forEach { SjljLsdaAnalyzer.layResume(program, it, monitor, sink) }
+            // Again once a call before the receiver turns no-return: Ghidra's repair then clears the code past
+            // it that no flow reaches, which is the receiver and its landing pads (only the longjmp reaches
+            // them), with their comment, and shrinks the body. The code that changed is the call site, not
+            // the store, so any of the function counts.
+            val fm = program.functionManager
+            fun touched(reg: SjljLsdaAnalyzer.Registration): Boolean {
+                if (set.contains(reg.store)) return true
+                val fn = fm.getFunctionContaining(reg.store) ?: return false
+                return set.intersects(fn.entryPoint, fn.body.maxAddress)
+            }
+            all.filter(::touched).forEach { SjljLsdaAnalyzer.layResume(program, it, monitor, sink) }
             val abi = SjljAbi(program.dataTypeManager)
             val contexts = typeContexts(program, regs, abi, monitor, sink)
             return contexts to typeEntryPoints(program, all, abi, monitor, sink) { set.contains(it) }
