@@ -14,21 +14,16 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.*
+import ghistabs.cpp.MemberAttrs
+import ghistabs.cpp.MemberAttrs.Companion.writeMember
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.Itanium.isInlineStdMember
+import ghistabs.cpp.qualifiedName
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.harvest.*
-import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.MemberAttrs
-import ghistabs.materialize.MemberAttrs.Companion.writeMember
-import ghistabs.materialize.classBody
-import ghistabs.materialize.className
-import ghistabs.materialize.classesBasesFirst
-import ghistabs.materialize.reasonFor
-import ghistabs.materialize.resolveRef
-import ghistabs.materialize.statedClassPath
+import ghistabs.materialize.*
 import ghistabs.parse.*
 import ghidra.program.model.data.Array as GhidraArray
 

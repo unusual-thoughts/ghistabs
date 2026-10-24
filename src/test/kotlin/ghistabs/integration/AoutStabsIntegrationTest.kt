@@ -11,6 +11,7 @@ import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
+import ghistabs.importer.import
 import ghistabs.integration.StaticMemberLabelIntegrationTest.Companion.mustHaveNoGcc2StaticMemberPrimary
 import ghistabs.loadProgram
 import ghistabs.render.Renderer

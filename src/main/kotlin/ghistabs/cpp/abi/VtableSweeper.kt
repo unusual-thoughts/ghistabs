@@ -1,4 +1,4 @@
-package ghistabs.importer
+package ghistabs.cpp.abi
 
 import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
@@ -11,17 +11,16 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.abi.*
+import ghistabs.cpp.canonTemplateName
+import ghistabs.cpp.describeVxTable
 import ghistabs.cpp.isBaseField
+import ghistabs.cpp.leafName
+import ghistabs.cpp.nameSegments
+import ghistabs.cpp.primaryBase
+import ghistabs.cpp.vfptrOffset
+import ghistabs.cpp.vfptrOffsetOfBase
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
-import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.describeVxTable
-import ghistabs.materialize.vfptrOffset
-import ghistabs.materialize.vfptrOffsetOfBase
-import ghistabs.parse.canonTemplateName
-import ghistabs.parse.leafName
-import ghistabs.parse.nameSegments
 
 /** One gcc 2.x secondary vtable record: its symbol's [base] and ABI, and where it sits. */
 internal data class Gcc2SecondaryVtable(val base: String, val address: Address, val abi: CxxAbi)
@@ -30,8 +29,9 @@ internal data class Gcc2SecondaryVtable(val base: String, val address: Address, 
  * Lays the vtables of classes nothing describes: every `_ZTV…` (and gcc 2.x `_vt…`) symbol whose record
  * no class has claimed ([isVtableClaimed]), typed off whatever sits at the addresses its slots hold.
  * Needs only the symbol table and memory: [ghistabs.entrypoints.GccVftableAnalyzer] runs the sweep,
- * on a binary with no stabs at all as much as after a stabs import. [ClassApplier] extends it only for
- * the table-laying helpers, which it uses on the classes the stabs describe, and never sweeps.
+ * on a binary with no stabs at all as much as after a stabs import. [ghistabs.importer.ClassApplier]
+ * extends it only for the table-laying helpers, which it uses on the classes the stabs describe, and
+ * never sweeps.
  */
 open class VtableSweeper(
     internal open val registry: DtmRegistry,
@@ -43,12 +43,12 @@ open class VtableSweeper(
     internal val dtm = program.dataTypeManager
 
     /**
-     * A demangled parameter's type as the stabs made it, where this sweep runs on an import's registry:
-     * gcc 3's stabs file `std::_Ios_Openmode` under no namespace, so Ghidra's lookup in `/std` misses it.
+     * A demangled parameter's type as an import made it, ahead of Ghidra's own lookup: gcc 3's stabs file
+     * `std::_Ios_Openmode` under no namespace, so the lookup in `/std` misses it. Null for none.
      */
-    private val ours by lazy { (registry as? DataTypeRegistry)?.let { DemanglerReplacer(program, it, monitor, sink) } }
+    protected open fun importedType(t: DemangledDataType): DataType? = null
 
-    internal fun DemangledDataType.slotParameterType(category: String, degrades: String) = ours?.parameterType(this)
+    internal fun DemangledDataType.slotParameterType(category: String, degrades: String) = importedType(this)
         ?: parameterType(dtm)
         ?: Undefined4DataType.dataType.also { degradation(category, degrades, "demangler gave no type for $this") }
 
@@ -400,14 +400,6 @@ open class VtableSweeper(
                 .onFailure { degradation("vftable-rename-failed", leaf, "${vftable.name} -> $name: ${it.message}") }
         }
         vftable.describeVxTable(leaf, label, vfptrAt)
-    }
-
-    /** The direct base whose `{vfptr}` the class's own is, when it shares one. */
-    private fun Structure.primaryBase(): String? {
-        val vfptr = vfptrOffset() ?: return null
-        return definedComponents.firstOrNull { c ->
-            c.isBaseField() && (c.dataType as? Structure)?.vfptrOffset()?.let { c.offset + it } == vfptr
-        }?.dataType?.name
     }
 
     /**

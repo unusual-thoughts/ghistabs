@@ -1,5 +1,6 @@
 package ghistabs.index
 
+import ghistabs.cpp.leafName
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Type
 import ghistabs.parse.GlobalTypeDecl
@@ -7,7 +8,6 @@ import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Field
-import ghistabs.parse.leafName
 import java.util.*
 
 /**

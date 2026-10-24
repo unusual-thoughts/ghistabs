@@ -10,8 +10,8 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.buildClassNamespaces
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.VtableSweeper.Companion.isVtablesSwept
 import ghistabs.entrypoints.GccVftableAnalyzer
-import ghistabs.importer.VtableSweeper.Companion.isVtablesSwept
 import ghistabs.runTransaction
 import ghistabs.test.must
 import ghistabs.test.mustBe

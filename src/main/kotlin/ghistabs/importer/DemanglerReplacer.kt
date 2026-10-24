@@ -17,6 +17,11 @@ import ghistabs.*
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.Itanium
 import ghistabs.cpp.abi.Rtti
+import ghistabs.cpp.canonTemplateName
+import ghistabs.cpp.isTemplated
+import ghistabs.cpp.leafName
+import ghistabs.cpp.nameSegments
+import ghistabs.cpp.templateLeaf
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.materialize.DataTypeRegistry

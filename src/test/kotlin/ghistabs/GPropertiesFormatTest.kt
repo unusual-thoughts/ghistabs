@@ -1,7 +1,7 @@
 package ghistabs
 
 import ghidra.framework.options.GProperties
-import ghistabs.parse.Access
+import ghistabs.cpp.Access
 import ghistabs.test.*
 import kotlinx.serialization.Serializable
 import org.junit.jupiter.api.Test

@@ -1,7 +1,6 @@
 package ghistabs.cpp
 
 import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.DataTypePath
 import ghidra.program.model.symbol.Namespace
 import ghistabs.at
@@ -104,6 +103,3 @@ object ClassNaming {
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
         (if (isVirtual) VBASE_PREFIX else BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()
 }
-
-/** [ClassNaming.isBaseField], off a live component instead of a bare field name. */
-fun DataTypeComponent.isBaseField() = ClassNaming.isBaseField(fieldName.orEmpty())

@@ -5,14 +5,14 @@ import ghidra.program.model.gclass.ClassUtils
 import ghistabs.at
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.isBaseField
+import ghistabs.cpp.isVptrFieldName
+import ghistabs.cpp.leafName
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.includes
 import ghistabs.length
-import ghistabs.materialize.cpp.createVxTableDescriptionOffsetTag
 import ghistabs.overlaps
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.isVptrFieldName
-import ghistabs.parse.leafName
 import ghistabs.withLength
 
 /**
@@ -267,53 +267,10 @@ internal fun DataTypeRegistry.vftableOf(classPath: List<String>) = ClassNaming.v
     }
 }
 
-/**
- * Describe [this] as [owner]'s [table], the one the `{vfptr}` at [vfptrOffset] in the class points at.
- * The description leads with the offset tag `ClassUtils.isVTable` (12.1+) recognises a table by, one
- * per table at its own `{vfptr}`'s offset, so a secondary carries the offset of the subobject it
- * serves. No offset, no tag: a guessed one would point Ghidra's vxtable replacement at the wrong word,
- * and a negative one can only come from a misread record.
- */
-internal fun Structure.describeVxTable(owner: String, table: String, offset: Long?) {
-    val vfptrOffset = offset?.takeIf { it >= 0 }
-    val text = "$owner's $table: what its {${ClassUtils.VFPTR}}" +
-        vfptrOffset?.let { " at +$it" }.orEmpty() + " points at"
-    val tag = vfptrOffset?.let { ClassUtils::class.createVxTableDescriptionOffsetTag(it) }
-    description = listOfNotNull(tag, text).joinToString(" ")
-}
-
-/**
- * Offset of the first `{vfptr}` in [this], looking through base subobjects in layout order — so it
- * finds the pointer a class inherits through its primary base as well as one it owns, wherever the
- * ABI put it (gcc 2.x appends it after the class's own fields).
- */
-internal fun Structure.vfptrOffset(): Int? = definedComponents.firstNotNullOfOrNull { c ->
-    when {
-        c.fieldName == ClassUtils.VFPTR -> c.offset
-        c.isBaseField() -> (c.dataType as? Structure)?.vfptrOffset()?.let { c.offset + it }
-        else -> null
-    }
-}
-
-/**
- * Offset in [this] of the `{vfptr}` inside the base subobject [base] names, looking through base
- * subobjects in layout order — where a gcc 2.x secondary vtable's pointer sits in the class. The base
- * is found by name, whole: a primary base [VfptrModel.SPLIT_BASE] took apart is a `_fields_` run
- * with no vptr left, and its table is the class's own.
- */
-internal fun Structure.vfptrOffsetOfBase(base: String): Int? = definedComponents.firstNotNullOfOrNull { c ->
-    val dt = c.dataType as? Structure
-    when {
-        !c.isBaseField() || dt == null -> null
-        dt.name == base.leafName -> dt.vfptrOffset()?.let { c.offset + it }
-        else -> dt.vfptrOffsetOfBase(base)?.let { c.offset + it }
-    }
-}
+private val DataTypeComponent.range get() = offset.withLength(length)
 
 /** Whether [c] lies wholly within these bytes. */
-private fun IntRange.holds(c: DataTypeComponent) = c.offset >= first && c.offset + c.length <= last + 1
-
-private val DataTypeComponent.range get() = offset.withLength(length)
+private fun IntRange.holds(c: DataTypeComponent) = includes(c.range)
 
 /** Whether [c] shares a byte with these. */
 private fun IntRange.overlaps(c: DataTypeComponent) = overlaps(c.range)
