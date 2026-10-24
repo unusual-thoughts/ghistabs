@@ -12,6 +12,7 @@ import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportProbe
+import ghistabs.importer.import
 import ghistabs.materialize.isUndefined
 import ghistabs.runTransaction
 import ghistabs.test.disableWindowsResourceAnalyzer

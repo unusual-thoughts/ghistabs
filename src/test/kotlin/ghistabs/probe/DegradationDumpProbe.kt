@@ -6,6 +6,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.CapturingSink
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
+import ghistabs.importer.import
 import ghistabs.runTransaction
 import ghistabs.test.importAndAnalyze
 import ghistabs.withProgram

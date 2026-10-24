@@ -7,7 +7,6 @@ import ghidra.program.model.data.EnumDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.Demangler
 import ghistabs.formals
-import ghistabs.importer.VtableSweeper
 import ghistabs.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -38,7 +37,7 @@ class VtableSweeperSlotTypeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             "_ZNSt15basic_streambufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
         ) as DemangledFunction
 
-        val typed = with(VtableSweeper(registry, program, ctx.monitor, ctx)) {
+        val typed = with(ctx.classApplier(registry)) {
             seekoff.formals.last().slotParameterType("vftable-demangled-untyped", "seekoff")
         }
 

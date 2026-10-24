@@ -17,6 +17,38 @@ class ImportOptions() : OptionContainer() {
     var sourceRoots: List<String> by SOURCE_ROOTS
 
     companion object {
+        /** The Stabs Importer analyzer's name: its switch, and the options bucket these live in. */
+        const val ANALYZER = "Stabs Importer"
+
+        private fun Program.analyzerOptions() = getOptions(Program.ANALYSIS_PROPERTIES).getOptions(ANALYZER)
+
+        fun Program.stabsOptions() = ImportOptions(analyzerOptions())
+
+        private fun Program.setStabsOptions(options: ImportOptions) = options.exportTo(analyzerOptions())
+
+        private fun Program.setEnabled(value: Boolean = true) {
+            getOptions(Program.ANALYSIS_PROPERTIES).setBoolean(ANALYZER, value)
+        }
+
+        private fun Program.updateOptions(mod: ImportOptions.() -> Unit) = analyzerOptions().apply {
+            ImportOptions(this).also { mod(it) }.exportTo(this)
+        }
+
+        fun Program.enableStabsAnalyzer(options: ImportOptions) = runTransaction("Enable Stabs analyzer") {
+            setStabsOptions(options)
+            setEnabled(true)
+        }
+
+        fun Program.enableStabsAnalyzer(config: ImportOptions.() -> Unit = { }) =
+            runTransaction("Configure Stabs analyzer") {
+                updateOptions(config)
+                setEnabled(true)
+            }
+
+        fun Program.disableStabsAnalyzer() = runTransaction("Disable Stabs analyzer") {
+            setEnabled(false)
+        }
+
         val STABS_DONE = BoolOption("Stabs Imported", "Stabs Import already attempted.", false)
         val OVERLAY_DONE = BoolOption("Stabs Overlaid", "Stab structs already overlaid.", false)
         val SHORTENED_DONE = BoolOption(

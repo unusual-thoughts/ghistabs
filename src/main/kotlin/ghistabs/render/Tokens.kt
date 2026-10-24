@@ -3,7 +3,6 @@ package ghistabs.render
 import ghidra.app.decompiler.*
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.address.Address
-import ghistabs.entrypoints.Correction
 import ghistabs.harvest.BlockScope
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
@@ -170,7 +169,7 @@ fun ClangLine.blockDepth() = significant().minOfOrNull { tok ->
 // Derived spellings included: StructReturnAnalyzer installs `__thiscall_memret`/`__cdecl_regret` as
 // ordinary prototype models, so Ghidra prints them here exactly like a stock convention.
 private val CALLING_CONVENTIONS = setOf("__thiscall", "__cdecl", "__stdcall", "__fastcall", "__vectorcall")
-    .let { base -> base + base.flatMap { c -> Correction.entries.map { c + it.suffix } } }
+    .let { base -> base + base.flatMap { c -> listOf("_memret", "_regret").map { c + it } } }
 
 // Tokens carrying text, minus line breaks and the calling-convention keyword (with the one blank
 // that trails it, so `ushort __thiscall Foo::m` reads `ushort Foo::m`, not `ushort  Foo::m`).

@@ -1,12 +1,12 @@
 package ghistabs.render
 
+import ghistabs.cpp.isTemplated
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.rootSegment
 import ghistabs.harvest.segments
 import ghistabs.parse.AggrKind
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isDriveLetter
-import ghistabs.parse.isTemplated
 import kotlin.io.path.Path
 
 /**

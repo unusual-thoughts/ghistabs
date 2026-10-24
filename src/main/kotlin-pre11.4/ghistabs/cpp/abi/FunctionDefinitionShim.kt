@@ -1,4 +1,4 @@
-package ghistabs.importer
+package ghistabs.cpp.abi
 
 import ghidra.program.model.data.FunctionDefinitionDataType
 import ghidra.program.model.data.ParameterDefinition

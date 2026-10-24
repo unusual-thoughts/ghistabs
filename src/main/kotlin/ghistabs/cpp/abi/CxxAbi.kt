@@ -5,8 +5,8 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
-import ghistabs.parse.TypeDecl.Aggregate.Method
-import ghistabs.parse.templateLeaf
+import ghistabs.cpp.MemberDecl
+import ghistabs.cpp.templateLeaf
 
 /**
  * How a C++ ABI spells a *member* — the half of [CxxAbi] that never touches a vtable record. Split
@@ -22,7 +22,7 @@ interface CxxMemberNaming {
      * tried first and unchanged; an ABI whose stabs put something less than a whole symbol in that
      * field composes the rest from what the stab does state.
      */
-    fun physnameCandidates(m: Method<*>, className: String): List<String> = listOfNotNull(m.mangled)
+    fun physnameCandidates(m: MemberDecl, className: String): List<String> = listOfNotNull(m.mangled)
 
     /** How this ABI's stabs spell the implicit assignment operator. */
     val assignmentOperatorName: String
@@ -40,7 +40,7 @@ interface CxxMemberNaming {
      * physname at all is recognisable by name alone, and one whose physname *is* a whole symbol is
      * recognisable by [physnameIsImplicit] even when its source name is spelled unusually.
      */
-    fun isImplicitMember(m: Method<*>, className: String): Boolean {
+    fun isImplicitMember(m: MemberDecl, className: String): Boolean {
         val leaf = className.templateLeaf
         return m.name == leaf || m.name == "~$leaf" || m.name == assignmentOperatorName ||
             m.mangled?.let(::physnameIsImplicit) == true

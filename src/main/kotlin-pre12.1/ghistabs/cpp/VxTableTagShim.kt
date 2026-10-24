@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp
+package ghistabs.cpp
 
 import ghidra.program.model.gclass.ClassUtils
 import kotlin.reflect.KClass

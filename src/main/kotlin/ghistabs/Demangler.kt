@@ -12,6 +12,9 @@ import ghidra.app.util.demangler.gnu.GnuDemanglerOptions
 import ghidra.app.util.demangler.gnu.GnuDemanglerParser
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.TypeDef
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import java.util.concurrent.ConcurrentHashMap
@@ -159,3 +162,21 @@ val DemangledFunction.formals: List<DemangledDataType> get() = paramTypes
 
 /** Whether [this] ends in `...`. */
 val DemangledFunction.isVarArgs get() = paramTypes.lastOrNull()?.isVarArgs == true
+
+/**
+ * [this] as the type of a parameter the stabs don't type, or null when the demangler has none to give.
+ * A class it can't find by name comes back as an empty `/Demangler` stand-in, and anything else it
+ * can't find, an enum included, as a typedef of the 1-byte `undefined`. Neither is the parameter's
+ * size, and applying either loses the parameter's name and moves every slot after it: typing gcc 12
+ * `xmltest`'s `XMLDocument::SetError(XMLError error, int, const char* format, ...)`'s `error` so
+ * cost `format` its `char*`.
+ */
+fun DemangledDataType.parameterType(dtm: DataTypeManager): DataType? =
+    runCatching { getDataType(dtm) }.getOrNull()?.takeIf { it.isParameterSized }
+
+/** Whether [this] has a parameter's size: neither a stand-in nor a 1-byte `undefined` in disguise. */
+internal val DataType.isParameterSized get() =
+    !isNotYetDefined && !isZeroLength && withoutTypedefs() != DataType.DEFAULT
+
+/** [this] with the typedefs at its top peeled off. */
+internal fun DataType.withoutTypedefs(): DataType = generateSequence(this) { (it as? TypeDef)?.dataType }.last()

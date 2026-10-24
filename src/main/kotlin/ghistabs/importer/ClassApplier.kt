@@ -1,23 +1,22 @@
 package ghistabs.importer
 
 import ghidra.app.util.NamespaceUtils
+import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.symbol.Namespace
-import ghidra.program.model.symbol.SourceType
-import ghidra.program.model.symbol.Symbol
-import ghidra.program.model.symbol.SymbolType
-import ghidra.program.model.symbol.SymbolUtilities
+import ghidra.program.model.symbol.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
-import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.*
+import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.ResolvedVtable
+import ghistabs.cpp.abi.VtableSweeper
 import ghistabs.cpp.abi.vtableRecord
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
@@ -25,8 +24,9 @@ import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
 import ghistabs.materialize.*
-import ghistabs.materialize.ClassHierarchyRecords.Companion.writeClassRecord
-import ghistabs.parse.*
+import ghistabs.parse.GlobalTypeDecl
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
 /**
@@ -50,6 +50,11 @@ class ClassApplier(
     sink: DiagnosticSink,
 ) : VtableSweeper(registry, program, monitor, sink) {
     private val types = registry.types
+
+    /** The stabs' own type for a demangled slot parameter, where they made one. Built once a slot asks. */
+    private val replacer by lazy { DemanglerReplacer(program, registry, monitor, sink) }
+
+    override fun importedType(t: DemangledDataType) = replacer.parameterType(t)
 
     companion object {
         private val source = SourceType.IMPORTED
@@ -94,7 +99,7 @@ class ClassApplier(
 
         // [resolveMember]'s answers, misses included, so the reparenting and plate-comment passes resolve
         // each member once.
-        private val members = mutableMapOf<Method<*>, ResolvedMember?>()
+        private val members = mutableMapOf<MemberDecl, ResolvedMember?>()
 
         val name get() = located.className
         val body get() = located.classBody
@@ -109,7 +114,7 @@ class ClassApplier(
         val vftableCategory by lazy { ClassNaming.vftableCategory(ns) }
         val vftable: Structure by lazy { registry.vftableOf(located.vftablePath(types)).refiledUnder(vftableCategory) }
 
-        fun physnames(m: Method<*>) = abi.physnameCandidates(m, qualifiedClassName)
+        fun physnames(m: MemberDecl) = abi.physnameCandidates(m, qualifiedClassName)
 
         /**
          * The symbol [m] was emitted as and where it landed, or null if none of the ABI's spellings
@@ -118,7 +123,7 @@ class ClassApplier(
          * up — which is why both the reparenting pass and the vtable plate comments come through here
          * rather than reaching for [Method.mangled].
          */
-        fun resolveMember(m: Method<*>): ResolvedMember? = if (m in members) {
+        fun resolveMember(m: MemberDecl): ResolvedMember? = if (m in members) {
             members[m]
         } else {
             physnames(m).firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { ResolvedMember(name, it) } }
@@ -126,18 +131,17 @@ class ClassApplier(
         }
 
         /** The first of [m]'s physnames that demangles, linked or not: a pure virtual has no symbol. */
-        fun demangledPhysname(m: Method<GlobalTypeId>) =
+        fun demangledPhysname(m: MemberDecl) =
             physnames(m).firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
 
         /**
          * [stubParams] for a virtual slot, whose member need not be linked: a pure virtual has no symbol,
          * but the physname it would have still demangles. Null when none does, which leaves the slot `this`-only.
          */
-        fun slotStubParams(m: Method<GlobalTypeId>, at: String): List<DataType>? =
-            demangledPhysname(m)?.formalTypes(at) ?: run {
-                degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
-                null
-            }
+        fun slotStubParams(m: MemberDecl, at: String): List<DataType>? = demangledPhysname(m)?.formalTypes(at) ?: run {
+            degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
+            null
+        }
     }
 
     private fun DemangledFunction.formalTypes(at: String) =
@@ -176,7 +180,7 @@ class ClassApplier(
      * materializeAll already collapsed by name, and iterating canonical groups builds each class
      * once, off the most-detailed body. Returns the number of classes built.
      *
-     * The vtables of classes no stab describes are left to [ghistabs.entrypoints.GccVftableAnalyzer]'s
+     * The vtables of classes no stab describes are left to [VtableSweeper]'s
      * sweep, which knows the ones laid here by their `vftable` labels.
      */
     fun applyAll(): Int {
@@ -536,11 +540,10 @@ class ClassApplier(
     }
 
     /** [m]'s parameter leaf types as [slotName] spells them, or null for none: gcc 2.x's `(void)` is none. */
-    private fun LocatedClass.paramSpelling(m: Method<GlobalTypeId>): String? =
-        demangledPhysname(m)?.parameters.orEmpty()
-            .joinToString("_") { (if (it.type.isUnsigned) "unsigned_" else "") + it.type.name.orEmpty() }
-            .let { SymbolUtilities.replaceInvalidChars(it, true) }
-            .takeIf { it.isNotEmpty() && it != "void" }
+    private fun LocatedClass.paramSpelling(m: MemberDecl): String? = demangledPhysname(m)?.parameters.orEmpty()
+        .joinToString("_") { (if (it.type.isUnsigned) "unsigned_" else "") + it.type.name.orEmpty() }
+        .let { SymbolUtilities.replaceInvalidChars(it, true) }
+        .takeIf { it.isNotEmpty() && it != "void" }
 
     /** gcc 2.x's `##<ret>;`: no domain, no parameters, `this` included. */
     private val TypeDecl.Method<*>.isStub get() = cls == null && params.isEmpty()
@@ -629,7 +632,7 @@ class ClassApplier(
         }
 
         // Members resolve through [fallbackAbi]: [abi] is what this vtable's lookup is deciding.
-        fun Method<*>.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
+        fun MemberDecl.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
             resolver.resolve(it)?.isDefined() == true
         }
 

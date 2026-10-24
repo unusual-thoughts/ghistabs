@@ -6,8 +6,8 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
+import ghistabs.cpp.Access
 import ghistabs.cpp.ClassNaming
-import ghistabs.parse.Access
 
 /**
  * Authoritative Itanium `__cxxabiv1` typeinfo struct layouts, adapted from Ghidra's

@@ -4,10 +4,12 @@ import ghidra.framework.options.GProperties
 import ghidra.util.Saveable
 import ghidra.util.datastruct.DataTable
 import ghidra.util.map.ObjectStorageAdapter
-import ghistabs.materialize.ClassHierarchyRecords.Base
-import ghistabs.materialize.ClassHierarchyRecords.Entry
-import ghistabs.parse.Access
-import ghistabs.parse.VirtKind
+import ghistabs.cpp.Access
+import ghistabs.cpp.ClassHierarchyRecords
+import ghistabs.cpp.ClassHierarchyRecords.Base
+import ghistabs.cpp.ClassHierarchyRecords.Entry
+import ghistabs.cpp.MemberAttrs
+import ghistabs.cpp.VirtKind
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 

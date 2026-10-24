@@ -5,6 +5,8 @@ import ghidra.program.model.data.DataOrganizationImpl.getAlignedOffset
 import ghidra.program.model.gclass.ClassUtils
 import ghistabs.componentsOverlapping
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.member
+import ghistabs.cpp.placeBase
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
@@ -12,7 +14,6 @@ import ghistabs.index.demangledClassPath
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.member
 
 /**
  * A vptr at a base's offset is inherited: it is in the base subobject laid there, or in the part of a
@@ -194,29 +195,6 @@ internal fun DataTypeRegistry.baseSubobjects(body: TypeDecl.Aggregate<GlobalType
         types.hasVirtualBase(body) -> virtualBaseStructs(body).count { (_, dt) -> dt != null }
         else -> 0
     }
-
-/** Lays [dt] at [offset] in [struct] as a base subobject, and reports how that went. */
-internal fun DiagnosticSink.placeBase(
-    struct: Structure,
-    offset: Int,
-    dt: DataType,
-    isVirtual: Boolean,
-    comment: String,
-    fieldName: String,
-    qualifiedName: String,
-) {
-    val (applied, failed) = if (isVirtual) {
-        "vbase-applied" to "vbase-layout-failed"
-    } else {
-        "inheritance-applied" to "base-layout-failed"
-    }
-    runCatching { struct.replaceAtOffset(offset, dt, dt.length, fieldName, comment) }
-        .onSuccess { debug(applied) }
-        .onFailure {
-            degradation(failed, qualifiedName.member(dt.name), it.message)
-            if (!isVirtual) debug("inheritance-failed")
-        }
-}
 
 internal val LocatedType.classBody get() = type.body as TypeDecl.Aggregate<GlobalTypeId>
 internal val LocatedType.className get() = location.name

@@ -1,6 +1,10 @@
 package ghistabs.index
 
 import ghistabs.Demangler
+import ghistabs.cpp.canonTemplateName
+import ghistabs.cpp.isTemplated
+import ghistabs.cpp.member
+import ghistabs.cpp.templateLeaf
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.Func

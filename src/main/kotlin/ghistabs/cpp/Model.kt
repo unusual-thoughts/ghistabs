@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.cpp
 
 import ghidra.framework.options.CustomOption
 import ghidra.framework.options.GProperties
@@ -8,14 +8,25 @@ import ghidra.program.model.listing.Program
 import ghidra.util.ObjectStorage
 import ghidra.util.Saveable
 import ghistabs.GPropertiesFormat
-import ghistabs.parse.Access
-import ghistabs.parse.TypeDecl
-import ghistabs.parse.VirtKind
 import kotlinx.serialization.Serializable
 
-// What the stabs say of classes and their members that nothing else in the program keeps, recorded for
-// the Class Hierarchy window ([ghistabs.browse.ClassHierarchy]), which runs long after the stabs are
-// gone from memory.
+/** A C++ member's or base's access, as a stab's visibility marker or an RTTI base flag states it. */
+enum class Access { PRIVATE, PROTECTED, PUBLIC }
+
+/** Method kind from the stabs method-block trailer: `.` normal, `?` static, `*` virtual. */
+enum class VirtKind { NORMAL, STATIC, VIRTUAL }
+
+/** What a class member's declaration states, which is all [CxxMemberNaming] spells its symbol from. */
+interface MemberDecl {
+    val name: String
+
+    /** The physname the declaration states, if any: not always a whole symbol ([physnameCandidates]). */
+    val mangled: String?
+    val access: Access
+    val virt: VirtKind
+    val isConst: Boolean
+    val isVolatile: Boolean
+}
 
 /**
  * A map of each class's struct and direct bases ([Entry]) stored to program option [CLASSES], by
@@ -72,11 +83,8 @@ data class MemberAttrs(
     var isConst: Boolean = false,
     var isVolatile: Boolean = false,
 ) : Saveable {
-    constructor(method: TypeDecl.Aggregate.Method<*>) :
+    constructor(method: MemberDecl) :
         this(method.access, method.virt, method.isConst, method.isVolatile)
-
-    constructor(field: TypeDecl.Aggregate.Field<*>) :
-        this(field.access, if (field.isStatic) VirtKind.STATIC else VirtKind.NORMAL)
 
     override fun getObjectStorageFields(): Array<Class<*>> = arrayOf(INT, INT, BOOLEAN, BOOLEAN)
 

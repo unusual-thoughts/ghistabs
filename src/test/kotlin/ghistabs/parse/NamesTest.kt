@@ -1,5 +1,13 @@
 package ghistabs.parse
 
+import ghistabs.cpp.enclosingName
+import ghistabs.cpp.isTemplated
+import ghistabs.cpp.isVptrFieldName
+import ghistabs.cpp.leafName
+import ghistabs.cpp.nameSegments
+import ghistabs.cpp.outermostTemplate
+import ghistabs.cpp.templateLeaf
+import ghistabs.cpp.templateName
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 

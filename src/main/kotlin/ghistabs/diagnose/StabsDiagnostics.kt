@@ -1,16 +1,15 @@
 package ghistabs.diagnose
 
 import ghidra.program.model.address.Address
-import ghistabs.parse.SourceFile
 
 /** A gap between struct fields. `prev`/`next` are null at struct start/end. */
 data class GapRecord(val offsetBits: Long, val lengthBits: Long, val prevField: String?, val nextField: String?)
 
-/** Decision to route a type to `/std/`. */
+/** Decision to route a type to `/std/`, the sources it weighed spelled as the render spells them. */
 data class AttributionTrace(
     val typeName: String,
-    val definingCUs: Set<SourceFile>,
-    val matchedCU: SourceFile,
+    val definingCUs: Set<String>,
+    val matchedCU: String,
     val routedTo: String,
 )
 
@@ -95,8 +94,8 @@ class StabsDiagnostics : DiagnosticSink {
     /** Stores up to 200 traces total across all buckets; beyond that only the counter bumps. */
     fun recordAttributionTrace(
         typeName: String,
-        definingCUs: Set<SourceFile>,
-        matchedCU: SourceFile,
+        definingCUs: Set<String>,
+        matchedCU: String,
         routedTo: String,
         counter: String,
     ) {

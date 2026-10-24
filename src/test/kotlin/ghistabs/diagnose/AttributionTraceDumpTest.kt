@@ -1,7 +1,5 @@
 package ghistabs.diagnose
 
-import ghistabs.parse.HeaderFile
-import ghistabs.parse.SourceFile
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
@@ -10,8 +8,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 class AttributionTraceDumpTest {
-    private fun stdHeader(path: String): SourceFile.HeaderSource = SourceFile.HeaderSource(HeaderFile(path, 0L, null))
-
     @Test
     fun testFormatForTypeNoMatches() {
         val result = AttributionTraceDump.formatForType("Foo", emptyList())
@@ -24,8 +20,8 @@ class AttributionTraceDumpTest {
         val traces = listOf(
             AttributionTrace(
                 typeName = "Bar",
-                matchedCU = stdHeader(path),
-                definingCUs = setOf(stdHeader(path)),
+                matchedCU = path,
+                definingCUs = setOf(path),
                 routedTo = "/std/string",
             ),
         )
@@ -40,14 +36,14 @@ class AttributionTraceDumpTest {
         val traces = listOf(
             AttributionTrace(
                 typeName = "Baz",
-                matchedCU = stdHeader("/usr/include/c++/3.4.4/string"),
-                definingCUs = setOf(stdHeader("/usr/include/c++/3.4.4/string")),
+                matchedCU = "/usr/include/c++/3.4.4/string",
+                definingCUs = setOf("/usr/include/c++/3.4.4/string"),
                 routedTo = "/std/string",
             ),
             AttributionTrace(
                 typeName = "Baz",
-                matchedCU = stdHeader("/usr/include/c++/3.4.4/vector"),
-                definingCUs = setOf(stdHeader("/usr/include/c++/3.4.4/vector")),
+                matchedCU = "/usr/include/c++/3.4.4/vector",
+                definingCUs = setOf("/usr/include/c++/3.4.4/vector"),
                 routedTo = "/std/vector",
             ),
         )
@@ -64,8 +60,8 @@ class AttributionTraceDumpTest {
         val traces = listOf(
             AttributionTrace(
                 typeName = "Test",
-                matchedCU = stdHeader("/usr/include/c++/3.4.4/string"),
-                definingCUs = setOf(stdHeader("/usr/include/c++/3.4.4/string")),
+                matchedCU = "/usr/include/c++/3.4.4/string",
+                definingCUs = setOf("/usr/include/c++/3.4.4/string"),
                 routedTo = "/std/string",
             ),
         )

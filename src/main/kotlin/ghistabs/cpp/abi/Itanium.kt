@@ -10,12 +10,12 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.isTemplated
+import ghistabs.cpp.member
+import ghistabs.cpp.nameSegments
+import ghistabs.cpp.qualifiedName
 import ghistabs.getScalar
 import ghistabs.namespaces
-import ghistabs.parse.isTemplated
-import ghistabs.parse.member
-import ghistabs.parse.nameSegments
-import ghistabs.parse.qualifiedName
 
 /**
  * Single source of Itanium C++ ABI facts for the gcc/Cygwin corpus: mangled names,

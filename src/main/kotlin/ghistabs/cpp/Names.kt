@@ -1,4 +1,4 @@
-package ghistabs.parse
+package ghistabs.cpp
 
 // Pure C++ name-string operations for stabs (gcc writes names demangled) — no Ghidra dependency.
 // Source-form namespace/template splitting, template-whitespace canonicalisation, and Itanium

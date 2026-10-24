@@ -5,6 +5,8 @@ import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.isTemplated
+import ghistabs.cpp.member
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
@@ -18,8 +20,6 @@ import ghistabs.index.SourceHints
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.isTemplated
-import ghistabs.parse.member
 import ghistabs.render.Renderer.Companion.DECOMPILE_SECONDS
 import ghistabs.runTransaction
 import ghistabs.scan.Definition

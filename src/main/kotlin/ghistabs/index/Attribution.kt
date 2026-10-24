@@ -204,8 +204,8 @@ class Attribution(
         defSources.sorted().firstNotNullOfOrNull { stdRelativePath(it.filename) }?.let { rel ->
             diagnostics?.recordAttributionTrace(
                 typeName = typeName,
-                definingCUs = defSources,
-                matchedCU = defSources.first { stdRelativePath(it.filename) == rel },
+                definingCUs = defSources.mapTo(linkedSetOf()) { it.toString() },
+                matchedCU = defSources.first { stdRelativePath(it.filename) == rel }.toString(),
                 routedTo = "/std/$rel",
                 counter = "attribution-routed-std",
             )

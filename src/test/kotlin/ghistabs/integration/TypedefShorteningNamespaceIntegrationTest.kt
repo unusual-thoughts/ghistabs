@@ -13,6 +13,7 @@ import ghistabs.diagnose.CapturingSink
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
+import ghistabs.importer.import
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.typedefAliases
 import ghistabs.runTransaction

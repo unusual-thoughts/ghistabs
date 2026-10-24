@@ -2,6 +2,8 @@ package ghistabs.index
 
 import ghistabs.cpp.abi.Gcc2
 import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.isTemplated
+import ghistabs.cpp.qualifiedName
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
