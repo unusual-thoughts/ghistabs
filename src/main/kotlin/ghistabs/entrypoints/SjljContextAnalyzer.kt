@@ -48,7 +48,7 @@ class SjljContextAnalyzer :
 
     override fun canAnalyze(program: Program) = SjljLsdaAnalyzer().canAnalyze(program)
 
-    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         // Byte analyzers run again on whatever code a later analyzer changes (call fixups re-add theirs),
         // so only what [set] covers: the whole program once, then just the changed code.
         val (contexts, signatures) = typeAll(
@@ -73,17 +73,17 @@ class SjljContextAnalyzer :
             program: Program,
             monitor: TaskMonitor,
             sink: DiagnosticSink,
-            set: AddressSetView? = null,
+            set: AddressSetView,
         ): Pair<Int, Int> {
             if (!SjljLsdaAnalyzer().canAnalyze(program)) return 0 to 0
             val all = SjljLsdaAnalyzer.lsdas(program, program.memory, monitor).values.flatMap { it.second }
             if (all.isEmpty()) return 0 to 0
-            val regs = all.filter { set == null || set.contains(it.store) }
+            val regs = all.filter { set.contains(it.store) }
             // Again after the import, which can recreate a function and with it drop the labels in it.
             regs.forEach { SjljLsdaAnalyzer.layResume(program, it, monitor, sink) }
             val abi = SjljAbi(program.dataTypeManager)
             val contexts = typeContexts(program, regs, abi, monitor, sink)
-            return contexts to typeEntryPoints(program, all, abi, monitor, sink) { set == null || set.contains(it) }
+            return contexts to typeEntryPoints(program, all, abi, monitor, sink) { set.contains(it) }
         }
 
         /**

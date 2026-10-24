@@ -39,14 +39,14 @@ class FillerByteAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun getDefaultEnablement(program: Program?) = true
+    override fun getDefaultEnablement(program: Program) = true
 
-    override fun canAnalyze(program: Program?) = program?.memory?.executeSet?.isEmpty == false
+    override fun canAnalyze(program: Program) = !program.memory.executeSet.isEmpty
 
-    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val listing = program.listing
         val bookmarks = program.bookmarkManager
-        val target = program.memory.executeSet.intersect(set ?: program.memory.executeSet)
+        val target = program.memory.executeSet.intersect(set)
         val code = PseudoDisassembler(program).instructions
 
         var marked = 0
