@@ -60,6 +60,21 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     private val laidOut = FunctionSpans.of(rawFuncs - compilerWritten, source)
     override fun Int?.indentAt() = if (this != null && laidOut.inFunction(this)) 4 else 0
 
+    /**
+     * Where a class whose members this file defines is dated (§105). Decomp anchors every statement of a
+     * one-line body at that line, so all but the first slide down, and through such a class's row they
+     * took it: gcc 2.95's `operator+=` at hello.cc L47 slid onto L48, `Diamond`'s `};`, and gcc 3.x's
+     * `~Named` at L43 onto L44, `Diamond`'s opener. Header types gcc misfiles into the file define no
+     * member here, so they stop nothing.
+     */
+    private val classLines = rawFuncs.mapTo(mutableSetOf()) { Demangler.namespaces(it.name).qualifiedName }
+        .let { scopes -> typeDecls.filter { it.body is TypeDecl.Aggregate && it.name in scopes } }
+        .mapNotNull { it.line }
+
+    /** [FunctionSpans.barrier], stopping above a class of [classLines] too. */
+    private fun barrier(line: Int) =
+        listOfNotNull(spans.barrier(line), classLines.filter { it > line }.minOrNull()?.minus(1)).minOrNull()
+
     private val lineExtent = lines.maxOfOrNull { it.lineNumber }
     private val codeExtent = extentOf(lineExtent, spans.maxStabLine)
     private val staticsExtent = statics.mapNotNull { it.line }.maxOrNull()
@@ -713,7 +728,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             // The body may borrow the blank rows after its span when it outgrows it — up to the next
             // function's opener, past which the rows are that function's — so a dense body breathes
             // instead of piling on.
-            val gapEnd = spans.barrier(r.start)
+            val gapEnd = barrier(r.start)
             // AFTER, not EXACT: several functions can share a start line, and under EXACT their heads
             // merged into one `{` while each body kept its `}`. Each keeps its own opener and slides
             // if it must.
@@ -789,7 +804,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                 }
             }
 
-            addAll(anchored.claimsFor(spans::barrier, floor = r.start))
+            addAll(anchored.claimsFor(::barrier, floor = r.start))
         }
 
         // The code this file contributed to *other* files' functions. gcc inlined it from here, so
@@ -821,7 +836,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                 acc
             }
             .flatMap { (f, group) -> group.wrapAsDefinition(f) }
-        addAll(inlined.claimsFor(spans::barrier, owner = Owner.INLINED_BODY))
+        addAll(inlined.claimsFor(::barrier, owner = Owner.INLINED_BODY))
     }
 
     /** A row nothing has claimed yet — only meaningful before allocation writes anything. */
