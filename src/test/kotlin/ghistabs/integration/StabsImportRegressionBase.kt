@@ -19,6 +19,7 @@ import ghistabs.*
 import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.BaselineWriter
+import ghistabs.baseline.Observations
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
@@ -89,6 +90,9 @@ private val NON_VIRTUAL_THUNK = Regex("_?_ZThn(\\d+)_(N.*)")
  */
 enum class Mode { BEFORE, CONCURRENT, AFTER }
 
+/** The modes [StabsImportRegressionBase.countersWithinBaseline] checks, and a baseline has to cover. */
+val BASELINE_MODES = listOf(Mode.AFTER, Mode.CONCURRENT)
+
 const val OUTPUT_ROOT = "build/test-output"
 
 /**
@@ -136,6 +140,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     private val shiftedBaselineFile get() = File(
         "$OUTPUT_ROOT/shifted-baselines/${fixture.nameWithoutExtension}-baseline.json",
     )
+    private val observations get() = Observations(File("$OUTPUT_ROOT/observed-counters"), fixture.nameWithoutExtension)
     private val recordsFile get() = outputFile("record")
     private val emptyStubDumpFile get() = File("$OUTPUT_ROOT/demangler-empty-stubs/${fixture.nameWithoutExtension}.txt")
     private val harvestFile get() = outputFile("harvest.${mode.name.lowercase()}")
@@ -308,25 +313,22 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
     @Test
     fun countersWithinBaseline() {
-        assumeTrue { mode == Mode.AFTER || mode == Mode.CONCURRENT }
+        assumeTrue { mode in BASELINE_MODES }
         assumeTrue(defaultVfptrModel, "Skipping: baselines are recorded under ${VFPTR_MODEL.default}")
         // Authoritative per-category counts. Not `log.tagFrequencies()`: that only sees categories
         // that reach the sink (record*/direct-inc bypass it) and ignores `count = n` tallies, which
         // made assertions on those categories (e.g. empty-scope) silently vacuous.
         val counters = context.diagnostics.snapshotCounters()
         val targets = context.diagnostics.degradationTargets()
+        // Kept per mode, so a baseline written below covers every checked mode, not just this one.
+        if (counters.isNotEmpty()) observations.locked { observations.record(mode.name, counters, targets) }
 
         // -PregenerateBaselines=true rewrites the baseline from the observed counts (deterministic
         // import). The resulting git diff is the record of exactly which counters moved. This has to
         // precede the exists() check below, or a newly added fixture can never get a first baseline:
         // the assumption skips the test before it can write one.
         if (System.getProperty("regenerateBaselines") == "true") {
-            BaselineWriter.write(
-                baselineFile,
-                counters,
-                "$binaryName - generated from snapshotCounters()",
-                degradationTargets = targets,
-            )
+            writeFromObservations(baselineFile, "$binaryName - generated from snapshotCounters()")
             return
         }
 
@@ -356,20 +358,24 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             }
         }
         val new = counters.keys - baseline.counters.keys
-        if (drift.isNotEmpty() || new.isNotEmpty()) {
-            shiftedBaselineFile.parentFile.mkdirs()
-            BaselineWriter.write(
-                shiftedBaselineFile,
-                counters,
-                "$binaryName - shifted from committed",
-                baselineFile,
-                targets,
-            )
-
-            if (System.getProperty("ignoreBaselines") != "true") {
-                drift.mustBeEmpty("Baseline drift detected")
-            }
+        // Rewritten by every mode once any has drifted: from all the modes' observations, so the file
+        // does not depend on which mode finished last.
+        if (drift.isNotEmpty() || new.isNotEmpty() || shiftedBaselineFile.exists()) {
+            writeFromObservations(shiftedBaselineFile, "$binaryName - shifted from committed")
         }
+        if (System.getProperty("ignoreBaselines") != "true") {
+            drift.mustBeEmpty("Baseline drift detected")
+        }
+    }
+
+    /**
+     * Write [file] from every mode's observations so far, against the committed baseline. Read under the
+     * lock, so the last write has every mode recorded before it.
+     */
+    private fun writeFromObservations(file: File, source: String) = observations.locked {
+        val modes = BASELINE_MODES.map { it.name }
+        val (observed, complete) = observations.load(modes)
+        BaselineWriter.write(file, observed, source, baselineFile, observations.degradationTargets(modes), complete)
     }
 
     /**
