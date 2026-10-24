@@ -2,26 +2,22 @@ package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
-import ghistabs.at
+import ghistabs.*
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.isBaseField
 import ghistabs.cpp.isVptrFieldName
-import ghistabs.cpp.leafName
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.includes
-import ghistabs.length
-import ghistabs.overlaps
+import ghistabs.index.vptrOffsetBytesOf
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghistabs.withLength
 
 /**
  * Where a polymorphic class's `{vfptr}` goes, and what happens to the base subobject that would
  * otherwise own it. See [VfptrModel] for what the choice costs a virtual call. [cpp.ClassLayout]'s, which
  * runs it on each class in its turn.
  */
-internal class VfptrPlacement(private val registry: DataTypeRegistry, private val model: VfptrModel) :
-    DiagnosticSink by registry {
+internal class VfptrPlacement(private val registry: DtmRegistry, private val model: VfptrModel, sink: DiagnosticSink) :
+    DiagnosticSink by sink {
     private val dtm = registry.dtm
 
     /**
@@ -37,7 +33,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
         polyBase: TypeDecl.Aggregate.Base<GlobalTypeId>?,
     ) {
         val vfptrName = ClassUtils.VFPTR
-        val parserVptrOffset = vptrOffsetBytesOf(classBody)
+        val parserVptrOffset = classBody.vptrOffsetBytesOf()
 
         val targetOffset = parserVptrOffset ?: 0
         val existingComp = runCatching { structDt.getComponentAt(targetOffset) }.getOrNull()
@@ -261,7 +257,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
  * at, where `RecoveredClassHelper` and shift-S round-trip expect it. [classPath] is the class's
  * namespace path, the class itself last. Empty until the class pass fills it.
  */
-internal fun DataTypeRegistry.vftableOf(classPath: List<String>) = ClassNaming.vftablePath(classPath).let { dtPath ->
+internal fun DtmRegistry.vftableOf(classPath: List<String>) = ClassNaming.vftablePath(classPath).let { dtPath ->
     getOrRegister<Structure>(dtPath) {
         StructureDataType(dtPath.categoryPath, dtPath.dataTypeName, 0, dtm)
     }

@@ -1,8 +1,5 @@
-package ghistabs.materialize.cpp
+package ghistabs.materialize
 
-import ghistabs.materialize.FirstComponentSnapshot
-import ghistabs.materialize.VfptrAction
-import ghistabs.materialize.chooseVfptrAction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeA
 import org.junit.jupiter.api.Test

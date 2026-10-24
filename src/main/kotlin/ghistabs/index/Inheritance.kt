@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.index
 
 import ghistabs.cpp.VirtKind
 import ghistabs.cpp.isVptrFieldName
@@ -13,7 +13,7 @@ import ghistabs.parse.TypeDecl.Aggregate.Method
  * "where does this class say its vptr is": the Itanium ABI puts it at 0, gcc 2.x appends it after
  * the class's own fields, and only the stab says which.
  */
-fun vptrOffsetBytesOf(typeDecl: TypeDecl.Aggregate<GlobalTypeId>): Int? = typeDecl.fields
+fun TypeDecl.Aggregate<GlobalTypeId>.vptrOffsetBytesOf(): Int? = fields
     .firstOrNull { isVptrFieldName(it.name) }
     ?.let { (it.offsetBits / 8).toInt() }
 
@@ -37,7 +37,7 @@ fun TypeGraph.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Aggregate<GlobalTyp
  */
 fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Aggregate<GlobalTypeId>): Base<GlobalTypeId>? = typeDecl.bases
     .filter {
-        when (val offsetBytes = vptrOffsetBytesOf(typeDecl)) {
+        when (val offsetBytes = typeDecl.vptrOffsetBytesOf()) {
             null -> true
             else if it.isVirtual -> false
             else -> offsetBytes.toLong() == it.offsetBits / 8

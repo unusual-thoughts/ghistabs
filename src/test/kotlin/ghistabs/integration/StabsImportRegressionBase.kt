@@ -47,10 +47,10 @@ import ghistabs.importer.ImportOptions.Companion.enableStabsAnalyzer
 import ghistabs.importer.import
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
+import ghistabs.index.hasPolymorphicBaseSubobject
+import ghistabs.index.vptrOffsetBytesOf
 import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.conflictCount
-import ghistabs.materialize.hasPolymorphicBaseSubobject
-import ghistabs.materialize.vptrOffsetBytesOf
 import ghistabs.parse.*
 import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -1265,7 +1265,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun declaredVptrsBecomeTheClassVfptr() {
         val declaring = builtClasses().mapNotNull { (body, dt) ->
-            vptrOffsetBytesOf(body)
+            body.vptrOffsetBytesOf()
                 ?.takeUnless { off -> body.bases.any { !it.isVirtual && it.offsetBits / 8 == off.toLong() } }
                 ?.let { Triple(body, dt, it) }
         }

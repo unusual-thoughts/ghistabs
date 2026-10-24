@@ -1,11 +1,11 @@
-package ghistabs.materialize.cpp
+package ghistabs.cpp
 
 import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
+import ghistabs.index.vptrOffsetBytesOf
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.integration.Fixtures
 import ghistabs.loadProgram
-import ghistabs.materialize.vptrOffsetBytesOf
 import ghistabs.parse.TypeDecl
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
@@ -44,7 +44,7 @@ class VxTableTagIntegrationTest : FeatureFixtureTest() {
         // Circle inherits Shape's vptr, at the same offset since Shape is its base at 0.
         for ((cls, declaring) in listOf("Shape" to "Shape", "Circle" to "Shape", "Named" to "Named")) {
             val vft = tables[cls] ?: continue
-            val expected = vptrOffsetBytesOf(body(declaring))?.toLong() ?: 0L
+            val expected = body(declaring).vptrOffsetBytesOf()?.toLong() ?: 0L
             ClassUtils.validateVtableDescriptionOffsetTag(vft.description).mustBe(expected, "${vft.name}'s tag")
         }
     }

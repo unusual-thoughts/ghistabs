@@ -23,7 +23,10 @@ import ghistabs.diagnose.Level
 import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
+import ghistabs.index.collectAllVirtuals
+import ghistabs.index.isPolymorphic
 import ghistabs.materialize.*
+import ghistabs.materialize.vftableOf
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
