@@ -1,6 +1,7 @@
 package ghistabs.cpp
 
 import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
 import ghistabs.diagnose.DiagnosticSink
@@ -33,6 +34,14 @@ internal fun Structure.vfptrOffset(): Int? = definedComponents.firstNotNullOfOrN
     }
 }
 
+/** The direct base whose `{vfptr}` the class's own is, when it shares one. */
+internal fun Structure.primaryBase(): String? {
+    val vfptr = vfptrOffset() ?: return null
+    return definedComponents.firstOrNull { c ->
+        c.isBaseField() && (c.dataType as? Structure)?.vfptrOffset()?.let { c.offset + it } == vfptr
+    }?.dataType?.name
+}
+
 /**
  * Offset in [this] of the `{vfptr}` inside the base subobject [base] names, looking through base
  * subobjects in layout order — where a gcc 2.x secondary vtable's pointer sits in the class. The base
@@ -47,6 +56,9 @@ internal fun Structure.vfptrOffsetOfBase(base: String): Int? = definedComponents
         else -> dt.vfptrOffsetOfBase(base)?.let { c.offset + it }
     }
 }
+
+/** [ClassNaming.isBaseField], off a live component instead of a bare field name. */
+fun DataTypeComponent.isBaseField() = ClassNaming.isBaseField(fieldName.orEmpty())
 
 /** Lays [dt] at [offset] in [struct] as a base subobject, and reports how that went. */
 internal fun DiagnosticSink.placeBase(

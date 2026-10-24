@@ -16,6 +16,7 @@ import ghistabs.cpp.describeVxTable
 import ghistabs.cpp.isBaseField
 import ghistabs.cpp.leafName
 import ghistabs.cpp.nameSegments
+import ghistabs.cpp.primaryBase
 import ghistabs.cpp.vfptrOffset
 import ghistabs.cpp.vfptrOffsetOfBase
 import ghistabs.diagnose.DiagnosticSink
@@ -399,14 +400,6 @@ open class VtableSweeper(
                 .onFailure { degradation("vftable-rename-failed", leaf, "${vftable.name} -> $name: ${it.message}") }
         }
         vftable.describeVxTable(leaf, label, vfptrAt)
-    }
-
-    /** The direct base whose `{vfptr}` the class's own is, when it shares one. */
-    private fun Structure.primaryBase(): String? {
-        val vfptr = vfptrOffset() ?: return null
-        return definedComponents.firstOrNull { c ->
-            c.isBaseField() && (c.dataType as? Structure)?.vfptrOffset()?.let { c.offset + it } == vfptr
-        }?.dataType?.name
     }
 
     /**
