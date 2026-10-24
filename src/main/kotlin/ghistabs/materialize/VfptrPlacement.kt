@@ -8,6 +8,7 @@ import ghistabs.cpp.isBaseField
 import ghistabs.cpp.isVptrFieldName
 import ghistabs.cpp.leafName
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.includes
 import ghistabs.length
 import ghistabs.overlaps
 import ghistabs.parse.GlobalTypeId
@@ -266,10 +267,10 @@ internal fun DataTypeRegistry.vftableOf(classPath: List<String>) = ClassNaming.v
     }
 }
 
-/** Whether [c] lies wholly within these bytes. */
-private fun IntRange.holds(c: DataTypeComponent) = c.offset >= first && c.offset + c.length <= last + 1
-
 private val DataTypeComponent.range get() = offset.withLength(length)
+
+/** Whether [c] lies wholly within these bytes. */
+private fun IntRange.holds(c: DataTypeComponent) = includes(c.range)
 
 /** Whether [c] shares a byte with these. */
 private fun IntRange.overlaps(c: DataTypeComponent) = overlaps(c.range)

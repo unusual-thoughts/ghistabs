@@ -35,6 +35,7 @@ class Once<T, R>(private val f: (T) -> R) : (T) -> R {
 
 fun Int.withLength(len: Int) = this..<this + len
 fun IntRange.overlaps(other: IntRange) = other.first in this || first in other
+fun IntRange.includes(other: IntRange) = other.first in this && other.last in this
 val IntRange.length get() = endInclusive - start + 1
 
 /**
