@@ -69,11 +69,11 @@ class DeferredPopAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun canAnalyze(program: Program?) = program?.run {
+    override fun canAnalyze(program: Program) = program.run {
         language.processor.toString() == "x86" && !language.isBigEndian && defaultPointerSize == 4
-    } ?: false
+    }
 
-    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val stdcall = program.fixImportPurges()
         if (stdcall > 0) log.appendMsg(NAME, "set the purge of $stdcall stdcall import(s)")
 

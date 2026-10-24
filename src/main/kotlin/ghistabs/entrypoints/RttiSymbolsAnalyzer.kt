@@ -33,7 +33,7 @@ class RttiSymbolsAnalyzer :
 
     override fun canAnalyze(program: Program) = !program[RTTI_SYMBOLS_RESTORED] && GnuDemangler().canDemangle(program)
 
-    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val laid = RttiSymbols.restoreOnce(program, MessageLogSink(log, originator = NAME))
         if (laid > 0) log.appendMsg(NAME, "labelled $laid vtable(s)")
         return true

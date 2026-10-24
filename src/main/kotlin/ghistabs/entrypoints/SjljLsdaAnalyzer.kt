@@ -88,8 +88,8 @@ class SjljLsdaAnalyzer :
         program.defaultPointerSize == 4 &&
         GnuDemangler().canDemangle(program)
 
-    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
-        val laid = layAll(program, set ?: program.memory, monitor, MessageLogSink(log, originator = NAME))
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
+        val laid = layAll(program, set, monitor, MessageLogSink(log, originator = NAME))
         if (laid > 0) log.appendMsg(NAME, "laid $laid LSDA(s)")
         return true
     }

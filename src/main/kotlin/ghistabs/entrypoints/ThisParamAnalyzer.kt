@@ -41,16 +41,16 @@ class ThisParamAnalyzer :
 
     override fun canAnalyze(program: Program) = program.compilerSpec.callingConventions.any { it.hasThisPointer() }
 
-    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val frozen = program.functionManager.getFunctions(set, true)
             .filter { it.isMethod && it.hasCustomVariableStorage() }
             .filter { it.callingConvention?.hasThisPointer() == true }
             // Custom storage means no auto-params, so this `this` is a stored one — the shape to undo.
             .filter { f -> f.parameters.any { it.name == Function.THIS_PARAM_NAME } }
-        monitor?.checkCancelled()
+        monitor.checkCancelled()
 
         frozen.count { it.redoStorage(log) }.takeIf { it > 0 }?.let { restored ->
-            log?.appendMsg(THIS_PARAM_ANALYZER_NAME, "restored `this` on $restored method(s)")
+            log.appendMsg(THIS_PARAM_ANALYZER_NAME, "restored `this` on $restored method(s)")
         }
         return true
     }
@@ -58,7 +58,7 @@ class ThisParamAnalyzer :
     // Ours to drop: `updateFunction` strips an explicit `this` only when it is pointer-typed. Copies,
     // not the live parameters: `updateFunction` clears the names off those before reading the list
     // back, so passing them in loses the name and source it is being asked to keep.
-    private fun Function.redoStorage(log: MessageLog?) = runCatching {
+    private fun Function.redoStorage(log: MessageLog) = runCatching {
         replaceParameters(
             parameters.filterNot { it.isInjected }.map { ParameterImpl(it.name, it.dataType, program, it.source) },
             Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
@@ -66,6 +66,6 @@ class ThisParamAnalyzer :
             signatureSource,
         )
     }.onFailure {
-        log?.appendMsg(THIS_PARAM_ANALYZER_NAME, "failed on $name @$entryPoint: ${it.message}")
+        log.appendMsg(THIS_PARAM_ANALYZER_NAME, "failed on $name @$entryPoint: ${it.message}")
     }.isSuccess
 }

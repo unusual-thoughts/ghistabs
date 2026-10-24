@@ -58,19 +58,17 @@ class HullDisassemblyAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun getDefaultEnablement(program: Program?) = true
+    override fun getDefaultEnablement(program: Program) = true
 
-    override fun canAnalyze(program: Program?) = program?.memory?.executeSet?.isEmpty == false
+    override fun canAnalyze(program: Program) = !program.memory.executeSet.isEmpty
 
-    override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
-        program ?: return false
-        monitor ?: return false
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val pseudo = PseudoDisassembler(program)
         val code = pseudo.instructions
         val executable = program.memory.executeSet
 
         val recover = mutableMapOf<AddressRange, String>()
-        for (fn in program.functionManager.getFunctions(set ?: executable, true)) {
+        for (fn in program.functionManager.getFunctions(set, true)) {
             monitor.checkCancelled()
             if (fn.isExternal || fn.isThunk) continue
             val hull = AddressSet(fn.entryPoint, fn.body.maxAddress).intersect(executable)
@@ -87,7 +85,7 @@ class HullDisassemblyAnalyzer :
             for ((range, why) in recover) {
                 program.bookmarkManager.setBookmark(range.minAddress, BookmarkType.ANALYSIS, NAME, "Disassembled: $why")
             }
-            log?.appendMsg(NAME, "recovered ${all.numAddresses} in-function code bytes")
+            log.appendMsg(NAME, "recovered ${all.numAddresses} in-function code bytes")
         }
         return true
     }

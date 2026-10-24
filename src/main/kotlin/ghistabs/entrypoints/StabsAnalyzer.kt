@@ -44,20 +44,16 @@ class StabsAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun getDefaultEnablement(program: Program?): Boolean = true
+    override fun getDefaultEnablement(program: Program): Boolean = true
 
-    override fun canAnalyze(program: Program?): Boolean {
-        if (program == null) return false
+    override fun canAnalyze(program: Program): Boolean {
         if (program.isStabsDone) return false
         return StabReader.hasStabs(program)
     }
 
-    override fun registerOptions(options: Options, program: Program?) = options.registerStabs()
+    override fun registerOptions(options: Options, program: Program) = options.registerStabs()
 
-    override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, msg: MessageLog?): Boolean {
-        program ?: return false
-        msg ?: return false
-        monitor ?: return false
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, msg: MessageLog): Boolean {
         val options = program.stabsOptions()
         val probe = ImportProbe.get(program)
 

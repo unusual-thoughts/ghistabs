@@ -63,7 +63,7 @@ class GccVftableAnalyzer :
      */
     override fun canAnalyze(program: Program) = !program.isVtablesSwept && GnuDemangler().canDemangle(program)
 
-    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         if (program.isVtablesSwept) return false
 
         // The log only, at INFO and up: no bookmarks. Every table laid would get an Analysis one, and its
