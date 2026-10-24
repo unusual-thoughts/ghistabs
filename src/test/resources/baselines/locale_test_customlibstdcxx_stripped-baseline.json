@@ -470,7 +470,7 @@
         },
         "text-data-no-coverage": {
             "min": 10,
-            "max": 12
+            "max": 10
         },
         "textrange-entries": {
             "min": 903,
