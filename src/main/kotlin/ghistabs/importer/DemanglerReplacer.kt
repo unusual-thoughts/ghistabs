@@ -36,21 +36,6 @@ sealed class Skip(open val reason: String) {
 }
 
 /**
- * What a [ghistabs.cpp.abi.VtableSweeper] on this import's [registry] types a demangled slot parameter by:
- * the stabs' own type for it where they made one ([DemanglerReplacer.parameterType]). The replacer is
- * only built once a slot asks.
- */
-internal fun importedParameterTypes(
-    program: Program,
-    registry: DataTypeRegistry,
-    monitor: TaskMonitor,
-    sink: DiagnosticSink,
-): (DemangledDataType) -> DataType? {
-    val replacer by lazy { DemanglerReplacer(program, registry, monitor, sink) }
-    return { replacer.parameterType(it) }
-}
-
-/**
  * Replaces empty `/Demangler/...` stubs with our registered types. Candidates come from
  * [DataTypeRegistry.allRegistered] only — no DTM-wide heuristics. The stub's path (sans `/Demangler`)
  * acts as the preferred-category hint when multiple candidates share a simple name.

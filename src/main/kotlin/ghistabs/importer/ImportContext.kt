@@ -78,8 +78,6 @@ class ImportContext<Terminal : DiagnosticSink>(
     fun hints(harvest: Harvest) = SourceHints(harvest, types(harvest), sources(harvest), this)
     fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
     fun classApplier(registry: DataTypeRegistry) = ClassApplier(registry, program, resolver, monitor, this)
-    fun vtableSweeper(registry: DataTypeRegistry) =
-        VtableSweeper(registry, program, monitor, this, importedParameterTypes(program, registry, monitor, this))
 }
 
 /**

@@ -37,14 +37,15 @@ open class VtableSweeper(
     internal val program: Program,
     internal val monitor: TaskMonitor,
     private val sink: DiagnosticSink = DummySink,
+) : DiagnosticSink by sink {
+    internal val symtab = program.symbolTable
+    internal val dtm = program.dataTypeManager
+
     /**
      * A demangled parameter's type as an import made it, ahead of Ghidra's own lookup: gcc 3's stabs file
      * `std::_Ios_Openmode` under no namespace, so the lookup in `/std` misses it. Null for none.
      */
-    private val importedType: (DemangledDataType) -> DataType? = { null },
-) : DiagnosticSink by sink {
-    internal val symtab = program.symbolTable
-    internal val dtm = program.dataTypeManager
+    protected open fun importedType(t: DemangledDataType): DataType? = null
 
     internal fun DemangledDataType.slotParameterType(category: String, degrades: String) = importedType(this)
         ?: parameterType(dtm)

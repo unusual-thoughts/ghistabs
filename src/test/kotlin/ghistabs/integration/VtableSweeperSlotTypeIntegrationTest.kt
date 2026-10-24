@@ -37,7 +37,7 @@ class VtableSweeperSlotTypeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             "_ZNSt15basic_streambufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
         ) as DemangledFunction
 
-        val typed = with(ctx.vtableSweeper(registry)) {
+        val typed = with(ctx.classApplier(registry)) {
             seekoff.formals.last().slotParameterType("vftable-demangled-untyped", "seekoff")
         }
 

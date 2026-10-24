@@ -1,6 +1,7 @@
 package ghistabs.importer
 
 import ghidra.app.util.NamespaceUtils
+import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
@@ -57,8 +58,13 @@ class ClassApplier(
     internal val resolver: AddressResolver,
     monitor: TaskMonitor,
     sink: DiagnosticSink,
-) : VtableSweeper(registry, program, monitor, sink, importedParameterTypes(program, registry, monitor, sink)) {
+) : VtableSweeper(registry, program, monitor, sink) {
     private val types = registry.types
+
+    /** The stabs' own type for a demangled slot parameter, where they made one. Built once a slot asks. */
+    private val replacer by lazy { DemanglerReplacer(program, registry, monitor, sink) }
+
+    override fun importedType(t: DemangledDataType) = replacer.parameterType(t)
 
     companion object {
         private val source = SourceType.IMPORTED
