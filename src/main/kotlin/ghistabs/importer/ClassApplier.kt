@@ -14,6 +14,8 @@ import ghidra.program.model.symbol.SymbolType
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
+import ghistabs.cpp.ClassHierarchyRecords
+import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
@@ -32,7 +34,6 @@ import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
 import ghistabs.materialize.*
-import ghistabs.materialize.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
