@@ -1,12 +1,17 @@
 package ghistabs.integration
 
 import ghidra.app.util.importer.MessageLog
+import ghidra.program.model.listing.CommentType
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.Demangler
+import ghistabs.DtmRegistry
 import ghistabs.LoadedProgram
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.vtableRecord
+import ghistabs.diagnose.DummySink
+import ghistabs.entrypoints.GccVftableAnalyzer
 import ghistabs.entrypoints.RttiSymbolsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.loadProgram
@@ -18,7 +23,9 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.MethodSource
 import java.io.File
+import java.util.stream.Stream
 
 /**
  * A stripped twin finds its vtables where the unstripped one's symbols put them (§99). The two link
@@ -66,5 +73,79 @@ class RttiSymbolsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val vtable = named.firstOrNull { it == ClassNaming.VTABLE || it.startsWith("_ZTV") }
         checkNotNull(vtable) { "no vtable at $at: $named" }
         program.vtableRecord(at).addressPoint.toString() mustBe addressPoint.removePrefix("0x").padStart(8, '0')
+    }
+
+    /**
+     * Every VTT and construction vtable the unstripped twin names, the stripped one gets back from its VTTs,
+     * at the same address and nothing else: the twins link `.rdata` byte for byte. Compared demangled: the
+     * `_ZTC` names put back spell the base out in full where gcc's substitute what the class already said
+     * (`_ZTCSt13basic_fstreamIwSt11char_traitsIwEE0_St13basic_istreamIwS1_E`).
+     */
+    @ParameterizedTest
+    @MethodSource("strippedTwins")
+    fun `a stripped binary's VTTs and construction vtables are found through its typeinfo`(stripped: String) {
+        val twin = stripped.replace("_stripped", "")
+        fun File.vttLabels(analyze: Boolean) = loadProgram(this).use { loaded ->
+            val program = loaded.program
+            if (analyze) {
+                program.runTransaction("rtti-symbols") {
+                    RttiSymbolsAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog())
+                }
+            }
+            program.symbolTable.getAllSymbols(false)
+                .map { it.address.toString() to it.name.substringAfter("_ZT", "").let { n -> "_ZT$n" } }
+                .filter { (_, name) -> name.startsWith("_ZTT") || name.startsWith("_ZTC") }
+                .map { (at, name) -> at to (Demangler.of(name)?.originalDemangled ?: name) }
+                .toSet()
+        }
+        val expected = File("src/test/resources/binaries/$twin").vttLabels(analyze = false)
+        assumeTrue(expected.isNotEmpty(), "$twin has no VTT")
+        File("src/test/resources/binaries/$stripped").vttLabels(analyze = true) mustBe expected
+    }
+
+    /**
+     * The vftable sweep lays every VTT as its vtable pointers, each word commented with the vtable it points into.
+     * `std::iostream`'s holds its own primary vtable, a sub-VTT for each of `istream` and `ostream` (their
+     * construction vtable, then `ios` in it), then `ios` and `ostream` in `iostream`: the virtual `ios` is
+     * reached through `istream`, ahead of `ostream`.
+     */
+    @ParameterizedTest
+    @MethodSource("strippedTwins")
+    fun `every VTT is laid word by word, each commented with what it points at`(stripped: String) {
+        loaded = loadProgram(File("src/test/resources/binaries/${stripped.replace("_stripped", "")}"))
+        program.runTransaction("sweep") {
+            GccVftableAnalyzer.sweep(program, DtmRegistry(program.dataTypeManager), TaskMonitor.DUMMY, DummySink)
+        }
+        val ptr = program.defaultPointerSize
+        val vtts = program.symbolTable.getAllSymbols(false).filter { it.name.substringAfter("_ZT", "").startsWith("T") }
+            .distinctBy { it.address }.toList()
+        assumeTrue(vtts.isNotEmpty(), "no VTT")
+        val comments = vtts.associate { sym ->
+            sym.name.substringAfter("_ZT") to generateSequence(sym.address) { it.add(ptr.toLong()) }
+                .takeWhile { program.listing.getDataAt(it)?.isPointer == true }
+                .map { program.listing.getComment(CommentType.EOL, it) }
+                .toList()
+        }
+        comments.filterValues { it.isEmpty() || null in it }.keys mustBe emptySet()
+        comments["TSd"]?.let { words ->
+            words mustBe listOf(
+                "vtable for iostream",
+                "construction vtable for istream-in-iostream",
+                "vtable for ios-in-istream-in-iostream, in its construction vtable",
+                "construction vtable for ostream-in-iostream",
+                "vtable for ios-in-ostream-in-iostream, in its construction vtable",
+                "vtable for ios-in-iostream",
+                "vtable for ostream-in-iostream",
+            )
+        }
+    }
+
+    companion object {
+        @JvmStatic
+        fun strippedTwins(): Stream<String> = Fixtures.all()
+            .filter {
+                it.contains("_stripped") &&
+                    File("src/test/resources/binaries/${it.replace("_stripped", "")}").exists()
+            }
     }
 }

@@ -504,6 +504,10 @@
             "min": 89,
             "max": 89
         },
+        "vtt-laid": {
+            "min": 12,
+            "max": 12
+        },
         "xref-undefined": {
             "min": 15,
             "max": 15

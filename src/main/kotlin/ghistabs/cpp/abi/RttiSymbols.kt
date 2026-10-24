@@ -97,43 +97,90 @@ class RttiSymbols(
             label(typeinfo, Itanium.TYPEINFO_PREFIX + name)
         }
 
+        return labelVtables(unique)
+    }
+
+    /**
+     * Labels the vtable of each class in [typeinfos], and the VTTs and construction vtables of those with
+     * virtual bases; returns how many vtables.
+     *
+     * A class one record matches has its vtable there. Their VTTs then say which of the records left are
+     * construction vtables, which leaves the rest one each; the PE section order settles what doesn't.
+     */
+    private fun labelVtables(typeinfos: List<TypeInfoRecord>): Int {
         val header = primaryHeader(dtm)
 
         // The offset_to_top words in front of a pointer to this typeinfo that start a primary vtable
         fun TypeInfoRecord.primaryVtables() = sitesByTarget[address]?.mapNotNull { it.plusWords(-1) }
             ?.filter { program.primaryRecordAt(it, header) != null }.orEmpty()
 
-        val tops = unique.associate { it.name to (it.address to it.primaryVtables()) }
-        val settled = tops.values.mapNotNull { (_, candidates) -> candidates.singleOrNull() }
-        val among = settled.minOrNull()?.let { lo -> lo..settled.max() }
-        val laid = tops.mapNotNull { (name, found) ->
-            val (typeinfo, candidates) = found
-            val top = candidates.singleOrNull()
-                ?: candidates.singleOrNull { among != null && it in among } ?: run {
-                if (candidates.isNotEmpty()) debug("vtable-rtti-ambiguous", "$name: $candidates", typeinfo)
+        val candidates = typeinfos.associateWith { it.primaryVtables() }
+        val rtti = Rtti.Reader(program)
+        val reader = VttReader(
+            program,
+            rtti,
+            names = typeinfos.associate { it.address to it.name },
+            dynamic = candidates.filterValues { it.isNotEmpty() }.keys.mapTo(HashSet()) { it.address },
+        )
+
+        // A class's VTT is the lowest data word pointing at its address point: only a VTT stores a vtable address
+        // in data, and a virtual primary base reusing the class's vptr puts the same address further into it.
+        fun vttOf(top: Address) = top.plusWords(2)?.let(sitesByTarget::get)?.min()?.let(reader::vttAt)
+
+        val settled = candidates.mapNotNull { (ti, found) -> found.singleOrNull()?.let { ti to it } }.toMap()
+        var kept = labelVtables(settled, rtti)
+        val vtts = settled.mapNotNull { (ti, top) -> vttOf(top)?.let { ti to it } }.toMap(HashMap())
+        val construction = vtts.values.flatMap { vtt -> vtt.constructionVtables.map { it.second } }.toSet()
+        val among = settled.values.minOrNull()?.let { lo -> lo..settled.values.max() }
+        val rest = candidates.filterKeys { it !in settled }.mapNotNull { (ti, found) ->
+            val left = found - construction
+            val top = left.singleOrNull() ?: left.singleOrNull { among != null && it in among } ?: run {
+                if (found.isNotEmpty()) debug("vtable-rtti-ambiguous", "${ti.name}: $found", ti.address)
                 return@mapNotNull null
             }
-            if (!label(program.recordStart(top), Itanium.VTABLE_PREFIX + name)) return@mapNotNull null
-            Triple(name, typeinfo, top)
+            ti to top
+        }.toMap()
+        kept += labelVtables(rest, rtti)
+        rest.forEach { (ti, top) -> vttOf(top)?.let { vtts[ti] = it } }
+        vtts.forEach { (ti, vtt) -> labelVtt(ti.name, vtt, rtti) }
+        return kept
+    }
+
+    /** Labels [vtt], the VTT of the class [name] mangles, and the construction vtables it starts sub-VTTs with. */
+    private fun labelVtt(name: String, vtt: Vtt, rtti: Rtti.Reader) {
+        if (label(vtt.address, Itanium.VTABLE_TABLE_PREFIX + name)) debug("vtt-from-rtti", name, vtt.address)
+        for ((ztc, top) in vtt.constructionVtables) {
+            val base = program.pointerAt(top.add(ptr.toLong())) ?: continue
+            val start = recordStart(top, base, rtti)
+            if (label(start, ztc)) debug("vtable-construction-from-vtt", ztc, start)
         }
-        // Once every typeinfo and vtable is labelled, the typeinfos can be read for where they put their
+    }
+
+    /** Labels each of [tops]' classes' vtables where its record starts; returns how many. */
+    private fun labelVtables(tops: Map<TypeInfoRecord, Address>, rtti: Rtti.Reader): Int {
+        val starts = tops.map { (ti, top) -> Triple(ti, top, program.recordStart(top)) }
+            .filter { (ti, _, start) -> label(start, Itanium.VTABLE_PREFIX + ti.name) }
+        // Once the typeinfos and their vtables are labelled, a typeinfo can be read for where it puts its
         // vbase offsets, which a run of zeros in front of offset_to_top hides. Where the true start was
         // named all along (an unstripped binary), the label just laid is a duplicate and goes.
-        val rtti = Rtti.Reader(program)
-        val kept = laid.filter { (name, typeinfo, top) ->
-            val start = program.recordStart(top)
-            val lowest = rtti.virtualBasesOf(typeinfo).minOfOrNull { it.offset }
-            val vbaseStart = lowest?.let { top.plusWords(2)?.plusOrNull(it) }?.takeIf { it < start }
-            if (vbaseStart == null) {
-                debug("vtable-from-rtti", name, start)
-                return@filter true
+        return starts.count { (ti, top, start) ->
+            val vbaseStart = recordStart(top, ti.address, rtti)
+            if (vbaseStart == start) {
+                debug("vtable-from-rtti", ti.name, start)
+                return@count true
             }
-            program.symbolTable.getSymbol(Itanium.VTABLE_PREFIX + name, start, null)?.delete()
-            label(vbaseStart, Itanium.VTABLE_PREFIX + name).also {
-                if (it) debug("vtable-rtti-zero-vbase", name, vbaseStart)
+            program.symbolTable.getSymbol(Itanium.VTABLE_PREFIX + ti.name, start, null)?.delete()
+            label(vbaseStart, Itanium.VTABLE_PREFIX + ti.name).also {
+                if (it) debug("vtable-rtti-zero-vbase", ti.name, vbaseStart)
             }
         }
-        return kept.size
+    }
+
+    /** Where the record whose `offset_to_top` is at [top] starts, given the [typeinfo] its rtti word holds. */
+    private fun recordStart(top: Address, typeinfo: Address, rtti: Rtti.Reader): Address {
+        val start = program.recordStart(top)
+        val lowest = rtti.virtualBasesOf(typeinfo).minOfOrNull { it.offset }
+        return lowest?.let { top.plusWords(2)?.plusOrNull(it) }?.takeIf { it < start } ?: start
     }
 
     /**
