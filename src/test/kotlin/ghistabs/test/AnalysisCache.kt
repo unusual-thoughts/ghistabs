@@ -11,9 +11,10 @@ import ghidra.util.Msg
 import ghidra.util.classfinder.ClassSearcher
 import ghidra.util.task.TaskMonitor
 import ghistabs.LoadedProgram
+import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.importer.ImportOptions.Companion.disableStabsAnalyzer
 import ghistabs.loadPackedProgram
-import java.io.DataInputStream
+import org.objectweb.asm.Type
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
@@ -26,11 +27,11 @@ import java.security.MessageDigest
  * fixture (90-500s against BEFORE's ~10s), and the snapshot is taken between the analysis and the
  * stabs import, which is a point only AFTER mode has.
  *
- * An entry is named for everything that produced it (see [key]): the fixture's bytes, the Ghidra
+ * An entry is named for everything that produced it (see [codeKey]): the fixture's bytes, the Ghidra
  * build, and the bytecode of the analysis it ran. Ghidra's analysis is not alone in that pass: this
- * extension's other analyzers stay enabled in AFTER mode and run inside it, so a change to one of them,
- * or to anything they call, names a new entry and the fixture is re-analyzed. Whatever only the stabs
- * import and the rendering reach does not, which is what lets CI carry the cache from run to run.
+ * extension's other analyzers stay enabled in AFTER mode and run inside it, so a change to a method
+ * one of them can execute names a new entry and the fixture is re-analyzed. A change to code only the
+ * stabs import executes does not, which is what lets CI carry the cache from run to run.
  * Storing an entry deletes the fixture's others. `-PanalysisCache=off` bypasses it entirely, `=refresh`
  * re-analyzes and overwrites.
  *
@@ -42,10 +43,11 @@ object AnalysisCache {
     private val dir = File(System.getProperty("analysisCacheDir").orEmpty().ifEmpty { "build/analysis-cache" })
 
     /**
-     * What every entry depends on besides its fixture: the Ghidra build, and each class this project
-     * built that an analysis can execute. Those are the classes loaded from a directory rather than a
-     * jar that the analyzers Ghidra discovers, or this object (which holds the AFTER-mode analysis
-     * recipe), reach through their constant pools. Computed once per JVM, after Ghidra is up.
+     * What every entry depends on besides its fixture: the Ghidra build, and the bytecode this project
+     * built that the analysis can execute (see [ReachableCode]). That is every analyzer Ghidra discovers,
+     * as Ghidra drives it, and the recipe in [analyze], but not [StabsAnalyzer.added]: the recipe turns
+     * the stabs analyzer off, so the import and everything only it calls stay out of the key, and the
+     * import runs after the snapshot anyway. Computed once per JVM, after Ghidra is up.
      */
     private val codeKey: String? by lazy {
         runCatching {
@@ -54,16 +56,25 @@ object AnalysisCache {
                 Application.getBuildDate(),
                 Application.getApplicationProperty("application.revision.ghidra").orEmpty(),
             )
-            val roots = ClassSearcher.getClasses(Analyzer::class.java) + AnalysisCache::class.java
+            val code = analysisCode(ClassSearcher.getClasses(Analyzer::class.java))
+            Msg.info(this, "analysis cache: key covers ${code.classes.size} classes")
             sha256 { digest ->
                 ghidra.forEach { digest.update("$it\n".toByteArray()) }
-                reachableClasses(roots).forEach { (name, bytes) ->
-                    digest.update("$name\n".toByteArray())
-                    digest.update(bytes)
-                }
+                digest.update(code.text().toByteArray())
             }
         }.onFailure { Msg.warn(this, "analysis cache: cannot fingerprint the analysis, cache off ($it)") }
             .getOrNull()
+    }
+
+    /** The code an AFTER-mode analysis with [analyzers] can execute. */
+    internal fun analysisCode(analyzers: Collection<Class<*>>): ReachableCode {
+        val import = StabsAnalyzer::class.java.methods.filter { it.name == "added" }.map {
+            ReachableCode.Ref(Type.getInternalName(StabsAnalyzer::class.java), it.name, Type.getMethodDescriptor(it))
+        }
+        return ReachableCode(AnalysisCache::class.java.classLoader, import.toSet()).apply {
+            analyzers.forEach(::instantiatedExternally)
+            calledExternally(AnalysisCache::class.java, "analyze")
+        }
     }
 
     /** [fixture]'s entry under the current code, or null when the cache has no key. */
@@ -139,62 +150,4 @@ object AnalysisCache {
 
     private fun sha256(feed: (MessageDigest) -> Unit) =
         MessageDigest.getInstance("SHA-256").also(feed).digest().joinToString("") { "%02x".format(it) }
-
-    /**
-     * Bytecode of [roots] and of every class they reach, by internal name, in name order, keeping to
-     * classes loaded from a directory: this project's own output, not Ghidra's jars or the JDK.
-     */
-    private fun reachableClasses(roots: Collection<Class<*>>): Map<String, ByteArray> {
-        val loader = AnalysisCache::class.java.classLoader
-        val found = sortedMapOf<String, ByteArray>()
-        val pending = ArrayDeque(roots.map { it.name.replace('.', '/') })
-        val visited = mutableSetOf<String>()
-        while (pending.isNotEmpty()) {
-            val name = pending.removeFirst()
-            if (!visited.add(name)) continue
-            val url = loader.getResource("$name.class")?.takeIf { it.protocol == "file" } ?: continue
-            val bytes = url.openStream().use { it.readBytes() }
-            found[name] = bytes
-            pending += referencedClasses(bytes) - visited
-        }
-        return found
-    }
-
-    private val DESCRIPTOR_CLASS = Regex("L([^;<>]+)[;<]")
-
-    /** Bytes after the tag of each fixed-size constant pool entry, by tag (JVMS 4.4). */
-    @Suppress("MagicNumber")
-    private val CONSTANT_SIZE = mapOf(
-        3 to 4, 4 to 4, 5 to 8, 6 to 8, 8 to 2, 9 to 4, 10 to 4, 11 to 4,
-        12 to 4, 15 to 3, 16 to 2, 17 to 4, 18 to 4, 19 to 2, 20 to 2,
-    )
-
-    /**
-     * Internal names a class file's constant pool mentions: its class entries, and every class in its
-     * descriptors and signatures. Over-approximates (a name in a string constant counts too), which can
-     * only make the key more sensitive.
-     */
-    @Suppress("MagicNumber")
-    private fun referencedClasses(bytes: ByteArray): Set<String> {
-        val input = DataInputStream(bytes.inputStream())
-        input.skipBytes(8) // magic, minor_version, major_version
-        val count = input.readUnsignedShort()
-        val utf8 = mutableMapOf<Int, String>()
-        val classIndices = mutableListOf<Int>()
-        var index = 1
-        while (index < count) {
-            val tag = input.readUnsignedByte()
-            when (tag) {
-                1 -> utf8[index] = input.readUTF()
-                7 -> classIndices += input.readUnsignedShort()
-                else -> input.skipBytes(CONSTANT_SIZE[tag] ?: error("unknown constant pool tag $tag"))
-            }
-            // Eight-byte constants take two slots.
-            index += if (tag == 5 || tag == 6) 2 else 1
-        }
-        return buildSet {
-            classIndices.mapNotNullTo(this) { utf8[it]?.takeUnless { name -> name.startsWith('[') } }
-            utf8.values.forEach { value -> DESCRIPTOR_CLASS.findAll(value).mapTo(this) { it.groupValues[1] } }
-        }
-    }
 }
