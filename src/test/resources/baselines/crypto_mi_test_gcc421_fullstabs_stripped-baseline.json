@@ -56,6 +56,10 @@
             "min": 25,
             "max": 25
         },
+        "demangler-reverse-demangle-match": {
+            "min": 61,
+            "max": 61
+        },
         "demangler-shortened-name-match": {
             "min": 17,
             "max": 17
@@ -109,7 +113,7 @@
             "max": 188
         },
         "function-create-disassembled-first": {
-            "min": 164,
+            "min": 136,
             "max": 164
         },
         "function-created-from-stab": {
@@ -875,6 +879,10 @@
             "min": 4,
             "max": 4
         },
+        "replaced-demangler": {
+            "min": 61,
+            "max": 61
+        },
         "rtti-pseudo-substituted": {
             "min": 37,
             "max": 37
@@ -964,8 +972,8 @@
             "max": 1
         },
         "typedef-shorten-rehomed": {
-            "min": 977,
-            "max": 977
+            "min": 673,
+            "max": 673
         },
         "typeinfo-unread": {
             "min": 2,

@@ -432,14 +432,3 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         }
     }
 }
-
-/**
- * The one struct a stab tag, or typedef, names, when only one does: a class no namespace finds, a plain struct,
- * `basic_ios<char,…>` under its `ios`. A cycle-break stub, kept out of the DTM, is not one.
- */
-internal fun DataTypeRegistry.uniqueStructTagged(tag: String) =
-    (types.definitionsByTag[tag].orEmpty() + types.namedTypedefs[tag].orEmpty())
-        .mapNotNull { dataTypeFor(it.id)?.let { dt -> (dt as? TypeDef)?.baseDataType ?: dt } as? Structure }
-        .filter(dtm::contains)
-        .distinct()
-        .singleOrNull()

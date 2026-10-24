@@ -9,7 +9,6 @@ import ghistabs.LOADS_AOUT
 import ghistabs.LoadedProgram
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.integration.StaticMemberLabelIntegrationTest.Companion.mustHaveNoGcc2StaticMemberPrimary
@@ -78,7 +77,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun importsStabsFromTheSymbolTable() {
         load("hello_aout_gcc295.o")
-        program.defaultContext().import()
+        program.defaultContext().importAndAnalyze()
 
         val dtm = program.dataTypeManager
         fun find(name: String) = dtm.allDataTypes.asSequence().firstOrNull { it.name == name }
@@ -108,7 +107,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             ImportOptions { minLogLevel = Level.DEBUG },
         )
         ctx.options.must("this test is meaningless unless the overlay is on") { overlaySection }
-        ctx.import()
+        ctx.importAndAnalyze()
 
         val symtab = program.memory.getBlock(".symtab")
         symtab.mustNotBeNull("a.out loader should expose the symbol table as .symtab")
@@ -132,7 +131,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun labelsStaticMembersByTheirClass() {
         load("tinyxml_aout_gcc295.o")
-        program.defaultContext().import()
+        program.defaultContext().importAndAnalyze()
 
         program.mustHaveNoGcc2StaticMemberPrimary()
         program.symbolTable.getSymbols("entity").map { it.getName(true) }
@@ -147,7 +146,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun harvestsEveryCompilationUnitOfAMergedObject() {
         load("zlib_aout_gcc263.o")
-        program.defaultContext().import()
+        program.defaultContext().importAndAnalyze()
 
         val dtm = program.dataTypeManager
         fun find(name: String) = dtm.allDataTypes.asSequence().firstOrNull { it.name == name }
@@ -180,7 +179,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun headerWrappersCarryOnlyTheirOwnBraces() {
         load("zlib_aout_gcc263.o")
         val ctx = program.defaultContext()
-        val artifacts = checkNotNull(ctx.import().artifacts)
+        val artifacts = checkNotNull(ctx.importAndAnalyze().artifacts)
         val out = File("build/test-output/header-wrappers").apply { deleteRecursively() }
         Renderer(Renderer.Mode.DECOMPILE, ctx, artifacts.hints).use { it.renderAll(out) }
         val stdlib = out.walk().single { it.name == "stdlib.h" }.readText()

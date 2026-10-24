@@ -17,8 +17,7 @@ import ghistabs.get
  * Puts back the `_ZTS`/`_ZTI`/`_ZTV` labels a stripped gcc binary lost, from the RTTI it kept
  * ([RttiSymbols]). Early, so everything keyed off those symbols sees them: the Demangler analyzer's
  * `vtable`/`typeinfo` labels, [RttiLayoutAnalyzer], [GccVftableAnalyzer] and the stabs import's classes.
- * Needs only memory and the block permissions. A stabs import run before analysis restores them itself;
- * disabling this analyzer turns that off too ([isEnabled]).
+ * Needs only memory and the block permissions.
  */
 class RttiSymbolsAnalyzer :
     AbstractAnalyzer(
@@ -42,8 +41,5 @@ class RttiSymbolsAnalyzer :
 
     companion object {
         const val NAME = "Itanium RTTI symbols"
-
-        /** Whether the analyzer is on in [program]'s analysis options, which the stabs import honours too. */
-        fun isEnabled(program: Program) = program.getOptions(Program.ANALYSIS_PROPERTIES).getBoolean(NAME, true)
     }
 }

@@ -12,6 +12,7 @@ import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.*
 import ghistabs.cpp.isBaseField
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.materialize.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.parse.leafName
 import ghistabs.parse.member
 
@@ -24,18 +25,22 @@ import ghistabs.parse.member
  * defines where the typeinfo puts it, `ios_base` 4 bytes in. Where that does not fit, that base alone is laid.
  *
  * Needs the labels demangled, so each `vtable` and `typeinfo` sits in its class's namespace, which
- * [DataTypeUtilities.findExistingClassStruct] finds the class's struct by; [fallback] answers, by the
- * class's qualified name, where that finds none. gcc 2.x fills its typeinfo at run time, so has none to
- * read. A struct already holding something where a virtual base goes is taken to have it, and anything
- * that would not fit, or would cover laid bytes, is reported and left.
+ * [DataTypeUtilities.findExistingClassStruct] finds the class's struct by. Where that finds none (a struct
+ * renamed by typedef shortening, or filed under a CU's category), the struct a stabs import recorded for
+ * the class ([readClassRecord]) answers, by that namespace or the class's qualified name. gcc 2.x fills
+ * its typeinfo at run time, so has none to read. A struct already holding something where a virtual base
+ * goes is taken to have it, and anything that would not fit, or would cover laid bytes, is reported and left.
  */
-class VtableVirtualBases(
-    private val program: Program,
-    sink: DiagnosticSink,
-    private val fallback: (String) -> Structure? = { null },
-) : DiagnosticSink by sink {
+class VtableVirtualBases(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val dtm = program.dataTypeManager
     private val reader = Rtti.Reader(program)
+    private val record = program.readClassRecord().orEmpty()
+
+    /** [record] by qualified class name, for a label the demangler left outside its class's namespace. */
+    private val recordByName by lazy {
+        record.mapNotNull { (id, entry) -> program.symbolTable.getSymbol(id)?.getName(true)?.let { it to entry } }
+            .toMap()
+    }
 
     /** Lays every class's; returns how many virtual bases it laid. */
     fun layAll(): Int = program.symbolTable.getSymbols(ClassNaming.VTABLE).iterator().asSequence()
@@ -136,11 +141,11 @@ class VtableVirtualBases(
     private fun roomAt(struct: Structure, offset: Int) =
         (struct.definedComponents.map { it.offset }.filter { it > offset }.minOrNull() ?: struct.length) - offset
 
-    /** [className]'s struct, by the namespace its demangled labels sit in, else by [fallback]. */
+    /** [className]'s struct, by the namespace its demangled labels sit in, else as [recorded]. */
     private fun structFor(className: String, namespace: Namespace?) =
         lookup(className, namespace).firstNotNullOfOrNull { it.takeAcceptable() }
 
-    /** What may be [className]'s struct, empty or not: by the namespace, then by [fallback]. */
+    /** What may be [className]'s struct, empty or not: by the namespace, then as [recorded]. */
     private fun lookup(className: String, namespace: Namespace?) = listOfNotNull(
         when (namespace) {
             is GhidraClass -> DataTypeUtilities.findExistingClassStruct(dtm, namespace)
@@ -154,8 +159,14 @@ class VtableVirtualBases(
 
             else -> null
         },
-        fallback(className),
+        recorded(className, namespace),
     )
+
+    /** The struct a stabs import recorded for [className]: by its [namespace], else by its qualified name. */
+    private fun recorded(className: String, namespace: Namespace?): Structure? {
+        val entry = (namespace as? GhidraClass)?.let { record[it.id] } ?: recordByName[className]
+        return entry?.structId?.let(dtm::getDataType) as? Structure
+    }
 
     /** The namespace the demangled `typeinfo` label at [zti] sits in. */
     private fun namespaceOfTypeinfo(zti: Address) = program.symbolTable.getSymbols(zti)

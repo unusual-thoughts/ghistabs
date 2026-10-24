@@ -153,8 +153,8 @@ class RttiSymbols(
         private const val MAX_TYPE_NAME = 4096
 
         /**
-         * [restore] on an Itanium binary, once: early analysis does it ([ghistabs.entrypoints.RttiSymbolsAnalyzer]),
-         * and a stabs import run before analysis does it itself. gcc 2.x builds its typeinfo at run time, so a
+         * [restore] on an Itanium binary, once: early analysis does it ([ghistabs.entrypoints.RttiSymbolsAnalyzer]).
+         * gcc 2.x builds its typeinfo at run time, so a
          * name string in its data proves nothing; a stripped binary may have no mangled symbol left to say which
          * ABI it is, and then a name only Itanium spells has to. Returns how many vtables were labelled.
          */

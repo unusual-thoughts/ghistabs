@@ -1,5 +1,6 @@
 package ghistabs.test
 
+import ghidra.app.util.importer.MessageLog
 import ghidra.framework.options.OptionType
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSpace
@@ -7,15 +8,24 @@ import ghidra.program.model.address.GenericAddressSpace
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.*
+import ghistabs.entrypoints.RttiSymbolsAnalyzer
+import ghistabs.entrypoints.StabsAnalyzer.Companion.import
+import ghistabs.entrypoints.analyzeAfterImport
 import ghistabs.harvest.*
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
+import ghistabs.importer.ImportProbe
+import ghistabs.importer.ImportResult
+import ghistabs.importer.analyzeDataCoverage
+import ghistabs.importer.runOnRecords
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
+import ghistabs.isAnalyzerEnabled
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.VfptrModel
 import ghistabs.parse.IdInterface
+import ghistabs.parse.StabReader
 import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
 import java.math.BigInteger
@@ -52,6 +62,23 @@ fun dummyCursor() = StabCursor(GenericAddressResolver, DummySink)
  */
 fun <Id : IdInterface> longRange(inner: Id, min: Long, max: Long) =
     TypeDecl.Range(TypeDecl.Ref(inner), BigInteger.valueOf(min), BigInteger.valueOf(max))
+
+/**
+ * The import with what auto-analysis would run around it: the RTTI symbols it needs back first, then
+ * [analyzeAfterImport], which reports into this context's counters and sink through a probe
+ * ([ImportProbe.sinkFor]), then the data coverage report over all of it. Imports [stabs] where a test
+ * builds its records by hand, else what the program's own stab section holds.
+ */
+fun ImportContext<*>.importAndAnalyze(stabs: StabReader.Result? = null): ImportResult {
+    if (ImportProbe.get(program) == null) ImportProbe.install(this)
+    RttiSymbolsAnalyzer().takeIf { program.isAnalyzerEnabled(it.name) && it.canAnalyze(program) }?.let {
+        program.runTransaction("rtti-symbols") { it.added(program, program.memory, monitor, MessageLog()) }
+    }
+    return (stabs?.let(::runOnRecords) ?: import()).also {
+        program.analyzeAfterImport(monitor)
+        if (it.artifacts != null) analyzeDataCoverage()
+    }
+}
 
 // Tests capture at max verbosity — DEBUG and up — so log assertions see every message.
 fun Program.defaultContext(

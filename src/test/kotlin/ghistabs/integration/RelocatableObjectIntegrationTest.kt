@@ -5,7 +5,6 @@ import ghidra.program.model.data.Undefined
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.loadProgram
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -29,7 +28,7 @@ class RelocatableObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
     private fun load(name: String) {
         assumeTrue(Fixtures.accepts(name), "excluded by -Pfixture")
         loaded = loadProgram(File("src/test/resources/binaries/features/$name"))
-        program.defaultContext().import()
+        program.defaultContext().importAndAnalyze()
     }
 
     @AfterEach
