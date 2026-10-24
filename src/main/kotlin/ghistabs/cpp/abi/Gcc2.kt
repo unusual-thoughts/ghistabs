@@ -5,6 +5,7 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
 import ghistabs.Demangler
+import ghistabs.cpp.MemberDecl
 import ghistabs.cpp.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
 import ghistabs.cpp.leafName
 import ghistabs.cpp.nameSegments
@@ -291,7 +292,7 @@ sealed interface Gcc2Abi : CxxAbi {
      * Composed unconditionally: the caller tries the stated name first and stops at the first hit,
      * so a physname that is already a whole symbol resolves before this one is ever looked up.
      */
-    override fun physnameCandidates(m: MethodDecl, className: String) = listOfNotNull(
+    override fun physnameCandidates(m: MemberDecl, className: String) = listOfNotNull(
         m.mangled,
         m.mangled?.let { Gcc2.classQualifiedPhysname(m.name, it, m.isConst, m.isVolatile) },
         Gcc2.physnamePrefix(m.name, className, m.isConst, m.isVolatile) + m.mangled.orEmpty(),

@@ -3,6 +3,7 @@ package ghistabs.render
 import ghidra.program.model.address.Address
 import ghistabs.Demangler
 import ghistabs.chunkOf
+import ghistabs.cpp.VirtKind
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.Gcc2
 import ghistabs.cpp.abi.StructorVariant
