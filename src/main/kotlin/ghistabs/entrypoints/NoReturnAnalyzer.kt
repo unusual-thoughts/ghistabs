@@ -65,11 +65,10 @@ class NoReturnAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
-        program ?: return false
-        val marked = markNoReturn(program, set, monitor ?: TaskMonitor.DUMMY)
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
+        val marked = markNoReturn(program, set, monitor)
         if (marked.isNotEmpty()) {
-            log?.appendMsg(NO_RETURN_ANALYZER_NAME, "marked ${marked.size} function(s) non-returning")
+            log.appendMsg(NO_RETURN_ANALYZER_NAME, "marked ${marked.size} function(s) non-returning")
         }
         return true
     }
@@ -81,7 +80,7 @@ class NoReturnAnalyzer :
  * re-queues that function's callers; the fixed point terminates because marking is one-way and only a
  * new mark enqueues anything. Re-running is therefore idempotent and cheap. See [NoReturnAnalyzer].
  */
-fun markNoReturn(program: Program, set: AddressSetView?, monitor: TaskMonitor = TaskMonitor.DUMMY): List<Function> {
+fun markNoReturn(program: Program, set: AddressSetView, monitor: TaskMonitor = TaskMonitor.DUMMY): List<Function> {
     val funMgr = program.functionManager
     val model = SimpleBlockModel(program)
 

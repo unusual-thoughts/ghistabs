@@ -32,7 +32,7 @@ class VirtualBaseAnalyzer :
 
     override fun canAnalyze(program: Program) = GnuDemangler().canDemangle(program)
 
-    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = ImportProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val laid = VtableVirtualBases(program, sink).layAll()
         if (laid > 0) log.appendMsg(NAME, "laid $laid virtual base(s)")

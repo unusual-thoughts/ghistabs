@@ -80,17 +80,16 @@ class StructReturnAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun canAnalyze(program: Program?) = program?.run {
+    override fun canAnalyze(program: Program) = program.run {
         language.processor.toString() == "x86" &&
             !language.isBigEndian &&
             defaultPointerSize == 4 &&
             compilerSpec.compilerSpecID.idAsString == "gcc"
-    } ?: false
+    }
 
-    override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
-        program ?: return false
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val work = program.functionManager.getFunctions(set, true).mapNotNull { f ->
-            monitor?.checkCancelled()
+            monitor.checkCancelled()
             correctionFor(program, f)?.let { Triple(f, f.callingConventionName, it) }
         }
         if (work.isEmpty()) return true
@@ -102,7 +101,7 @@ class StructReturnAnalyzer :
         val fixed = work.count { (f, base, fix) ->
             (base to fix) in ready && reassign(f, fix.conventionFor(base), log)
         }
-        if (fixed > 0) log?.appendMsg(STRUCT_RETURN_ANALYZER_NAME, "corrected return storage on $fixed function(s)")
+        if (fixed > 0) log.appendMsg(STRUCT_RETURN_ANALYZER_NAME, "corrected return storage on $fixed function(s)")
         return true
     }
 
@@ -126,7 +125,7 @@ class StructReturnAnalyzer :
         else -> null
     }
 
-    private fun install(program: Program, base: String, fix: Correction, log: MessageLog?): Boolean = runCatching {
+    private fun install(program: Program, base: String, fix: Correction, log: MessageLog): Boolean = runCatching {
         val xml = derivedConventionXml(program, base, fix)
         SpecExtension(program).run {
             if (testExtensionDocument(xml).installedIn(program) == null) {
@@ -135,18 +134,18 @@ class StructReturnAnalyzer :
         }
         true
     }.getOrElse {
-        log?.appendMsg(STRUCT_RETURN_ANALYZER_NAME, "could not install ${fix.conventionFor(base)}: ${it.message}")
+        log.appendMsg(STRUCT_RETURN_ANALYZER_NAME, "could not install ${fix.conventionFor(base)}: ${it.message}")
         false
     }
 
-    private fun reassign(f: Function, convention: String, log: MessageLog?): Boolean = runCatching {
+    private fun reassign(f: Function, convention: String, log: MessageLog): Boolean = runCatching {
         // reparentMethod's explicit-`this` under __thiscall leaves a spurious local named `this`,
         // which collides with the auto-parameter the derived convention reinstates.
         f.localVariables.filter { it.collidesWithInjectedParameter }.forEach { f.removeVariable(it) }
         f.setCallingConvention(convention)
         true
     }.getOrElse {
-        log?.appendMsg(STRUCT_RETURN_ANALYZER_NAME, "failed on ${f.name} @ ${f.entryPoint}: ${it.message}")
+        log.appendMsg(STRUCT_RETURN_ANALYZER_NAME, "failed on ${f.name} @ ${f.entryPoint}: ${it.message}")
         false
     }
 }

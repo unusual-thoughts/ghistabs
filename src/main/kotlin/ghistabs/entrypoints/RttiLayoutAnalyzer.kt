@@ -33,7 +33,7 @@ class RttiLayoutAnalyzer :
 
     override fun canAnalyze(program: Program) = GnuDemangler().canDemangle(program)
 
-    override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
+    override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = ImportProbe.sinkFor(program, MessageLogSink(log, Level.DEBUG, NAME))
         val laid = layTypeinfos(program, DtmRegistry(program.dataTypeManager), sink)
         if (laid > 0) log.appendMsg(NAME, "laid $laid typeinfo(s)")
