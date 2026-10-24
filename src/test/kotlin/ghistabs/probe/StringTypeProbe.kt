@@ -9,13 +9,13 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.entrypoints.StabsAnalyzer
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportProbe
 import ghistabs.materialize.isUndefined
 import ghistabs.runTransaction
 import ghistabs.test.disableWindowsResourceAnalyzer
+import ghistabs.test.importAndAnalyze
 import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -71,7 +71,7 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
                 mgr.waitForAnalysis(null, monitor)
             }
             program.runTransaction("stabs-analyze") {
-                ctx.import()
+                ctx.importAndAnalyze()
             }
 
             val out = File("build/test-output/degradations/$label.string-probe.txt")

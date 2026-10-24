@@ -37,7 +37,6 @@ import ghistabs.entrypoints.SjljLsdaAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.disableStabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.enableStabsAnalyzer
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.harvest.Type
 import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
@@ -217,12 +216,15 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                     runAutoAnalysis(mgr, monitor)
                     artifacts = checkNotNull(probe.artifacts) { "artifacts not populated by CONCURRENT" }
+                    // The analyzers after the import have run too: report what all of it left undescribed.
+                    context.analyzeDataCoverage()
                 }
 
                 Mode.BEFORE -> {
                     // Just run our analyzer with no autoanalysis
                     program.runTransaction("stabs-analyze") {
-                        artifacts = checkNotNull(context.import().artifacts) { "artifacts not populated by BEFORE" }
+                        artifacts =
+                            checkNotNull(context.importAndAnalyze().artifacts) { "artifacts not populated by BEFORE" }
                     }
                 }
 
@@ -238,7 +240,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                         AnalysisCache.store(fixture, program)
                     }
                     program.runTransaction("stabs-analyze") {
-                        artifacts = checkNotNull(context.import().artifacts) { "artifacts not populated by AFTER" }
+                        artifacts =
+                            checkNotNull(context.importAndAnalyze().artifacts) { "artifacts not populated by AFTER" }
                     }
                 }
             }

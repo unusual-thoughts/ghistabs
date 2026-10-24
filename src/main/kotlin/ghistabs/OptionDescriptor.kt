@@ -87,6 +87,9 @@ operator fun <T : Any> Program.set(o: OptionDescriptor<T>, cat: String = Program
         getOptions(cat)[o] = value
     }
 
+/** Whether the analyzer called [name] is on in this program's analysis options. */
+fun Program.isAnalyzerEnabled(name: String) = getOptions(Program.ANALYSIS_PROPERTIES).getBoolean(name, true)
+
 class BoolOption(name: String, desc: String, default: Boolean) : OptionDescriptor<Boolean>(name, desc, default) {
     override fun get(options: Options) = options.getBoolean(name, default)
     override fun set(options: Options, value: Boolean) = options.setBoolean(name, value)

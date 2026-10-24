@@ -15,6 +15,7 @@ import ghidra.program.util.GhidraProgramUtilities
 import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
+import ghistabs.entrypoints.analyzeAfterImport
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
@@ -91,6 +92,8 @@ internal abstract class ImportingCommand(name: String) : StabsCommand(name = nam
         }
         saveDb?.let { savePacked(it, "the analyzed program") }
         return import().artifacts?.also {
+            // What auto-analysis would run next, on what the import applied, logged here as it comes.
+            program.analyzeAfterImport(monitor, ForwardingMessageLog(this))
             shared.dumpRecords(it.records)
             shared.dumpHarvest(it.harvest)
             shared.dumpRegistry(it)

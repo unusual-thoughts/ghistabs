@@ -4,10 +4,10 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.CapturingSink
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.runTransaction
+import ghistabs.test.importAndAnalyze
 import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -41,7 +41,7 @@ class DegradationDumpProbe : AbstractGhidraHeadlessIntegrationTest() {
                 ImportOptions(),
             )
             program.runTransaction("stabs-degradation-dump") {
-                ctx.import()
+                ctx.importAndAnalyze()
             }
 
             val events = ctx.diagnostics.snapshotDegradations()

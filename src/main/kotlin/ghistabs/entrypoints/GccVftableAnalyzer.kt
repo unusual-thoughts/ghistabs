@@ -9,12 +9,10 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.DtmRegistry
-import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.MessageLogSink
-import ghistabs.importer.ImportOptions.Companion.isStabsDone
+import ghistabs.importer.ImportProbe
 import ghistabs.importer.VtableSweeper
 import ghistabs.importer.VtableSweeper.Companion.isVtablesSwept
-import ghistabs.parse.StabReader
 
 /**
  * Lay a `<Class>_vftable` at every gcc vtable symbol, Itanium `_ZTV…` (gcc 3 and later, the record
@@ -40,10 +38,8 @@ import ghistabs.parse.StabReader
  *
  * This is the one sweep. On a binary with stabs it has to come after the class pass, whose tables are
  * typed off the declared virtuals and which it must leave alone ([ghistabs.cpp.abi.isVtableClaimed]
- * knows them by their labels). So the stabs import calls [sweep] itself as soon as its classes are
- * laid, on its own registry and diagnostics, and the analyzer does nothing on a program whose stabs
- * are not imported yet, or one already swept ([isVtablesSwept]). Disabling this analyzer turns the
- * import's sweep off too ([isEnabled]).
+ * knows them by their labels). Its priority puts it after the Stabs Importer, and it does nothing on a
+ * program already swept ([isVtablesSwept]) until an import claims tables and clears that.
  */
 class GccVftableAnalyzer :
     AbstractAnalyzer(
@@ -53,8 +49,8 @@ class GccVftableAnalyzer :
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
-        // After the Stabs Importer (LOW), which runs this sweep itself and marks the program swept, and
-        // after the analyzers that settle a function's signature, which a swept slot is typed off.
+        // After the Stabs Importer (LOW), whose classes claim their tables first, and after the analyzers
+        // that settle a function's signature, which a swept slot is typed off.
         priority = AnalysisPriority.LOW_PRIORITY.after().after()
         setDefaultEnablement(true)
         setSupportsOneTimeAnalysis()
@@ -69,25 +65,16 @@ class GccVftableAnalyzer :
 
     override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor, log: MessageLog): Boolean {
         if (program.isVtablesSwept) return false
-        // Not imported yet: the import sweeps once its classes have claimed their tables.
-        if (!program.isStabsDone && StabReader.hasStabs(program)) return false
 
         // The log only, at INFO and up: no bookmarks. Every table laid would get an Analysis one, and its
         // label and struct already mark it; what goes wrong (an empty table) is a WARN, so it is logged.
-        val sink = MessageLogSink(log, originator = "GccVftableAnalyzer")
-        val laid = sweep(program, DtmRegistry(program.dataTypeManager), monitor, sink)
+        val sink = ImportProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
+        val laid = VtableSweeper(DtmRegistry(program.dataTypeManager), program, monitor, sink).sweepUnclaimedVtables()
         if (laid > 0) log.appendMsg(NAME, "laid $laid vtable(s)")
         return true
     }
 
     companion object {
         const val NAME = "GCC C++ vftables"
-
-        /** Whether the analyzer is on in [program]'s analysis options, which the stabs import honours too. */
-        fun isEnabled(program: Program) = program.getOptions(Program.ANALYSIS_PROPERTIES).getBoolean(NAME, true)
-
-        /** Lay every vtable no class claimed, into [registry]; returns how many primaries it laid. */
-        fun sweep(program: Program, registry: DtmRegistry, monitor: TaskMonitor, sink: DiagnosticSink) =
-            VtableSweeper(registry, program, monitor, sink).sweepUnclaimedVtables()
     }
 }

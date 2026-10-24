@@ -1,9 +1,9 @@
 package ghistabs.integration
 
 import ghidra.program.model.data.Composite
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.test.defaultContext
+import ghistabs.test.importAndAnalyze
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -37,7 +37,7 @@ class ReimportIntegrationTest : FeatureFixtureTest() {
         load(fixture)
         val first = snapshot()
         program.markStabsDone(false)
-        program.defaultContext().import()
+        program.defaultContext().importAndAnalyze()
         val again = snapshot()
         (again.keys - first.keys) mustBe emptySet()
         (first.keys - again.keys) mustBe emptySet()

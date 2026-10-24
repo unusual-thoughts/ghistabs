@@ -49,7 +49,7 @@
             "max": 9947
         },
         "demangler-exact-match": {
-            "min": 766,
+            "min": 762,
             "max": 766
         },
         "demangler-retarget-bound": {
@@ -69,20 +69,20 @@
             "max": 17
         },
         "demangler-skip-no-replacement": {
-            "min": 80,
-            "max": 80
+            "min": 76,
+            "max": 76
         },
         "demangler-sole-instantiation-declined": {
-            "min": 29,
-            "max": 29
+            "min": 24,
+            "max": 24
         },
         "demangler-sole-instantiation-match": {
-            "min": 1,
-            "max": 1
+            "min": 5,
+            "max": 5
         },
         "demangler-unbound-stub": {
-            "min": 80,
-            "max": 80
+            "min": 76,
+            "max": 76
         },
         "drop-record-bnsym": {
             "min": 2841,
@@ -881,7 +881,7 @@
         },
         "replaced-demangler": {
             "min": 861,
-            "max": 861
+            "max": 865
         },
         "resolve-ambiguous": {
             "min": 1940,
@@ -976,8 +976,8 @@
             "max": 1
         },
         "typedef-shorten-rehomed": {
-            "min": 992,
-            "max": 992
+            "min": 688,
+            "max": 688
         },
         "typeinfo-unread": {
             "min": 81,

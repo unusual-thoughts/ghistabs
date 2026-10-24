@@ -2,13 +2,13 @@ package ghistabs.materialize.cpp
 
 import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.integration.Fixtures
 import ghistabs.loadProgram
 import ghistabs.materialize.vptrOffsetBytesOf
 import ghistabs.parse.TypeDecl
 import ghistabs.test.defaultContext
+import ghistabs.test.importAndAnalyze
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeEmpty
 import ghistabs.test.mustNotBeEmpty
@@ -78,7 +78,7 @@ class VxTableTagIntegrationTest : FeatureFixtureTest() {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loadProgram(File("src/test/resources/binaries/$fixture")).use { loaded ->
             val program = loaded.program
-            val artifacts = checkNotNull(program.defaultContext().import().artifacts)
+            val artifacts = checkNotNull(program.defaultContext().importAndAnalyze().artifacts)
             val classes = artifacts.harvest.types.values
                 .filter { it.body is TypeDecl.Aggregate }
                 .mapNotNull { t -> (artifacts.registry.dataTypeFor(t.id) as? Structure)?.let { t.name to it } }
