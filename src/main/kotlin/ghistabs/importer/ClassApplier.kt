@@ -18,6 +18,7 @@ import ghistabs.*
 import ghistabs.cpp.ClassHierarchyRecords
 import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.MemberDecl
 import ghistabs.cpp.VirtKind
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
@@ -109,7 +110,7 @@ class ClassApplier(
 
         // [resolveMember]'s answers, misses included, so the reparenting and plate-comment passes resolve
         // each member once.
-        private val members = mutableMapOf<Method<*>, ResolvedMember?>()
+        private val members = mutableMapOf<MemberDecl, ResolvedMember?>()
 
         val name get() = located.className
         val body get() = located.classBody
@@ -124,7 +125,7 @@ class ClassApplier(
         val vftableCategory by lazy { ClassNaming.vftableCategory(ns) }
         val vftable: Structure by lazy { registry.vftableOf(located.vftablePath(types)).refiledUnder(vftableCategory) }
 
-        fun physnames(m: Method<*>) = abi.physnameCandidates(m, qualifiedClassName)
+        fun physnames(m: MemberDecl) = abi.physnameCandidates(m, qualifiedClassName)
 
         /**
          * The symbol [m] was emitted as and where it landed, or null if none of the ABI's spellings
@@ -133,7 +134,7 @@ class ClassApplier(
          * up — which is why both the reparenting pass and the vtable plate comments come through here
          * rather than reaching for [Method.mangled].
          */
-        fun resolveMember(m: Method<*>): ResolvedMember? = if (m in members) {
+        fun resolveMember(m: MemberDecl): ResolvedMember? = if (m in members) {
             members[m]
         } else {
             physnames(m).firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { ResolvedMember(name, it) } }
@@ -141,18 +142,17 @@ class ClassApplier(
         }
 
         /** The first of [m]'s physnames that demangles, linked or not: a pure virtual has no symbol. */
-        fun demangledPhysname(m: Method<GlobalTypeId>) =
+        fun demangledPhysname(m: MemberDecl) =
             physnames(m).firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
 
         /**
          * [stubParams] for a virtual slot, whose member need not be linked: a pure virtual has no symbol,
          * but the physname it would have still demangles. Null when none does, which leaves the slot `this`-only.
          */
-        fun slotStubParams(m: Method<GlobalTypeId>, at: String): List<DataType>? =
-            demangledPhysname(m)?.formalTypes(at) ?: run {
-                degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
-                null
-            }
+        fun slotStubParams(m: MemberDecl, at: String): List<DataType>? = demangledPhysname(m)?.formalTypes(at) ?: run {
+            degradation("vftable-slot-stub-unrecovered", at, "no physname of ${m.name} demangles")
+            null
+        }
     }
 
     private fun DemangledFunction.formalTypes(at: String) =
@@ -551,11 +551,10 @@ class ClassApplier(
     }
 
     /** [m]'s parameter leaf types as [slotName] spells them, or null for none: gcc 2.x's `(void)` is none. */
-    private fun LocatedClass.paramSpelling(m: Method<GlobalTypeId>): String? =
-        demangledPhysname(m)?.parameters.orEmpty()
-            .joinToString("_") { (if (it.type.isUnsigned) "unsigned_" else "") + it.type.name.orEmpty() }
-            .let { SymbolUtilities.replaceInvalidChars(it, true) }
-            .takeIf { it.isNotEmpty() && it != "void" }
+    private fun LocatedClass.paramSpelling(m: MemberDecl): String? = demangledPhysname(m)?.parameters.orEmpty()
+        .joinToString("_") { (if (it.type.isUnsigned) "unsigned_" else "") + it.type.name.orEmpty() }
+        .let { SymbolUtilities.replaceInvalidChars(it, true) }
+        .takeIf { it.isNotEmpty() && it != "void" }
 
     /** gcc 2.x's `##<ret>;`: no domain, no parameters, `this` included. */
     private val TypeDecl.Method<*>.isStub get() = cls == null && params.isEmpty()
@@ -644,7 +643,7 @@ class ClassApplier(
         }
 
         // Members resolve through [fallbackAbi]: [abi] is what this vtable's lookup is deciding.
-        fun Method<*>.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
+        fun MemberDecl.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
             resolver.resolve(it)?.isDefined() == true
         }
 
