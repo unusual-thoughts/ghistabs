@@ -1,5 +1,6 @@
 package ghistabs.test
 
+import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.framework.options.OptionType
 import ghidra.program.model.address.Address
@@ -28,6 +29,7 @@ import ghistabs.parse.IdInterface
 import ghistabs.parse.StabReader
 import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
+import java.io.File
 import java.math.BigInteger
 
 /**
@@ -126,6 +128,26 @@ fun ImportContext<*>.defaultTypeRegistry(): DataTypeRegistry {
  */
 fun Program.disableWindowsResourceAnalyzer() = runTransaction("disable-windows-resource-analyzer") {
     getOptions(Program.ANALYSIS_PROPERTIES).setBoolean("WindowsResourceReference", false)
+}
+
+/**
+ * Full auto-analysis of [this] with whatever analyzers its options enable, less the Windows resource one
+ * (see [disableWindowsResourceAnalyzer]).
+ *
+ * Ghidra's own per-analyzer wall times go to [timesFile]. The Gradle listener only reports whole-invocation
+ * time, which also carries fixture load, our import and the dumps; this attributes the analysis share to
+ * individual analyzers, so a perf change can be localized without a profiler.
+ */
+fun Program.runAutoAnalysis(monitor: TaskMonitor, timesFile: File) {
+    val mgr = AutoAnalysisManager.getAnalysisManager(this)
+    disableWindowsResourceAnalyzer()
+    mgr.reAnalyzeAll(null)
+    runTransaction("auto-analyze") {
+        mgr.startAnalysis(monitor)
+        mgr.waitForAnalysis(null, monitor)
+    }
+    timesFile.apply { parentFile.mkdirs() }
+        .writeText("total = ${mgr.totalTimeInMillis} ms\n\n${mgr.taskTimesString}")
 }
 
 /**
