@@ -20,34 +20,33 @@ class ImportOptions() : OptionContainer() {
         /** The Stabs Importer analyzer's name: its switch, and the options bucket these live in. */
         const val ANALYZER = "Stabs Importer"
 
-        private fun optionsIn(program: Program): Options =
-            program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(ANALYZER)
+        private fun Program.analyzerOptions() = getOptions(Program.ANALYSIS_PROPERTIES).getOptions(ANALYZER)
 
-        fun Program.stabsOptions() = ImportOptions(optionsIn(this))
+        fun Program.stabsOptions() = ImportOptions(analyzerOptions())
 
-        private fun Program.setStabsOptions(options: ImportOptions) = options.exportTo(optionsIn(this))
+        private fun Program.setStabsOptions(options: ImportOptions) = options.exportTo(analyzerOptions())
 
-        private fun setEnabled(program: Program, value: Boolean = true) {
-            program.getOptions(Program.ANALYSIS_PROPERTIES).setBoolean(ANALYZER, value)
+        private fun Program.setEnabled(value: Boolean = true) {
+            getOptions(Program.ANALYSIS_PROPERTIES).setBoolean(ANALYZER, value)
         }
 
-        private fun Program.updateOptions(mod: ImportOptions.() -> Unit) = optionsIn(this).apply {
+        private fun Program.updateOptions(mod: ImportOptions.() -> Unit) = analyzerOptions().apply {
             ImportOptions(this).also { mod(it) }.exportTo(this)
         }
 
         fun Program.enableStabsAnalyzer(options: ImportOptions) = runTransaction("Enable Stabs analyzer") {
             setStabsOptions(options)
-            setEnabled(this, true)
+            setEnabled(true)
         }
 
         fun Program.enableStabsAnalyzer(config: ImportOptions.() -> Unit = { }) =
             runTransaction("Configure Stabs analyzer") {
                 updateOptions(config)
-                setEnabled(this, true)
+                setEnabled(true)
             }
 
         fun Program.disableStabsAnalyzer() = runTransaction("Disable Stabs analyzer") {
-            setEnabled(this, false)
+            setEnabled(false)
         }
 
         val STABS_DONE = BoolOption("Stabs Imported", "Stabs Import already attempted.", false)
