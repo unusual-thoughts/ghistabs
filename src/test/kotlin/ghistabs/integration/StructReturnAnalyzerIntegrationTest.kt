@@ -11,7 +11,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.Correction
+import ghistabs.entrypoints.Correction
 import ghistabs.entrypoints.STRUCT_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StructReturnAnalyzer
 import ghistabs.runTransaction

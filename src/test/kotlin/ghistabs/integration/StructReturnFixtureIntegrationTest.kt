@@ -6,7 +6,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.Correction
+import ghistabs.entrypoints.Correction
 import ghistabs.functionsIterable
 import ghistabs.runTransaction
 import ghistabs.test.*

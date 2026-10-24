@@ -12,7 +12,6 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.XmlEncode
 import ghidra.util.task.TaskMonitor
-import ghistabs.Correction
 import ghistabs.collidesWithInjectedParameter
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
@@ -28,6 +27,18 @@ const val STRUCT_RETURN_ANALYZER_NAME = "Struct-return ABI (x86 gcc)"
 
 /** Conventions this analyzer derives from, e.g. `__thiscall` → `__thiscall_memret`. */
 val CORRECTABLE_CONVENTIONS = setOf(CompilerSpec.CALLING_CONVENTION_cdecl, CompilerSpec.CALLING_CONVENTION_thiscall)
+
+/** Which way round the epilogue says the cspec has a function's aggregate return. */
+enum class Correction(val suffix: String) {
+    /** Aggregates go back through a caller-allocated pointer; scalars still use the pentries. */
+    TO_MEMORY("_memret"),
+
+    /** No aggregate rule at all, so they fall through to the EAX / EDX:EAX pentries. */
+    TO_REGISTER("_regret"),
+    ;
+
+    fun conventionFor(base: String) = "$base$suffix"
+}
 
 /**
  * gcc/MinGW i386 returns a class in memory — through a caller-allocated hidden pointer — whenever it
