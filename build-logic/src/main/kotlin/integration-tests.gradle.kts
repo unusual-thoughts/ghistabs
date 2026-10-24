@@ -7,7 +7,13 @@ registerHeadlessTest(
     "Real-binary assertion tests against binary fixtures (@Tag(\"integration\"))",
     tag = "integration",
     narrowGeneratedClasses = true,
-) { finalizedBy(auditTests) }
+) {
+    finalizedBy(auditTests)
+    // Written per run from every mode's observations: a file left by an earlier run would be merged in.
+    val stale = listOf("observed-counters", "shifted-baselines")
+        .map { layout.buildDirectory.dir("test-output/$it").get().asFile }
+    doFirst { stale.forEach { it.deleteRecursively() } }
+}
 
 // Imports a real fixture against exactly what we ship: serializers get reached from class
 // initializers, so a missing `-json` fails in the GUI while every ordinary test passes.
