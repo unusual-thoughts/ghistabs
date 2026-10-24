@@ -2,6 +2,7 @@ package ghistabs.integration
 
 import ghidra.program.model.data.Composite
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
+import ghistabs.importer.import
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
 import ghistabs.test.mustBe

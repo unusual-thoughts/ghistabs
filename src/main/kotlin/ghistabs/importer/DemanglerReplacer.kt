@@ -17,6 +17,11 @@ import ghistabs.*
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.Itanium
 import ghistabs.cpp.abi.Rtti
+import ghistabs.cpp.canonTemplateName
+import ghistabs.cpp.isTemplated
+import ghistabs.cpp.leafName
+import ghistabs.cpp.nameSegments
+import ghistabs.cpp.templateLeaf
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.materialize.DataTypeRegistry
@@ -28,6 +33,21 @@ import java.util.*
 sealed class Skip(open val reason: String) {
     data class NoReplacement(val name: String) : Skip("no-replacement-for-$name")
     data class WouldBeCycle(val name: String) : Skip("would-be-cycle-$name")
+}
+
+/**
+ * What a [ghistabs.cpp.abi.VtableSweeper] on this import's [registry] types a demangled slot parameter by:
+ * the stabs' own type for it where they made one ([DemanglerReplacer.parameterType]). The replacer is
+ * only built once a slot asks.
+ */
+internal fun importedParameterTypes(
+    program: Program,
+    registry: DataTypeRegistry,
+    monitor: TaskMonitor,
+    sink: DiagnosticSink,
+): (DemangledDataType) -> DataType? {
+    val replacer by lazy { DemanglerReplacer(program, registry, monitor, sink) }
+    return { replacer.parameterType(it) }
 }
 
 /**

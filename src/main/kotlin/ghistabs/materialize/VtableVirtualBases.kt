@@ -11,10 +11,11 @@ import ghistabs.componentsOverlapping
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.*
 import ghistabs.cpp.isBaseField
+import ghistabs.cpp.leafName
+import ghistabs.cpp.member
+import ghistabs.cpp.placeBase
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.ClassHierarchyRecords.Companion.readClassRecord
-import ghistabs.parse.leafName
-import ghistabs.parse.member
 
 /**
  * Lays the virtual bases a class struct lacks where its Itanium vtable says they are. A class deriving

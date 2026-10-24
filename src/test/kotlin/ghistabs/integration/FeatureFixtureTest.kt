@@ -3,6 +3,7 @@ package ghistabs.integration
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
 import ghistabs.importer.ImportArtifacts
+import ghistabs.importer.import
 import ghistabs.loadProgram
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze

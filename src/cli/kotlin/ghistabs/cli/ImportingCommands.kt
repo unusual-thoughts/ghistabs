@@ -14,7 +14,6 @@ import ghidra.program.model.listing.Program
 import ghidra.program.util.GhidraProgramUtilities
 import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StabsAnalyzer
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.entrypoints.analyzeAfterImport
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
@@ -25,6 +24,7 @@ import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
+import ghistabs.importer.import
 import ghistabs.materialize.VfptrModel
 import ghistabs.runTransaction
 import java.io.File

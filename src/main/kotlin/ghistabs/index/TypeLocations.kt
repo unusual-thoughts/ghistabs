@@ -4,6 +4,10 @@ package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypePath
+import ghistabs.cpp.canonTemplateName
+import ghistabs.cpp.enclosingName
+import ghistabs.cpp.leafName
+import ghistabs.cpp.member
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Type
 import ghistabs.parse.*

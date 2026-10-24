@@ -2,6 +2,8 @@ package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.cpp.Access
+import ghistabs.cpp.member
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding

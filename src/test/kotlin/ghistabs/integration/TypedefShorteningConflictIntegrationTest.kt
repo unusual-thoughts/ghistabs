@@ -8,9 +8,9 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.entrypoints.StabsAnalyzer
-import ghistabs.entrypoints.StabsAnalyzer.Companion.enableStabsAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
+import ghistabs.importer.ImportOptions.Companion.enableStabsAnalyzer
 import ghistabs.importer.ImportProbe
 import ghistabs.isConflict
 import ghistabs.nameWithoutConflict

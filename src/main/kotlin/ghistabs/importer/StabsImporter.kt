@@ -1,15 +1,42 @@
 package ghistabs.importer
 
+import ghistabs.cpp.abi.VtableSweeper.Companion.markVtablesSwept
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
+import ghistabs.importer.ImportOptions.Companion.isOverlayDone
+import ghistabs.importer.ImportOptions.Companion.isStabsDone
+import ghistabs.importer.ImportOptions.Companion.markOverlayDone
+import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
-import ghistabs.importer.VtableSweeper.Companion.markVtablesSwept
 import ghistabs.index.TypeGraph
+import ghistabs.isAnalyzerEnabled
 import ghistabs.materialize.*
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
 import ghistabs.runTransaction
 import java.nio.file.Path
+
+/**
+ * The whole import, once per program: a second call, or one on a program the analyzer already imported,
+ * returns an empty result.
+ */
+fun ImportContext<*>.import(): ImportResult {
+    if (program.isStabsDone) return ImportResult()
+
+    if (options.overlaySection && !program.isOverlayDone) {
+        debug("stab-section-overlaid", count = StabSectionOverlay(this).apply().toLong())
+        program.markOverlayDone()
+    }
+
+    val results = readStabs()?.let(::runOnRecords) ?: run {
+        diagnostics.writeSummary(terminal)
+        ImportResult()
+    }
+
+    log("import", "import complete: $results")
+    program.markStabsDone(true)
+    return results
+}
 
 /**
  * Pass A's input, the raw records: null when the program carries none. Either way, says why a read
