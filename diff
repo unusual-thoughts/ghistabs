@@ -1,0 +1,530 @@
+diff --git a/src/main/kotlin/ghistabs/GhidraExtensions.kt b/src/main/kotlin/ghistabs/GhidraExtensions.kt
+index f0f34ebb..6cc7652c 100644
+--- a/src/main/kotlin/ghistabs/GhidraExtensions.kt
++++ b/src/main/kotlin/ghistabs/GhidraExtensions.kt
+@@ -6,8 +6,10 @@ import ghidra.app.cmd.function.CallDepthChangeInfo
+ import ghidra.app.util.NamespaceUtils
+ import ghidra.app.util.PseudoData
+ import ghidra.app.util.PseudoDisassembler
++import ghidra.app.util.bin.BinaryReader
+ import ghidra.app.util.bin.FileByteProvider
+ import ghidra.app.util.bin.InputStreamByteProvider
++import ghidra.app.util.bin.MemBufferByteProvider
+ import ghidra.app.util.importer.MessageLog
+ import ghidra.app.util.opinion.LoaderTier
+ import ghidra.program.database.data.DataTypeUtilities
+@@ -16,13 +18,14 @@ import ghidra.program.model.data.*
+ import ghidra.program.model.lang.Register
+ import ghidra.program.model.listing.*
+ import ghidra.program.model.listing.Function
+-import ghidra.program.model.mem.DumbMemBufferImpl
+-import ghidra.program.model.mem.MemoryBlock
++import ghidra.program.model.mem.*
+ import ghidra.program.model.pcode.PcodeOp
+ import ghidra.program.model.scalar.Scalar
+ import ghidra.program.model.symbol.Namespace
+ import ghidra.program.model.symbol.SourceType
+ import ghidra.program.model.symbol.SymbolTable
++import ghidra.util.ascii.AsciiCharSetRecognizer
++import ghidra.util.ascii.CharSetRecognizer
+ import ghidra.util.task.TaskMonitor
+ import ghistabs.parse.dbxArch
+ import ghistabs.parse.frameRegister
+@@ -31,6 +34,7 @@ import java.nio.file.AccessMode
+ 
+ operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)
+ operator fun Address.plus(rhs: Int): Address = addNoWrap(rhs.toLong())
++fun Address.alignTo(size: Long) = add((size - offset % size) % size)
+ 
+ operator fun Address.minus(rhs: Long): Address = subtractNoWrap(rhs)
+ operator fun Address.minus(rhs: Int): Address = subtractNoWrap(rhs.toLong())
+@@ -58,6 +62,8 @@ operator fun AddressSetView.plus(addrs: AddressSetView): AddressSet = union(addr
+ operator fun AddressSetView.plus(range: AddressRange): AddressSet = union(AddressSet(range))
+ operator fun AddressSetView.plus(addr: Address): AddressSet = union(AddressSet(addr))
+ 
++val AddressSpace.range get() = minAddress..maxAddress
++
+ operator fun Data.get(i: Int): Data? = this.getComponent(i)
+ operator fun Data.get(name: String): Data? =
+     (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(this::get)
+@@ -209,6 +215,46 @@ fun Program.forceCreateData(
+     return DataUtilities.createData(this, addr, dt, length, DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
+ }
+ 
++fun MemBuffer.reader() = BinaryReader(MemBufferByteProvider(this), !isBigEndian)
++
++fun MutableMemBuffer.lengthOf(dt: DataType): Int? = when (dt) {
++    is Dynamic -> dt.getLength(this, -1)
++    else -> dt.length
++}.takeIf { it > 0 }
++
++inline fun <reified T> MutableMemBuffer.readAs(dt: DataType, addr: Address? = null) = runCatching {
++    addr?.let { setPosition(it) }
++    // StringDataType returns null for length == -1
++    dt.getValue(this, dt.defaultSettings, -1) as T?
++}.getOrNull()?.also { lengthOf(dt)?.let { runCatching { advance(it) } } }
++
++fun MutableMemBuffer.dataAt(dt: DataType, addr: Address? = null) = runCatching {
++    addr?.let { setPosition(it) }
++    PseudoData(address, dt, this)
++}.getOrNull()?.also { runCatching { advance(it.length) } }
++
++// fun MutableMemBuffer.pointerAt(addr: Address? = null, length: Int = address.pointerSize) =
++//    dataAt(PointerDataType(null, length), addr)
++
++// fun MutableMemBuffer.readPointer(addr: Address? = null): Address? = readAs(PointerDataType(), addr)
++
++// fun Program.blockBuffer(block: MemoryBlock): MutableMemBuffer = MemoryBufferImpl(memory, block.start)
++fun Program.memBuffer(start: Address = memory.allInitializedAddressSet.minAddress): MutableMemBuffer =
++    MemoryBufferImpl(memory, start)
++fun Program.smallBuffer(start: Address): MutableMemBuffer = DumbMemBufferImpl(memory, start)
++
++fun MutableMemBuffer.stringAt(
++    addr: Address? = null,
++    lengthIn: IntRange = 0..256,
++    charSet: CharSetRecognizer = AsciiCharSetRecognizer(),
++) = runCatching {
++    addr?.let { setPosition(it) }
++    (0..<lengthIn.last).asSequence().map { getByte(it) }
++        .takeWhile { charSet.contains(it.toInt()) }.toList()
++        .takeIf { it.size >= lengthIn.first && getByte(it.size).toInt() == 0 }
++        ?.toByteArray()?.decodeToString()
++}.getOrNull()
++
+ /**
+  * [dt] read over the bytes at [addr] without laying anything in the listing, or null if they are not
+  * all readable. The data type does the decoding — width, endianness, sign, which address space a
+@@ -221,17 +267,19 @@ fun Program.readAt(addr: Address, dt: DataType): Data? = PseudoDisassembler(this
+  * type such as a LEB128 is read at the length it sizes itself to, which [PseudoData]'s fixed one
+  * would cut to a byte.
+  */
+-inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = when (dt) {
+-    is Dynamic -> dt.getValue(DumbMemBufferImpl(memory, addr), dt.defaultSettings, -1)
+-    else -> readAt(addr, dt)?.value
+-} as? T
++inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = smallBuffer(addr).readAs(dt)
+ 
+ /** How many bytes [dt] spans at [addr]: a [Dynamic] type's own decoded length, or null if unreadable. */
+ fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
+-    is Dynamic -> dt.getLength(DumbMemBufferImpl(memory, addr), -1)
++    is Dynamic -> dt.getLength(smallBuffer(addr), -1)
+     else -> dt.length
+ }.takeIf { it > 0 }
+ 
++// fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
++//    is Dynamic -> smallBuffer(addr).lengthOf(dt)
++//    else -> dt.length
++// }
++
+ /**
+  * The pointer stored at [addr], taken as it stands. The loader has already relocated what memory
+  * holds, so this is the address it points at in the program as loaded.
+@@ -239,6 +287,52 @@ fun Program.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
+ fun Program.readPointer(addr: Address): Address? = readAs(addr, PointerDataType(dataTypeManager))
+ 
+ val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
++//
++// class BlockBuffer(val program: Program, addresses: AddressSetView) :
++//    MemoryBufferImpl(program.memory, addresses.minAddress) {
++//    constructor(program: Program, block: MemoryBlock) : this(program, AddressSet(block.addressRange))
++//    constructor(program: Program) : this(program, program.memory.allInitializedAddressSet)
++//
++//    fun readAndAdvance(addr: Address, dt: DataType) = PseudoData(program, addr, dt, this).apply { advance(length) }
++//    inline fun <reified T> readAs(addr: Address, dt: DataType): T? =
++//        runCatching { readAndAdvance(addr, dt) }.getOrNull()?.value as? T
++// }
++//
++// fun Program.blockBuffer(block: MemoryBlock): MutableMemBuffer = MemoryBufferImpl(memory, block.start)
++// fun Program.memBuffer(): MutableMemBuffer = MemoryBufferImpl(memory, memory.allInitializedAddressSet.minAddress)
++//
++// fun MutableMemBuffer.lengthOf(dt: DataType): Int? = when (dt) {
++//    is Dynamic -> dt.getLength(this, -1)
++//    else -> dt.length
++// }.takeIf { it > 0 }
++//
++// //
++// // fun MutableMemBuffer.lengthAt(addr: Address, dt: DataType): Int? = when (dt) {
++// //    is Dynamic -> {
++// //        setPosition(addr)
++// //        dt.getLength(this, -1)
++// //    }
++// //
++// //    else -> dt.length
++// // }.takeIf { it > 0 }
++//
++// //    dt.getValueClass(dt.defaultSettings)
++//
++// inline fun <reified T> MutableMemBuffer.readAs(dt: DataType, addr: Address? = null) = runCatching {
++//    addr?.let { setPosition(it) }
++//    dt.getValue(this, dt.defaultSettings, -1) as T?
++// }.getOrNull()?.also { lengthOf(dt)?.let { runCatching { advance(it) } } }
++//
++// // inline fun <reified T> MutableMemBuffer.readAs(addr: Address, dt: DataType) = runCatching {
++// //    setPosition(addr)
++// //    dt.getValue(this, dt.defaultSettings, -1) as T?
++// // }.getOrNull()?.also { lengthAt(addr, dt)?.let { runCatching { advance(it) } } }
++//
++// // inline fun <reified T> MutableMemBuffer.readAs(program: Program, addr: Address, dt: DataType): T? =
++// //    PseudoData(program, addr, dt, this).run {
++// //        advance(length)
++// //        value
++// //    } as? T
+ 
+ /**
+  * Where the program's default calling convention starts its stack parameters — the bias between a
+diff --git a/src/main/kotlin/ghistabs/materialize/cpp/abi/RttiSymbols.kt b/src/main/kotlin/ghistabs/materialize/cpp/abi/RttiSymbols.kt
+index d4d966fd..18ca51a3 100644
+--- a/src/main/kotlin/ghistabs/materialize/cpp/abi/RttiSymbols.kt
++++ b/src/main/kotlin/ghistabs/materialize/cpp/abi/RttiSymbols.kt
+@@ -1,17 +1,20 @@
+ package ghistabs.materialize.cpp.abi
+ 
+-import ghidra.app.util.bin.BinaryReader
+-import ghidra.app.util.bin.MemoryByteProvider
+ import ghidra.program.model.address.Address
++import ghidra.program.model.data.PointerDataType
+ import ghidra.program.model.listing.Program
+ import ghidra.program.model.symbol.SourceType
+ import ghistabs.BoolOption
+ import ghistabs.Demangler
++import ghistabs.dataAt
+ import ghistabs.diagnose.DiagnosticSink
+ import ghistabs.get
+ import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
++import ghistabs.memBuffer
+ import ghistabs.set
++import ghistabs.stringAt
+ import kotlin.math.abs
++import kotlin.ranges.rangeTo
+ 
+ /** Longest typeinfo name read; CryptoPP's deepest template instantiations run to a few hundred bytes. */
+ private const val MAX_TYPE_NAME = 4096
+@@ -53,9 +56,14 @@ class RttiSymbols(
+     private val ptr = program.defaultPointerSize
+     private val space = program.addressFactory.defaultAddressSpace
+     private val memory = program.memory
++    private val dtm = program.dataTypeManager
++    private val rtti by lazy { Rtti(dtm) }
++
++//    private val buf = MemoryBufferImpl(memory)
+ 
+     /** Reads memory where it lies, indexed by offset into the default space, with nothing copied out. */
+-    private val reader = BinaryReader(MemoryByteProvider(memory, space), !program.language.isBigEndian)
++//    private val reader = BinaryReader(MemoryByteProvider(memory, space), !program.language.isBigEndian)
++    val buf = program.memBuffer()
+ 
+     private fun isData(addr: Address) = memory.getBlock(addr)?.let { it.isInitialized && !it.isExecute } == true
+ 
+@@ -66,39 +74,121 @@ class RttiSymbols(
+     private fun Address.lastByteOfWord(): Address? = plusOrNull(ptr - 1L)
+ 
+     /** The word at [addr], unsigned, or null unless it lies whole in one data block. */
+-    private fun word(addr: Address): Long? = memory.getBlock(addr)
+-        ?.takeIf { it.isInitialized && !it.isExecute && addr.lastByteOfWord()?.let(it::contains) == true }
+-        ?.let { reader.readUnsignedValue(addr.offset, ptr) }
++//    private fun word(addr: Address): Long? = memory.getBlock(addr)
++//        ?.takeIf { it.isInitialized && !it.isExecute && addr.lastByteOfWord()?.let(it::contains) == true }
++//        ?.let { reader.readUnsignedValue(addr.offset, ptr) }
++
++//    private fun word(addr: Address=buf.address): Long? = buf.getVarLengthUnsignedInt()
++//        memory.getBlock(addr)
++//        ?.takeIf { it.isInitialized && !it.isExecute && addr.lastByteOfWord()?.let(it::contains) == true }
++//        ?.let { reader.readUnsignedValue(addr.offset, ptr) }
++//
+ 
+     /** [word], sign-extended from the pointer width. */
+-    private fun signedWord(addr: Address) = word(addr)?.let { if (ptr == 4) it.toInt().toLong() else it }
++//    private fun signedWord(addr: Address) = word(addr)?.let { if (ptr == 4) it.toInt().toLong() else it }
+ 
+-    /** [word] as the address it points at, if any. */
+-    private fun pointer(addr: Address): Address? = word(addr)?.let { runCatching { space.getAddress(it) }.getOrNull() }
++//    private fun pointer(addr: Address): Address? = word(addr)?.let { runCatching { space.getAddress(it) }.getOrNull() }
+ 
+     private fun Address.plusOrNull(by: Long): Address? = runCatching { addNoWrap(by) }.getOrNull()
+ 
++//    private fun ref(from: Address, to: Address) = MemReferenceImpl(from, to, RefType.DATA, SourceType.ANALYSIS, 0, true)
++
++//    private fun MutableMemBuffer.curPointer() =
++//        address.let { from -> readAs<Address>(PointerDataType(program.dataTypeManager))?.let { to -> ref(from, to) } }
++
++    fun pointerData(addr: Address? = null) = buf.dataAt(PointerDataType(dtm), addr)
++
++    /** [word] as the address it points at, if any. */
++    fun pointer(addr: Address? = null) = pointerData(addr)?.value as? Address
++
+     /** Every aligned word in the data blocks that points into them, by what it points at. */
+     private val sitesByTarget: Map<Address, List<Address>> by lazy {
+-        val sites = HashMap<Address, MutableList<Address>>()
+-        for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
+-            var site = b.start.add((ptr - b.start.offset % ptr) % ptr)
+-            while (site.lastByteOfWord()?.let(b::contains) == true) {
+-                val target = runCatching { space.getAddress(reader.readUnsignedValue(site.offset, ptr)) }.getOrNull()
+-                if (target != null && isData(target)) sites.getOrPut(target) { mutableListOf() }.add(site)
+-                site = site.plusWords(1) ?: break
++        buildMap<Address, MutableList<Address>> {
++            for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
++                buf.setPosition(b.start)
++                while (true) {
++                    pointerData()?.takeIf { it.maxAddress in b }?.let { data ->
++                        (data.value as? Address)?.takeIf { isData(it) }?.let {
++                            getOrPut(it) { mutableListOf() }.add(data.address)
++                        }
++                    } ?: break
++                }
+             }
+         }
+-        sites
+     }
+ 
++//    private val sitesByTarget: Map<Address, List<Address>> by lazy {
++//        buildMap<Address, MutableList<Address>> {
++//            for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
++// //                val buf = MemoryBufferImpl(memory, b.start)
++// //                val reader = BinaryReader(InputStreamByteProvider(buf.inputStream, b.size), !memory.isBigEndian)
++// //
++// //                class BlockReader(
++// //                    memory: Memory,
++// //                    val block: MemoryBlock,
++// //                    val buf: MemBuffer = MemoryBufferImpl(memory, block.start),
++// //                ) : BinaryReader(InputStreamByteProvider(buf.inputStream, b.size), !memory.isBigEndian) {
++// // //                    val addr get() = block.start.addressSpace.get currentIndex
++// //                    val addr get() = buf.address
++// //
++// // //                    val x get() =
++// //                    fun readAndAdvance(addr: Address, dt: DataType) {
++// // //                        buf.inputStream
++// //                        val x = PseudoData(program, addr, dt, buf)
++// //                        x.length
++// //                            .value
++// //                        buf.advance(dt.length)
++// //                    }
++// //                }
++//
++// //                PseudoData(program)
++// //                b.start.align()
++// //                val reader = BinaryReader(b.byteProvider, !memory.isBigEndian)
++//                val buf = program.memBuffer(b.start.alignTo(ptr.toLong()))
++// //                    NumericUtilities.getUnsignedAlignedValue(b.start, ptr))
++// //                val reader = buf.reader()
++// //                reader.align(ptr)
++// //                reader.pointerIndex
++// //                reader.pointerIndex
++// //                var site = b.start.add((ptr - b.start.offset % ptr) % ptr)
++//                while (true) {
++// //                    PseudoData(buf.address, PointerDataType(program.dataTypeManager), buf)
++//                    buf.pointerAt()?.takeIf { it.maxAddress in b }
++//                        ?.let { getOrPut(it.value as Address) { mutableListOf() }.add(it.address) }
++//                        ?: break
++// //                    buf.curPointer()
++// //                        .takeIf {
++// //                            buf.address.previous() in b.addressRange
++// //                        }?.let { getOrPut(it.toAddress) { mutableListOf() }.add(it.fromAddress) }
++// //                        ?: break
++// //                    val addr = buf.address
++// //                    buf.readAs<Address>(PointerDataType(program.dataTypeManager)).takeIf {
++// //                        buf.address.previous() in b.addressRange
++// //                    }?.let { getOrPut(it) { mutableListOf() }.add(addr) } ?: break
++//                }
++// //                while (site.lastByteOfWord()?.let(b::contains) == true) {
++// //                    runCatching {
++// //                        space.getAddress(reader.readUnsignedValue(site.offset, ptr))
++// //                    }.getOrNull()?.let {
++// //                        if (isData(it)) getOrPut(it) { mutableListOf() }.add(site)
++// //                    }
++// //                    site = site.plusWords(1) ?: break
++// //                }
++//            }
++//        }
++//    }
++
+     /** The NUL-terminated class name at [addr], or null if what is there can't be one. */
+-    private fun className(addr: Address): String? {
+-        val block = memory.getBlock(addr) ?: return null
+-        val length = (0 until minOf(MAX_TYPE_NAME.toLong(), block.end.subtract(addr) + 1))
+-            .firstOrNull { reader.readByte(addr.offset + it) == 0.toByte() } ?: return null
+-        return reader.readAsciiString(addr.offset, length.toInt()).takeIf(CLASS_TYPE_NAME::matches)
+-    }
++    private fun className(addr: Address): String? = buf.stringAt(addr)?.takeIf(CLASS_TYPE_NAME::matches)
++//    {
++//        buf.readAs<String>(TerminatedStringDataType(), addr)
++//        StringDataInstance(TerminatedStringDataType())
++//        val block = memory.getBlock(addr) ?: return null
++//        val length = (0 until minOf(MAX_TYPE_NAME.toLong(), block.end.subtract(addr) + 1))
++//            .firstOrNull { reader.readByte(addr.offset + it) == 0.toByte() } ?: return null
++//        return reader.readAsciiString(addr.offset, length.toInt()).takeIf(CLASS_TYPE_NAME::matches)
++//        return
++//    }
+ 
+     companion object {
+         val RTTI_SYMBOLS_RESTORED = BoolOption("RTTI Symbols Restored", "Stripped RTTI labels already put back.", false)
+@@ -141,11 +231,11 @@ class RttiSymbols(
+         val among = settled.minOrNull()?.let { lo -> lo..settled.max() }
+         val laid = tops.mapNotNull { (name, found) ->
+             val (typeinfo, candidates) = found
+-            val top =
+-                candidates.singleOrNull() ?: candidates.filter { among != null && it in among }.singleOrNull() ?: run {
+-                    if (candidates.isNotEmpty()) debug("vtable-rtti-ambiguous", "$name: $candidates", typeinfo)
+-                    return@mapNotNull null
+-                }
++            val top = candidates.singleOrNull()
++                ?: candidates.singleOrNull { among != null && it in among } ?: run {
++                if (candidates.isNotEmpty()) debug("vtable-rtti-ambiguous", "$name: $candidates", typeinfo)
++                return@mapNotNull null
++            }
+             if (!label(prefixStart(top), Itanium.VTABLE_PREFIX + name)) return@mapNotNull null
+             Triple(name, typeinfo, top)
+         }
+@@ -169,6 +259,8 @@ class RttiSymbols(
+         return kept.size
+     }
+ 
++//    val thing = StructureDataType("ti", 0).apply { add(PointerDataType(dtm)) }
++
+     /**
+      * The `offset_to_top` words a record of [typeinfo] can start its address point behind: a 0, then
+      * a function pointer after the rtti word. Without that slot, `{0, typeinfo}` is as likely an exception
+@@ -177,7 +269,9 @@ class RttiSymbols(
+      */
+     private fun primaryCandidates(typeinfo: Address): List<Address> = sitesByTarget[typeinfo].orEmpty()
+         .mapNotNull { it.plusWords(-1) }
+-        .filter { top -> word(top) == 0L && top.plusWords(2)?.let(::pointer)?.let(::isCode) == true }
++        .map { vtableHeaderLayout(dtm, 0) }
++//        .filter {buf.readAs(rtti.)}
++//        .filter { top -> word(top) == 0L && top.plusWords(2)?.let(::pointer)?.let(::isCode) == true }
+ 
+     /** Where the record whose `offset_to_top` is at [top] starts: in front of the vbase offsets it can see. */
+     private fun prefixStart(top: Address) = generateSequence(top) { it.plusWords(-1) }
+diff --git a/src/main/kotlin/ghistabs/materialize/cpp/abi/Vtable.kt b/src/main/kotlin/ghistabs/materialize/cpp/abi/Vtable.kt
+index 2628887b..88c8b2d2 100644
+--- a/src/main/kotlin/ghistabs/materialize/cpp/abi/Vtable.kt
++++ b/src/main/kotlin/ghistabs/materialize/cpp/abi/Vtable.kt
+@@ -8,12 +8,14 @@ import ghidra.program.model.data.StructureDataType
+ import ghidra.program.model.listing.CommentType
+ import ghidra.program.model.listing.Data
+ import ghidra.program.model.listing.Program
++import ghidra.program.model.scalar.Scalar
+ import ghidra.program.model.symbol.Namespace
+ import ghidra.program.model.symbol.SourceType
+ import ghidra.program.model.symbol.Symbol
+ import ghistabs.*
+ import ghistabs.materialize.DtmRegistry
+ import ghistabs.materialize.cpp.ClassNaming
++import kotlin.reflect.KProperty
+ 
+ /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
+ private const val MAX_VTABLE_PREFIX_WORDS = 64
+@@ -53,6 +55,114 @@ fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataTyp
+     }
+ }
+ 
++interface Structable {
++//    val dt: StructureDataType
++    val data: Data
++}
++
++class VtableHeader(dtm: DataTypeManager, prefixWords: Int) :
++    StructureDataType(
++        ClassNaming.classDataTypesRoot,
++        "VtableHeaderStructure${if (prefixWords > 0) prefixWords else ""}",
++        0,
++        dtm,
++    ) {
++    init {
++        val word = Itanium.offsetToTopType(dtm.dataOrganization.pointerSize)
++        // One field a word, not an array: Ghidra shows no comment on a word inside an array inside a struct,
++        // and each word gets its own saying which base it is for.
++        repeat(prefixWords) { add(word, vtableOffsetField(it), null).showDecimal() }
++        add(word, Itanium.OFFSET_TO_TOP, "to top of complete object").showDecimal()
++        add(PointerDataType(dtm), Itanium.RTTI, null)
++        isPackingEnabled = true
++    }
++
++    @Suppress("ktlint:standard:property-naming")
++    class Value(override val data: Data) : Structable {
++        val offset_to_top by field<Scalar>()
++        val rtti by
++    }
++}
++
++interface Prout<T> {
++    operator fun getValue(thisRef: Structable, property: KProperty<*>): T?
++}
++
++inline fun <reified T> field() = object : Prout<T> {
++    override operator fun getValue(thisRef: Structable, property: KProperty<*>): T? =
++        thisRef.data[property.name]?.value as? T?
++}
++
++//
++class StructFieldDelegate<T : Any> {
++    operator fun getValue(thisRef: Structable, property: KProperty<*>): T? = thisRef.data[property.name]?.value as? T?
++}
++// //    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: String) {
++// //        println("$value has been assigned to '${property.name}' in $thisRef.")
++// //    }
++// }
++//
++//
++//
++// class Thing(dtm: DataTypeManager) : StructureDataType(ClassNaming.classDataTypesRoot, "", 0, dtm) {
++//    init {
++//        add(Undefined2DataType(), "prout", null)
++//    }
++//    class Value(val dt: Thing)
++// //    data class ()
++// }
++//
++// abstract class StructDescriptor<T : Any>(val name: String, val desc: String, val default: T) :
++//    PropertyDelegateProvider<StructDescriptor.Structable, StructDescriptor<T>.Holder> {
++// //    abstract fun get(options: Options): T
++// //    abstract fun set(options: Options, value: T)
++// //    abstract fun read(option: Option): T
++// //    open fun register(options: Options) = options.registerOption(
++// //        name,
++// //        default,
++// //        null,
++// //        desc,
++// //    )
++//
++//    inner class Holder {
++// //        private var value = default
++// //        fun get() = value.asOption()
++// //        fun set(edited: Option) {
++// //            value = read(edited)
++// //        }
++// //        fun read(options: Options) {
++// //            value = options[option]
++// //        }
++// //        fun write(options: Options) {
++// //            options[option] = value
++// //        }
++//
++//        val option get() = this@StructDescriptor
++//        operator fun getValue(thisRef: Structable, property: KProperty<*>) =
++//    thisRef.dt.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(this::get)
++// //        operator fun setValue(thisRef: Any?, property: KProperty<*>, new: T) {
++// //            value = new
++// //        }
++//    }
++//
++// //    interface Container {
++// //        fun <T : Any> bind(option: OptionDescriptor<T>): OptionDescriptor<T>.Holder
++// //    }
++//
++// interface Structable {
++//    val dt: StructureDataType
++// //    val data: Data
++// }
++//
++//    /**
++//     * This option carrying [this], in the form an exporter hands the dialog. Per subclass rather
++//     * than one untyped default: since 12.2 an [Option] is built as the subclass matching its value
++//     * type, and there is none for an arbitrary value.
++//     */
++// //    abstract fun T.asOption(): Option
++//    override operator fun provideDelegate(thisRef: Structable, property: KProperty<*>) = thisRef.bind(this)
++// }
++
+ /**
+  * A vtable record, located: where it starts, the [header] laid there, and the [abi] that laid it out. An
+  * Itanium record's header is a [vtableHeaderLayout], read back through it ([readHeader]), and its function
