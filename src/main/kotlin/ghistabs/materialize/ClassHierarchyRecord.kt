@@ -8,7 +8,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.ObjectStorage
 import ghidra.util.Saveable
 import ghistabs.GPropertiesFormat
-import ghistabs.parse.Access
+import ghistabs.cpp.Access
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.VirtKind
 import kotlinx.serialization.Serializable

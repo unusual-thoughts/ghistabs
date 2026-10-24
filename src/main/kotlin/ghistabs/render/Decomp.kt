@@ -4,10 +4,10 @@ import ghidra.app.decompiler.*
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.listing.Function
 import ghistabs.cpp.eh.SjljAbi
+import ghistabs.cpp.templateLeaf
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.blockAt
-import ghistabs.parse.templateLeaf
 
 /** The fragments a wrapped logical line was rejoined from, each token at its offset in the join. */
 private fun List<ClangLine>.placed(spell: Spelling): List<Placed> {

@@ -2,6 +2,7 @@ package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.cpp.Access
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*

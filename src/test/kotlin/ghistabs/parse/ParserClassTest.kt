@@ -1,5 +1,7 @@
 package ghistabs.parse
 
+import ghistabs.cpp.Access
+import ghistabs.cpp.member
 import ghistabs.parse.TypeDecl.Aggregate.*
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test

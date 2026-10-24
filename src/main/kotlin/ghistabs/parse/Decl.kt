@@ -3,11 +3,12 @@
 
 package ghistabs.parse
 
+import ghistabs.cpp.Access
+import ghistabs.cpp.abi.MethodDecl
+import ghistabs.cpp.isVptrFieldName
 import kotlinx.serialization.*
 import kotlinx.serialization.json.JsonClassDiscriminator
 import java.math.BigInteger
-
-enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
 /** Method kind from the stabs method-block trailer: `.` normal, `?` static, `*` virtual. */
 enum class VirtKind { NORMAL, STATIC, VIRTUAL }
@@ -312,20 +313,20 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
         @Serializable
         data class Method<Id : IdInterface>(
-            val name: String,
+            override val name: String,
             /** The stab's physname field, or null when it states none: gcc 2.x leaves this blank far
              *  more often than it fills it (98 of tinyxml's 274 method entries), and "" is not a
              *  symbol, so the parser folds blank to null. Not always a complete mangled name either:
              *  gcc 2.x sometimes fills it with only the mangled argument list. */
-            val mangled: String?,
+            override val mangled: String?,
             val signature: TypeDecl<Id>,
             val access: Access,
             val virt: VirtKind,
-            val isConst: Boolean,
-            val isVolatile: Boolean,
+            override val isConst: Boolean,
+            override val isVolatile: Boolean,
             /** Vtable offset in bits when `virt == VIRTUAL`, else null. */
             val vtableOffsetBits: Long?,
-        ) {
+        ) : MethodDecl {
             /** `virtual `/`static ` — Ghidra's prototypeString models neither, so the stab is the only source. */
             val declPrefix get() = when (virt) {
                 VirtKind.VIRTUAL -> "virtual "

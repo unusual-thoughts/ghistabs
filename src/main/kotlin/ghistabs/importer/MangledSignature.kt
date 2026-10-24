@@ -13,6 +13,9 @@ import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.lang.PrototypeModel
 import ghidra.program.model.listing.Function
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.isParameterSized
+import ghistabs.parameterType
+import ghistabs.withoutTypedefs
 
 // The signature rules both apply passes share: SymbolApplier.applyAllFunctions for every function the
 // stabs define, then ClassApplier for each member it reparents into its class.
@@ -32,21 +35,6 @@ fun Function.conventionFor(takesThis: Boolean): PrototypeModel? {
         else -> null
     }
 }
-
-/**
- * [this] as the type of a parameter the stabs don't type, or null when the demangler has none to give.
- * A class it can't find by name comes back as an empty `/Demangler` stand-in, and anything else it
- * can't find, an enum included, as a typedef of the 1-byte `undefined`. Neither is the parameter's
- * size, and applying either loses the parameter's name and moves every slot after it: typing gcc 12
- * `xmltest`'s `XMLDocument::SetError(XMLError error, int, const char* format, ...)`'s `error` so
- * cost `format` its `char*`.
- */
-fun DemangledDataType.parameterType(dtm: DataTypeManager): DataType? =
-    runCatching { getDataType(dtm) }.getOrNull()?.takeIf { it.isParameterSized }
-
-/** Whether [this] has a parameter's size: neither a stand-in nor a 1-byte `undefined` in disguise. */
-internal val DataType.isParameterSized get() =
-    !isNotYetDefined && !isZeroLength && withoutTypedefs() != DataType.DEFAULT
 
 /** [base] behind [this]'s pointers and reference, which Ghidra also lays as a pointer. */
 internal fun DemangledDataType.decorated(base: DataType, dtm: DataTypeManager): DataType {
@@ -115,5 +103,3 @@ private fun DataType.agreesWith(other: DataType): Boolean {
     }
     return a.isEquivalent(b) || a.name == b.name
 }
-
-private fun DataType.withoutTypedefs(): DataType = generateSequence(this) { (it as? TypeDef)?.dataType }.last()

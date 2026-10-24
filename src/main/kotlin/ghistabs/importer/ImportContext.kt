@@ -4,14 +4,15 @@ import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.abi.VtableSweeper
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
-import ghistabs.entrypoints.StabsAnalyzer.Companion.stabsOptions
 import ghistabs.harvest.AddressResolver
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.ProgramAddressResolver
+import ghistabs.importer.ImportOptions.Companion.stabsOptions
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
@@ -77,6 +78,8 @@ class ImportContext<Terminal : DiagnosticSink>(
     fun hints(harvest: Harvest) = SourceHints(harvest, types(harvest), sources(harvest), this)
     fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
     fun classApplier(registry: DataTypeRegistry) = ClassApplier(registry, program, resolver, monitor, this)
+    fun vtableSweeper(registry: DataTypeRegistry) =
+        VtableSweeper(registry, program, monitor, this, importedParameterTypes(program, registry, monitor, this))
 }
 
 /**
