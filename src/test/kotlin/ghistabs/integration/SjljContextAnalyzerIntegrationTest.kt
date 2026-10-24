@@ -1,10 +1,15 @@
 package ghistabs.integration
 
+import ghidra.app.cmd.function.CreateFunctionCmd
+import ghidra.app.decompiler.DecompInterface
+import ghidra.app.plugin.core.clear.ClearFlowAndRepairCmd
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.data.*
+import ghidra.program.model.listing.CommentType
+import ghidra.program.model.listing.FlowOverride
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
@@ -15,6 +20,7 @@ import ghistabs.entrypoints.SjljLsdaAnalyzer
 import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeA
+import ghistabs.test.mustBeNull
 import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -35,6 +41,7 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     private val receiver = 0x401080
     private val register = 0x401600
     private val resume = 0x401610
+    private val thrower = 0x401620
     private val personality = 0x401800
     private val lsda = 0x402000
     private val zti = 0x403000
@@ -81,6 +88,42 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         }
     }
 
+    /**
+     * The receiver past a call that turns out not to return, as gcc lays it when the try block ends in
+     * a throw: the context and [setjmpToSlots], `call register`, `call thrower`, the `add $0x10,%esp`
+     * after it, then the receiver, `mov -0x3c(%ebp),%eax; leave; ret`. Until the thrower is known not
+     * to return, the entry falls through to all of it.
+     */
+    private fun functionWithReceiverPastAThrow() {
+        val head = code(0x55, 0x89, 0xe5, 0x83, 0xec, 0x40) +
+            code(0xc7, 0x45, 0xd8) + le(personality) + code(0xc7, 0x45, 0xdc) + le(lsda) + setjmpToSlots +
+            code(0x8d, 0x45, 0xc0, 0x50, 0xe8)
+        val body = head + le(register - (fn + head.size + 4))
+        val call = receiver - 8
+        builder.setBytes(hex(fn), body + ByteArray(call - fn - body.size) { 0x90.toByte() })
+        builder.setBytes(hex(call), code(0xe8) + le(thrower - (call + 5)) + code(0x83, 0xc4, 0x10))
+        builder.setBytes(hex(receiver), code(0x8b, 0x45, 0xc4, 0xc9, 0xc3))
+        builder.disassemble(hex(fn), receiver + 5 - fn)
+        builder.createFunction(hex(fn))
+    }
+
+    /**
+     * The thrower found not to return, and Ghidra's repair of that as its no-return analysis does it
+     * (FindNoReturnFunctionsAnalyzer): no fall-through from the call, the flow past it cleared, the body
+     * recomputed.
+     */
+    private fun repairAfterTheThrow() = program.runTransaction("no-return") {
+        program.functionManager.getFunctionAt(addr(thrower)).setNoReturn(true)
+        program.listing.getInstructionAt(addr(receiver - 8)).setFlowOverride(FlowOverride.CALL_RETURN)
+        ClearFlowAndRepairCmd(AddressSet(addr(receiver - 3)), null, true, false, true)
+            .applyTo(program, TaskMonitor.DUMMY)
+        val f = program.functionManager.getFunctionAt(addr(fn))
+        CreateFunctionCmd.fixupFunctionBody(program, f, TaskMonitor.DUMMY)
+    }
+
+    private fun receiverFlow() = program.referenceManager.getReferencesTo(addr(receiver)).iterator().asSequence()
+        .filter { it.referenceType.isFlow }.toList()
+
     @BeforeEach
     fun setUp() {
         builder = ProgramBuilder("sjlj", ProgramBuilder._X86, "gcc", this)
@@ -89,6 +132,8 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         builder.createEmptyFunction("___gxx_personality_sj0", hex(personality), 1, VoidDataType.dataType)
         builder.createEmptyFunction("__Unwind_SjLj_Register", hex(register), 1, VoidDataType.dataType)
         builder.createEmptyFunction("__Unwind_SjLj_Resume", hex(resume), 1, VoidDataType.dataType)
+        builder.createEmptyFunction("__ZSt19__throw_ios_failurePKc", hex(thrower), 1, VoidDataType.dataType)
+        builder.setBytes(hex(thrower), code(0xc3))
         builder.setBytes(hex(register), code(0xc3))
         // As the loader leaves a symbol table's functions: named, their signatures no one's.
         program.runTransaction("untyped") {
@@ -150,6 +195,52 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         // One label, global so the decompiler names it.
         program.symbolTable.getSymbols(addr(receiver)).map { it.name }.mustBe(listOf("sjlj_dispatch_00401080"))
         f.body.contains(addr(receiver)).mustBe(true)
+    }
+
+    /** The address-taking instruction flows to the receiver, so a no-return repair keeps it in code and body. */
+    @Test
+    fun keepsTheReceiverThroughANoReturnRepair() {
+        functionWithReceiverPastAThrow()
+        runAnalyzers()
+        receiverFlow().map { it.fromAddress }.mustBe(listOf(addr(fn + 0x1a)))
+
+        repairAfterTheThrow()
+        program.listing.getInstructionAt(addr(receiver - 3)).mustBeNull("the repair clears the dead add")
+        program.listing.getInstructionAt(addr(receiver)).mustNotBeNull("the receiver must stay code")
+        program.listing.getComment(CommentType.PRE, addr(receiver)).mustNotBeNull()
+        program.functionManager.getFunctionAt(addr(fn)).body.contains(addr(receiver + 4)).mustBe(true)
+    }
+
+    /** The case the flow reference is for: without it, the same repair clears the receiver. */
+    @Test
+    fun withoutTheFlowARepairClearsTheReceiver() {
+        functionWithReceiverPastAThrow()
+        runAnalyzers()
+        program.runTransaction("drop flow") { receiverFlow().forEach(program.referenceManager::delete) }
+
+        repairAfterTheThrow()
+        program.listing.getInstructionAt(addr(receiver)).mustBeNull("nothing but the flow keeps the receiver")
+    }
+
+    /** The flow is no branch the decompiler takes: the function decompiles the same without it. */
+    @Test
+    fun theFlowLeavesTheDecompilationAlone() {
+        function(setjmpToSlots)
+        runAnalyzers()
+        val with = decompiled()
+        receiverFlow().size.mustBe(1)
+        program.runTransaction("drop flow") { receiverFlow().forEach(program.referenceManager::delete) }
+        decompiled().mustBe(with)
+    }
+
+    private fun decompiled(): String {
+        val decomp = DecompInterface().also { it.openProgram(program) }
+        try {
+            val f = program.functionManager.getFunctionAt(addr(fn))
+            return decomp.decompileFunction(f, 60, TaskMonitor.DUMMY).decompiledFunction.c
+        } finally {
+            decomp.dispose()
+        }
     }
 
     @Test
