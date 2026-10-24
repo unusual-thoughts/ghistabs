@@ -23,10 +23,13 @@ import ghidra.program.model.data.UnsignedLeb128DataType
 import ghidra.program.model.lang.OperandType
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.CommentType
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryAccessException
 import ghidra.program.model.scalar.Scalar
+import ghidra.program.model.symbol.RefType
+import ghidra.program.model.symbol.ReferenceManager
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.util.CodeUnitInsertionException
 import ghidra.util.bytesearch.*
@@ -38,6 +41,7 @@ import ghistabs.diagnose.MessageLogSink
 import ghistabs.entrypoints.SjljLsdaAnalyzer.Companion.layUnreferenced
 import ghistabs.entrypoints.SjljLsdaAnalyzer.Companion.traceStore
 import ghistabs.forceCreateData
+import ghistabs.minus
 import ghistabs.plus
 import java.util.*
 import kotlin.math.abs
@@ -343,6 +347,7 @@ class SjljLsdaAnalyzer :
                 DisassembleCommand(at, null, true).applyTo(program, monitor)
                 listing.getInstructionAt(at) ?: return sink.warn("sjlj-resume-undecoded", "receiver of ${fn.name}", at)
             }
+            program.flowTo(fn, reg, at)
             // Within the function's extent: gcc puts the receiver and its landing pads there, and a flow
             // past it may be a function nothing has defined yet, which the stabs import would then find taken.
             val flow = CreateFunctionCmd.getFunctionBody(program, at, monitor)
@@ -367,6 +372,29 @@ class SjljLsdaAnalyzer :
                 "SJLJ receiver (jbuf[1]): the unwinder longjmps here to dispatch on call_site to a landing pad",
             )
         }
+
+        fun ReferenceManager.addIfNone(from: Address, to: Address, op: Int) {
+            if (getReferencesFrom(from, op).none { it.toAddress == to && it.referenceType.isFlow }) {
+                addMemoryReference(from, to, RefType.COMPUTED_JUMP, SourceType.ANALYSIS, op)
+            }
+        }
+
+        /**
+         * A flow reference to the receiver [at] from the instruction in [fn] that takes its address, the
+         * nearest to [reg]'s store: the edge the unwinder's `longjmp` takes, which no instruction spells.
+         * Ghidra keeps code a flow reference reaches through a no-return repair, which otherwise clears
+         * the receiver and its landing pads as dead code past a call, and takes it into the body each
+         * time it recomputes one. Not a branch in the instruction's p-code, so the decompiler, which
+         * follows that, still sees the address taken and nothing more.
+         */
+        private fun Program.flowTo(fn: Function, reg: Registration, at: Address) =
+            listing.getInstructions(fn.body, true).iterator().asSequence()
+                .flatMap { insn: Instruction -> (0..<insn.numOperands).map { insn to it } }
+                .filter { (insn, op) -> insn.getScalar(op)?.unsignedValue == at.offset }
+                .minByOrNull { (insn, _) -> abs(insn.address - reg.store) }
+                ?.let { (insn, op) ->
+                    referenceManager.addIfNone(insn.address, at, op)
+                }
 
         /** A `movl $immediate, displacement(%ebp)` of [length] bytes at [at]. */
         private class Store(val at: Address, val length: Int, val displacement: Long, val immediate: Long)
