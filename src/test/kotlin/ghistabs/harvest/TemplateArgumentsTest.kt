@@ -2,6 +2,7 @@ package ghistabs.harvest
 
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.cpp.Access
+import ghistabs.cpp.VirtKind
 import ghistabs.cpp.member
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method

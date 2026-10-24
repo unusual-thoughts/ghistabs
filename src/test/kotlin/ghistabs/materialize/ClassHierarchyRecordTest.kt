@@ -8,7 +8,8 @@ import ghistabs.cpp.Access
 import ghistabs.cpp.ClassHierarchyRecords
 import ghistabs.cpp.ClassHierarchyRecords.Base
 import ghistabs.cpp.ClassHierarchyRecords.Entry
-import ghistabs.parse.VirtKind
+import ghistabs.cpp.MemberAttrs
+import ghistabs.cpp.VirtKind
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 

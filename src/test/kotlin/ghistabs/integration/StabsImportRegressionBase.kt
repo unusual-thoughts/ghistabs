@@ -20,6 +20,7 @@ import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.BaselineWriter
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.VirtKind
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.Gcc2

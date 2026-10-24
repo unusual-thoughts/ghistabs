@@ -1,6 +1,7 @@
 package ghistabs.materialize.cpp
 
 import ghistabs.cpp.Access
+import ghistabs.cpp.VirtKind
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.materialize.hasPolymorphicBaseSubobject
