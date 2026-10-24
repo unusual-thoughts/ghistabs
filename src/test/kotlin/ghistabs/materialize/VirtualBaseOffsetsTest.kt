@@ -1,6 +1,5 @@
-package ghistabs.materialize.cpp
+package ghistabs.materialize
 
-import ghistabs.materialize.virtualBaseOffsets
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 

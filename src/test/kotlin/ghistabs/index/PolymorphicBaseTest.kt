@@ -1,11 +1,9 @@
-package ghistabs.materialize.cpp
+package ghistabs.index
 
 import ghistabs.cpp.Access
 import ghistabs.cpp.VirtKind
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
-import ghistabs.materialize.hasPolymorphicBaseSubobject
-import ghistabs.materialize.virtualBases
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method

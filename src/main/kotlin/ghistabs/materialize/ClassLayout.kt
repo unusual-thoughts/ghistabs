@@ -11,6 +11,11 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
 import ghistabs.index.demangledClassPath
+import ghistabs.index.firstPolymorphicBase
+import ghistabs.index.inheritanceDepth
+import ghistabs.index.virtualBases
+import ghistabs.materialize.VfptrModel
+import ghistabs.materialize.VfptrPlacement
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -254,7 +259,7 @@ fun virtualBaseOffsets(nvEnd: Int, nvAlign: Int, vbases: List<Pair<Int, Int>>, c
  * self-bases and `_fields_` structs it creates are looked up again by name.
  */
 internal fun DataTypeRegistry.layClasses(vfptrModel: VfptrModel?) =
-    ClassLayout(this, vfptrModel?.let { VfptrPlacement(this, it) }).layAll()
+    ClassLayout(this, vfptrModel?.let { VfptrPlacement(this, it, this) }).layAll()
 
 private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlacement?) : DiagnosticSink by registry {
     private val types = registry.types
