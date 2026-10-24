@@ -94,7 +94,8 @@ data class ImportArtifacts(val registry: DataTypeRegistry, val records: List<Sta
 /**
  * Test↔analyzer rendezvous under `@Execution(CONCURRENT)`. The analyzer owns its own [ImportContext]
  * (it builds the Bookmark/MessageLog terminal), so a test that wants to read what the analyzer produced
- * pre-installs a probe: the analyzer emits into [diagnostics]/[terminal] and hands back [artifacts].
+ * pre-installs a probe: the analyzer emits into [diagnostics]/[terminal] and hands back [artifacts]. The
+ * analyzers that run after it, on what it applied, emit into the same pair ([sinkFor]).
  */
 class ImportProbe(val diagnostics: StabsDiagnostics, val terminal: DiagnosticSink) {
     @get:TestOnly
@@ -117,5 +118,12 @@ class ImportProbe(val diagnostics: StabsDiagnostics, val terminal: DiagnosticSin
 
         @Synchronized
         internal fun get(program: Program): ImportProbe? = map[program]
+
+        /**
+         * [sink], tee'd onto the probe a test installed on [program], if any: an analyzer that runs after the
+         * import reports into the same counters and log the test reads the import's from.
+         */
+        fun sinkFor(program: Program, sink: DiagnosticSink): DiagnosticSink =
+            get(program)?.let { TeeSink(sink, it.diagnostics, it.terminal) } ?: sink
     }
 }

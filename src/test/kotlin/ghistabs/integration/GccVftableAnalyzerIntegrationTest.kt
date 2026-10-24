@@ -11,7 +11,6 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.buildClassNamespaces
 import ghistabs.cpp.ClassNaming
 import ghistabs.entrypoints.GccVftableAnalyzer
-import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.VtableSweeper.Companion.isVtablesSwept
 import ghistabs.runTransaction
 import ghistabs.test.must
@@ -102,18 +101,14 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         program.fooVftable().mustBe(null, "swept a table a class had claimed")
     }
 
+    /** Stabs not imported yet are no reason to wait: the import, once it runs, has the table swept again. */
     @Test
-    fun defersToTheStabsImport() {
+    fun sweepsWithoutWaitingForTheStabsImport() {
         builder.createMemory(".stab", "0x403000", 4)
         builder.createMemory(".stabstr", "0x404000", 4)
 
-        runAnalyzer().mustBe(false)
-        program.fooVftable().mustBe(null, "swept ahead of the stabs import")
-
-        // An import with this analyzer disabled marks the program imported but sweeps nothing.
-        program.runTransaction("stabs-done") { program.markStabsDone(true) }
         runAnalyzer().mustBe(true)
-        program.fooVftable().mustNotBeNull("not swept after an import that left it")
+        program.fooVftable().mustNotBeNull("not swept ahead of the stabs import")
     }
 
     /** An MSVC-built PE is not gcc's, however its symbols read: the Demangler analyzer's own test. */

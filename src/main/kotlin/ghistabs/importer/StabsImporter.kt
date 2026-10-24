@@ -1,17 +1,13 @@
 package ghistabs.importer
 
-import ghistabs.entrypoints.GccVftableAnalyzer
-import ghistabs.entrypoints.RttiLayoutAnalyzer
-import ghistabs.entrypoints.SjljContextAnalyzer
-import ghistabs.entrypoints.VirtualBaseAnalyzer
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
+import ghistabs.importer.VtableSweeper.Companion.markVtablesSwept
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.*
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
-import ghistabs.parse.leafName
 import ghistabs.runTransaction
 import java.nio.file.Path
 
@@ -77,6 +73,8 @@ internal fun ImportContext<*>.runOnRecords(stabs: StabReader.Result): ImportResu
             )
         }.also { layAfterSymbols(registry) }
     }
+    // The class pass claimed its tables: a sweep from before this import has more to leave alone now.
+    program.markVtablesSwept(false)
 
     // Pass D — publish the line map, then point it at local sources if any root was given
     val sourceMapEntries = program.runTransaction("Stabs: publish source map") {
@@ -84,7 +82,6 @@ internal fun ImportContext<*>.runOnRecords(stabs: StabReader.Result): ImportResu
     }
     program.applySourceRoots(options.sourceRoots.map(Path::of), this)
 
-    analyzeDataCoverage()
     registry.reportSurvivingPlaceholders()
     registry.reportConflictDelta()
     diagnostics.writeSummary(terminal)
@@ -99,31 +96,17 @@ internal fun ImportContext<*>.runOnRecords(stabs: StabReader.Result): ImportResu
     )
 }
 
-/** The ABI passes that need the stabs' symbols applied first, in the order each depends on. */
+/**
+ * What needs the stabs' symbols applied first, in the order each depends on. The ABI passes that lay
+ * typeinfos, sweep vtables, lay virtual bases and type the SJLJ contexts are their own analyzers, which
+ * run after this import and read what it left in the program.
+ */
 private fun ImportContext<*>.layAfterSymbols(registry: DataTypeRegistry) {
-    // Typeinfos first, so the coverage report counts them in every analysis order: some
-    // `_ZTI` labels only exist once this import has applied its globals.
-    if (RttiLayoutAnalyzer.isEnabled(program)) {
-        RttiLayoutAnalyzer.layTypeinfos(program, registry, this)
-    }
-    // The classes the stabs describe are laid; the analyzer's sweep takes the rest now, on
-    // this import's registry and diagnostics, ahead of the demangler stub replacement.
-    if (GccVftableAnalyzer.isEnabled(program)) {
-        GccVftableAnalyzer.sweep(program, registry, monitor, this)
-    }
     demanglerReplacer(registry).replace()
-    // After the demangle passes above, which re-file methods under their mangled scope, and before
-    // the virtual bases, which find a class's struct by the namespace its labels sit in.
+    // After the demangle passes above, which re-file methods under their mangled scope, so the
+    // labels the virtual-bases analyzer finds a class by sit in its shortened namespace.
     if (options.shortenTypedefs && options.buildClasses) {
         program.rehomeOntoShortenedClasses(TemplateNameShortener(registry.typedefAliases()), this)
-    }
-    // Once labels are demangled, so each typeinfo and vtable sits in its class's namespace.
-    if (VirtualBaseAnalyzer.isEnabled(program)) {
-        VtableVirtualBases(program, this) { registry.uniqueStructTagged(it.leafName) }.layAll()
-    }
-    // Once the stabs have typed what they type, the libgcc entry points among it.
-    if (SjljContextAnalyzer.isEnabled(program)) {
-        SjljContextAnalyzer.typeAll(program, monitor, this)
     }
 }
 

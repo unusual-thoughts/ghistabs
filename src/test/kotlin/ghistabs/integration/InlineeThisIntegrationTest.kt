@@ -3,7 +3,6 @@ package ghistabs.integration
 import ghidra.program.model.data.Pointer
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.loadProgram
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -38,7 +37,7 @@ class InlineeThisIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun `an inlined member's this is a local of its own`(fixture: String, entry: String, onStack: Boolean) {
         assumeTrue(Fixtures.accepts(File(fixture).name), "excluded by -Pfixture")
         loaded = loadProgram(File("src/test/resources/binaries/$fixture"))
-        program.defaultContext().import()
+        program.defaultContext().importAndAnalyze()
 
         val func = checkNotNull(program.functionManager.getFunctionAt(program.addressFactory.getAddress(entry)))
         val inlinee = checkNotNull(

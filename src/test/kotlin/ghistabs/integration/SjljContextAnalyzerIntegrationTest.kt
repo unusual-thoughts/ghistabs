@@ -171,7 +171,7 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     fun aSecondRunTypesNothing() {
         function(setjmpThroughRegister)
         runAnalyzers()
-        val sink = MessageLogSink(MessageLog())
+        val sink = MessageLogSink(MessageLog(), originator = SjljContextAnalyzer.NAME)
         program.runTransaction("again") {
             SjljContextAnalyzer.typeAll(program, TaskMonitor.DUMMY, sink).mustBe(0 to 0)
             SjljContextAnalyzer.typeAll(program, TaskMonitor.DUMMY, sink, AddressSet(addr(receiver))).mustBe(0 to 0)

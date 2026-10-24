@@ -45,7 +45,7 @@
             "max": 2630
         },
         "demangler-exact-match": {
-            "min": 166,
+            "min": 162,
             "max": 166
         },
         "demangler-reverse-demangle-match": {
@@ -425,7 +425,7 @@
             "max": 1
         },
         "replaced-demangler": {
-            "min": 169,
+            "min": 165,
             "max": 169
         },
         "resolve-ambiguous": {

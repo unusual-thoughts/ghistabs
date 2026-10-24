@@ -2,10 +2,10 @@ package ghistabs.integration
 
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportArtifacts
 import ghistabs.loadProgram
 import ghistabs.test.defaultContext
+import ghistabs.test.importAndAnalyze
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.io.File
@@ -19,7 +19,7 @@ abstract class FeatureFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
     protected fun load(fixture: String) {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loaded = loadProgram(File(FEATURES, fixture))
-        artifacts = checkNotNull(program.defaultContext().import().artifacts) { "$fixture carries no stabs" }
+        artifacts = checkNotNull(program.defaultContext().importAndAnalyze().artifacts) { "$fixture carries no stabs" }
     }
 
     @AfterEach

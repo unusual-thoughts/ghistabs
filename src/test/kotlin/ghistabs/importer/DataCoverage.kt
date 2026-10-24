@@ -19,8 +19,9 @@ private const val ALIGN_PADDING = 16L
 
 /**
  * Report data bytes that no code unit describes — undefined ranges Ghidra never turned into data.
- * Runs last, after globals/statics/vtables/RTTI/demangled labels are applied (and after the filler
- * analyzer has collapsed alignment padding), so both defined data and padding count as covered.
+ * A test's report on an import: run last, after the import and the analyzers that lay typeinfos, vtables
+ * and virtual bases on what it applied (and after the filler analyzer has collapsed alignment padding),
+ * so both defined data and padding count as covered.
  *
  * Non-code segments (.data/.rdata/.bss/…) are swept directly; initialized zero-fill runs are ignored
  * and .bss keeps only runs ≥ one alignment window (the ≤15-byte CU-boundary padding is dropped).

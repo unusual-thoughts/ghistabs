@@ -16,6 +16,7 @@ import com.github.ajalt.mordant.table.horizontalLayout
 import com.github.ajalt.mordant.terminal.Terminal
 import com.github.ajalt.mordant.widgets.Text
 import com.github.ajalt.mordant.widgets.progress.*
+import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.util.ErrorLogger
 import ghidra.util.task.TaskMonitorAdapter
@@ -229,4 +230,18 @@ class BarLoggerMonitorSink(
     override fun setShowProgressValue(show: Boolean) {
         bar.update { this.visible = show }
     }
+}
+
+/**
+ * A [MessageLog] that keeps nothing: each line goes to [sink] as it is appended, under its originator
+ * as the category when it names one, else `analysis`.
+ */
+internal class ForwardingMessageLog(private val sink: DiagnosticSink) : MessageLog() {
+    override fun appendMsg(message: String) = appendMsg(null, message)
+
+    override fun appendMsg(originator: String?, message: String) = sink.log(originator ?: "analysis", message)
+
+    override fun appendMsg(lineNum: Int, message: String) = appendMsg("Line #$lineNum - $message")
+
+    override fun appendException(t: Throwable) = sink.log("analysis", t.stackTraceToString(), Level.ERROR)
 }

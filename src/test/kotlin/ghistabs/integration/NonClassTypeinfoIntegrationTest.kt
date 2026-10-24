@@ -2,7 +2,6 @@ package ghistabs.integration
 
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.loadProgram
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -33,7 +32,7 @@ class NonClassTypeinfoIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loaded = loadProgram(File("src/test/resources/binaries/$fixture"))
         val ctx = loaded.program.defaultContext()
-        ctx.import()
+        ctx.importAndAnalyze()
 
         val at = loaded.program.symbolTable.getGlobalSymbols(symbol).single().address
         val data = checkNotNull(loaded.program.listing.getDataAt(at)) { "nothing laid at $symbol" }

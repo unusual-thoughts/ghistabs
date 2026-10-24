@@ -2,7 +2,6 @@ package ghistabs.integration
 
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.loadProgram
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -40,7 +39,7 @@ class VtableUnlinkedIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loaded = loadProgram(File("src/test/resources/binaries/$fixture"))
         val ctx = loaded.program.defaultContext()
-        ctx.import()
+        ctx.importAndAnalyze()
 
         val failures = ctx.diagnostics.degradationTargets()
             .filterKeys { it.startsWith("vtable-failed-") }
@@ -55,7 +54,7 @@ class VtableUnlinkedIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loaded = loadProgram(File("src/test/resources/binaries/$fixture"))
         val ctx = loaded.program.defaultContext()
-        ctx.import()
+        ctx.importAndAnalyze()
 
         (ctx.diagnostics["vtable-applied"] > 0) mustBe true
     }

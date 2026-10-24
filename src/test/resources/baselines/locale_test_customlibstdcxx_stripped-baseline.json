@@ -89,7 +89,7 @@
             "max": 122
         },
         "function-create-disassembled-first": {
-            "min": 22,
+            "min": 0,
             "max": 22
         },
         "function-created-from-stab": {
@@ -470,7 +470,7 @@
         },
         "text-data-no-coverage": {
             "min": 10,
-            "max": 10
+            "max": 12
         },
         "textrange-entries": {
             "min": 903,

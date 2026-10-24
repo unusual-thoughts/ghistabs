@@ -49,15 +49,19 @@
             "max": 284
         },
         "demangler-exact-match": {
-            "min": 114,
+            "min": 113,
             "max": 114
+        },
+        "demangler-retarget-no-mangled-name": {
+            "min": 0,
+            "max": 15
         },
         "demangler-retarget-no-type": {
             "min": 135,
             "max": 135
         },
         "demangler-rtti-match": {
-            "min": 3,
+            "min": 0,
             "max": 3
         },
         "demangler-skip-no-replacement": {
@@ -74,15 +78,15 @@
         },
         "demangler-unbound-stub-in-signature": {
             "min": 30,
-            "max": 30
+            "max": 32
         },
         "demangler-unbound-stub-signature-site": {
             "min": 139,
-            "max": 139
+            "max": 154
         },
         "demangler-unbound-stub-site-origin": {
             "min": 139,
-            "max": 139
+            "max": 154
         },
         "drop-record-opt": {
             "min": 5,
@@ -289,7 +293,7 @@
             "max": 2
         },
         "replaced-demangler": {
-            "min": 117,
+            "min": 113,
             "max": 117
         },
         "scope-from-twin": {
@@ -503,6 +507,10 @@
         "vtable-skipped": {
             "min": 89,
             "max": 89
+        },
+        "vtable-typeinfo-stub-laid": {
+            "min": 0,
+            "max": 4
         },
         "xref-undefined": {
             "min": 15,

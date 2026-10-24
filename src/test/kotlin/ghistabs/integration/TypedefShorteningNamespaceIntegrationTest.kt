@@ -11,13 +11,13 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.CapturingSink
 import ghistabs.entrypoints.StabsAnalyzer
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.typedefAliases
 import ghistabs.runTransaction
 import ghistabs.test.disableWindowsResourceAnalyzer
+import ghistabs.test.importAndAnalyze
 import ghistabs.test.mustBeEmpty
 import ghistabs.withProgram
 import org.junit.jupiter.api.Tag
@@ -49,7 +49,7 @@ class TypedefShorteningNamespaceIntegrationTest : AbstractGhidraHeadlessIntegrat
                 mgr.startAnalysis(monitor)
                 mgr.waitForAnalysis(null, monitor)
             }
-            val result = program.runTransaction("stabs-import") { ctx.import() }
+            val result = program.runTransaction("stabs-import") { ctx.importAndAnalyze() }
             val registry = checkNotNull(result.artifacts) { "artifacts not populated" }.registry
             val shortener = TemplateNameShortener(registry.typedefAliases())
 

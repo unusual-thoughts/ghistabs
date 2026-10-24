@@ -47,7 +47,7 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: O
     private val showDisplaced by SHOW_DISPLACED
     private val provenance by PROVENANCE
 
-    private val sink = MessageLogSink(log)
+    private val sink = MessageLogSink(log, originator = name)
 
     override fun supportsAddressRestrictedExport() = false
 
