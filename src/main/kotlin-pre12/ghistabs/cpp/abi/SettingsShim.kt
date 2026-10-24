@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp.abi
+package ghistabs.cpp.abi
 
 import ghidra.docking.settings.Settings
 import ghidra.docking.settings.SettingsImpl
@@ -10,7 +10,7 @@ import ghidra.docking.settings.SettingsImpl
  * what 12's `SettingsImpl` returns; the other implementations a component hands out
  * (`ComponentDBSettings`) answer false there too.
  *
- * Declared in the caller's own package so that 12.0+, where this file is not compiled, has no import
+ * Declared in each caller's own package so that 12.0+, where this file is not compiled, has no import
  * left pointing at nothing.
  */
 internal val Settings.isImmutableSettings: Boolean
