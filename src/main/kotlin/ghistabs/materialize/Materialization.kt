@@ -3,6 +3,9 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.componentsOverlapping
+import ghistabs.cpp.isVptrFieldName
+import ghistabs.cpp.member
+import ghistabs.cpp.qualifiedName
 import ghistabs.harvest.Type
 import ghistabs.parse.*
 import ghistabs.runTransaction

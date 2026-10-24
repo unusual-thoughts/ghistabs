@@ -9,7 +9,6 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.*
 import ghistabs.entrypoints.RttiSymbolsAnalyzer
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.entrypoints.analyzeAfterImport
 import ghistabs.harvest.*
 import ghistabs.importer.ImportContext
@@ -17,6 +16,7 @@ import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportProbe
 import ghistabs.importer.ImportResult
 import ghistabs.importer.analyzeDataCoverage
+import ghistabs.importer.import
 import ghistabs.importer.runOnRecords
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex

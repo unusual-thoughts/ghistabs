@@ -1,5 +1,7 @@
 package ghistabs.materialize
 
+import ghistabs.cpp.isVptrFieldName
+import ghistabs.cpp.member
 import ghistabs.index.TypeGraph
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base

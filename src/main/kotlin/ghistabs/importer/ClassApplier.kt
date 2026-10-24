@@ -14,18 +14,26 @@ import ghidra.program.model.symbol.SymbolType
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
+import ghistabs.cpp.ClassHierarchyRecords
+import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.ResolvedVtable
+import ghistabs.cpp.abi.VtableSweeper
 import ghistabs.cpp.abi.vtableRecord
+import ghistabs.cpp.describeVxTable
+import ghistabs.cpp.leafName
+import ghistabs.cpp.member
+import ghistabs.cpp.nameSegments
+import ghistabs.cpp.qualifiedName
+import ghistabs.cpp.vfptrOffset
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType
 import ghistabs.materialize.*
-import ghistabs.materialize.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
@@ -48,7 +56,7 @@ class ClassApplier(
     internal val resolver: AddressResolver,
     monitor: TaskMonitor,
     sink: DiagnosticSink,
-) : VtableSweeper(registry, program, monitor, sink) {
+) : VtableSweeper(registry, program, monitor, sink, importedParameterTypes(program, registry, monitor, sink)) {
     private val types = registry.types
 
     companion object {
@@ -176,7 +184,7 @@ class ClassApplier(
      * materializeAll already collapsed by name, and iterating canonical groups builds each class
      * once, off the most-detailed body. Returns the number of classes built.
      *
-     * The vtables of classes no stab describes are left to [ghistabs.entrypoints.GccVftableAnalyzer]'s
+     * The vtables of classes no stab describes are left to [VtableSweeper]'s
      * sweep, which knows the ones laid here by their `vftable` labels.
      */
     fun applyAll(): Int {

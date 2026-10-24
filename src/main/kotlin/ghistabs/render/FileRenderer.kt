@@ -6,6 +6,9 @@ import ghistabs.chunkOf
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.Gcc2
 import ghistabs.cpp.abi.StructorVariant
+import ghistabs.cpp.member
+import ghistabs.cpp.qualifiedName
+import ghistabs.cpp.templateLeaf
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile

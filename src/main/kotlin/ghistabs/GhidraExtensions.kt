@@ -24,8 +24,6 @@ import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.ascii.AsciiCharSetRecognizer
 import ghidra.util.ascii.CharSetRecognizer
 import ghidra.util.task.TaskMonitor
-import ghistabs.parse.dbxArch
-import ghistabs.parse.frameRegister
 import java.io.File
 import java.nio.charset.Charset
 import java.nio.file.AccessMode
@@ -333,8 +331,15 @@ private const val PROLOGUE_SCAN = 32
 
 private val Program.stackPointer get() = compilerSpec.stackPointer
 
-/** The register gcc's stab frame offsets count from, or null when [dbxArch] doesn't know this processor. */
-private val Program.framePointer get() = dbxArch?.frameRegister?.let(::getRegister)
+/**
+ * This processor's frame pointer, in Ghidra's spelling: %ebp, %rbp, and SPARC's %i6, which Ghidra names
+ * `fp`. Null on a processor not listed here.
+ */
+private val Program.framePointer get() = when (language.processor.toString()) {
+    "x86" -> if (defaultPointerSize == 8) "RBP" else "EBP"
+    "Sparc" -> "fp"
+    else -> null
+}?.let(::getRegister)
 
 /**
  * How far below the entry SP this function's prologue set the frame pointer that gcc's stab offsets
@@ -344,8 +349,8 @@ private val Program.framePointer get() = dbxArch?.frameRegister?.let(::getRegist
  * `fp = sp` before it moves `sp`, so the depth at the `save` is 0: the frame pointer is the entry SP itself,
  * nowhere near the convention's stack-parameter offset.
  *
- * Only a copy of SP into the architecture's frame register ([ghistabs.parse.frameRegister]) counts; a
- * program whose [ghistabs.parse.dbxArch] is unknown keeps the convention-derived bias.
+ * Only a copy of SP into the architecture's frame register ([framePointer]) counts; a
+ * processor without one keeps the convention-derived bias.
  */
 fun Function.frameBias(monitor: TaskMonitor = TaskMonitor.DUMMY): Int = program.framePointer?.let { fp ->
     setsFramePointer(fp)?.let { setsFp ->

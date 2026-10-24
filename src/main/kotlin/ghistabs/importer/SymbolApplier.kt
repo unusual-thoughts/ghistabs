@@ -16,6 +16,8 @@ import ghidra.program.model.symbol.SymbolTable
 import ghistabs.*
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.Itanium.isInlineStdMember
+import ghistabs.cpp.member
+import ghistabs.cpp.qualifiedName
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level

@@ -13,11 +13,9 @@ import ghistabs.diagnose.MessageLogSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
 import ghistabs.importer.*
-import ghistabs.importer.ImportOptions.Companion.isOverlayDone
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
-import ghistabs.importer.ImportOptions.Companion.markOverlayDone
-import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.ImportOptions.Companion.registerStabs
+import ghistabs.importer.ImportOptions.Companion.stabsOptions
 import ghistabs.parse.StabReader
 import ghistabs.runTransaction
 
@@ -76,55 +74,6 @@ class StabsAnalyzer :
     }
 
     companion object {
-        const val NAME = "Stabs Importer"
-
-        private fun optionsIn(program: Program): Options =
-            program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(NAME)
-
-        fun Program.stabsOptions() = ImportOptions(optionsIn(this))
-
-        private fun Program.setStabsOptions(options: ImportOptions) = options.exportTo(optionsIn(this))
-
-        private fun setEnabled(program: Program, value: Boolean = true) {
-            program.getOptions(Program.ANALYSIS_PROPERTIES).setBoolean(NAME, value)
-        }
-
-        private fun Program.updateOptions(mod: ImportOptions.() -> Unit) = optionsIn(this).apply {
-            ImportOptions(this).also { mod(it) }.exportTo(this)
-        }
-
-        fun Program.enableStabsAnalyzer(options: ImportOptions) = runTransaction("Enable Stabs analyzer") {
-            setStabsOptions(options)
-            setEnabled(this, true)
-        }
-
-        fun Program.enableStabsAnalyzer(config: ImportOptions.() -> Unit = { }) =
-            runTransaction("Configure Stabs analyzer") {
-                updateOptions(config)
-                setEnabled(this, true)
-            }
-
-        fun Program.disableStabsAnalyzer() = runTransaction("Disable Stabs analyzer") {
-            setEnabled(this, false)
-        }
-
-        @JvmStatic
-        fun ImportContext<*>.import(): ImportResult {
-            if (program.isStabsDone) return ImportResult()
-
-            if (options.overlaySection && !program.isOverlayDone) {
-                debug("stab-section-overlaid", count = StabSectionOverlay(this).apply().toLong())
-                program.markOverlayDone()
-            }
-
-            val results = readStabs()?.let(::runOnRecords) ?: run {
-                diagnostics.writeSummary(terminal)
-                ImportResult()
-            }
-
-            log("import", "import complete: $results")
-            program.markStabsDone(true)
-            return results
-        }
+        const val NAME = ImportOptions.ANALYZER
     }
 }

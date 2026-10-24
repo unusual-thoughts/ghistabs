@@ -1,5 +1,6 @@
 package ghistabs.harvest
 
+import ghistabs.cpp.Access
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.test.*
