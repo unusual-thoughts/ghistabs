@@ -8,6 +8,7 @@ import ghidra.program.model.data.UnsignedLeb128DataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
 import ghistabs.*
+import ghistabs.cpp.ClassNaming.TYPEINFO
 
 /**
  * One gcc SJLJ LSDA (`.gcc_except_table` entry), parsed as `__gxx_personality_sj0` reads it:
@@ -39,15 +40,61 @@ class SjljLsda private constructor(
     val actions: List<Action>,
     /** How many type table entries a filter or exception spec reaches. */
     val typeCount: Int,
+    /** The type table's base, entry N a pointer N pointers below it; null without one. */
+    val typeBase: Address?,
+    /** Each exception spec's type indices, by the (negative) filter that reaches it. */
+    val specs: Map<Long, List<Long>>,
 ) {
     enum class Kind { ENCODING, ULEB128, SLEB128, POINTER, ALIGNMENT }
 
     /** One field to lay, [length] bytes at [at], with what it holds. */
     data class Item(val at: Address, val length: Int, val kind: Kind, val comment: String)
 
-    data class CallSite(val landingPad: Long, val action: Long)
+    /** [actionAt] is the first action record [action] reaches, null for a cleanup with none. */
+    data class CallSite(val landingPad: Long, val action: Long, val actionAt: Address? = null)
 
-    data class Action(val at: Address, val filter: Long, val next: Long)
+    /** [nextAt] is the record [next] reaches, null at the end of the chain. */
+    data class Action(val at: Address, val filter: Long, val next: Long, val nextAt: Address? = null)
+
+    /**
+     * The filters of [callSite]'s action chain, in the order the personality tries them: above 0 a
+     * catch of that type table entry, 0 a cleanup, below 0 an exception spec ([specs]). Empty for a
+     * call site with no action, a cleanup that catches nothing.
+     */
+    fun filters(callSite: CallSite): List<Long> {
+        val byAt = actions.associateBy { it.at }
+        return generateSequence(callSite.actionAt?.let(byAt::get)) { it.nextAt?.let(byAt::get) }
+            .take(actions.size).map { it.filter }.toList()
+    }
+
+    /** Where type table entry [n] is, a pointer to its typeinfo (null for `catch (...)`); null without a type table. */
+    fun typeAt(n: Long, pointerSize: Int): Address? = typeBase?.let { it - n * pointerSize }
+
+    /**
+     * What [callSite]'s landing pad does, in [filters]' order: `catch (Type)`, `catch (...)`,
+     * `throw (Type, …)` for an exception spec, or `cleanup`, joined by commas. The types are named
+     * from [program]'s typeinfo symbols.
+     */
+    fun handlers(callSite: CallSite, program: Program): String = filters(callSite).run {
+        if (isEmpty()) return CLEANUP
+        joinToString(", ") { filter ->
+            when {
+                filter > 0 -> "catch (${typeName(filter, program) ?: "..."})"
+                filter == 0L -> CLEANUP
+                else -> "throw (${specs[filter].orEmpty().joinToString(", ") { typeName(it, program) ?: "?" }})"
+            }
+        }
+    }
+
+    /** The type entry [n] names, by its typeinfo's symbol, demangled; null for `catch (...)`. */
+    private fun typeName(n: Long, program: Program): String? {
+        val at = typeAt(n, program.defaultPointerSize) ?: return null
+        val typeinfo = program.pointerAt(at)?.takeIf { it.offset != 0L } ?: return null
+        val symbol = program.symbolTable.getPrimarySymbol(typeinfo) ?: return "$typeinfo"
+        if (symbol.name == TYPEINFO) return symbol.parentNamespace.getName(true)
+        return Demangler.of(symbol.name)?.takeIf { it.name == TYPEINFO }?.namespace?.namespaceString
+            ?: symbol.getName(true)
+    }
 
     /** Bytes from the LSDA's start to the end of its last field. */
     val size get() = items.maxOf { it.at + it.length } - start
@@ -76,6 +123,8 @@ class SjljLsda private constructor(
     }
 
     companion object {
+        private const val CLEANUP = "cleanup"
+
         const val OMIT = 0xff
         const val ABSPTR = 0x00
         const val ULEB128 = 0x01
@@ -99,6 +148,8 @@ class SjljLsda private constructor(
 
         /** Just past the last action record: where the type table's padding starts. */
         lateinit var actionEnd: Address
+
+        val specs = mutableMapOf<Long, List<Long>>()
 
         fun item(at: Address, kind: Kind, comment: String) {
             items += Item(at, (c.at - at).toInt(), kind, comment)
@@ -132,7 +183,15 @@ class SjljLsda private constructor(
             val actions = actions(actionTable, callSites, base)
             expect(base != null || actions.all { it.filter == 0L })
             val typeCount = if (base == null) 0 else types(base, actions)
-            return SjljLsda(start, items.distinctBy { it.at }.sortedBy { it.at }, callSites, actions, typeCount)
+            return SjljLsda(
+                start,
+                items.distinctBy { it.at }.sortedBy { it.at },
+                callSites.map { if (it.action == 0L) it else it.copy(actionAt = actionTable + it.action - 1) },
+                actions,
+                typeCount,
+                base,
+                specs,
+            )
         }
 
         fun callSites(actionTable: Address) = buildList {
@@ -159,7 +218,7 @@ class SjljLsda private constructor(
                 expect(-filter <= MAX_TABLE)
                 val nextAt = c.at
                 val next = leb(true, "(LSDA Action) Next-Action Reference")
-                actions[at] = Action(at, filter, next)
+                actions[at] = Action(at, filter, next, if (next == 0L) null else nextAt + next)
                 actionEnd = maxOf(actionEnd, c.at)
                 if (next != 0L) pending += nextAt + next
             }
@@ -172,12 +231,15 @@ class SjljLsda private constructor(
          */
         fun types(base: Address, actions: List<Action>): Int {
             var typeCount = actions.maxOfOrNull { it.filter }?.coerceAtLeast(0L) ?: 0L
-            for (spec in actions.filter { it.filter < 0 }.map { base - it.filter - 1 }.distinct()) {
-                c.at = spec
-                do {
-                    val index = leb(false, "(LSDA Exception Spec) Type Index")
-                    typeCount = maxOf(typeCount, index)
-                } while (index != 0L)
+            for (filter in actions.map { it.filter }.filter { it < 0 }.distinct()) {
+                c.at = base - filter - 1
+                specs[filter] = buildList {
+                    do {
+                        val index = leb(false, "(LSDA Exception Spec) Type Index")
+                        typeCount = maxOf(typeCount, index)
+                        if (index != 0L) add(index)
+                    } while (index != 0L)
+                }
             }
             expect(typeCount <= MAX_TABLE)
             val types = base - typeCount * pointerSize

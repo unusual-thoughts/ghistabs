@@ -128,7 +128,13 @@ class SjljAbi(private val dtm: DataTypeManager) {
     }
 
     private fun isContextHead(s: Structure) = s.length >= JBUF_OFFSET &&
-        listOf("prev" to 0, "call_site" to 4, "data" to 8, "personality" to PERSONALITY_OFFSET, "lsda" to LSDA_OFFSET)
+        listOf(
+            "prev" to 0,
+            "call_site" to CALL_SITE_OFFSET,
+            "data" to 8,
+            "personality" to PERSONALITY_OFFSET,
+            "lsda" to LSDA_OFFSET,
+        )
             .all { (name, offset) ->
                 s.getComponentAt(offset)?.let { it.fieldName == name && it.offset == offset } == true
             }
@@ -226,7 +232,8 @@ class SjljAbi(private val dtm: DataTypeManager) {
         /** The calls that push and pop a function's context on the thread's chain. */
         val REGISTRATION_CALLS = setOf(REGISTER, UNREGISTER)
 
-        /** Offsets in the context of the slots a registering prologue stores. */
+        /** Offsets in the context of the slots a registering prologue stores, and of the call-site index. */
+        const val CALL_SITE_OFFSET = 4
         const val PERSONALITY_OFFSET = 0x18
         const val LSDA_OFFSET = 0x1c
         const val JBUF_OFFSET = 0x20

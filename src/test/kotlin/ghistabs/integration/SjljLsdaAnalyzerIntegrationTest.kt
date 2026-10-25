@@ -11,6 +11,8 @@ import ghidra.program.model.data.VoidDataType
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.eh.MIN_UNNAMED_PERSONALITY
+import ghistabs.cpp.eh.SjljLsdaApplier
 import ghistabs.entrypoints.SjljLsdaAnalyzer
 import ghistabs.runTransaction
 import ghistabs.test.*
@@ -88,7 +90,7 @@ class SjljLsdaAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         type?.value.mustBe(addr(zti))
         program.listing.getComment(CommentType.EOL, addr(lsda + 9)).mustBe("(LSDA Action Table) Type Filter")
 
-        val label = program.symbolTable.getSymbols(addr(lsda)).single { it.name == SjljLsdaAnalyzer.LABEL }
+        val label = program.symbolTable.getSymbols(addr(lsda)).single { it.name == SjljLsdaApplier.LABEL }
         label.parentNamespace.name.mustBe("_ZN3Bar3runEv")
         program.symbolTable.getPrimarySymbol(addr(lsda))?.name.mustBe("lsda_exception_table_00402000")
     }
@@ -99,12 +101,12 @@ class SjljLsdaAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         function(0x401000, "first")
         function(0x401100, "second")
         runAnalyzer()
-        program.symbolTable.getSymbols(addr(lsda)).filter { it.name == SjljLsdaAnalyzer.LABEL }
+        program.symbolTable.getSymbols(addr(lsda)).filter { it.name == SjljLsdaApplier.LABEL }
             .map { it.parentNamespace.name }.toSet().mustBe(setOf("first", "second"))
     }
 
     /**
-     * A stripped binary names no personality: one stored before [SjljLsdaAnalyzer.MIN_UNNAMED] LSDAs
+     * A stripped binary names no personality: one stored before [MIN_UNNAMED_PERSONALITY] LSDAs
      * that all parse is taken as one, and fewer is not enough.
      */
     @Test
