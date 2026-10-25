@@ -156,25 +156,26 @@ class RttiSymbols(
         }
     }
 
-    /** Labels each of [tops]' classes' vtables where its record starts; returns how many. */
-    private fun labelVtables(tops: Map<TypeInfoRecord, Address>, rtti: Rtti.Reader): Int {
-        val starts = tops.map { (ti, top) -> Triple(ti, top, program.recordStart(top)) }
+    /**
+     * Labels each of [tops]' classes' vtables where its record starts; returns how many.
+     * Once the typeinfos and their vtables are labelled, a typeinfo can be read for where it puts its
+     * vbase offsets, which a run of zeros in front of offset_to_top hides. Where the true start was
+     * named all along (an unstripped binary), the label just laid is a duplicate and goes.
+     */
+    private fun labelVtables(tops: Map<TypeInfoRecord, Address>, rtti: Rtti.Reader): Int =
+        tops.map { (ti, top) -> Triple(ti, top, program.recordStart(top)) }
             .filter { (ti, _, start) -> label(start, Itanium.VTABLE_PREFIX + ti.name) }
-        // Once the typeinfos and their vtables are labelled, a typeinfo can be read for where it puts its
-        // vbase offsets, which a run of zeros in front of offset_to_top hides. Where the true start was
-        // named all along (an unstripped binary), the label just laid is a duplicate and goes.
-        return starts.count { (ti, top, start) ->
-            val vbaseStart = recordStart(top, ti.address, rtti)
-            if (vbaseStart == start) {
-                debug("vtable-from-rtti", ti.name, start)
-                return@count true
+            .count { (ti, top, start) ->
+                val vbaseStart = recordStart(top, ti.address, rtti)
+                if (vbaseStart == start) {
+                    debug("vtable-from-rtti", ti.name, start)
+                    return@count true
+                }
+                program.symbolTable.getSymbol(Itanium.VTABLE_PREFIX + ti.name, start, null)?.delete()
+                label(vbaseStart, Itanium.VTABLE_PREFIX + ti.name).also {
+                    if (it) debug("vtable-rtti-zero-vbase", ti.name, vbaseStart)
+                }
             }
-            program.symbolTable.getSymbol(Itanium.VTABLE_PREFIX + ti.name, start, null)?.delete()
-            label(vbaseStart, Itanium.VTABLE_PREFIX + ti.name).also {
-                if (it) debug("vtable-rtti-zero-vbase", ti.name, vbaseStart)
-            }
-        }
-    }
 
     /** Where the record whose `offset_to_top` is at [top] starts, given the [typeinfo] its rtti word holds. */
     private fun recordStart(top: Address, typeinfo: Address, rtti: Rtti.Reader): Address {
