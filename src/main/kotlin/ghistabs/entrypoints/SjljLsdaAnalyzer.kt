@@ -64,8 +64,8 @@ class SjljLsdaAnalyzer :
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = ImportProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val stored = program.sjljLsdas(set, monitor)
-        val receivers = SjljApplier(program, monitor, sink)
-        stored.values.flatMap { it.registrations }.forEach { receivers.layReceiver(it) }
+        val applier = SjljApplier(program, monitor, sink)
+        stored.values.flatMap { it.registrations }.forEach { applier.layReceiver(it) }
         val laid = SjljLsdaApplier(program, monitor, sink).layAll(stored)
         if (laid > 0) log.appendMsg(NAME, "laid $laid LSDA(s)")
         return true

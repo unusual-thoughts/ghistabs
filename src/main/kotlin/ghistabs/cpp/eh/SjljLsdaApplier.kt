@@ -31,6 +31,7 @@ import java.util.*
 class SjljLsdaApplier(val program: Program, private val monitor: TaskMonitor, sink: DiagnosticSink) :
     DiagnosticSink by sink {
     private val listing = program.listing
+    private val fm = program.functionManager
 
     /**
      * Lay every parsed LSDA in [stored], then the unreferenced ones packed after each
@@ -44,7 +45,7 @@ class SjljLsdaApplier(val program: Program, private val monitor: TaskMonitor, si
                 warn("lsda-unparsed", "no SJLJ LSDA where ${found.registrations.first().store} stores one", at)
                 continue
             }
-            if (lay(at, lsda)) {
+            if (lsda.lay(at)) {
                 label(at, found.registrations)
                 laid[at] = lsda.size
             }
@@ -76,7 +77,7 @@ class SjljLsdaApplier(val program: Program, private val monitor: TaskMonitor, si
                 }
                 val lsda = SjljLsda.parse(program, next) ?: break
                 if (limit != null && next + lsda.size > limit) break
-                if (!lay(next, lsda)) break
+                if (!lsda.lay(next)) break
                 if (pad > 0) program.forceCreateData(at, AlignmentDataType(), pad)
                 count += 1
                 at = next + lsda.size
@@ -93,20 +94,20 @@ class SjljLsdaApplier(val program: Program, private val monitor: TaskMonitor, si
      * `LSDATypeTable` can only reach through that call-site parse, are laid from [lsda]. Ghidra's
      * classes skip a field whose bytes already hold data, so the extent is cleared first.
      */
-    private fun lay(at: Address, lsda: SjljLsda): Boolean {
-        val end = at + (lsda.size - 1)
-        if (program.functionManager.getFunctionsOverlapping(AddressSet(at, end)).hasNext()) {
-            warn("lsda-in-function", "LSDA would cover ${lsda.size} bytes of a function", at)
+    private fun SjljLsda.lay(at: Address): Boolean {
+        val end = at + (size - 1)
+        if (fm.getFunctionsOverlapping(AddressSet(at, end)).hasNext()) {
+            warn("lsda-in-function", "LSDA would cover $size bytes of a function", at)
             return false
         }
         listing.clearCodeUnits(at, end, false)
         val headerEnd = try {
-            layWithGhidra(at, lsda)
+            layWithGhidra(at)
         } catch (e: MemoryAccessException) {
             warn("lsda-lay-error", "Ghidra's LSDA classes: $e", at)
             null
         }
-        val ours = lsda.items.filter {
+        val ours = items.filter {
             headerEnd == null || (it.at >= headerEnd && it.kind != SjljLsda.Kind.SLEB128)
         }
         for ((addr, length, kind, comment) in ours) {
@@ -129,20 +130,20 @@ class SjljLsdaApplier(val program: Program, private val monitor: TaskMonitor, si
     }
 
     /** Lay [lsda]'s header and action records with Ghidra's classes; returns the address past the header. */
-    private fun layWithGhidra(at: Address, lsda: SjljLsda): Address {
+    private fun SjljLsda.layWithGhidra(at: Address): Address {
         val region = RegionDescriptor(program.memory.getBlock(at))
         val header = LSDAHeader(TaskMonitor.DUMMY, program, region)
         header.create(at)
-        if (lsda.actions.isNotEmpty()) {
+        if (actions.isNotEmpty()) {
             LSDAActionTable(TaskMonitor.DUMMY, program, region)
-                .create(lsda.actions.first().at, lsda.actions.last().at)
+                .create(actions.first().at, actions.last().at)
         }
         return header.nextAddress
     }
 
     /** [LABEL] in each storing function's namespace, beside the header's global label. */
     private fun label(at: Address, regs: List<Registration>) {
-        regs.mapNotNull { program.functionManager.getFunctionContaining(it.store) }.distinct()
+        regs.mapNotNull { fm.getFunctionContaining(it.store) }.distinct()
             .forEach { program.symbolTable.createLabel(at, LABEL, it, SourceType.ANALYSIS) }
     }
 

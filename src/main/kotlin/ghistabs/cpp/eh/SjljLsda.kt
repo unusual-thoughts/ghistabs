@@ -75,10 +75,9 @@ class SjljLsda private constructor(
      * `throw (Type, …)` for an exception spec, or `cleanup`, joined by commas. The types are named
      * from [program]'s typeinfo symbols.
      */
-    fun handlers(callSite: CallSite, program: Program): String {
-        val filters = filters(callSite)
-        if (filters.isEmpty()) return CLEANUP
-        return filters.joinToString(", ") { filter ->
+    fun handlers(callSite: CallSite, program: Program): String = filters(callSite).run {
+        if (isEmpty()) return CLEANUP
+        joinToString(", ") { filter ->
             when {
                 filter > 0 -> "catch (${typeName(filter, program) ?: "..."})"
                 filter == 0L -> CLEANUP

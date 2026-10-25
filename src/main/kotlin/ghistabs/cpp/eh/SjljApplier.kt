@@ -41,6 +41,7 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
     DiagnosticSink by sink {
     private val listing = program.listing
     private val fm = program.functionManager
+    private val refs = program.referenceManager
 
     /**
      * Apply all of it to the registrations whose store [set] holds, and to the entry points it holds;
@@ -53,12 +54,10 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
         val regs = all.filter { set.contains(it.store) }
         // Again after the import, which can recreate a function and with it drop the labels in it.
         regs.forEach { layReceiver(it) }
-        regs.forEach { reg -> stored[reg.lsda]?.lsda?.let { commentCallSites(reg, it) } }
+        regs.forEach { reg -> stored[reg.lsda]?.lsda?.let { reg.commentCallSites(it) } }
         val abi = SjljAbi(program.dataTypeManager)
         return typeContexts(regs, abi) to typeEntryPoints(all, abi) { set.contains(it) }
     }
-
-    // The receiver
 
     /**
      * Disassemble [reg]'s receiver, with the code it flows to, into its function's body, and label it
@@ -77,7 +76,7 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
             DisassembleCommand(at, null, true).applyTo(program, monitor)
             listing.getInstructionAt(at) ?: return warn("sjlj-resume-undecoded", "receiver of ${fn.name}", at)
         }
-        referenceReceiver(fn, reg, at)
+        reg.referenceReceiver(fn, at)
         // Within the function's extent: gcc puts the receiver and its landing pads there, and a flow
         // past it may be a function nothing has defined yet, which the stabs import would then find taken.
         val flow = CreateFunctionCmd.getFunctionBody(program, at, monitor)
@@ -107,19 +106,16 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
      * time it recomputes one. Not a branch in the instruction's p-code, so the decompiler, which
      * follows that, still sees the address taken and nothing more.
      */
-    private fun referenceReceiver(fn: Function, reg: Registration, at: Address) {
+    private fun Registration.referenceReceiver(fn: Function, at: Address) {
         val (insn, op) = listing.getInstructions(fn.body, true).iterator().asSequence()
             .flatMap { insn -> (0..<insn.numOperands).map { insn to it } }
             .filter { (insn, op) -> insn.getScalar(op)?.unsignedValue == at.offset }
-            .minByOrNull { (insn, _) -> abs(insn.address - reg.store) }
+            .minByOrNull { (insn, _) -> abs(insn.address - store) }
             ?: return
-        val refs = program.referenceManager
         if (refs.getReferencesFrom(insn.address, op).none { it.toAddress == at && it.referenceType.isFlow }) {
             refs.addMemoryReference(insn.address, at, RefType.COMPUTED_JUMP, SourceType.ANALYSIS, op)
         }
     }
-
-    // The call sites
 
     /**
      * What each call site [reg]'s function stores into `fc.call_site` selects in [lsda], as Ghidra's
@@ -132,9 +128,9 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
      * and the receiver, which dispatches on the landing pad index, one line per pad. The decompiler
      * shows pre comments, so each lands above the protected call's `fc.call_site = 2;`.
      */
-    fun commentCallSites(reg: Registration, lsda: SjljLsda) {
-        val fn = fm.getFunctionContaining(reg.store) ?: return
-        val slot = reg.lsdaDisplacement - SjljAbi.LSDA_OFFSET + SjljAbi.CALL_SITE_OFFSET
+    fun Registration.commentCallSites(lsda: SjljLsda) {
+        val fn = fm.getFunctionContaining(store) ?: return
+        val slot = lsdaDisplacement - SjljAbi.LSDA_OFFSET + SjljAbi.CALL_SITE_OFFSET
         for (insn in listing.getInstructions(fn.body, true)) {
             monitor.checkCancelled()
             val text = insn.storedImmediate(slot)?.let { callSiteComment(lsda, it) } ?: continue
@@ -143,7 +139,16 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
                 listing.setComment(insn.address, CommentType.PRE, text)
             }
         }
-        reg.resume?.let { commentLandingPads(it, lsda) }
+        resume?.let { commentLandingPads(it, lsda) }
+    }
+
+    /** The immediate this `movl $immediate, displacement(%ebp)` stores, if it is one to [displacement]. */
+    private fun Instruction.storedImmediate(displacement: Long): Long? {
+        if (mnemonicString != "MOV" || numOperands != 2) return null
+        val dest = getOpObjects(0)
+        if (dest.none { it is Register && it.name == "EBP" }) return null
+        if (dest.filterIsInstance<Scalar>().singleOrNull()?.signedValue != displacement) return null
+        return getScalar(1)?.signedValue
     }
 
     /**
@@ -169,8 +174,6 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
         listing.setComment(receiver, CommentType.PRE, (listOf(head) + pads).joinToString("\n"))
     }
 
-    // The context
-
     /**
      * Commit an [LOCAL] local over each registering function's context, the LSDA slot being
      * [SjljAbi.LSDA_OFFSET] into it, unless one an import or a user made covers it; returns how many.
@@ -185,37 +188,34 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
             monitor.checkCancelled()
             val fn = fm.getFunctionContaining(reg.store) ?: continue
             val offset = reg.lsdaDisplacement.toInt() - SjljAbi.LSDA_OFFSET - fn.frameBias(monitor)
-            if (commitContext(fn, offset, dt)) typed += 1
+            if (fn.commitContext(offset, dt)) typed += 1
         }
         return typed
     }
 
-    private fun commitContext(fn: Function, offset: Int, dt: Structure): Boolean {
-        val frame = fn.stackFrame
+    private fun Function.commitContext(offset: Int, dt: Structure): Boolean {
         val span = offset.withLength(dt.length)
-        val overlapping = frame.stackVariables.filter { it.stackOffset.withLength(it.length).overlaps(span) }
+        val overlapping = stackFrame.stackVariables.filter { it.stackOffset.withLength(it.length).overlaps(span) }
         if (overlapping.any { it.isContext(dt, offset) }) return false
         if (overlapping.any { it.source == SourceType.IMPORTED || it.source == SourceType.USER_DEFINED }) {
-            debug("sjlj-context-taken", "a defined local covers ${fn.name}'s context", fn.entryPoint)
+            debug("sjlj-context-taken", "a defined local covers $name's context", entryPoint)
             return false
         }
-        overlapping.forEach { fn.removeVariable(it) }
-        val name = generateSequence(LOCAL) { "${it}_" }.first { n -> fn.allVariables.none { it.name == n } }
+        overlapping.forEach { removeVariable(it) }
+        val name = generateSequence(LOCAL) { "${it}_" }.first { n -> allVariables.none { it.name == n } }
         return try {
-            frame.createVariable(name, offset, dt, SourceType.ANALYSIS)
+            stackFrame.createVariable(name, offset, dt, SourceType.ANALYSIS)
             true
         } catch (e: InvalidInputException) {
-            warn("sjlj-context-error", "${fn.name}: $e", fn.entryPoint)
+            warn("sjlj-context-error", "$name: $e", entryPoint)
             false
         } catch (e: DuplicateNameException) {
-            warn("sjlj-context-error", "${fn.name}: $e", fn.entryPoint)
+            warn("sjlj-context-error", "$name: $e", entryPoint)
             false
         }
     }
 
     private fun Variable.isContext(dt: DataType, offset: Int) = stackOffset == offset && dataType.isEquivalent(dt)
-
-    // The entry points
 
     /**
      * Give each gcc EH entry point its [SjljAbi.signature], by name with or without the PE underscore,
@@ -242,7 +242,7 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
             monitor.checkCancelled()
             if (!covers(fn.entryPoint)) continue
             val sig = abi.signature(name) ?: continue
-            if (typeEntryPoint(fn, name, sig)) typed += 1
+            if (fn.typeEntryPoint(name, sig)) typed += 1
         }
         return typed
     }
@@ -260,14 +260,14 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
         ?.takeIf { it.value * 2 > regs.size }
         ?.key
 
-    private fun typeEntryPoint(fn: Function, name: String, sig: SjljAbi.Signature): Boolean {
+    private fun Function.typeEntryPoint(name: String, sig: SjljAbi.Signature): Boolean {
         // No stab says a function never returns, so that is the ABI's even where they give the rest.
-        if (sig.noReturn && !fn.hasNoReturn()) fn.setNoReturn(true)
-        if (fn.signatureSource == SourceType.IMPORTED || fn.signatureSource == SourceType.USER_DEFINED) return false
-        if (fn.has(sig)) return false
+        if (sig.noReturn && !hasNoReturn()) setNoReturn(true)
+        if (signatureSource == SourceType.IMPORTED || signatureSource == SourceType.USER_DEFINED) return false
+        if (has(sig)) return false
         return try {
-            if (fn.symbol.source == SourceType.DEFAULT) fn.setName(name, SourceType.ANALYSIS)
-            fn.updateFunction(
+            if (symbol.source == SourceType.DEFAULT) setName(name, SourceType.ANALYSIS)
+            updateFunction(
                 "__cdecl",
                 ReturnParameterImpl(sig.ret, program),
                 sig.params.map { (n, t) -> ParameterImpl(n, t, program) },
@@ -275,13 +275,13 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
                 true,
                 SourceType.ANALYSIS,
             )
-            if (sig.noReturn) fn.setNoReturn(true)
+            if (sig.noReturn) setNoReturn(true)
             true
         } catch (e: InvalidInputException) {
-            warn("sjlj-signature-error", "$name: $e", fn.entryPoint)
+            warn("sjlj-signature-error", "$name: $e", entryPoint)
             false
         } catch (e: DuplicateNameException) {
-            warn("sjlj-signature-error", "$name: $e", fn.entryPoint)
+            warn("sjlj-signature-error", "$name: $e", entryPoint)
             false
         }
     }
@@ -308,13 +308,4 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
         /** How far past the LSDA store `call _Unwind_SjLj_Register` may be, in instructions. */
         private const val REGISTER_SCAN = 16
     }
-}
-
-/** The immediate this `movl $immediate, displacement(%ebp)` stores, if it is one to [displacement]. */
-private fun Instruction.storedImmediate(displacement: Long): Long? {
-    if (mnemonicString != "MOV" || numOperands != 2) return null
-    val dest = getOpObjects(0)
-    if (dest.none { it is Register && it.name == "EBP" }) return null
-    if (dest.filterIsInstance<Scalar>().singleOrNull()?.signedValue != displacement) return null
-    return getScalar(1)?.signedValue
 }
