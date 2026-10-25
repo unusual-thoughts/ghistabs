@@ -29,16 +29,16 @@
             "max": 2
         },
         "data-no-coverage": {
-            "min": 596,
-            "max": 596
+            "min": 192,
+            "max": 192
         },
         "demangle-applied": {
-            "min": 19958,
-            "max": 19958
+            "min": 20266,
+            "max": 20266
         },
         "demangle-attempted": {
-            "min": 19958,
-            "max": 19958
+            "min": 20266,
+            "max": 20266
         },
         "demangle-displaced-function-renamed": {
             "min": 0,
@@ -1019,6 +1019,10 @@
             "min": 111,
             "max": 111
         },
+        "vtable-construction": {
+            "min": 241,
+            "max": 241
+        },
         "vtable-reconstructed": {
             "min": 460,
             "max": 460,
@@ -1486,8 +1490,8 @@
             ]
         },
         "vtable-secondary": {
-            "min": 444,
-            "max": 444
+            "min": 603,
+            "max": 603
         },
         "vtable-skipped": {
             "min": 625,
@@ -1500,6 +1504,10 @@
         "vtable-virtual-no-impl": {
             "min": 38,
             "max": 38
+        },
+        "vtt-laid": {
+            "min": 67,
+            "max": 67
         },
         "xref-base-tag-resolved": {
             "min": 2,
