@@ -31,13 +31,14 @@ import ghistabs.cpp.abi.isTypeinfo
 import ghistabs.cpp.abi.vftableStructAt
 import ghistabs.cpp.canonTemplateName
 import ghistabs.cpp.eh.SjljLsda
+import ghistabs.cpp.eh.SjljLsdaApplier
+import ghistabs.cpp.eh.sjljLsdas
 import ghistabs.cpp.isBaseField
 import ghistabs.cpp.isVptrFieldName
 import ghistabs.cpp.member
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
-import ghistabs.entrypoints.SjljLsdaAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.harvest.Type
 import ghistabs.importer.*
@@ -793,18 +794,18 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun sjljLsdasAreLaidWithTheirTypeTables() {
         assumeTrue(mode != Mode.BEFORE, "Skipping: the LSDAs are laid by auto-analysis")
-        val lsdas = SjljLsdaAnalyzer.lsdas(program, program.memory, TaskMonitor.DUMMY)
+        val lsdas = program.sjljLsdas(program.memory, TaskMonitor.DUMMY)
         assumeTrue(lsdas.isNotEmpty(), "Skipping: no SJLJ exception tables in this fixture")
 
         val unlaid = mutableListOf<String>()
         val notTypeinfo = mutableListOf<String>()
         var typeinfos = 0
         for ((at, found) in lsdas) {
-            val lsda = found.first
+            val lsda = found.lsda
             if (lsda == null || program.listing.getDefinedDataAt(at) == null ||
-                program.symbolTable.getSymbols(at).none { it.name == SjljLsdaAnalyzer.LABEL }
+                program.symbolTable.getSymbols(at).none { it.name == SjljLsdaApplier.LABEL }
             ) {
-                unlaid += "$at (stored at ${found.second.first().store})"
+                unlaid += "$at (stored at ${found.registrations.first().store})"
                 continue
             }
             for (item in lsda.items.filter { it.kind == SjljLsda.Kind.POINTER }) {

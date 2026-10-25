@@ -65,6 +65,16 @@ class SjljLsdaTest : AbstractGhidraHeadlessIntegrationTest() {
         lsda.size.mustBe(29L)
     }
 
+    /** Each call site's chain followed through its next-action references, and the spec's type list. */
+    @Test
+    fun followsEachCallSitesActionChain() {
+        val lsda = parse(xmltest)!!
+        lsda.callSites.map { lsda.filters(it) }
+            .mustBe(listOf(emptyList(), listOf(-1L), emptyList(), listOf(-1L, -1L), listOf(-1L), listOf(1L)))
+        lsda.specs.mustBe(mapOf(-1L to emptyList()))
+        (lsda.typeAt(1, 4)!! - lsda.start).mustBe(24L)
+    }
+
     @Test
     fun laysEveryByteOnce() {
         val lsda = parse(xmltest)!!

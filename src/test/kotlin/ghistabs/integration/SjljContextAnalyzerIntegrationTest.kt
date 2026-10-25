@@ -14,6 +14,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.eh.SjljAbi
+import ghistabs.cpp.eh.SjljApplier
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.entrypoints.SjljContextAnalyzer
 import ghistabs.entrypoints.SjljLsdaAnalyzer
@@ -65,11 +66,13 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
     /**
      * `push %ebp; mov %esp,%ebp; sub $0x40,%esp`, the context at -0x40(%ebp): its personality and LSDA,
-     * [setjmp], `lea -0x40(%ebp),%eax; push %eax; call register`, a `jmp` past the receiver to `leave; ret`.
+     * [setjmp], `lea -0x40(%ebp),%eax; push %eax; call register`, a `jmp` past the receiver to `leave; ret`,
+     * after [stores] as gcc's `movl $index, -0x3c(%ebp)` into `fc.call_site`.
      */
-    private fun function(setjmp: ByteArray) {
+    private fun function(setjmp: ByteArray, vararg stores: Int) {
         val head = code(0x55, 0x89, 0xe5, 0x83, 0xec, 0x40) +
             code(0xc7, 0x45, 0xd8) + le(personality) + code(0xc7, 0x45, 0xdc) + le(lsda) + setjmp +
+            stores.fold(byteArrayOf()) { acc, i -> acc + code(0xc7, 0x45, 0xc4) + le(i) } +
             code(0x8d, 0x45, 0xc0, 0x50, 0xe8)
         val call = fn + head.size + 4
         // Then `jmp` over the receiver to the epilogue, as gcc lays the dispatch inside the function.
@@ -157,7 +160,7 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     }
 
     private val fc get() = program.functionManager.getFunctionAt(addr(fn)).stackFrame.stackVariables
-        .single { it.name == SjljContextAnalyzer.LOCAL }
+        .single { it.name == SjljApplier.LOCAL }
 
     private fun Structure.at(offset: Int) = getComponentAt(offset)
 
@@ -257,6 +260,31 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             .mustBe(listOf("version", "actions", "exceptionClass", "ue_header", "context"))
     }
 
+    /**
+     * The LSDA's two call sites, a cleanup and a `catch (Foo)` on landing pads 0 and 1: each
+     * `fc.call_site` store but -1's names what its index selects, and the receiver lists the pads.
+     */
+    @Test
+    fun commentsWhatEachCallSiteCatches() {
+        function(setjmpThroughRegister, 1, -1, 2, 0)
+        runAnalyzers()
+
+        val listing = program.listing
+        val comments = listing.getInstructions(program.functionManager.getFunctionAt(addr(fn)).body, true)
+            .filter { it.mnemonicString == "MOV" && it.getScalar(1)?.signedValue in -1L..2L }
+            .map { listing.getComment(CommentType.PRE, it.address) }
+        comments.mustBe(
+            listOf(
+                "SJLJ call site 1, landing pad 0: cleanup",
+                null,
+                "SJLJ call site 2, landing pad 1: catch (Foo)",
+                "SJLJ call site 0: terminate if anything throws",
+            ),
+        )
+        listing.getComment(CommentType.PRE, addr(receiver))!!.lines().drop(1)
+            .mustBe(listOf("landing pad 0: cleanup", "landing pad 1: catch (Foo)"))
+    }
+
     /** Run again, on the program or on the code a later analyzer changed, it finds nothing left to type. */
     @Test
     fun aSecondRunTypesNothing() {
@@ -264,8 +292,8 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         runAnalyzers()
         val sink = MessageLogSink(MessageLog(), originator = SjljContextAnalyzer.NAME)
         program.runTransaction("again") {
-            SjljContextAnalyzer.typeAll(program, TaskMonitor.DUMMY, sink, program.memory).mustBe(0 to 0)
-            SjljContextAnalyzer.typeAll(program, TaskMonitor.DUMMY, sink, AddressSet(addr(receiver))).mustBe(0 to 0)
+            SjljApplier(program, TaskMonitor.DUMMY, sink).applyAll(program.memory).mustBe(0 to 0)
+            SjljApplier(program, TaskMonitor.DUMMY, sink).applyAll(AddressSet(addr(receiver))).mustBe(0 to 0)
         }
     }
 

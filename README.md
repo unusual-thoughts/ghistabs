@@ -211,7 +211,11 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   SJLJ personality routines and the `__cxa_*` throw and catch calls get their signatures
   wherever nothing more definite than analysis typed them. The decompiler then shows
   `fc.call_site = 2` and `fc.jbuf.resume = …` instead of raw stack slots, and `--elide-sjlj`
-  drops those stores by the context's type. On a binary with stabs, the importer runs it itself
+  drops those stores by the context's type. Each `fc.call_site` store also gets a pre comment,
+  shown in the decompiler, saying what its LSDA entry does if the call throws, such as
+  `SJLJ call site 2, landing pad 1: catch (CryptoPP::InvalidArgument), cleanup`, and the receiver's
+  comment lists every landing pad the same way, as Ghidra's own analyzer comments a DWARF function's
+  try and catch ranges. On a binary with stabs, the importer runs it itself
   after applying its symbols, so a type or signature the stabs give is the one kept.
 - **Itanium typeinfo** - lays a typed struct at every gcc 3+ typeinfo symbol (`_ZTI…`): the
   `__class_type_info`, `__si_class_type_info` or `__vmi_class_type_info` layout its vtable
