@@ -29,16 +29,16 @@
             "max": 60
         },
         "data-no-coverage": {
-            "min": 147,
-            "max": 147
+            "min": 102,
+            "max": 102
         },
         "demangle-applied": {
-            "min": 943,
-            "max": 943
+            "min": 969,
+            "max": 969
         },
         "demangle-attempted": {
-            "min": 943,
-            "max": 943
+            "min": 969,
+            "max": 969
         },
         "demangle-displaced-function-renamed": {
             "min": 0,
@@ -339,6 +339,10 @@
             "min": 69,
             "max": 69
         },
+        "vtable-construction": {
+            "min": 14,
+            "max": 14
+        },
         "vtable-reconstructed": {
             "min": 115,
             "max": 115,
@@ -461,12 +465,16 @@
             ]
         },
         "vtable-secondary": {
-            "min": 16,
-            "max": 16
+            "min": 32,
+            "max": 32
         },
         "vtable-skipped": {
             "min": 89,
             "max": 89
+        },
+        "vtt-laid": {
+            "min": 12,
+            "max": 12
         },
         "xref-undefined": {
             "min": 15,

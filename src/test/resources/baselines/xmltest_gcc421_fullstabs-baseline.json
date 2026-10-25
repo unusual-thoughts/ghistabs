@@ -587,6 +587,10 @@
             "min": 38,
             "max": 38
         },
+        "vtt-laid": {
+            "min": 12,
+            "max": 12
+        },
         "xref-base-tag-resolved": {
             "min": 2,
             "max": 2

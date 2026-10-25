@@ -230,6 +230,14 @@ internal fun startsVtableGroup(symbolName: String) = symbolName.trimDoubleUnders
 internal fun looksLikeZtc(symbolName: String) =
     symbolName.trimDoubleUnderscore().startsWith(Itanium.CONSTRUCTION_VTABLE_PREFIX)
 
+/** Whether [symbolName] names a VTT (`_ZTT`), Cygwin's extra underscore or not. */
+internal fun looksLikeZtt(symbolName: String) =
+    symbolName.trimDoubleUnderscore().startsWith(Itanium.VTABLE_TABLE_PREFIX)
+
+/** The mangled type a `_ZTI` symbol is the typeinfo of, `N8CryptoPP9PublicKeyE`, or null for any other symbol. */
+internal fun typeinfoTypeOf(symbolName: String) = symbolName.trimDoubleUnderscore()
+    .takeIf { it.startsWith(Itanium.TYPEINFO_PREFIX) }?.removePrefix(Itanium.TYPEINFO_PREFIX)
+
 private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
 
 /**

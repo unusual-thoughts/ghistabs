@@ -25,16 +25,16 @@
             "max": 1
         },
         "data-no-coverage": {
-            "min": 138,
-            "max": 138
+            "min": 106,
+            "max": 106
         },
         "demangle-applied": {
-            "min": 3901,
-            "max": 3901
+            "min": 3927,
+            "max": 3927
         },
         "demangle-attempted": {
-            "min": 3901,
-            "max": 3901
+            "min": 3927,
+            "max": 3927
         },
         "demangle-displaced-function-renamed": {
             "min": 0,
@@ -94,7 +94,7 @@
         },
         "function-create-disassembled-first": {
             "min": 0,
-            "max": 14
+            "max": 16
         },
         "function-created-from-stab": {
             "min": 33,
@@ -542,6 +542,10 @@
             "min": 104,
             "max": 104
         },
+        "vtable-construction": {
+            "min": 14,
+            "max": 14
+        },
         "vtable-reconstructed": {
             "min": 11,
             "max": 11,
@@ -560,8 +564,8 @@
             ]
         },
         "vtable-secondary": {
-            "min": 16,
-            "max": 16
+            "min": 32,
+            "max": 32
         },
         "vtable-skipped": {
             "min": 11,
@@ -574,6 +578,10 @@
         "vtable-virtual-no-impl": {
             "min": 38,
             "max": 38
+        },
+        "vtt-laid": {
+            "min": 12,
+            "max": 12
         },
         "xref-base-tag-resolved": {
             "min": 2,
