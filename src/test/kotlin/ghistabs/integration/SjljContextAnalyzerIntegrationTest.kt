@@ -14,6 +14,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.eh.SjljAbi
+import ghistabs.cpp.eh.SjljApplier
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.entrypoints.SjljContextAnalyzer
 import ghistabs.entrypoints.SjljLsdaAnalyzer
@@ -159,7 +160,7 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     }
 
     private val fc get() = program.functionManager.getFunctionAt(addr(fn)).stackFrame.stackVariables
-        .single { it.name == SjljContextAnalyzer.LOCAL }
+        .single { it.name == SjljApplier.LOCAL }
 
     private fun Structure.at(offset: Int) = getComponentAt(offset)
 
@@ -291,8 +292,8 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         runAnalyzers()
         val sink = MessageLogSink(MessageLog(), originator = SjljContextAnalyzer.NAME)
         program.runTransaction("again") {
-            SjljContextAnalyzer.typeAll(program, TaskMonitor.DUMMY, sink, program.memory).mustBe(0 to 0)
-            SjljContextAnalyzer.typeAll(program, TaskMonitor.DUMMY, sink, AddressSet(addr(receiver))).mustBe(0 to 0)
+            SjljApplier(program, TaskMonitor.DUMMY, sink).applyAll(program.memory).mustBe(0 to 0)
+            SjljApplier(program, TaskMonitor.DUMMY, sink).applyAll(AddressSet(addr(receiver))).mustBe(0 to 0)
         }
     }
 

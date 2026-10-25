@@ -8,6 +8,7 @@ import ghidra.program.model.data.UnsignedLeb128DataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
 import ghistabs.*
+import ghistabs.cpp.ClassNaming.TYPEINFO
 
 /**
  * One gcc SJLJ LSDA (`.gcc_except_table` entry), parsed as `__gxx_personality_sj0` reads it:
@@ -66,8 +67,35 @@ class SjljLsda private constructor(
             .take(actions.size).map { it.filter }.toList()
     }
 
-    /** Where type table entry [n] is, the pointer to its typeinfo, or null for `catch (...)`. */
+    /** Where type table entry [n] is, a pointer to its typeinfo (null for `catch (...)`); null without a type table. */
     fun typeAt(n: Long, pointerSize: Int): Address? = typeBase?.let { it - n * pointerSize }
+
+    /**
+     * What [callSite]'s landing pad does, in [filters]' order: `catch (Type)`, `catch (...)`,
+     * `throw (Type, …)` for an exception spec, or `cleanup`, joined by commas. The types are named
+     * from [program]'s typeinfo symbols.
+     */
+    fun handlers(callSite: CallSite, program: Program): String {
+        val filters = filters(callSite)
+        if (filters.isEmpty()) return CLEANUP
+        return filters.joinToString(", ") { filter ->
+            when {
+                filter > 0 -> "catch (${typeName(filter, program) ?: "..."})"
+                filter == 0L -> CLEANUP
+                else -> "throw (${specs[filter].orEmpty().joinToString(", ") { typeName(it, program) ?: "?" }})"
+            }
+        }
+    }
+
+    /** The type entry [n] names, by its typeinfo's symbol, demangled; null for `catch (...)`. */
+    private fun typeName(n: Long, program: Program): String? {
+        val at = typeAt(n, program.defaultPointerSize) ?: return null
+        val typeinfo = program.pointerAt(at)?.takeIf { it.offset != 0L } ?: return null
+        val symbol = program.symbolTable.getPrimarySymbol(typeinfo) ?: return "$typeinfo"
+        if (symbol.name == TYPEINFO) return symbol.parentNamespace.getName(true)
+        return Demangler.of(symbol.name)?.takeIf { it.name == TYPEINFO }?.namespace?.namespaceString
+            ?: symbol.getName(true)
+    }
 
     /** Bytes from the LSDA's start to the end of its last field. */
     val size get() = items.maxOf { it.at + it.length } - start
@@ -96,6 +124,8 @@ class SjljLsda private constructor(
     }
 
     companion object {
+        private const val CLEANUP = "cleanup"
+
         const val OMIT = 0xff
         const val ABSPTR = 0x00
         const val ULEB128 = 0x01
