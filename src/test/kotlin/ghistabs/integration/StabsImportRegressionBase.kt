@@ -1322,6 +1322,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             val at = addr.add(slot0.offset.toLong())
             val before = runCatching { at.subtract(ptr) }.getOrNull()
             when {
+                // gcc 12 leaves an abstract class's destructor slots 0 (`tinyxml2::MemPool`): the word
+                // before still tells the basing.
+                program.pointerAt(at)?.offset == 0L ->
+                    "vftable for $ns@$addr: null slot '${slot0.fieldName}' follows a code address"
+                        .takeIf { before != null && pointsIntoCode(before) }
+
                 !pointsIntoCode(at) ->
                     "vftable for $ns@$addr: slot '${slot0.fieldName}' at +${slot0.offset} " +
                         "holds ${program.pointerAt(at)}, not a code address"

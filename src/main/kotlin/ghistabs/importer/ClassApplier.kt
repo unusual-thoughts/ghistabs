@@ -26,7 +26,6 @@ import ghistabs.index.LocatedType
 import ghistabs.index.collectAllVirtuals
 import ghistabs.index.isPolymorphic
 import ghistabs.materialize.*
-import ghistabs.materialize.vftableOf
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -422,7 +421,7 @@ class ClassApplier(
         }
 
         val record = vtable?.let { program.vtableRecord(it.address, abi) }
-        val targets = record?.vtableSlotTargets(program).orEmpty()
+        val targets = record?.slots(program).orEmpty()
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)
         // Read off the laid struct, which records where gcc 2.x put the vptr (after the fields). Not

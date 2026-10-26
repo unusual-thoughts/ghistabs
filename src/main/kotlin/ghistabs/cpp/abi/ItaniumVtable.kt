@@ -148,7 +148,7 @@ private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? =
         // inside the primary's function array.
         .firstOrNull { it > start && pointerAt(it) == rtti }
         ?.let { recordAt(start, it, Itanium) }
-        ?.let { record -> SubVtable(record, record.vtableSlotTargets(this)) }
+        ?.let { record -> SubVtable(record, record.slots(this)) }
 
 /**
  * The secondary sub-vtables following an Itanium primary record, whose slots end at [afterPrimary] — one per

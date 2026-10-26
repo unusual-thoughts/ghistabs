@@ -84,16 +84,39 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
 
     /**
      * Addresses the function-pointer array at [addressPoint], in slot order. Nothing records its
-     * length, so it ends where the entries stop pointing into executable memory — at the next record's
-     * `offset_to_top` (0) or rtti pointer (into .data). Walks by the record's ABI's entry stride and reads `pfn` at
+     * length, so it ends where the entries stop pointing at functions — at the next record's
+     * `offset_to_top` or rtti pointer (into .data). A function is one in executable memory, or an import
+     * the loader's EXTERNAL block stands in for: an abstract class's slots in a dynamic link hold
+     * `__cxa_pure_virtual`'s. Up to two nulls are slots when a function follows them, else the next record's
+     * `offset_to_top`: gcc 12 leaves 0 in an abstract class's destructor slots (`tinyxml2::MemPool`'s
+     * `{0, 0, __cxa_pure_virtual…}`). Walks by the record's ABI's entry stride and reads `pfn` at
      * its offset within the entry, which is what separates a gcc 2.x table without thunks from one with.
      */
-    fun vtableSlotTargets(program: Program): List<Address> =
-        generateSequence(addressPoint) { it.add(abi.stride(program.defaultPointerSize)) }
-            .map { program.pointerAt(it.add(abi.pfnOffset(program.defaultPointerSize)))?.takeIf(program::isCode) }
-            .takeWhile { it != null }
-            .filterNotNull()
-            .toList()
+    fun slots(program: Program): List<Address> = buildList {
+        val ptr = program.defaultPointerSize
+        val nulls = mutableListOf<Address>()
+        for (pfn in generateSequence(addressPoint) { it + abi.stride(ptr) }.map { it + abi.pfnOffset(ptr) }) {
+            val target = program.pointerAt(pfn) ?: break
+            when {
+                target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target
+
+                program.isCode(target) || program.isImportedFunction(pfn, target) ->
+                    addAll(nulls + target).also { nulls.clear() }
+
+                else -> break
+            }
+        }
+    }
+
+    /**
+     * Whether [pfn] is relocated against the import whose thunk sits at [target]. The loader packs data
+     * imports in the same EXTERNAL block, so a thunk at [target] alone is not enough: a typeinfo's vptr
+     * (`_ZTVN10__cxxabiv120__si_class_type_infoE+0x10`) can land on some function's.
+     */
+    private fun Program.isImportedFunction(pfn: Address, target: Address): Boolean {
+        val thunk = functionManager.getFunctionAt(target)?.takeIf { it.isThunk } ?: return false
+        return relocationTable.getRelocations(pfn).any { it.symbolName == thunk.name }
+    }
 
     /**
      * The `rtti:` header comment, reporting the typeinfo symbol that is actually there. [Itanium.zti]
@@ -162,6 +185,9 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
         return addressPoint
     }
 }
+
+/** gcc's two destructor entries, complete and deleting: the only slots it leaves null. */
+private const val DESTRUCTOR_SLOTS = 2
 
 /**
  * The record at [ztv], the address of a class's vtable symbol. An Itanium one is found by its rtti

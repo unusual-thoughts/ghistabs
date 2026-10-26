@@ -3,14 +3,19 @@ package ghistabs.integration
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
+import ghidra.program.model.address.AddressSet
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
+import ghidra.program.model.reloc.Relocation
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.DtmRegistry
 import ghistabs.buildClassNamespaces
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.VtableSweeper
 import ghistabs.cpp.abi.VtableSweeper.Companion.isVtablesSwept
+import ghistabs.diagnose.CountingSink
 import ghistabs.entrypoints.GccVftableAnalyzer
 import ghistabs.runTransaction
 import ghistabs.test.must
@@ -160,6 +165,74 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         val label = program.symbolTable.getSymbols(addressPoint).single { it.name == ClassNaming.VFTABLE }
         program.namespaceOf(primary!!).mustBe(label.parentNamespace)
         program.namespaceOf(secondary).mustBe(label.parentNamespace)
+    }
+
+    /**
+     * A dynamic link's imports, as the ELF loader lays them: a label in an EXTERNAL block with no bytes,
+     * and for a function a thunk there to the external location.
+     */
+    private fun externalBlock(): Int {
+        val external = 0x410000
+        program.runTransaction("external") {
+            val space = program.addressFactory.defaultAddressSpace
+            program.memory.createUninitializedBlock("EXTERNAL", space.getAddress(external.toLong()), 0x100, false)
+        }
+        return external
+    }
+
+    private fun importFunction(name: String, at: Int) = program.runTransaction("import $name") {
+        val ext = program.externalManager.addExtFunction("libstdc++.so.6", name, null, SourceType.IMPORTED)
+        val addr = program.addressFactory.defaultAddressSpace.getAddress(at.toLong())
+        program.functionManager.createThunkFunction(
+            name,
+            program.globalNamespace,
+            addr,
+            AddressSet(addr),
+            ext.function,
+            SourceType.IMPORTED,
+        )
+    }
+
+    /** The loader's record of the word at [at] relocated against [symbol]. */
+    private fun relocate(at: Int, symbol: String) = program.runTransaction("relocate") {
+        val addr = program.addressFactory.defaultAddressSpace.getAddress(at.toLong())
+        program.relocationTable.add(addr, Relocation.Status.APPLIED, 1, null, 4, symbol)
+    }
+
+    /**
+     * gcc 12's `tinyxml2::MemPool` in xmltest: abstract, its destructor slots left 0 and the rest
+     * `__cxa_pure_virtual`, an import. `{0, &_ZTI…, 0, 0, pure, pure}`, then a word that holds the same
+     * address relocated against a data import, a typeinfo's vptr: not a slot.
+     */
+    @Test
+    fun laysAnAbstractClassOfNullsAndImports() {
+        val pure = externalBlock()
+        importFunction("__cxa_pure_virtual", pure)
+        val ztv = 0x401040
+        val zti = 0x401140
+        builder.setBytes(hex(ztv), le(0) + le(zti) + le(0) + le(0) + le(pure) + le(pure) + le(pure))
+        relocate(ztv + 16, "__cxa_pure_virtual")
+        relocate(ztv + 20, "__cxa_pure_virtual")
+        relocate(ztv + 24, "_ZTVN10__cxxabiv120__si_class_type_infoE")
+        builder.createLabel(hex(ztv), "_ZTV4Pool")
+        builder.createLabel(hex(zti), "_ZTI4Pool")
+
+        runAnalyzer().mustBe(true)
+
+        val vftable = program.dataTypeManager.getDataType(ClassNaming.vftableCategory(listOf("Pool")), "Pool_vftable")
+        vftable.mustNotBeNull("no Pool_vftable swept")
+        (vftable as Structure).definedComponents.map { it.fieldName }
+            .mustBe(listOf("slot", "slot_1", "__cxa_pure_virtual", "__cxa_pure_virtual_1"))
+    }
+
+    /** `__class_type_info`'s vtable in a dynamic link is the shared library's: only its label is here. */
+    @Test
+    fun leavesAnImportedVtable() {
+        builder.createLabel(hex(externalBlock()), "_ZTVN10__cxxabiv117__class_type_infoE")
+        val sink = CountingSink()
+        val sweeper = VtableSweeper(DtmRegistry(program.dataTypeManager), program, TaskMonitor.DUMMY, sink)
+        program.runTransaction("sweep") { sweeper.sweepUnclaimedVtables() }.mustBe(1)
+        sink.counts["vtable-swept-empty"].mustBe(null, "swept the import")
     }
 
     /** What `RecoveredClassHelper.getClassNamespace` makes of [vftable]'s category. */
