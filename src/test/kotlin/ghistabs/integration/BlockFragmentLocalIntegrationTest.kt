@@ -14,8 +14,9 @@ import java.io.File
  * gcc 3.4.5's block reordering splits a lexical block into address ranges, and `dbxout_block` brackets each
  * range on its own, repeating the block's locals in every one. libgcc's `read_uleb128` emits
  * `shift:r(0,17)` (EBX) and `result:r(8,1)` (ESI) three times over, in blocks at +0x8, +0xe and +0x2e: one
- * variable each, not a `shift_1` and `shift_2` the decompiler declares and never uses. Neither register holds
- * anything else, so each is the function's: one block's copy would leave the value the others name unnamed.
+ * variable each, not a `shift_1` and `shift_2` the decompiler declares and never uses. Each starts where its
+ * register is first written — `xor ebx,ebx` at +0x8, `xor esi,esi` at +0xe — the one address at which the
+ * decompiler matches it to a value.
  */
 @Tag("integration")
 class BlockFragmentLocalIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -37,6 +38,6 @@ class BlockFragmentLocalIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         val func = checkNotNull(program.functionManager.getFunctionAt(entry))
         val registerLocals = func.localVariables.filter { it.isRegisterVariable }
         registerLocals.map { it.name to it.firstUseOffset }.sortedBy { it.first } mustBe
-            listOf("result" to 0, "shift" to 0)
+            listOf("result" to 0xe, "shift" to 0x8)
     }
 }
