@@ -33,8 +33,10 @@ class BlockFragmentLocalIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         loaded = loadProgram(File("src/test/resources/binaries/crypto_mi_test_gcc345.exe"))
         program.defaultContext().importAndAnalyze()
 
-        val func = checkNotNull(program.functionManager.getFunctionAt(program.addressFactory.getAddress("004753a0")))
-        func.localVariables.filter { it.isRegisterVariable }.map { it.name to it.firstUseOffset }.sortedBy { it.first } mustBe
+        val entry = program.addressFactory.getAddress("004753a0")
+        val func = checkNotNull(program.functionManager.getFunctionAt(entry))
+        val registerLocals = func.localVariables.filter { it.isRegisterVariable }
+        registerLocals.map { it.name to it.firstUseOffset }.sortedBy { it.first } mustBe
             listOf("result" to 0, "shift" to 0)
     }
 }
