@@ -4,6 +4,7 @@ import ghidra.app.decompiler.*
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.listing.Function
 import ghistabs.cpp.eh.SjljAbi
+import ghistabs.cpp.eh.SjljApplier
 import ghistabs.cpp.templateLeaf
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
@@ -65,6 +66,10 @@ private fun ClangLine.storesSjljContext(): Boolean {
     return !(lhs.first() !is ClangVariableToken || lhs.drop(1).any { it !is ClangFieldToken && it.text != "." }) &&
         (lhs.firstOrNull { it is ClangFieldToken } as? ClangFieldToken)?.dataType?.name == SjljAbi.CONTEXT
 }
+
+/** A comment [SjljApplier] laid over a call-site store, `SJLJ call site 1, landing pad 0: cleanup`. */
+private fun ClangLine.isCallSiteComment() =
+    isComment() && significant().joinToString("") { it.text }.contains(SjljApplier.CALL_SITE_PREFIX)
 
 /**
  * ClangLines that are gcc SjLj exception scaffolding: the `_Unwind_SjLj_*` register/unregister
@@ -185,10 +190,18 @@ fun DecompileResults.compressedDecompLines(
     fun row(g: List<ClangLine>, rowOf: Map<ClangLine, Int>): DecompLine {
         val placed = g.placed(spell)
         val (condition, branches, cuts) = structure(placed, rowOf)
+        val notes = g.takeWhile { it.isComment() }
+        val statement = g.getOrNull(notes.size)
+        val sjlj = if (statement?.storesSjljContext() == true) {
+            g.rendered(spell)
+        } else {
+            notes.filter { it.isCallSiteComment() }.takeIf { it.isNotEmpty() }?.rendered(spell)
+        }
+        val lead = statement ?: g.first()
         return DecompLine(
             g.rendered(spell),
-            g.first().address(),
-            g.first().indent,
+            lead.address(),
+            lead.indent,
             g.flatMap { it.addresses() }.map { func.blockAt(it) }.distinct().singleOrNull(),
             braces = placed.braces(),
             ifCondition = condition,
@@ -196,6 +209,7 @@ fun DecompileResults.compressedDecompLines(
             thisAt = placed.thisAt(),
             booleanCuts = cuts,
             thisArgs = placed.thisArguments(),
+            sjlj = sjlj,
         )
     }
 
@@ -217,13 +231,35 @@ fun DecompileResults.compressedDecompLines(
     // depth as the line it continues but is indented deeper (a nested statement goes a block deeper; a
     // sibling stays at the same indent). Merging here keeps each logical line on one address, so it
     // lands on one row later. Indent is the head line's own nesting level; braces stay their own lines.
-    val body = lines.subList(bodyStart, lines.size).fold(mutableListOf<MutableList<ClangLine>>()) { acc, line ->
-        val head = acc.lastOrNull()?.first()
+    //
+    // A comment Ghidra prints above a statement, the pre comment at its address, leads that statement's
+    // row: it is about the code below it. Ghidra indents every comment deeper than the code, so as a
+    // continuation it trailed the statement before instead, and went wherever that went: an SJLJ
+    // call-site comment after an inlined `std::string` constructor was dropped with it. Before a row
+    // that is no statement (a `}`), it still trails.
+    val body = mutableListOf<MutableList<ClangLine>>()
+    val pending = mutableListOf<ClangLine>()
+    for (line in lines.subList(bodyStart, lines.size)) {
+        if (line.isComment()) {
+            pending += line
+            continue
+        }
+        val head = body.lastOrNull()?.let { g -> g.firstOrNull { !it.isComment() } ?: g.first() }
         val continues = head != null &&
             ((line.indent > head.indent && line.blockDepth() == head.blockDepth()) || line.isTrailingPunctuation())
-        if (continues) acc.last() += line else acc += mutableListOf(line)
-        acc
+        when {
+            continues -> body.last().apply { addAll(pending) }.add(line)
+
+            line.isCode() -> body += (pending + line).toMutableList()
+
+            else -> {
+                if (pending.isNotEmpty()) body.lastOrNull()?.addAll(pending) ?: body.add(pending.toMutableList())
+                body += mutableListOf(line)
+            }
+        }
+        pending.clear()
     }
+    if (pending.isNotEmpty()) body.lastOrNull()?.addAll(pending) ?: body.add(pending.toMutableList())
     // Row 0 is the head, so a body group's row is its index plus one. Needed before the rows exist:
     // a branch group's extent is a pair of row numbers, and the tokens name lines, not rows.
     val rowOf = body.flatMapIndexed { i, g -> g.map { it to i + 1 } }.toMap()

@@ -71,6 +71,13 @@ data class DecompLine(
     val prototype: String? = null,
     /** Where a call passes Ghidra's explicit this-argument. See [thisArguments]. */
     val thisArgs: List<IntRange> = emptyList(),
+    /**
+     * What of this row is the function's own SJLJ bookkeeping: its `fc.call_site = N` store with the
+     * call-site comment above it, or that comment alone where the store was elided. The context is
+     * the function's frame, so this stays in its view even where gcc filed the row under a header it
+     * inlined. See [dropInlined].
+     */
+    val sjlj: String? = null,
 ) {
     /**
      * This row with `f(this,x)` written `f(x)`, for a body rendering inside the member it belongs to.
