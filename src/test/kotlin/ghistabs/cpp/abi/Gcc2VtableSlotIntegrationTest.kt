@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test
  * advances `addressPoint` past the header for a [CxxAbi.vptrAtRecordStart] ABI (the same 2-pointer
  * width [Itanium.vtablePrefixBytes] computes, which [Gcc2Abi.headerBytes] independently arrives at
  * too — see its doc). This builds a minimal record of each gcc 2.x entry shape by hand — no thunks
- * (bare pfn) and no-thunk (`{delta,index,pfn}`) — and checks the first slot [VtableRecord.vtableSlotTargets]
+ * (bare pfn) and no-thunk (`{delta,index,pfn}`) — and checks the first slot [VtableRecord.slots]
  * reads back is the first real function, not the reserved header reinterpreted as one.
  */
 @Tag("integration")
@@ -60,7 +60,7 @@ class Gcc2VtableSlotIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 "addressPoint should land right after the reserved header",
             )
 
-            val targets = located.vtableSlotTargets(program)
+            val targets = located.slots(program)
             targets.size.mustBe(2, "expected exactly the two real slots, header excluded")
 
             val firstFunc = program.functionManager.getFunctionAt(targets[0])

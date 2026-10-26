@@ -11,15 +11,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
-import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.canonTemplateName
-import ghistabs.cpp.describeVxTable
-import ghistabs.cpp.isBaseField
-import ghistabs.cpp.leafName
-import ghistabs.cpp.nameSegments
-import ghistabs.cpp.primaryBase
-import ghistabs.cpp.vfptrOffset
-import ghistabs.cpp.vfptrOffsetOfBase
+import ghistabs.cpp.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 
@@ -114,7 +106,7 @@ open class VtableSweeper(
         for ((qualified, addr, abi) in unclaimed) {
             monitor.increment()
             val record = program.vtableRecord(addr, abi)
-            val targets = record.vtableSlotTargets(program)
+            val targets = record.slots(program)
             if (targets.isEmpty()) {
                 degradation("vtable-swept-empty", qualified, "no function pointers", record.addressPoint)
                 continue
@@ -198,7 +190,7 @@ open class VtableSweeper(
             val ns = constructionNamespace(sym.name) ?: continue
             val name = ns.getName(true)
             val record = program.vtableRecord(sym.address)
-            val targets = record.vtableSlotTargets(program)
+            val targets = record.slots(program)
             val path = ClassNaming.vftablePath(ns)
             // A base with no virtuals of its own (`Left`) has a header and no slots: nothing to type.
             val vftable = targets.takeIf { it.isNotEmpty() }?.let {
@@ -285,7 +277,7 @@ open class VtableSweeper(
         val abi = primary.abi
         val rtti = primary.rttiOf(program) ?: return
         val ptr = program.defaultPointerSize.toLong()
-        val slots = primary.vtableSlotTargets(program).size
+        val slots = primary.slots(program).size
         // Only a record with slots is laid: an empty one has no function array to put a struct over.
         val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
             .filter { it.targets.isNotEmpty() }
@@ -390,7 +382,7 @@ open class VtableSweeper(
             when (val record = program.vtableRecord(at, abi)) {
                 else if program.isVtableClaimed(record) -> null
 
-                else -> record.vtableSlotTargets(program).ifEmpty {
+                else -> record.slots(program).ifEmpty {
                     degradation("vtable-secondary-empty", className, "no slots read for base $base", at)
                     null
                 }?.let { (base to record) to it }

@@ -92,25 +92,20 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
      * `{0, 0, __cxa_pure_virtual…}`). Walks by the record's ABI's entry stride and reads `pfn` at
      * its offset within the entry, which is what separates a gcc 2.x table without thunks from one with.
      */
-    fun vtableSlotTargets(program: Program): List<Address> {
+    fun slots(program: Program): List<Address> = buildList {
         val ptr = program.defaultPointerSize
-        val slots = mutableListOf<Address>()
         val nulls = mutableListOf<Address>()
-        for (entry in generateSequence(addressPoint) { it.add(abi.stride(ptr)) }) {
-            val pfn = entry.add(abi.pfnOffset(ptr))
+        for (pfn in generateSequence(addressPoint) { it + abi.stride(ptr) }.map { it + abi.pfnOffset(ptr) }) {
             val target = program.pointerAt(pfn) ?: break
             when {
                 target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target
 
-                program.isCode(target) || program.isImportedFunction(pfn, target) -> {
-                    slots += nulls + target
-                    nulls.clear()
-                }
+                program.isCode(target) || program.isImportedFunction(pfn, target) ->
+                    addAll(nulls + target).also { nulls.clear() }
 
                 else -> break
             }
         }
-        return slots
     }
 
     /**
