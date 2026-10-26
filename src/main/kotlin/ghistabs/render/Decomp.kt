@@ -190,14 +190,7 @@ fun DecompileResults.compressedDecompLines(
     fun row(g: List<ClangLine>, rowOf: Map<ClangLine, Int>): DecompLine {
         val placed = g.placed(spell)
         val (condition, branches, cuts) = structure(placed, rowOf)
-        val notes = g.takeWhile { it.isComment() }
-        val statement = g.getOrNull(notes.size)
-        val sjlj = if (statement?.storesSjljContext() == true) {
-            g.rendered(spell)
-        } else {
-            notes.filter { it.isCallSiteComment() }.takeIf { it.isNotEmpty() }?.rendered(spell)
-        }
-        val lead = statement ?: g.first()
+        val lead = g.firstOrNull { !it.isComment() } ?: g.first()
         return DecompLine(
             g.rendered(spell),
             lead.address(),
@@ -209,7 +202,7 @@ fun DecompileResults.compressedDecompLines(
             thisAt = placed.thisAt(),
             booleanCuts = cuts,
             thisArgs = placed.thisArguments(),
-            sjlj = sjlj,
+            sjlj = g.sjljPart(spell),
         )
     }
 
@@ -231,35 +224,7 @@ fun DecompileResults.compressedDecompLines(
     // depth as the line it continues but is indented deeper (a nested statement goes a block deeper; a
     // sibling stays at the same indent). Merging here keeps each logical line on one address, so it
     // lands on one row later. Indent is the head line's own nesting level; braces stay their own lines.
-    //
-    // A comment Ghidra prints above a statement, the pre comment at its address, leads that statement's
-    // row: it is about the code below it. Ghidra indents every comment deeper than the code, so as a
-    // continuation it trailed the statement before instead, and went wherever that went: an SJLJ
-    // call-site comment after an inlined `std::string` constructor was dropped with it. Before a row
-    // that is no statement (a `}`), it still trails.
-    val body = mutableListOf<MutableList<ClangLine>>()
-    val pending = mutableListOf<ClangLine>()
-    for (line in lines.subList(bodyStart, lines.size)) {
-        if (line.isComment()) {
-            pending += line
-            continue
-        }
-        val head = body.lastOrNull()?.let { g -> g.firstOrNull { !it.isComment() } ?: g.first() }
-        val continues = head != null &&
-            ((line.indent > head.indent && line.blockDepth() == head.blockDepth()) || line.isTrailingPunctuation())
-        when {
-            continues -> body.last().apply { addAll(pending) }.add(line)
-
-            line.isCode() -> body += (pending + line).toMutableList()
-
-            else -> {
-                if (pending.isNotEmpty()) body.lastOrNull()?.addAll(pending) ?: body.add(pending.toMutableList())
-                body += mutableListOf(line)
-            }
-        }
-        pending.clear()
-    }
-    if (pending.isNotEmpty()) body.lastOrNull()?.addAll(pending) ?: body.add(pending.toMutableList())
+    val body = groupRows(lines.subList(bodyStart, lines.size))
     // Row 0 is the head, so a body group's row is its index plus one. Needed before the rows exist:
     // a branch group's extent is a pair of row numbers, and the tokens name lines, not rows.
     val rowOf = body.flatMapIndexed { i, g -> g.map { it to i + 1 } }.toMap()
@@ -287,6 +252,53 @@ fun DecompileResults.compressedDecompLines(
         prototype = signature,
     )
     return listOf(headRow) + body.map { row(it, rowOf) }
+}
+
+/**
+ * A comment Ghidra prints above a statement, the pre comment at its address, leads that statement's
+ * row: it is about the code below it. Ghidra indents every comment deeper than the code, so as a
+ * continuation it trailed the statement before instead, and went wherever that went: an SJLJ
+ * call-site comment after an inlined `std::string` constructor was dropped with it. Before a row
+ * that is no statement (a `}`), it still trails.
+ */
+private fun groupRows(lines: List<ClangLine>): List<List<ClangLine>> {
+    val body = mutableListOf<MutableList<ClangLine>>()
+    val pending = mutableListOf<ClangLine>()
+    fun trail() {
+        if (pending.isNotEmpty()) body.lastOrNull()?.addAll(pending) ?: body.add(pending.toMutableList())
+    }
+    for (line in lines) {
+        if (line.isComment()) {
+            pending += line
+            continue
+        }
+        val head = body.lastOrNull()?.let { g -> g.firstOrNull { !it.isComment() } ?: g.first() }
+        val continues = head != null &&
+            ((line.indent > head.indent && line.blockDepth() == head.blockDepth()) || line.isTrailingPunctuation())
+        when {
+            continues -> body.last().apply { addAll(pending) }.add(line)
+
+            line.isCode() -> body += (pending + line).toMutableList()
+
+            else -> {
+                trail()
+                body += mutableListOf(line)
+            }
+        }
+        pending.clear()
+    }
+    trail()
+    return body
+}
+
+/**
+ * What of the row [this] groups is SJLJ bookkeeping, [DecompLine.sjlj]: the whole row where its
+ * statement stores to the context, else the call-site comments leading it, if any.
+ */
+private fun List<ClangLine>.sjljPart(spell: Spelling): String? {
+    val notes = takeWhile { it.isComment() }
+    if (getOrNull(notes.size)?.storesSjljContext() == true) return rendered(spell)
+    return notes.filter { it.isCallSiteComment() }.takeIf { it.isNotEmpty() }?.rendered(spell)
 }
 
 private fun List<Placed>.thisAt() = filter { it.token.isThis() }.map { it.at..<it.at + it.token.text.length }
