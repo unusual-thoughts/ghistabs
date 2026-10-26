@@ -434,12 +434,25 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         return walk(blocks).sortedBy { it.start }
     }
 
-    /** The first instruction in [blocks] that writes [reg], as an offset from [func]'s entry. */
-    private fun firstWrite(func: Function, blocks: List<BlockScope>, reg: Register): Int? = blocks
-        .filter { it.start < it.endExclusive }
-        .flatMap { listing.getInstructions(AddressSet(it.start, it.endExclusive.previous()), true) }
-        .firstOrNull { insn -> insn.resultObjects.any { (it as? Register)?.baseRegister == reg.baseRegister } }
-        ?.let { (it.address.offset - func.entryPoint.offset).toInt() }
+    /**
+     * Where [local]'s value is first defined among its [fragments], as an offset from [func]'s entry: the
+     * first write of [reg] in the code of its declaration's line — an initialiser — else the first in any
+     * fragment. The fragments open before the value exists as often as not: XVImage-style setters reuse the
+     * register for `this` ahead of the declaration, and `__cxa_end_catch`'s first EDX write is a compare.
+     */
+    private fun Func.firstDef(func: Function, local: LocalSymbol, fragments: List<BlockScope>, reg: Register): Int? {
+        val sorted = lineEntries.sortedBy { it.addr }
+        val declared = sorted.zipWithNext()
+            .filter { (entry, _) -> entry.line == local.line && entry.source == local.sourceFile }
+            .map { (entry, next) -> entry.addr to next.addr }
+        val ranges = fragments.map { it.start to it.endExclusive }
+        fun firstWrite(spans: List<Pair<Address, Address>>) = spans
+            .filter { (start, end) -> start < end }
+            .flatMap { (start, end) -> listing.getInstructions(AddressSet(start, end.previous()), true) }
+            .firstOrNull { insn -> insn.resultObjects.any { (it as? Register)?.baseRegister == reg.baseRegister } }
+        val def = firstWrite(declared) ?: firstWrite(ranges) ?: return null
+        return (def.address.offset - func.entryPoint.offset).toInt()
+    }
 
     /** An `:r` local, live over its block from [firstUse]. */
     private fun LocalSymbol.applyRegisterLocal(func: Function, open: Func, firstUse: Int) {
@@ -480,8 +493,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         // into ranges and `dbxout_block` brackets each on its own, repeating its locals — `shift:r(0,17)`
         // three times in `read_uleb128` — and one copy per range start names whichever piece of the value
         // happens to be defined there, leaving a `shift_1` and `shift_2` that name nothing. One variable, at
-        // the first instruction in any range that writes the register, names the value from its first def.
-        val scopeStart = open.fragmentsOf(this)?.let { firstWrite(func, it, reg) } ?: firstUse
+        // the value's first def, names it throughout.
+        val scopeStart = open.fragmentsOf(this)?.let { open.firstDef(func, this, it, reg) } ?: firstUse
         val name = scopedName(func, reglocalName) {
             it.firstUseOffset == scopeStart && it.inRegister()
         } ?: return debug("reglocal-skipped-dup-local")
@@ -490,7 +503,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         val storage = registerStorage(reg, dt)
         func.addLocalVariable(LocalVariableImpl(name, scopeStart, dt, storage, false, ctx.program, source), source)
         debug("reglocal-add-success", "firstUse=$scopeStart")
-        if (scopeStart != firstUse) debug("reglocal-fragments-first-write")
+        if (scopeStart != firstUse) debug("reglocal-fragments-first-def")
         // Which of the two renames happened, if either — the `:p`/`:r` shadow, or scope disambiguation.
         if (reglocalName != body.name) debug("reglocal-param-home", "${body.name} → $reglocalName")
         if (name != reglocalName) debug("reglocal-renamed-scope", "$reglocalName → $name")
