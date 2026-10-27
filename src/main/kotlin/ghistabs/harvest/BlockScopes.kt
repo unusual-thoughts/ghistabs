@@ -3,8 +3,16 @@
 package ghistabs.harvest
 
 import ghidra.program.model.address.Address
+import ghidra.program.model.address.AddressSet
+import ghidra.program.model.data.Undefined4DataType
+import ghidra.program.model.data.VoidDataType
+import ghidra.program.model.lang.Register
+import ghidra.program.model.listing.Instruction
+import ghidra.program.model.listing.Program
+import ghidra.program.model.pcode.PcodeOp
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
+import ghistabs.parse.VariableLocation
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
@@ -161,4 +169,79 @@ fun Func.firstUseOffsets(entry: Address): Map<Int, Int> = buildMap {
         }
     }
     walk(blocks)
+}
+
+/** The blocks owning any of [locals], in address order. */
+fun Func.blocksOwning(locals: Collection<LocalSymbol>): List<BlockScope> {
+    val owners = locals.mapTo(HashSet()) { it.recordIndex }
+    fun walk(blocks: List<BlockScope>): List<BlockScope> = blocks.flatMap { b ->
+        listOfNotNull(b.takeIf { b.locals.any { it.recordIndex in owners } }) + walk(b.children)
+    }
+    return walk(blocks).sortedBy { it.start }
+}
+
+/**
+ * Where [local] is live: its own block, or — when its register holds it in more than one block and nothing
+ * else the stabs place in this function — every block repeating it, the fragments of one block gcc's
+ * reordering split apart.
+ */
+fun Func.liveBlocks(local: LocalSymbol): List<BlockScope> {
+    fun inRegister(location: VariableLocation, rawValue: Long) =
+        location == VariableLocation.REGISTER && rawValue == local.rawValue
+    val sharing = locals.filter { inRegister(it.body.location, it.rawValue) }
+    val fragmented = sharing.size > 1 &&
+        params.none { inRegister(it.body.location, it.rawValue) } &&
+        sharing.all { it.body.name == local.body.name && it.body.type == local.body.type }
+    return blocksOwning(if (fragmented) sharing else listOf(local))
+}
+
+/**
+ * The instruction whose write of [reg] should carry [local]'s name, as an offset from [entry]. A
+ * register variable's firstUse is the one def address the decompiler maps it at: the varnode written there
+ * takes the symbol, its name lock makes it the name representative of its HighVariable, and so the name
+ * covers the whole value (Funcdata::newVarnodeOut, HighVariable::compareName, Funcdata::linkSymbol). A
+ * write by COPY or LOAD rarely lives that long — the decompiler propagates the copy, or keeps a load in a
+ * temporary — so an arithmetic write wins over a move, one on the declaration's line (its initialiser) over
+ * one elsewhere in the [fragments]. `__cxa_end_catch`'s `count:r` loads its value on line 104 and keeps it
+ * through a `dec edx`; a setter may reuse a register for `this` ahead of the declaration. A call
+ * counts as a write of its return register: `uncaught_exception`'s `globals:r` is EAX from its CALL.
+ */
+fun Func.firstDef(
+    program: Program,
+    entry: Address,
+    local: LocalSymbol,
+    fragments: List<BlockScope>,
+    reg: Register,
+): Int? {
+    val declared = lineEntries.sortedBy { it.addr }.zipWithNext()
+        .filter { (line, _) -> line.line == local.line && line.source == local.sourceFile }
+        .map { (line, next) -> line.addr to next.addr }
+    val ranges = fragments.map { it.start to it.endExclusive }
+    fun writes(spans: List<Pair<Address, Address>>) = spans
+        .filter { (start, end) -> start < end }
+        .flatMap { (start, end) -> program.listing.getInstructions(AddressSet(start, end.previous()), true) }
+        .mapNotNull { insn ->
+            when {
+                insn.flowType.isCall && insn.returnsIn(program, reg) -> insn to false
+
+                else -> insn.pcode.lastOrNull { op ->
+                    op.output?.let { program.getRegister(it) }?.baseRegister == reg.baseRegister
+                }?.let { insn to (it.opcode == PcodeOp.COPY || it.opcode == PcodeOp.LOAD) }
+            }
+        }
+    val candidates = writes(declared) + writes(ranges)
+    val def = candidates.firstOrNull { (_, isMove) -> !isMove } ?: candidates.firstOrNull() ?: return null
+    return (def.first.address.offset - entry.offset).toInt()
+}
+
+/**
+ * A call defines its callee's return register at the CALL itself — the decompiler gives the call op that
+ * output — though the instruction's own p-code writes nothing there.
+ */
+fun Instruction.returnsIn(program: Program, reg: Register): Boolean {
+    val callee = flows.firstOrNull()?.let { program.functionManager.getFunctionAt(it) }
+    val storage = callee?.getReturn()?.takeUnless { callee.returnType is VoidDataType }?.variableStorage
+        ?: program.compilerSpec.defaultCallingConvention
+            ?.getReturnLocation(Undefined4DataType.dataType, program)
+    return storage?.registers.orEmpty().any { it.baseRegister == reg.baseRegister }
 }
