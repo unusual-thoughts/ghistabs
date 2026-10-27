@@ -418,21 +418,28 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
     private fun LocalSymbol.isFunctionScope(open: Func) = open.functionScopeLocals.any { it.recordIndex == recordIndex }
 
-    /**
-     * The blocks holding [local] when its register holds it in more than one block and nothing else the stabs
-     * place in this function, in address order; null otherwise.
-     */
-    private fun Func.fragmentsOf(local: LocalSymbol): List<BlockScope>? {
-        fun inRegister(location: VariableLocation, rawValue: Long) =
-            location == VariableLocation.REGISTER && rawValue == local.rawValue
-        val sharing = locals.filter { inRegister(it.body.location, it.rawValue) }
-        if (sharing.size < 2 || params.any { inRegister(it.body.location, it.rawValue) }) return null
-        if (sharing.any { it.body.name != local.body.name || it.body.type != local.body.type }) return null
-        val owners = sharing.mapTo(HashSet()) { it.recordIndex }
+    /** The blocks owning any of [locals], in address order. */
+    private fun Func.blocksOwning(locals: Collection<LocalSymbol>): List<BlockScope> {
+        val owners = locals.mapTo(HashSet()) { it.recordIndex }
         fun walk(blocks: List<BlockScope>): List<BlockScope> = blocks.flatMap { b ->
             listOfNotNull(b.takeIf { b.locals.any { it.recordIndex in owners } }) + walk(b.children)
         }
         return walk(blocks).sortedBy { it.start }
+    }
+
+    /**
+     * Where [local] is live: its own block, or — when its register holds it in more than one block and nothing
+     * else the stabs place in this function — every block repeating it, the fragments of one block gcc's
+     * reordering split apart.
+     */
+    private fun Func.liveBlocks(local: LocalSymbol): List<BlockScope> {
+        fun inRegister(location: VariableLocation, rawValue: Long) =
+            location == VariableLocation.REGISTER && rawValue == local.rawValue
+        val sharing = locals.filter { inRegister(it.body.location, it.rawValue) }
+        val fragmented = sharing.size > 1 &&
+            params.none { inRegister(it.body.location, it.rawValue) } &&
+            sharing.all { it.body.name == local.body.name && it.body.type == local.body.type }
+        return blocksOwning(if (fragmented) sharing else listOf(local))
     }
 
     /**
@@ -512,15 +519,16 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         fun Variable.inRegister() =
             lastStorageVarnode?.let { vn -> ctx.program.getRegister(vn) }?.baseRegister == reg.baseRegister
 
-        // [firstUse] is the local's block. The decompiler takes it as one address, not a range: Ghidra hands
-        // it over as the range [entry+firstUse, entry+firstUse] (SymbolEntry.encodeRangelist), and a register
-        // variable names a value only if the instruction defining that value's name representative sits
-        // exactly there (Funcdata::linkSymbol → SymbolEntry::inUse). gcc's block reordering splits a block
-        // into ranges and `dbxout_block` brackets each on its own, repeating its locals — `shift:r(0,17)`
-        // three times in `read_uleb128` — and one copy per range start names whichever piece of the value
-        // happens to be defined there, leaving a `shift_1` and `shift_2` that name nothing. One variable, at
-        // the value's first def, names it throughout.
-        val scopeStart = open.fragmentsOf(this)?.let { open.firstDef(func, this, it, reg) } ?: firstUse
+        // [firstUse] is where the local's block opens, and the decompiler takes a register variable's firstUse
+        // as one address, not a range: Ghidra hands it over as [entry+firstUse, entry+firstUse]
+        // (SymbolEntry.encodeRangelist), and a register variable names a value only if the instruction
+        // defining it sits exactly there (Funcdata::newVarnodeOut, Funcdata::linkSymbol). A block opens a few
+        // instructions before its locals get values, so at the block start barely one register local in
+        // twenty named anything. gcc's block reordering makes it worse: `dbxout_block` brackets each range
+        // of a split block on its own, repeating its locals — `shift:r(0,17)` three times in
+        // `read_uleb128` — and one copy per range start left a `shift_1` and `shift_2` naming nothing. One
+        // variable, at the value's first def in any of its ranges, names it throughout.
+        val scopeStart = open.firstDef(func, this, open.liveBlocks(this), reg) ?: firstUse
         val name = scopedName(func, reglocalName) {
             it.firstUseOffset == scopeStart && it.inRegister()
         } ?: return debug("reglocal-skipped-dup-local")
@@ -529,7 +537,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         val storage = registerStorage(reg, dt)
         func.addLocalVariable(LocalVariableImpl(name, scopeStart, dt, storage, false, ctx.program, source), source)
         debug("reglocal-add-success", "firstUse=$scopeStart")
-        if (scopeStart != firstUse) debug("reglocal-fragments-first-def")
+        if (scopeStart != firstUse) debug("reglocal-placed-at-def")
         // Which of the two renames happened, if either — the `:p`/`:r` shadow, or scope disambiguation.
         if (reglocalName != body.name) debug("reglocal-param-home", "${body.name} → $reglocalName")
         if (name != reglocalName) debug("reglocal-renamed-scope", "$reglocalName → $name")
