@@ -42,6 +42,9 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         /** Laid by the vtable sweep, bases read off its `_ZTI` typeinfo. */
         SWEPT_RTTI,
 
+        /** Laid by Ghidra's RTTI analyzer, bases off its MSVC Class Hierarchy Descriptor ([MsvcClasses]). */
+        MSVC_RTTI,
+
         /** Laid by the vtable sweep with no typeinfo to read: bases unknown. */
         SWEPT,
 
@@ -105,12 +108,12 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         /** Where its primary `vftable` label sits, for a polymorphic class. */
         val vftable: String?,
         val vftableStructId: Long?,
-        /** Its `_ZTI` typeinfo object, when the binary has one. */
+        /** Its `_ZTI` typeinfo object or MSVC type descriptor, when the binary has one. */
         val typeinfo: String?,
         /** The struct the stabs laid for it, by datatype id, and its name (shorter, once typedef shortening ran). */
         val structId: Long?,
         val structName: String?,
-        /** A slot of any of its vftables holds `__cxa_pure_virtual` (gcc 2.x: `__pure_virtual`). */
+        /** A slot of any of its vftables holds `__cxa_pure_virtual` (gcc 2.x: `__pure_virtual`, MSVC: `_purecall`). */
         val isAbstract: Boolean,
         /** Its functions and labels: vtables first, then the other ABI objects, then the rest by name. */
         val members: List<Member>,
@@ -174,19 +177,30 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
             }
         }
 
+        // MSVC type descriptors, which the RTTI analyzer labels in the class's namespace. Never read as an
+        // Itanium typeinfo: their bases are the class record's.
+        val typeDescriptorByClass: Map<List<String>, Address> by lazy {
+            symtab.getSymbols(Msvc.TYPE_DESCRIPTOR).iterator().asSequence()
+                .filterNot { it.parentNamespace.isGlobal }
+                .associate { it.parentNamespace.getPathList(true).toList() to it.address }
+        }
+
         fun build(): ClassHierarchy {
             val namespaces = classNamespaces().associateByTo(linkedMapOf()) { it.id }
             val byPath = namespaces.values.associateBy { it.getPathList(true).toList() }
             val classes = namespaces.values.map { ns ->
                 val vftableLabel = primaryVftableLabel(ns)
                 val vftable = vftableLabel?.address
-                val typeinfo = typeinfoByClass[ns.getPathList(true).toList()]
+                val path = ns.getPathList(true).toList()
+                val typeinfo = typeinfoByClass[path]
+                val typeDescriptor = typeDescriptorByClass[path]
                 val struct = structOf(ns)
                 val vftableStruct = vftableStructOf(ns, vftableLabel)
                 ClassInfo(
                     id = ns.id,
-                    path = ns.getPathList(true).toList(),
+                    path = path,
                     origin = when {
+                        typeDescriptor != null && ns.id in record -> Origin.MSVC_RTTI
                         ns.id in record -> Origin.STABS
                         typeinfo != null -> Origin.SWEPT_RTTI
                         vftable != null -> Origin.SWEPT
@@ -194,7 +208,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                     },
                     vftable = vftable?.toString(),
                     vftableStructId = vftableStruct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
-                    typeinfo = typeinfo?.toString(),
+                    typeinfo = (typeinfo ?: typeDescriptor)?.toString(),
                     structId = struct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
                     structName = struct?.name,
                     isAbstract = program.vftablesOf(ns).any(::hasPureVirtualSlot),
@@ -314,6 +328,8 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                 .firstNotNullOfOrNull { CxxAbi.mangledBy(it.name)?.to(it.name) } ?: (null to name)
             val special = (abi as? Itanium)?.specialName(mangled)
             return when {
+                name.startsWith(MSVC_RTTI_PREFIX) || name == Msvc.VFTABLE_META_PTR -> MemberKind.ABI
+
                 name in VTABLE_LABELS || ClassNaming.isVftableLabel(name) || special == SpecialName.VTABLE ->
                     MemberKind.VTABLE
 
@@ -361,7 +377,10 @@ private fun Program.slotTargets(vftable: Address): Sequence<Address> {
     }
 }
 
-private val PURE_VIRTUAL = setOf("cxa_pure_virtual", "pure_virtual")
+private val PURE_VIRTUAL = setOf("cxa_pure_virtual", "pure_virtual", "purecall")
+
+// What Ghidra's RTTI analyzer labels each MSVC RTTI record: `RTTI_Type_Descriptor`, `RTTI_Base_Class_Array`…
+private const val MSVC_RTTI_PREFIX = "RTTI_"
 
 // Vtables, then the other ABI objects, then functions and labels mixed by name, as the Symbol Tree.
 private val MEMBER_ORDER = compareBy<ClassHierarchy.Member>(
