@@ -6,12 +6,10 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
-import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.Access
-import ghistabs.materialize.DtmRegistry
+import ghistabs.cpp.ClassNaming
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import ghidra.program.model.data.Array as DataArray
 
 /**
  * Authoritative Itanium `__cxxabiv1` typeinfo struct layouts, adapted from Ghidra's

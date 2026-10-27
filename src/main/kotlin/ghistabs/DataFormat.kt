@@ -86,8 +86,8 @@ object DataFormat {
 
     internal fun decodeOnly(): Nothing = throw SerializationException("DataFormat only decodes")
 
-    private fun reader(decoder: Decoder) =
-        decoder as? Reader ?: throw SerializationException("${decoder::class.simpleName} is no DataFormat decoder")
+    private fun reader(decoder: Decoder) = decoder as? Reader
+        ?: throw SerializationException("${decoder::class.simpleName} is no DataFormat decoder")
 
     /** Reads the composite [data]; before its structure begins, [data] is the value itself. */
     // A decodeX per primitive is the decoder's contract, not a class doing too much.
@@ -150,8 +150,8 @@ object DataFormat {
         override fun decodeFloat() = double().toFloat()
         override fun decodeDouble() = double()
         override fun decodeChar() = element.value as? Char ?: long().toInt().toChar()
-        override fun decodeString() =
-            element.value as? String ?: element.pointedString(spec) ?: throw mismatch("a string")
+        override fun decodeString() = element.value as? String ?: element.pointedString(spec)
+            ?: throw mismatch("a string")
 
         override fun decodeEnum(enumDescriptor: SerialDescriptor): Int {
             val value = long()
