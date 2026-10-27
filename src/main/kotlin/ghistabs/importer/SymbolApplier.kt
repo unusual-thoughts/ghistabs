@@ -419,8 +419,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
     private fun LocalSymbol.isFunctionScope(open: Func) = open.functionScopeLocals.any { it.recordIndex == recordIndex }
 
-    val Varnode.register: Register? get() = ctx.program.getRegister(this)
-    fun Varnode.isRegister(reg: Register) = register?.baseRegister == reg.baseRegister
+    private val Varnode.register: Register? get() = ctx.program.getRegister(this)
+    private fun Varnode.isRegister(reg: Register) = register?.baseRegister == reg.baseRegister
 
     /**
      * A call defines its callee's return register at the CALL itself — the decompiler gives the call op that
