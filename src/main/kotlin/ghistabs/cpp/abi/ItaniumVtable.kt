@@ -6,6 +6,8 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
 import ghistabs.*
 import ghistabs.cpp.ClassNaming
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlin.math.abs
 
 // The Itanium side of Vtable.kt: a record's header layout (ABI §2.5.2), finding a record's start
@@ -39,12 +41,26 @@ fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataTyp
     }
 }
 
+/** What every Itanium vtable header ends with, read through a [vtableHeaderLayout]; its offset words go unread. */
+@Serializable
+open class VtableHeader {
+    @SerialName(Itanium.OFFSET_TO_TOP)
+    val offsetToTop = 0L
+
+    @SerialName(Itanium.RTTI)
+    val rtti: SerialAddress? = null
+}
+
+/** A primary vtable's [VtableHeader] and the slot 0 after it, read through a [primaryHeader]. */
+@Serializable
+class PrimaryVtableHeader : VtableHeader() {
+    val slot0: SerialAddress? = null
+}
+
 /** What an Itanium primary vtable's address point starts with: `offset_to_top`, the rtti word, and slot 0. */
-fun primaryHeader(dtm: DataTypeManager) = StructureDataType("PrimaryVtableHeader", 0).apply {
-    add(Itanium.offsetToTopType(dtm.dataOrganization.pointerSize), Itanium.OFFSET_TO_TOP, null)
-    add(PointerDataType(dtm), Itanium.RTTI, null)
+fun primaryHeader(dtm: DataTypeManager) = vtableHeaderLayout(dtm, 0).apply {
+    name = "PrimaryVtableHeader"
     add(PointerDataType(dtm), "slot0", null)
-    isPackingEnabled = true
 }
 
 /**
@@ -69,9 +85,9 @@ fun primaryHeader(dtm: DataTypeManager) = StructureDataType("PrimaryVtableHeader
  * - A base's construction vtable (`_ZTC`) has the same shape and holds the base's typeinfo, so one typeinfo
  *   can match more than one address; the caller decides between them.
  */
-fun Program.primaryRecordAt(addr: Address, header: Structure) = addr.takeIf(::isData)?.let { dataAt(it, header) }
-    ?.takeIf { it.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value == 0L }
-    ?.takeIf { it.valueOf<Address>("slot0")?.let(::isCode) == true }
+fun Program.primaryRecordAt(addr: Address, header: Structure) =
+    addr.takeIf(::isData)?.let { decodeAt<PrimaryVtableHeader>(it, header) }
+        ?.takeIf { it.offsetToTop == 0L && it.slot0?.let(::isCode) == true }
 
 /**
  * Where the Itanium vtable record whose `offset_to_top` word is at [top] begins.

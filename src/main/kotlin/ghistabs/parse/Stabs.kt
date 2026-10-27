@@ -1,5 +1,6 @@
 package ghistabs.parse
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /** On-disk size of a single stab record (Sun a.out / PE-COFF / ELF). */
@@ -300,9 +301,18 @@ enum class Language(val code: Int) {
     }
 }
 
-/** Raw stab header, before type interpretation — the on-disk 12 bytes, faithfully unsigned. */
+/**
+ * Raw stab header, before type interpretation: the on-disk 12 bytes, faithfully unsigned. Its serial
+ * names are the `/stabs/StabRecord` layout's fields ([stabRecordDataType]), so that layout's data decodes to one.
+ */
 @Serializable
-data class StabHeader(val strx: UInt, val type: UByte, val other: UByte, val desc: UShort, val value: UInt) {
+data class StabHeader(
+    @SerialName("n_strx") val strx: UInt,
+    @SerialName("n_type") val type: UByte,
+    @SerialName("n_other") val other: UByte,
+    @SerialName("n_desc") val desc: UShort,
+    @SerialName("n_value") val value: UInt,
+) {
     companion object {
         /**
          * An a.out `n_type` is a *discriminated union*, not three parallel fields:

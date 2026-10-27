@@ -65,9 +65,6 @@ inline fun <reified T> Data.valueOf(i: Int): T? = getComponent(i)?.value as? T
 inline fun <reified T> Data.valueOf(name: String): T? = get(name)?.value as? T
 fun Data.getScalar(name: String): Scalar? = valueOf(name)
 
-/** Whether the one-bit field [name] is set. */
-fun Data.flag(name: String) = getScalar(name)?.unsignedValue == 1L
-
 fun Iterable<AddressRange>.gapsIn(range: AddressRange, action: (AddressRange) -> Unit = { }) = sequence {
     var start = range.minAddress
     for (r in this@gapsIn) {
@@ -231,10 +228,14 @@ fun MemBuffer.dataHere(dt: DataType): Data? = runCatching { PseudoData(memory.pr
     // PseudoData zero-fills bytes it can't read, so check they are all there
     ?.takeIf { memory.allInitializedAddressSet.contains(it.minAddress, it.maxAddress) }
 
-/** The bytes of the NUL-terminated string where the buffer stands, NUL left off, if [lengths] holds how many. */
-fun MemBuffer.cBytesHere(lengths: IntRange): ByteArray? = ByteArray(lengths.last + 1).run {
+/**
+ * The bytes of the NUL-terminated string where the buffer stands, NUL left off, if [lengths] holds how many.
+ * Its chars are [width] bytes wide, so its NUL is [width] zero bytes at a multiple of [width].
+ */
+fun MemBuffer.cBytesHere(lengths: IntRange, width: Int = 1): ByteArray? = ByteArray(lengths.last + width).run {
     // getBytes stops short at unreadable memory, so a NUL past what it read is never found
-    asSequence().take(getBytes(this, 0)).indexOf(0).takeIf { it in lengths }?.let(::copyOf)
+    (0..getBytes(this, 0) - width step width).firstOrNull { at -> (at..<at + width).all { this[it] == 0.toByte() } }
+        ?.takeIf { it in lengths }?.let(::copyOf)
 }
 
 /**
