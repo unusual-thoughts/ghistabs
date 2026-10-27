@@ -173,17 +173,17 @@ fun Func.blocksOwning(locals: Collection<LocalSymbol>): List<BlockScope> {
     return walk(blocks).sortedBy { it.start }
 }
 
+val Symbol<*>.regValue get() = rawValue.takeIf { location == VariableLocation.REGISTER }
+
 /**
  * Where [local] is live: its own block, or — when its register holds it in more than one block and nothing
  * else the stabs place in this function — every block repeating it, the fragments of one block gcc's
  * reordering split apart.
  */
 fun Func.liveBlocks(local: LocalSymbol): List<BlockScope> {
-    fun inRegister(location: VariableLocation, rawValue: Long) =
-        location == VariableLocation.REGISTER && rawValue == local.rawValue
-    val sharing = locals.filter { inRegister(it.body.location, it.rawValue) }
+    val sharing = locals.filter { it.regValue == local.regValue }
     val fragmented = sharing.size > 1 &&
-        params.none { inRegister(it.body.location, it.rawValue) } &&
+        params.none { it.regValue == local.regValue } &&
         sharing.all { it.body.name == local.body.name && it.body.type == local.body.type }
     return blocksOwning(if (fragmented) sharing else listOf(local))
 }
