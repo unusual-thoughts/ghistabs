@@ -11,6 +11,7 @@ import ghidra.program.model.data.*
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
+import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.*
@@ -435,23 +436,31 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     }
 
     /**
-     * Where [local]'s value is first defined among its [fragments], as an offset from [func]'s entry: the
-     * first write of [reg] in the code of its declaration's line — an initialiser — else the first in any
-     * fragment. The fragments open before the value exists as often as not: XVImage-style setters reuse the
-     * register for `this` ahead of the declaration, and `__cxa_end_catch`'s first EDX write is a compare.
+     * The instruction whose write of [reg] should carry [local]'s name, as an offset from [func]'s entry. A
+     * register variable's firstUse is the one def address the decompiler maps it at: the varnode written there
+     * takes the symbol, its name lock makes it the name representative of its HighVariable, and so the name
+     * covers the whole value (Funcdata::newVarnodeOut, HighVariable::compareName, Funcdata::linkSymbol). A
+     * write by COPY or LOAD rarely lives that long — the decompiler propagates the copy, or keeps a load in a
+     * temporary — so an arithmetic write wins over a move, one on the declaration's line (its initialiser) over
+     * one elsewhere in the [fragments]. `__cxa_end_catch`'s `count:r` loads its value on line 104 and keeps it
+     * through a `dec edx`; XVImage-style setters reuse a register for `this` ahead of the declaration.
      */
     private fun Func.firstDef(func: Function, local: LocalSymbol, fragments: List<BlockScope>, reg: Register): Int? {
-        val sorted = lineEntries.sortedBy { it.addr }
-        val declared = sorted.zipWithNext()
+        val declared = lineEntries.sortedBy { it.addr }.zipWithNext()
             .filter { (entry, _) -> entry.line == local.line && entry.source == local.sourceFile }
             .map { (entry, next) -> entry.addr to next.addr }
         val ranges = fragments.map { it.start to it.endExclusive }
-        fun firstWrite(spans: List<Pair<Address, Address>>) = spans
+        fun writes(spans: List<Pair<Address, Address>>) = spans
             .filter { (start, end) -> start < end }
             .flatMap { (start, end) -> listing.getInstructions(AddressSet(start, end.previous()), true) }
-            .firstOrNull { insn -> insn.resultObjects.any { (it as? Register)?.baseRegister == reg.baseRegister } }
-        val def = firstWrite(declared) ?: firstWrite(ranges) ?: return null
-        return (def.address.offset - func.entryPoint.offset).toInt()
+            .mapNotNull { insn ->
+                insn.pcode.lastOrNull { op ->
+                    op.output?.let { ctx.program.getRegister(it) }?.baseRegister == reg.baseRegister
+                }?.let { insn to (it.opcode == PcodeOp.COPY || it.opcode == PcodeOp.LOAD) }
+            }
+        val candidates = writes(declared) + writes(ranges)
+        val def = candidates.firstOrNull { (_, isMove) -> !isMove } ?: candidates.firstOrNull() ?: return null
+        return (def.first.address.offset - func.entryPoint.offset).toInt()
     }
 
     /** An `:r` local, live over its block from [firstUse]. */
