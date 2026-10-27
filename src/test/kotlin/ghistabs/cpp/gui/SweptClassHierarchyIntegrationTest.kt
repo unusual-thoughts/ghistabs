@@ -134,4 +134,26 @@ class SweptClassHierarchyIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         attrs("402040") mustBe MemberAttrs(isConst = true)
         attrs("402050") mustBe MemberAttrs(isConst = true, isVolatile = true)
     }
+
+    @Test
+    fun `an imported class's namespace folds into the program's own, and stands alone without one`() {
+        program.runTransaction("import") {
+            GccVftableAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog())
+            val symtab = program.symbolTable
+            program.externalManager.setExternalPath("LIBQUX.SO", null, false)
+            val lib = symtab.getLibrarySymbol("LIBQUX.SO").`object` as Namespace
+            // The same path less the library's name, as an import of a mangled name files it.
+            for (name in listOf("Qux", "Ext")) {
+                val ns = symtab.createClass(lib, name, SourceType.IMPORTED)
+                program.externalManager.addExtFunction(ns, "g", null, SourceType.IMPORTED)
+            }
+        }
+        val hierarchy = ClassHierarchy.of(program)
+        val qux = hierarchy.classes.single { it.qualifiedName == "Qux" }
+        qux.origin mustBe Origin.SWEPT
+        qux.members.filter { it.library != null }.map { it.name to it.library } mustBe listOf("g" to "LIBQUX.SO")
+        val ext = hierarchy.classes.single { it.qualifiedName == "Ext" }
+        ext.origin mustBe Origin.IMPORTED
+        ext.members.map { it.name to it.library } mustBe listOf("g" to "LIBQUX.SO")
+    }
 }
