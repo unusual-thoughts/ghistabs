@@ -35,7 +35,9 @@ data class BaseEntry<K>(val type: K, val contained: Int, val isVirtual: Boolean,
  */
 fun <K> directBases(array: List<BaseEntry<K>>): List<BaseEntry<K>> {
     val tops = generateSequence(1) { it + 1 + array[it].contained }.takeWhile { it < array.size }.toList()
-    val inherited = tops.flatMapTo(mutableSetOf()) { i -> array.subList(i + 1, i + 1 + array[i].contained).map { it.type } }
+    val inherited = tops.flatMapTo(mutableSetOf()) { i ->
+        array.subList(i + 1, i + 1 + array[i].contained).map { it.type }
+    }
     return tops.map(array::get).filterNot { it.isVirtual && it.type in inherited }.distinctBy { it.type }
 }
 
@@ -75,7 +77,12 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
     private val tableClasses = mutableSetOf<Address>()
 
     /** A class the RTTI describes: its namespace, if the analyzer made one, and its Base Class Array. */
-    private inner class RttiClass(val typeDescriptor: Address, val ns: Namespace?, val name: String, val array: List<BaseEntry<Address>>) {
+    private inner class RttiClass(
+        val typeDescriptor: Address,
+        val ns: Namespace?,
+        val name: String,
+        val array: List<BaseEntry<Address>>,
+    ) {
         val ancestors = array.drop(1).mapTo(mutableSetOf()) { it.type }
     }
 
@@ -91,7 +98,9 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
             if (attach(func, cls)) moved++
         }
         val shared = owners.values.count { it == null }
-        if (shared > 0) sink.debug("msvc-vfunction-shared", "$shared virtual function(s) held by classes no one class explains", count = shared.toLong())
+        if (shared > 0) {
+            sink.debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
+        }
         writeRecords(classes)
         return Result(classes.size, owners.size - shared, moved, shared)
     }
@@ -152,7 +161,7 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
         val ns = cls.ns?.let(::asClass) ?: return false
         if (!func.parentNamespace.isGlobal) return false
         return runCatching { func.setParentNamespace(ns) }
-            .onFailure { sink.warn("msvc-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: ${it.message}", entry) }
+            .onFailure { sink.warn("msvc-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
             .isSuccess
     }
 
