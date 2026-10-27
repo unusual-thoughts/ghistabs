@@ -574,7 +574,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         fun Address.inBlocks() = blocks.any { this in it }
         val at = open.lineEntries.filter { it.line == line && it.source == sourceFile && it.addr.inBlocks() }
             .minByOrNull { it.addr }?.addr ?: blocks.firstOrNull()?.start ?: return
-        val text = "stabs: ${dt.displayName} ${body.name}  ${storage(ctx.program, open).orEmpty()}" +
+        val slot = storage(ctx.program, open)?.let { "$it:${dt.length}" }.orEmpty()
+        val text = "stabs: ${dt.displayName} ${body.name}  $slot" +
             "  (slot held by ${holder.dataType.displayName} ${holder.name})"
         try {
             val existing = listing.getComment(CommentType.PRE, at)
