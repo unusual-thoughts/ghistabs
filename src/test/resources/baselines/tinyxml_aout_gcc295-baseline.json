@@ -193,8 +193,12 @@
             "max": 5
         },
         "local-var-add-success": {
-            "min": 100,
-            "max": 100
+            "min": 99,
+            "max": 99
+        },
+        "local-var-clobbered-comment": {
+            "min": 1,
+            "max": 1
         },
         "local-var-skipped-dup-local": {
             "min": 1,
@@ -203,6 +207,10 @@
         "local-var-skipped-dup-param": {
             "min": 3,
             "max": 3
+        },
+        "local-var-skipped-slot-taken": {
+            "min": 1,
+            "max": 1
         },
         "method-implicit-not-emitted": {
             "min": 84,
@@ -249,6 +257,10 @@
         "reglocal-param-home": {
             "min": 42,
             "max": 42
+        },
+        "reglocal-placed-at-def": {
+            "min": 41,
+            "max": 41
         },
         "reglocal-skipped-dup-param": {
             "min": 219,
