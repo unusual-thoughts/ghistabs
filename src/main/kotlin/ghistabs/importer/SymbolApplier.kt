@@ -574,9 +574,40 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
             else -> body.name
         }
+        // A slot gcc reuses across disjoint scopes holds the first local imported into it: adding another over
+        // it would evict it. One of a different type is still worth seeing where its value starts.
+        val slot = offset.withLength(dt.length)
+        func.localVariables.firstOrNull {
+            it.source == source && it.isStackVariable && it.stackOffset.withLength(it.length).overlaps(slot)
+        }?.let { holder ->
+            val retyped = !holder.dataType.isEquivalent(dt)
+            if (ctx.options.applyPlateComments && retyped) commentClobbered(func, open, holder, dt)
+            return debug("local-var-skipped-slot-taken")
+        }
         func.addLocalVariable(LocalVariableImpl(name, dt, offset, ctx.program, source), source)
         if (open.staleFrameShift(ctx.program) != 0) debug("local-var-stale-frame-shifted")
         debug("local-var-add-success")
+    }
+
+    /**
+     * A PRE comment where this stack local's value starts — the first code of its declaration's line in its
+     * block, else the block's start — naming it beside the [holder] that keeps its slot. The decompiler
+     * prints PRE comments in the body, so the shadowed variable shows at the statement that sets it.
+     */
+    private fun LocalSymbol.commentClobbered(func: Function, open: Func, holder: Variable, dt: DataType) {
+        val blocks = open.blocksOwning(listOf(this))
+        fun Address.inBlocks() = blocks.any { this >= it.start && this < it.endExclusive }
+        val at = open.lineEntries.filter { it.line == line && it.source == sourceFile && it.addr.inBlocks() }
+            .minByOrNull { it.addr }?.addr ?: blocks.firstOrNull()?.start ?: return
+        val text = "stabs: ${dt.displayName} ${body.name}  ${storage(ctx.program, open).orEmpty()}" +
+            "  (slot held by ${holder.dataType.displayName} ${holder.name})"
+        try {
+            val existing = listing.getComment(CommentType.PRE, at)
+            listing.setComment(at, CommentType.PRE, existing?.let { "$it\n$text" } ?: text)
+            debug("local-var-clobbered-comment", "${func.name}.${body.name}", at)
+        } catch (e: Exception) {
+            degradation("local-var-clobbered-comment-dropped", "${func.name}.${body.name}", e.message, at)
+        }
     }
 
     private fun LocalSymbol.applyLocal(func: Function, open: Func, firstUse: Int) {
