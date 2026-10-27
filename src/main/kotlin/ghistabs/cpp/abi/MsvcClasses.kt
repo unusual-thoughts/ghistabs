@@ -159,7 +159,10 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
     private fun asClass(ns: Namespace): GhidraClass? = ns as? GhidraClass
         ?: runCatching { NamespaceUtils.convertNamespaceToClass(ns) }.getOrNull()
 
-    /** Each class's entry, added to whatever record a stabs import left: that one knows more. */
+    /**
+     * Each class's entry, over its own from an earlier run: a one-shot after `RecoverClassesFromRTTIScript`
+     * finds the struct the script filed. Other classes' entries are kept.
+     */
     private fun writeRecords(classes: Map<Address, RttiClass>) {
         val entries = classes.values.mapNotNull { cls ->
             val ns = cls.ns?.let(::asClass) ?: return@mapNotNull null
@@ -175,7 +178,7 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
             }
             ns.id to ClassHierarchyRecords.Entry(classStructId(ns), bases)
         }
-        program.writeClassRecord(entries.toMap() + program.readClassRecord().orEmpty())
+        program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
 
     /** A base with no hierarchy descriptor of its own still has its type descriptor labelled in its class. */
