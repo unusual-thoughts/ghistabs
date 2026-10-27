@@ -142,6 +142,7 @@ sealed interface CxxAbi : CxxMemberNaming {
             Gcc2Thunks.looksLikeVtable(symbolName) -> Gcc2Thunks
             Gcc2Plain.looksLikeVtable(symbolName) -> Gcc2Plain
             Itanium.looksLikeVtable(symbolName) -> Itanium
+            Msvc.looksLikeVtable(symbolName) -> Msvc
             else -> null
         }
 
@@ -196,7 +197,8 @@ sealed interface CxxAbi : CxxMemberNaming {
         /**
          * Which ABI mangled [name], as a member. Nothing here tells the two gcc 2.x ABIs apart —
          * they mangle members identically and differ only in vtable geometry, which a binary with no
-         * vtable symbol has no record of — so [Gcc2Thunks] stands for gcc 2.x.
+         * vtable symbol has no record of — so [Gcc2Thunks] stands for gcc 2.x. [Msvc] is left out:
+         * a MinGW binary imports `??2@YAPAXI@Z` and its like from msvcrt, which must not vote.
          */
         fun mangledBy(name: String): CxxAbi? = when {
             Itanium.isProbablyMangled(name) -> Itanium
