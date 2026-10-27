@@ -11,6 +11,8 @@ import ghidra.program.model.data.*
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
+import ghidra.program.model.pcode.PcodeOp
+import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.*
@@ -417,6 +419,51 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
     private fun LocalSymbol.isFunctionScope(open: Func) = open.functionScopeLocals.any { it.recordIndex == recordIndex }
 
+    private val Varnode.register: Register? get() = ctx.program.getRegister(this)
+    private fun Varnode.isRegister(reg: Register) = register?.baseRegister == reg.baseRegister
+
+    /**
+     * A call defines its callee's return register at the CALL itself — the decompiler gives the call op that
+     * output — though the instruction's own p-code writes nothing there.
+     */
+    private fun Instruction.returnsIn(reg: Register): Boolean {
+        val callee = flows.firstOrNull()?.let { funMgr.getFunctionAt(it) }
+        val storage = callee?.getReturn()?.takeUnless { callee.returnType is VoidDataType }?.variableStorage
+            ?: ctx.program.compilerSpec.defaultCallingConvention
+                ?.getReturnLocation(Undefined4DataType.dataType, ctx.program)
+        return storage?.registers.orEmpty().any { it.baseRegister == reg.baseRegister }
+    }
+
+    private fun Instruction.writes(reg: Register) = when {
+        flowType.isCall && returnsIn(reg) -> PcodeOp.CALL
+        else -> pcode.lastOrNull { op -> op.output?.isRegister(reg) == true }?.opcode
+    }
+
+    /**
+     * The instruction whose write of [reg] should carry [local]'s name, as an offset from [func]'s entry. A
+     * register variable's firstUse is the one def address the decompiler maps it at: the varnode written there
+     * takes the symbol, its name lock makes it the name representative of its HighVariable, and so the name
+     * covers the whole value (Funcdata::newVarnodeOut, HighVariable::compareName, Funcdata::linkSymbol). A
+     * write by COPY or LOAD rarely lives that long — the decompiler propagates the copy, or keeps a load in a
+     * temporary — so an arithmetic write wins over a move, one on the declaration's line (its initialiser) over
+     * one elsewhere in the [fragments]. `__cxa_end_catch`'s `count:r` loads its value on line 104 and keeps it
+     * through a `dec edx`; a setter may reuse a register for `this` ahead of the declaration. A call
+     * counts as a write of its return register: `uncaught_exception`'s `globals:r` is EAX from its CALL.
+     */
+    private fun Func.firstDef(local: LocalSymbol, reg: Register): Int? {
+        val declared = lineEntries.sortedBy { it.addr }.zipWithNext()
+            .filter { (line, _) -> line.line == local.line && line.source == local.sourceFile }
+            .map { (line, next) -> line.addr..<next.addr }
+        val fragments = liveBlocks(local).map { it.range }
+
+        return (declared + fragments).asSequence().filter { it.length > 0 }
+            .flatMap { listing.getInstructions(AddressSet(it), true) }
+            .mapNotNull { insn -> insn.writes(reg)?.to(insn) }
+            .minByOrNull { (op, _) -> op == PcodeOp.COPY || op == PcodeOp.LOAD }?.let { (_, insn) ->
+                (insn.address - addr).toInt()
+            }
+    }
+
     /** An `:r` local, live over its block from [firstUse]. */
     private fun LocalSymbol.applyRegisterLocal(func: Function, open: Func, firstUse: Int) {
         // The dbx register number is the stab's n_value, not part of the descriptor
@@ -443,20 +490,29 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             else -> body.name
         }
 
-        val name = scopedName(func, reglocalName) {
-            // Base registers: Ghidra narrows a register variable to its type's width, so the
-            // `CL` an earlier import left for a `char` in ECX is this same slot. The last register,
-            // because a register pair lists its low word, the one the stab names, last.
-            val low = it.lastStorageVarnode?.let { vn -> ctx.program.getRegister(vn) }
-            it.firstUseOffset == firstUse && low?.baseRegister == reg.baseRegister
-        } ?: return debug("reglocal-skipped-dup-local")
+        // Base registers: Ghidra narrows a register variable to its type's width, so the
+        // `CL` an earlier import left for a `char` in ECX is this same slot. The last register,
+        // because a register pair lists its low word, the one the stab names, last.
+        fun Variable.inRegister() = lastStorageVarnode?.isRegister(reg) == true
 
-        // [firstUse] is the local's block, i.e. the range it is actually live over — a
-        // register local declared from entry claims the register for the whole function.
+        // [firstUse] is where the local's block opens, and the decompiler takes a register variable's firstUse
+        // as one address, not a range: Ghidra hands it over as [entry+firstUse, entry+firstUse]
+        // (SymbolEntry.encodeRangelist), and a register variable names a value only if the instruction
+        // defining it sits exactly there (Funcdata::newVarnodeOut, Funcdata::linkSymbol). A block opens a few
+        // instructions before its locals get values, so at the block start barely one register local in
+        // twenty named anything. gcc's block reordering makes it worse: `dbxout_block` brackets each range
+        // of a split block on its own, repeating its locals — `shift:r(0,17)` three times in
+        // `read_uleb128` — and one copy per range start left a `shift_1` and `shift_2` naming nothing. One
+        // variable, at the value's first def in any of its ranges, names it throughout.
+        val scopeStart = open.firstDef(this, reg) ?: firstUse
+        val name = scopedName(func, reglocalName) { it.firstUseOffset == scopeStart && it.inRegister() }
+            ?: return debug("reglocal-skipped-dup-local")
+
         val dt = resolvedDataType(func)
         val storage = registerStorage(reg, dt)
-        func.addLocalVariable(LocalVariableImpl(name, firstUse, dt, storage, false, ctx.program, source), source)
-        debug("reglocal-add-success", "firstUse=$firstUse")
+        func.addLocalVariable(LocalVariableImpl(name, scopeStart, dt, storage, false, ctx.program, source), source)
+        debug("reglocal-add-success", "firstUse=$scopeStart")
+        if (scopeStart != firstUse) debug("reglocal-placed-at-def")
         // Which of the two renames happened, if either — the `:p`/`:r` shadow, or scope disambiguation.
         if (reglocalName != body.name) debug("reglocal-param-home", "${body.name} → $reglocalName")
         if (name != reglocalName) debug("reglocal-renamed-scope", "$reglocalName → $name")
@@ -493,9 +549,40 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
             else -> body.name
         }
+        // A slot gcc reuses across disjoint scopes holds the first local imported into it: adding another over
+        // it would evict it. One of a different type is still worth seeing where its value starts.
+        val slot = offset.withLength(dt.length)
+        func.localVariables.firstOrNull {
+            it.source == source && it.isStackVariable && it.stackOffset.withLength(it.length).overlaps(slot)
+        }?.let { holder ->
+            val retyped = !holder.dataType.isEquivalent(dt)
+            if (ctx.options.applyPlateComments && retyped) commentClobbered(func, open, holder, dt)
+            return debug("local-var-skipped-slot-taken")
+        }
         func.addLocalVariable(LocalVariableImpl(name, dt, offset, ctx.program, source), source)
         if (open.staleFrameShift(ctx.program) != 0) debug("local-var-stale-frame-shifted")
         debug("local-var-add-success")
+    }
+
+    /**
+     * A PRE comment where this stack local's value starts — the first code of its declaration's line in its
+     * block, else the block's start — naming it beside the [holder] that keeps its slot. The decompiler
+     * prints PRE comments in the body, so the shadowed variable shows at the statement that sets it.
+     */
+    private fun LocalSymbol.commentClobbered(func: Function, open: Func, holder: Variable, dt: DataType) {
+        val blocks = open.blocksOwning(listOf(this))
+        fun Address.inBlocks() = blocks.any { this in it }
+        val at = open.lineEntries.filter { it.line == line && it.source == sourceFile && it.addr.inBlocks() }
+            .minByOrNull { it.addr }?.addr ?: blocks.firstOrNull()?.start ?: return
+        val text = "stabs: ${dt.displayName} ${body.name}  ${storage(ctx.program, open).orEmpty()}" +
+            "  (slot held by ${holder.dataType.displayName} ${holder.name})"
+        try {
+            val existing = listing.getComment(CommentType.PRE, at)
+            listing.setComment(at, CommentType.PRE, existing?.let { "$it\n$text" } ?: text)
+            debug("local-var-clobbered-comment", "${func.name}.${body.name}", at)
+        } catch (e: Exception) {
+            degradation("local-var-clobbered-comment-dropped", "${func.name}.${body.name}", e.message, at)
+        }
     }
 
     private fun LocalSymbol.applyLocal(func: Function, open: Func, firstUse: Int) {
