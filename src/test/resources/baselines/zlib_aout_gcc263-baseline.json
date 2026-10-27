@@ -172,16 +172,24 @@
             ]
         },
         "local-var-add-success": {
-            "min": 114,
-            "max": 114
+            "min": 112,
+            "max": 112
+        },
+        "local-var-clobbered-comment": {
+            "min": 2,
+            "max": 2
         },
         "local-var-skipped-dup-local": {
-            "min": 15,
-            "max": 15
+            "min": 11,
+            "max": 11
         },
         "local-var-skipped-dup-param": {
             "min": 2,
             "max": 2
+        },
+        "local-var-skipped-slot-taken": {
+            "min": 6,
+            "max": 6
         },
         "placeholder-created": {
             "min": 288,
@@ -192,16 +200,24 @@
             "max": 4
         },
         "reglocal-add-success": {
-            "min": 294,
-            "max": 294
+            "min": 291,
+            "max": 291
         },
         "reglocal-param-home": {
             "min": 148,
             "max": 148
         },
+        "reglocal-placed-at-def": {
+            "min": 152,
+            "max": 152
+        },
         "reglocal-renamed-scope": {
-            "min": 20,
-            "max": 20
+            "min": 17,
+            "max": 17
+        },
+        "reglocal-skipped-dup-local": {
+            "min": 3,
+            "max": 3
         },
         "sourcemap-duplicate-entries": {
             "min": 0,

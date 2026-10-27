@@ -5,6 +5,8 @@ package ghistabs.harvest
 import ghidra.program.model.address.Address
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
+import ghistabs.parse.VariableLocation
+import ghistabs.rangeUntil
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
@@ -26,6 +28,8 @@ data class BlockScope(
     // Resolved by BlockTreeBuilder.finish; null until then. See [finish] for how it is derived.
     val source: GhidraSourceFile? = null,
 ) : OpenEndRange<Address> {
+    val range get() = start..<endExclusive
+
     /** Innermost block covering [addr], or null when [addr] lies outside this one. */
     fun blockAt(addr: Address): BlockScope? =
         if (addr in this) children.firstNotNullOfOrNull { it.blockAt(addr) } ?: this else null
@@ -161,4 +165,28 @@ fun Func.firstUseOffsets(entry: Address): Map<Int, Int> = buildMap {
         }
     }
     walk(blocks)
+}
+
+/** The blocks owning any of [locals], in address order. */
+fun Func.blocksOwning(locals: Collection<LocalSymbol>): List<BlockScope> {
+    val owners = locals.mapTo(HashSet()) { it.recordIndex }
+    fun walk(blocks: List<BlockScope>): List<BlockScope> = blocks.flatMap { b ->
+        listOfNotNull(b.takeIf { b.locals.any { it.recordIndex in owners } }) + walk(b.children)
+    }
+    return walk(blocks).sortedBy { it.start }
+}
+
+val Symbol<*>.regValue get() = rawValue.takeIf { location == VariableLocation.REGISTER }
+
+/**
+ * Where [local] is live: its own block, or — when its register holds it in more than one block and nothing
+ * else the stabs place in this function — every block repeating it, the fragments of one block gcc's
+ * reordering split apart.
+ */
+fun Func.liveBlocks(local: LocalSymbol): List<BlockScope> {
+    val sharing = locals.filter { it.regValue == local.regValue }
+    val fragmented = sharing.size > 1 &&
+        params.none { it.regValue == local.regValue } &&
+        sharing.all { it.body.name == local.body.name && it.body.type == local.body.type }
+    return blocksOwning(if (fragmented) sharing else listOf(local))
 }
