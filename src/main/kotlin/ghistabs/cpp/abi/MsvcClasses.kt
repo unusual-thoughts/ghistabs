@@ -20,10 +20,16 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.pointerAt
 
 /**
- * One entry of a class's RTTI Base Class Array: the class [type] it describes, how many entries after
- * it are that class's own bases ([contained]), and how the most derived class holds it.
+ * One entry of a class's RTTI Base Class Array: the class it describes, by the address of its type
+ * descriptor ([typeDescriptor]), how many entries after it are that class's own bases ([contained]),
+ * and how the most derived class holds it.
  */
-data class BaseEntry(val type: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean)
+data class BaseEntry(
+    val typeDescriptor: Address,
+    val contained: Int,
+    val isVirtual: Boolean,
+    val isPublic: Boolean,
+)
 
 /**
  * The direct bases among a Base Class Array, whose first entry is the class itself and the rest its
@@ -34,9 +40,11 @@ data class BaseEntry(val type: Address, val contained: Int, val isVirtual: Boole
 fun directBases(array: List<BaseEntry>): List<BaseEntry> {
     val tops = generateSequence(1) { it + 1 + array[it].contained }.takeWhile { it < array.size }.toList()
     val inherited = tops.flatMapTo(mutableSetOf()) { i ->
-        array.subList(i + 1, i + 1 + array[i].contained).map { it.type }
+        array.subList(i + 1, i + 1 + array[i].contained).map { it.typeDescriptor }
     }
-    return tops.map(array::get).filterNot { it.isVirtual && it.type in inherited }.distinctBy { it.type }
+    return tops.map(array::get)
+        .filterNot { it.isVirtual && it.typeDescriptor in inherited }
+        .distinctBy { it.typeDescriptor }
 }
 
 /**
@@ -81,7 +89,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val name: String,
         val bases: List<BaseEntry>,
     ) {
-        val ancestors = bases.drop(1).mapTo(mutableSetOf()) { it.type }
+        val ancestors = bases.drop(1).mapTo(mutableSetOf()) { it.typeDescriptor }
         val directBases by lazy { directBases(bases) }
     }
 
@@ -114,7 +122,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
                 val bcd = bca.getRtti1Model(i)
                 BaseEntry(bcd.rtti0Address, bcd.numBases, bcd.pDisp >= 0, bcd.attributes and Msvc.BCD_NONPUBLIC == 0)
             }
-            val td = array.first().type
+            val td = array.first().typeDescriptor
             RttiClass(td, sym.parentNamespace.takeUnless { it.isGlobal }, chd.rtti0Model.descriptorName, array)
         }.onFailure { warn("msvc-hierarchy-unread", "${sym.name}: ${it.message}", sym.address) }.getOrNull()
     }.toList()
@@ -172,8 +180,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val entries = classes.values.mapNotNull { cls ->
             val ns = cls.ns?.let(::asClass) ?: return@mapNotNull null
             val bases = cls.directBases.map { b ->
-                val base = classes[b.type]
-                val baseNs = base?.ns?.let(::asClass) ?: typeDescriptorClass(b.type)
+                val base = classes[b.typeDescriptor]
+                val baseNs = base?.ns?.let(::asClass) ?: typeDescriptorClass(b.typeDescriptor)
                 ClassHierarchyRecords.Base(
                     baseNs?.id,
                     if (baseNs == null) base?.name ?: "?" else null,

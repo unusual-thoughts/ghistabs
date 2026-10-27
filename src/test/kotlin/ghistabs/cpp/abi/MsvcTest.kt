@@ -19,14 +19,14 @@ class MsvcTest {
     fun `direct bases step over each base's own`() {
         // class D : B, S, with B : A
         val array = listOf(entry("D", 3), entry("B", 1), entry("A"), entry("S"))
-        assertEquals(listOf("B", "S").map(::td), directBases(array).map { it.type })
+        assertEquals(listOf("B", "S").map(::td), directBases(array).map { it.typeDescriptor })
     }
 
     @Test
     fun `a virtual base hoisted out from under its base is not direct`() {
         // class D : B, with B : virtual V, which MSVC lists both under B and after it
         val array = listOf(entry("D", 2), entry("B", 1), entry("V", isVirtual = true), entry("V", isVirtual = true))
-        assertEquals(listOf(td("B")), directBases(array).map { it.type })
+        assertEquals(listOf(td("B")), directBases(array).map { it.typeDescriptor })
     }
 
     private val bases = mapOf(
