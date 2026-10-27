@@ -11,6 +11,7 @@ import ghidra.program.model.data.*
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
+import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.*
@@ -417,6 +418,51 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
     private fun LocalSymbol.isFunctionScope(open: Func) = open.functionScopeLocals.any { it.recordIndex == recordIndex }
 
+    /**
+     * The instruction whose write of [reg] should carry [local]'s name, as an offset from [func]'s entry. A
+     * register variable's firstUse is the one def address the decompiler maps it at: the varnode written there
+     * takes the symbol, its name lock makes it the name representative of its HighVariable, and so the name
+     * covers the whole value (Funcdata::newVarnodeOut, HighVariable::compareName, Funcdata::linkSymbol). A
+     * write by COPY or LOAD rarely lives that long — the decompiler propagates the copy, or keeps a load in a
+     * temporary — so an arithmetic write wins over a move, one on the declaration's line (its initialiser) over
+     * one elsewhere in the [fragments]. `__cxa_end_catch`'s `count:r` loads its value on line 104 and keeps it
+     * through a `dec edx`; a setter may reuse a register for `this` ahead of the declaration. A call
+     * counts as a write of its return register: `uncaught_exception`'s `globals:r` is EAX from its CALL.
+     */
+    private fun Func.firstDef(func: Function, local: LocalSymbol, fragments: List<BlockScope>, reg: Register): Int? {
+        val declared = lineEntries.sortedBy { it.addr }.zipWithNext()
+            .filter { (line, _) -> line.line == local.line && line.source == local.sourceFile }
+            .map { (line, next) -> line.addr to next.addr }
+        val ranges = fragments.map { it.start to it.endExclusive }
+        fun writes(spans: List<Pair<Address, Address>>) = spans
+            .filter { (start, end) -> start < end }
+            .flatMap { (start, end) -> listing.getInstructions(AddressSet(start, end.previous()), true) }
+            .mapNotNull { insn ->
+                when {
+                    insn.flowType.isCall && insn.returnsIn(reg) -> insn to false
+
+                    else -> insn.pcode.lastOrNull { op ->
+                        op.output?.let { ctx.program.getRegister(it) }?.baseRegister == reg.baseRegister
+                    }?.let { insn to (it.opcode == PcodeOp.COPY || it.opcode == PcodeOp.LOAD) }
+                }
+            }
+        val candidates = writes(declared) + writes(ranges)
+        val def = candidates.firstOrNull { (_, isMove) -> !isMove } ?: candidates.firstOrNull() ?: return null
+        return (def.first.address.offset - func.entryPoint.offset).toInt()
+    }
+
+    /**
+     * A call defines its callee's return register at the CALL itself — the decompiler gives the call op that
+     * output — though the instruction's own p-code writes nothing there.
+     */
+    private fun Instruction.returnsIn(reg: Register): Boolean {
+        val callee = flows.firstOrNull()?.let { funMgr.getFunctionAt(it) }
+        val storage = callee?.getReturn()?.takeUnless { callee.returnType is VoidDataType }?.variableStorage
+            ?: ctx.program.compilerSpec.defaultCallingConvention
+                ?.getReturnLocation(Undefined4DataType.dataType, ctx.program)
+        return storage?.registers.orEmpty().any { it.baseRegister == reg.baseRegister }
+    }
+
     /** An `:r` local, live over its block from [firstUse]. */
     private fun LocalSymbol.applyRegisterLocal(func: Function, open: Func, firstUse: Int) {
         // The dbx register number is the stab's n_value, not part of the descriptor
@@ -458,7 +504,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         // of a split block on its own, repeating its locals — `shift:r(0,17)` three times in
         // `read_uleb128` — and one copy per range start left a `shift_1` and `shift_2` naming nothing. One
         // variable, at the value's first def in any of its ranges, names it throughout.
-        val scopeStart = open.firstDef(ctx.program, func.entryPoint, this, open.liveBlocks(this), reg) ?: firstUse
+        val scopeStart = open.firstDef(func, this, open.liveBlocks(this), reg) ?: firstUse
         val name = scopedName(func, reglocalName) {
             it.firstUseOffset == scopeStart && it.inRegister()
         } ?: return debug("reglocal-skipped-dup-local")
