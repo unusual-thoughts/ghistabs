@@ -68,4 +68,11 @@ class MsvcTest {
         assertEquals("Foo@b@a@@", Msvc.mangleClassName("a::b::Foo"))
         assertEquals(listOf("??_7Foo@@6B@", "Foo::vftable"), Msvc.vtableCandidates("Foo"))
     }
+
+    @Test
+    fun `msvc members vote, and a few msvc imports don't outvote gcc's own members`() {
+        assertEquals(Msvc, CxxAbi.prevailing(sequenceOf("??0Image@@QAE@XZ", "?read@Image@@UAE_NXZ", "main")))
+        val imports = sequenceOf("??2@YAPAXI@Z", "??3@YAXPAX@Z")
+        assertEquals(Itanium, CxxAbi.prevailing(imports + "_ZN5Image4readEv" + "_ZN5ImageC1Ev" + "_ZN5ImageD1Ev"))
+    }
 }
