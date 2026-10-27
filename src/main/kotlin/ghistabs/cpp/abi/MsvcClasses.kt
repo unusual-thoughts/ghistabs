@@ -24,12 +24,7 @@ import ghistabs.pointerAt
  * descriptor ([typeDescriptor]), how many entries after it are that class's own bases ([contained]),
  * and how the most derived class holds it.
  */
-data class BaseEntry(
-    val typeDescriptor: Address,
-    val contained: Int,
-    val isVirtual: Boolean,
-    val isPublic: Boolean,
-)
+data class BaseEntry(val typeDescriptor: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean)
 
 /**
  * The direct bases among a Base Class Array, whose first entry is the class itself and the rest its
