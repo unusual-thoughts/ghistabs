@@ -21,7 +21,7 @@ import ghistabs.diagnose.DiagnosticSink
  * One entry of a class's RTTI Base Class Array: the class [type] it describes, how many entries after
  * it are that class's own bases ([contained]), and how the most derived class holds it.
  */
-data class BaseEntry<K>(val type: K, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean)
+data class BaseEntry(val type: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean)
 
 /**
  * The direct bases among a Base Class Array, whose first entry is the class itself and the rest its
@@ -29,7 +29,7 @@ data class BaseEntry<K>(val type: K, val contained: Int, val isVirtual: Boolean,
  * leaves the direct bases, plus any virtual base MSVC hoisted out from under the base that inherits it,
  * which is dropped for being one of that base's.
  */
-fun <K> directBases(array: List<BaseEntry<K>>): List<BaseEntry<K>> {
+fun directBases(array: List<BaseEntry>): List<BaseEntry> {
     val tops = generateSequence(1) { it + 1 + array[it].contained }.takeWhile { it < array.size }.toList()
     val inherited = tops.flatMapTo(mutableSetOf()) { i ->
         array.subList(i + 1, i + 1 + array[i].contained).map { it.type }
@@ -77,7 +77,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val typeDescriptor: Address,
         val ns: Namespace?,
         val name: String,
-        val bases: List<BaseEntry<Address>>,
+        val bases: List<BaseEntry>,
     ) {
         val ancestors = bases.drop(1).mapTo(mutableSetOf()) { it.type }
         val directBases by lazy { directBases(bases) }

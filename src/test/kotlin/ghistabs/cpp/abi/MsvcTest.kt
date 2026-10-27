@@ -1,25 +1,32 @@
 package ghistabs.cpp.abi
 
+import ghidra.program.model.address.AddressSpace
+import ghidra.program.model.address.GenericAddressSpace
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class MsvcTest {
+    private val space = GenericAddressSpace("ram", 32, AddressSpace.TYPE_RAM, 0)
+
+    // A type descriptor's address, one per class name.
+    private fun td(name: String) = space.getAddress(name.hashCode().toLong() and 0xffff)
+
     private fun entry(type: String, contained: Int = 0, isVirtual: Boolean = false) =
-        BaseEntry(type, contained, isVirtual, isPublic = true)
+        BaseEntry(td(type), contained, isVirtual, isPublic = true)
 
     @Test
     fun `direct bases step over each base's own`() {
         // class D : B, S, with B : A
         val array = listOf(entry("D", 3), entry("B", 1), entry("A"), entry("S"))
-        assertEquals(listOf("B", "S"), directBases(array).map { it.type })
+        assertEquals(listOf("B", "S").map(::td), directBases(array).map { it.type })
     }
 
     @Test
     fun `a virtual base hoisted out from under its base is not direct`() {
         // class D : B, with B : virtual V, which MSVC lists both under B and after it
         val array = listOf(entry("D", 2), entry("B", 1), entry("V", isVirtual = true), entry("V", isVirtual = true))
-        assertEquals(listOf("B"), directBases(array).map { it.type })
+        assertEquals(listOf(td("B")), directBases(array).map { it.type })
     }
 
     private val bases = mapOf(
