@@ -277,8 +277,8 @@
             "max": 4082
         },
         "local-var-add-success": {
-            "min": 4892,
-            "max": 4892
+            "min": 4890,
+            "max": 4890
         },
         "local-var-skipped-dup-local": {
             "min": 580,
@@ -287,6 +287,10 @@
         "local-var-skipped-dup-param": {
             "min": 1043,
             "max": 1043
+        },
+        "local-var-skipped-slot-taken": {
+            "min": 2,
+            "max": 2
         },
         "method-implicit-not-emitted": {
             "min": 139,
@@ -878,6 +882,10 @@
         "reglocal-add-success": {
             "min": 4,
             "max": 4
+        },
+        "reglocal-placed-at-def": {
+            "min": 1,
+            "max": 1
         },
         "replaced-demangler": {
             "min": 61,

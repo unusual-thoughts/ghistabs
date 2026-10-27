@@ -281,8 +281,8 @@
             "max": 3244
         },
         "local-var-add-success": {
-            "min": 2380,
-            "max": 2380
+            "min": 2378,
+            "max": 2378
         },
         "local-var-skipped-dup-local": {
             "min": 492,
@@ -291,6 +291,10 @@
         "local-var-skipped-dup-param": {
             "min": 708,
             "max": 708
+        },
+        "local-var-skipped-slot-taken": {
+            "min": 2,
+            "max": 2
         },
         "param-typed-anonymous": {
             "min": 26,

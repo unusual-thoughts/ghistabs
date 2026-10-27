@@ -181,16 +181,24 @@
             "max": 142
         },
         "local-var-add-success": {
-            "min": 6346,
-            "max": 6346
+            "min": 6325,
+            "max": 6325
+        },
+        "local-var-clobbered-comment": {
+            "min": 12,
+            "max": 12
         },
         "local-var-skipped-dup-local": {
-            "min": 1696,
-            "max": 1696
+            "min": 1698,
+            "max": 1698
+        },
+        "local-var-skipped-slot-taken": {
+            "min": 19,
+            "max": 19
         },
         "local-var-stale-frame-shifted": {
-            "min": 2861,
-            "max": 2861
+            "min": 2857,
+            "max": 2857
         },
         "named-typedef-unresolved": {
             "min": 1,

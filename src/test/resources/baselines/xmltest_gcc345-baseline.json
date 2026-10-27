@@ -245,24 +245,28 @@
             "max": 7781
         },
         "local-var-add-success": {
-            "min": 1087,
-            "max": 1087
+            "min": 1076,
+            "max": 1076
+        },
+        "local-var-clobbered-comment": {
+            "min": 7,
+            "max": 7
         },
         "local-var-inlinee-param-name": {
             "min": 113,
             "max": 113
         },
         "local-var-skipped-dup-local": {
-            "min": 1719,
-            "max": 1719
+            "min": 1722,
+            "max": 1722
         },
         "local-var-skipped-dup-param": {
             "min": 564,
             "max": 564
         },
         "local-var-skipped-slot-taken": {
-            "min": 232,
-            "max": 232
+            "min": 240,
+            "max": 240
         },
         "method-implicit-not-emitted": {
             "min": 836,
@@ -370,20 +374,24 @@
             "max": 30
         },
         "reglocal-add-success": {
-            "min": 3862,
-            "max": 3862
+            "min": 2578,
+            "max": 2578
         },
         "reglocal-param-home": {
-            "min": 494,
-            "max": 494
+            "min": 480,
+            "max": 480
+        },
+        "reglocal-placed-at-def": {
+            "min": 1855,
+            "max": 1855
         },
         "reglocal-renamed-scope": {
-            "min": 2557,
-            "max": 2557
+            "min": 1333,
+            "max": 1333
         },
         "reglocal-skipped-dup-local": {
-            "min": 219,
-            "max": 219
+            "min": 1503,
+            "max": 1503
         },
         "reglocal-skipped-dup-param": {
             "min": 628,

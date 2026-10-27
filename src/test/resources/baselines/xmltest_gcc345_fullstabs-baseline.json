@@ -253,16 +253,24 @@
             "max": 604
         },
         "local-var-add-success": {
-            "min": 1539,
-            "max": 1539
+            "min": 1464,
+            "max": 1464
+        },
+        "local-var-clobbered-comment": {
+            "min": 64,
+            "max": 64
         },
         "local-var-skipped-dup-local": {
-            "min": 116,
-            "max": 116
+            "min": 107,
+            "max": 107
         },
         "local-var-skipped-dup-param": {
             "min": 145,
             "max": 145
+        },
+        "local-var-skipped-slot-taken": {
+            "min": 84,
+            "max": 84
         },
         "method-implicit-not-emitted": {
             "min": 809,
@@ -388,16 +396,24 @@
             "max": 17
         },
         "reglocal-add-success": {
-            "min": 193,
-            "max": 193
+            "min": 154,
+            "max": 154
         },
         "reglocal-param-home": {
-            "min": 33,
-            "max": 33
+            "min": 31,
+            "max": 31
+        },
+        "reglocal-placed-at-def": {
+            "min": 101,
+            "max": 101
         },
         "reglocal-renamed-scope": {
-            "min": 73,
-            "max": 73
+            "min": 37,
+            "max": 37
+        },
+        "reglocal-skipped-dup-local": {
+            "min": 39,
+            "max": 39
         },
         "replaced-demangler": {
             "min": 116,
