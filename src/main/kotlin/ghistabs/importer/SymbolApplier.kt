@@ -443,7 +443,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
      * write by COPY or LOAD rarely lives that long — the decompiler propagates the copy, or keeps a load in a
      * temporary — so an arithmetic write wins over a move, one on the declaration's line (its initialiser) over
      * one elsewhere in the [fragments]. `__cxa_end_catch`'s `count:r` loads its value on line 104 and keeps it
-     * through a `dec edx`; XVImage-style setters reuse a register for `this` ahead of the declaration.
+     * through a `dec edx`; XVImage-style setters reuse a register for `this` ahead of the declaration. A call
+     * counts as a write of its return register: `uncaught_exception`'s `globals:r` is EAX from its CALL.
      */
     private fun Func.firstDef(func: Function, local: LocalSymbol, fragments: List<BlockScope>, reg: Register): Int? {
         val declared = lineEntries.sortedBy { it.addr }.zipWithNext()
@@ -454,13 +455,29 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             .filter { (start, end) -> start < end }
             .flatMap { (start, end) -> listing.getInstructions(AddressSet(start, end.previous()), true) }
             .mapNotNull { insn ->
-                insn.pcode.lastOrNull { op ->
-                    op.output?.let { ctx.program.getRegister(it) }?.baseRegister == reg.baseRegister
-                }?.let { insn to (it.opcode == PcodeOp.COPY || it.opcode == PcodeOp.LOAD) }
+                when {
+                    insn.flowType.isCall && insn.returnsIn(reg) -> insn to false
+
+                    else -> insn.pcode.lastOrNull { op ->
+                        op.output?.let { ctx.program.getRegister(it) }?.baseRegister == reg.baseRegister
+                    }?.let { insn to (it.opcode == PcodeOp.COPY || it.opcode == PcodeOp.LOAD) }
+                }
             }
         val candidates = writes(declared) + writes(ranges)
         val def = candidates.firstOrNull { (_, isMove) -> !isMove } ?: candidates.firstOrNull() ?: return null
         return (def.first.address.offset - func.entryPoint.offset).toInt()
+    }
+
+    /**
+     * A call defines its callee's return register at the CALL itself — the decompiler gives the call op that
+     * output — though the instruction's own p-code writes nothing there.
+     */
+    private fun Instruction.returnsIn(reg: Register): Boolean {
+        val callee = flows.firstOrNull()?.let { funMgr.getFunctionAt(it) }
+        val storage = callee?.getReturn()?.takeUnless { callee.returnType is VoidDataType }?.variableStorage
+            ?: ctx.program.compilerSpec.defaultCallingConvention
+                ?.getReturnLocation(Undefined4DataType.dataType, ctx.program)
+        return storage?.registers.orEmpty().any { it.baseRegister == reg.baseRegister }
     }
 
     /** An `:r` local, live over its block from [firstUse]. */
