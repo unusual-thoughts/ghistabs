@@ -21,10 +21,10 @@ import ghistabs.pointerAt
 
 /**
  * One entry of a class's RTTI Base Class Array: the class it describes, by the address of its type
- * descriptor ([typeDescriptor]), how many entries after it are that class's own bases ([contained]),
+ * descriptor ([descriptor]), how many entries after it are that class's own bases ([contained]),
  * and how the most derived class holds it.
  */
-data class BaseEntry(val typeDescriptor: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean)
+data class BaseEntry(val descriptor: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean)
 
 /**
  * The direct bases among a Base Class Array, whose first entry is the class itself and the rest its
@@ -35,11 +35,11 @@ data class BaseEntry(val typeDescriptor: Address, val contained: Int, val isVirt
 fun directBases(array: List<BaseEntry>): List<BaseEntry> {
     val tops = generateSequence(1) { it + 1 + array[it].contained }.takeWhile { it < array.size }.toList()
     val inherited = tops.flatMapTo(mutableSetOf()) { i ->
-        array.subList(i + 1, i + 1 + array[i].contained).map { it.typeDescriptor }
+        array.subList(i + 1, i + 1 + array[i].contained).map { it.descriptor }
     }
     return tops.map(array::get)
-        .filterNot { it.isVirtual && it.typeDescriptor in inherited }
-        .distinctBy { it.typeDescriptor }
+        .filterNot { it.isVirtual && it.descriptor in inherited }
+        .distinctBy { it.descriptor }
 }
 
 /**
@@ -79,19 +79,19 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
 
     /** A class the RTTI describes: its namespace, if the analyzer made one, and its Base Class Array. */
     private class RttiClass(
-        val typeDescriptor: Address,
+        val descriptor: Address,
         val ns: Namespace?,
         val name: String,
         val bases: List<BaseEntry>,
     ) {
-        val ancestors = bases.drop(1).mapTo(mutableSetOf()) { it.typeDescriptor }
+        val ancestors = bases.drop(1).mapTo(mutableSetOf()) { it.descriptor }
         val directBases by lazy { directBases(bases) }
     }
 
     data class Result(val classes: Int, val owned: Int, val moved: Int, val shared: Int)
 
     fun recover(): Result {
-        val classes = readHierarchies().associateBy { it.typeDescriptor }
+        val classes = readHierarchies().associateBy { it.descriptor }
         val holders = readVftables()
         val owners = virtualOwners(holders, { classes[it]?.ancestors.orEmpty() }, { it in tableClasses })
         var moved = 0
@@ -117,7 +117,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
                 val bcd = bca.getRtti1Model(i)
                 BaseEntry(bcd.rtti0Address, bcd.numBases, bcd.pDisp >= 0, bcd.attributes and Msvc.BCD_NONPUBLIC == 0)
             }
-            val td = array.first().typeDescriptor
+            val td = array.first().descriptor
             RttiClass(td, sym.parentNamespace.takeUnless { it.isGlobal }, chd.rtti0Model.descriptorName, array)
         }.onFailure { warn("msvc-hierarchy-unread", "${sym.name}: ${it.message}", sym.address) }.getOrNull()
     }.toList()
@@ -175,8 +175,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val entries = classes.values.mapNotNull { cls ->
             val ns = cls.ns?.let(::asClass) ?: return@mapNotNull null
             val bases = cls.directBases.map { b ->
-                val base = classes[b.typeDescriptor]
-                val baseNs = base?.ns?.let(::asClass) ?: typeDescriptorClass(b.typeDescriptor)
+                val base = classes[b.descriptor]
+                val baseNs = base?.ns?.let(::asClass) ?: typeDescriptorClass(b.descriptor)
                 ClassHierarchyRecords.Base(
                     baseNs?.id,
                     if (baseNs == null) base?.name ?: "?" else null,

@@ -2,8 +2,8 @@ package ghistabs.cpp.abi
 
 import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.Test
 
 class MsvcTest {
@@ -19,14 +19,14 @@ class MsvcTest {
     fun `direct bases step over each base's own`() {
         // class D : B, S, with B : A
         val array = listOf(entry("D", 3), entry("B", 1), entry("A"), entry("S"))
-        assertEquals(listOf("B", "S").map(::td), directBases(array).map { it.typeDescriptor })
+        directBases(array).map { it.descriptor } mustBe listOf("B", "S").map(::td)
     }
 
     @Test
     fun `a virtual base hoisted out from under its base is not direct`() {
         // class D : B, with B : virtual V, which MSVC lists both under B and after it
         val array = listOf(entry("D", 2), entry("B", 1), entry("V", isVirtual = true), entry("V", isVirtual = true))
-        assertEquals(listOf(td("B")), directBases(array).map { it.typeDescriptor })
+        directBases(array).map { it.descriptor } mustBe listOf(td("B"))
     }
 
     private val bases = mapOf(
@@ -45,34 +45,34 @@ class MsvcTest {
 
     @Test
     fun `an inherited function belongs to the class that introduced it`() {
-        assertEquals("A", owners(mapOf("f" to setOf("A", "B", "C", "D")))["f"])
-        assertEquals("B", owners(mapOf("f" to setOf("B", "D")))["f"])
-        assertEquals("D", owners(mapOf("f" to setOf("D")))["f"])
+        owners(mapOf("f" to setOf("A", "B", "C", "D")))["f"] mustBe "A"
+        owners(mapOf("f" to setOf("B", "D")))["f"] mustBe "B"
+        owners(mapOf("f" to setOf("D")))["f"] mustBe "D"
     }
 
     @Test
     fun `siblings' function belongs to a common base with no vftable`() {
-        assertEquals("Abstract", owners(mapOf("f" to setOf("P", "Q")))["f"])
+        owners(mapOf("f" to setOf("P", "Q")))["f"] mustBe "Abstract"
     }
 
     @Test
     fun `folded overrides belong to no one`() {
         // B and C both override A's slot with code the linker folded into one body
-        assertNull(owners(mapOf("f" to setOf("B", "C")))["f"])
+        owners(mapOf("f" to setOf("B", "C")))["f"].mustBeNull()
         // unrelated classes share nothing but the body
-        assertNull(owners(mapOf("f" to setOf("A", "X")))["f"])
+        owners(mapOf("f" to setOf("A", "X")))["f"].mustBeNull()
     }
 
     @Test
     fun `msvc mangles a nested class innermost first`() {
-        assertEquals("Foo@b@a@@", Msvc.mangleClassName("a::b::Foo"))
-        assertEquals(listOf("??_7Foo@@6B@", "Foo::vftable"), Msvc.vtableCandidates("Foo"))
+        Msvc.mangleClassName("a::b::Foo") mustBe "Foo@b@a@@"
+        Msvc.vtableCandidates("Foo") mustBe listOf("??_7Foo@@6B@", "Foo::vftable")
     }
 
     @Test
     fun `msvc members vote, and a few msvc imports don't outvote gcc's own members`() {
-        assertEquals(Msvc, CxxAbi.prevailing(sequenceOf("??0Image@@QAE@XZ", "?read@Image@@UAE_NXZ", "main")))
+        CxxAbi.prevailing(sequenceOf("??0Image@@QAE@XZ", "?read@Image@@UAE_NXZ", "main")) mustBe Msvc
         val imports = sequenceOf("??2@YAPAXI@Z", "??3@YAXPAX@Z")
-        assertEquals(Itanium, CxxAbi.prevailing(imports + "_ZN5Image4readEv" + "_ZN5ImageC1Ev" + "_ZN5ImageD1Ev"))
+        CxxAbi.prevailing(imports + "_ZN5Image4readEv" + "_ZN5ImageC1Ev" + "_ZN5ImageD1Ev") mustBe Itanium
     }
 }
