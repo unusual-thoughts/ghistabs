@@ -1,6 +1,7 @@
 package ghistabs.cpp.abi
 
 import ghidra.app.cmd.data.rtti.Rtti3Model
+import ghidra.app.cmd.data.rtti.Rtti4Model
 import ghidra.app.cmd.data.rtti.VfTableModel
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
@@ -16,6 +17,7 @@ import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.writeMember
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.pointerAt
 
 /**
  * One entry of a class's RTTI Base Class Array: the class [type] it describes, how many entries after
@@ -195,4 +197,15 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val struct = dtm.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure ?: return null
         return dtm.getID(struct).takeIf { it >= 0 }
     }
+}
+
+/**
+ * Where in the complete object the subobject an MSVC vftable at [vftable] serves sits, as its complete object
+ * locator states it: 0 for the class's primary table. Null for any other table, no `vftable_meta_ptr` before it.
+ */
+fun Program.msvcSubobjectOffset(vftable: Address): Int? {
+    val meta = runCatching { vftable.subtract(defaultPointerSize.toLong()) }.getOrNull() ?: return null
+    if (symbolTable.getSymbols(meta).none { it.name == Msvc.VFTABLE_META_PTR }) return null
+    val col = pointerAt(meta) ?: return null
+    return runCatching { Rtti4Model(this, col, DataValidationOptions()).vbTableOffset }.getOrNull()
 }
