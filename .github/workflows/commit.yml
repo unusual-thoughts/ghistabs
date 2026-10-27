@@ -47,8 +47,38 @@ jobs:
       - name: Run unit tests
         run: ./gradlew test
 
+      # Entries are named for the fixture, Ghidra build and analyzer bytecode that produced them (see
+      # ghistabs.test.AnalysisCache), so restoring the newest cache is always safe: an entry this commit
+      # no longer matches is re-analyzed and replaced. The primary key never exists; restore-keys picks
+      # the latest save visible from this ref.
+      - name: Restore analysis cache
+        id: restore_analysis_cache
+        uses: actions/cache/restore@v6
+        with:
+          path: build/analysis-cache
+          key: analysis-cache-${{ github.sha }}
+          restore-keys: analysis-cache-
+
       - name: Run integration tests
         run: ./gradlew integrationTest -Pmode=all -PignoreBaselines=true -Pshorten=true --fail-fast
+
+      # Keyed by the entry names, which carry their content keys: a run that re-analyzed nothing
+      # names the cache it restored, and saves nothing.
+      - name: Fingerprint analysis cache
+        id: analysis_cache
+        if: success() || failure()
+        run: |
+          entries=$(find build/analysis-cache -maxdepth 1 -name '*.gzf' -printf '%f\n' 2>/dev/null | sort)
+          if [ -n "$entries" ]; then echo "key=analysis-cache-$(echo "$entries" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Save analysis cache
+        if: >-
+          (success() || failure()) && steps.analysis_cache.outputs.key != ''
+          && steps.analysis_cache.outputs.key != steps.restore_analysis_cache.outputs.cache-matched-key
+        uses: actions/cache/save@v6
+        with:
+          path: build/analysis-cache
+          key: ${{ steps.analysis_cache.outputs.key }}
 
       - name: Resolve commit under test
         id: commit_id

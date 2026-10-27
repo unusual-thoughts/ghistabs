@@ -43,7 +43,6 @@ import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.harvest.Type
 import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
-import ghistabs.importer.ImportOptions.Companion.disableStabsAnalyzer
 import ghistabs.importer.ImportOptions.Companion.enableStabsAnalyzer
 import ghistabs.importer.import
 import ghistabs.index.ContentIndex
@@ -220,7 +219,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     // not needed to produce types (~8% of the run), so skip it here too.
                     program.enableStabsAnalyzer(context.options)
                     mgr.scheduleOneTimeAnalysis(discovered, program.memory)
-                    runAutoAnalysis(mgr, monitor)
+                    program.runAutoAnalysis(monitor, analysisTimesFile)
                     artifacts = checkNotNull(probe.artifacts) { "artifacts not populated by CONCURRENT" }
                     // The analyzers after the import have run too: report what all of it left undescribed.
                     context.analyzeDataCoverage()
@@ -235,16 +234,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 }
 
                 Mode.AFTER -> {
-                    // Disable our analyzer so auto-analysis (incl. demangler) settles
-                    // without us, then re-run it manually with our CapturingSink.
-                    // `Options.setBoolean` mutates the program options DB and needs
-                    // a transaction.
-                    if (restored == null) {
-                        program.disableStabsAnalyzer()
-                        mgr.initializeOptions()
-                        runAutoAnalysis(mgr, monitor)
-                        AnalysisCache.store(fixture, program)
-                    }
+                    // Auto-analysis (incl. demangler) settles without our analyzer, then it is
+                    // re-run manually with our CapturingSink.
+                    if (restored == null) AnalysisCache.analyze(fixture, program, monitor, analysisTimesFile)
                     program.runTransaction("stabs-analyze") {
                         artifacts =
                             checkNotNull(context.importAndAnalyze().artifacts) { "artifacts not populated by AFTER" }
@@ -269,21 +261,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             e.printStackTrace()
             throw AssertionError("setUp failed for $binaryName/$mode (import/dump, not fixture load): $e", e)
         }
-    }
-
-    private fun runAutoAnalysis(mgr: AutoAnalysisManager, monitor: TaskMonitor) {
-        program.disableWindowsResourceAnalyzer()
-        mgr.reAnalyzeAll(null)
-        program.runTransaction("auto-analyze") {
-            mgr.startAnalysis(monitor)
-            mgr.waitForAnalysis(null, monitor)
-        }
-        // Ghidra's own per-analyzer wall times. The Gradle listener only reports whole-invocation
-        // time, which also carries fixture load, our import and the dumps; this attributes the
-        // analysis share to individual analyzers, so a perf change can be localized without a
-        // profiler. Written per fixture×mode alongside the other dumps.
-        analysisTimesFile.apply { parentFile.mkdirs() }
-            .writeText("total = ${mgr.totalTimeInMillis} ms\n\n${mgr.taskTimesString}")
     }
 
     // The CLI's `--degradation-log` dump, grouped by category, so one integrationTest run emits the

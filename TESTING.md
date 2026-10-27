@@ -57,14 +57,18 @@ Two axes, deliberately separate. **`-Pregression`** picks the *suite*; **`-Pfixt
 - **`-PregenerateBaselines=true`** — rewrite the baseline JSONs from observed counters instead of
   asserting against them (`countersWithinBaseline`). Review the diff.
 - **`-PanalysisCache=auto|off|refresh`**, `auto` by default. In `AFTER` mode the matrix snapshots each
-  fixture as auto-analysis left it, to `build/analysis-cache/<binary>.gzf`, and restores it next time
-  instead of re-analyzing: the first run over a binary costs the usual 90-500s, every later one a
-  second or two. Written and read automatically, never committed, and safe to delete. A snapshot also
-  carries *our* non-stabs analyzers (`HullDisassemblyAnalyzer`, `NoReturnAnalyzer`, `ThisParamAnalyzer`,
-  `StructReturnAnalyzer`, `DeferredPopAnalyzer`, `FillerByteAnalyzer`), which run inside the same pass, and nothing keys it to
-  the code that produced it — **a change to one of those is only seen under `-Pmode=CONCURRENT`, or after
-  `-PanalysisCache=refresh`**, which re-analyzes and overwrites. `off` bypasses the cache in both
-  directions. `-PanalysisCacheDir=<dir>` puts the databases somewhere `clean` does not reach.
+  fixture as auto-analysis left it, to `build/analysis-cache/<binary>.<key>.gzf`, and restores it next
+  time instead of re-analyzing: the first run over a binary costs the usual 90-500s, every later one a
+  second or two. Written and read automatically, never committed, and safe to delete. The key covers
+  the fixture's bytes, the Ghidra build, and the bytecode of every method the analysis pass can execute,
+  found by walking the call graph from the analyzers Ghidra discovers. That pass also carries *our*
+  non-stabs analyzers (`HullDisassemblyAnalyzer`, `NoReturnAnalyzer`, `VirtualBaseAnalyzer`,
+  `GccVftableAnalyzer`, …), so changing a method one of them can call misses and re-analyzes. The stabs analyzer is off for the pass, so code only
+  the import executes stays out of the key, and so does the renderer (`AnalysisCacheTest` holds both).
+  Storing an entry deletes that fixture's older ones.
+  `refresh` re-analyzes and overwrites, `off` bypasses the cache in both directions.
+  `-PanalysisCacheDir=<dir>` puts the databases somewhere `clean` does not reach. CI carries the
+  directory between runs with `actions/cache`, saving a new copy only when the set of entries changed.
   A restored fixture runs no analyzers, so it writes no `analysis-times/` entry; the one from the run
   that created the snapshot stays put, to compare the two paths against.
 
