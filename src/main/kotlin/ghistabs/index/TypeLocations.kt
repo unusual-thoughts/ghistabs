@@ -211,18 +211,67 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
             "$size-byte body from ${winner.id.source.filename} stands in for ${bySize.joinToString()}",
         )
     }
-}
 
-/**
- * Canonical (category, ghidraName) → group; drives TypeRegistry slot assignment. XRef-targets are
- * bucketed into `(category, ghidraName)` slots ([classifyGroup] picks each winner), then slots are
- * unified by **content hash** (§20): gcc spells one header two ways, so one logical type lands in
- * several slots (named, anonymous copy, typedef aliases) → several DataTypes → the decompiler picks
- * the wrong same-named one. Within a content class holding exactly one named ghidraName, every slot —
- * anonymous ones included — collapses onto that name's largest slot. Content, not path, is the signal,
- * so it reaches headers that don't fold by basename; distinct-named or unnamed classes stay separate.
- */
-fun TypeGraph.locateTypes(attribution: Attribution) = locateTypesWith(attribution)
+    /** Members keyed together, and the voters their winner is picked from: a kept scope's owners, or the member. */
+    private class TypeSlot(val voters: List<Type>, val members: List<Type>) {
+        constructor(single: Type) : this(listOf(single), listOf(single))
+
+        companion object {
+            /**
+             * One slot for a scope key's [members], or null when its owners diverge. The owners are the
+             * method-bearing members; method-less ones ride along. Counting method-less copies as owners
+             * let every CU's stub `std::type_info` split the vote and empty `/std/type_info`. Methods never
+             * enter [ContentIndex.content], so owners differing only in method flags or order still agree.
+             */
+            fun scopedFrom(members: List<Type>, graph: TypeGraph): TypeSlot? =
+                when (val owners = members.filter { it.demangledClassPath() != null }.ifEmpty { members }) {
+                    else if owners.distinctBy { graph.content(it.body) }.size == 1 -> TypeSlot(owners, members)
+                    else -> null
+                }
+        }
+    }
+
+    // A header key is voted by every copy of a type, so the copies land in one slot. Copies of one class
+    // are one size; name alone also polls same-named classes of another, which then share the slot and its
+    // one body: crypto_mi_test_gcc345's bare 8-byte `sentry` from ostream.tcc voted with istream.tcc's 1-byte
+    // one and was filed under `/std/istream`. Size, not layout: copies whose layouts differ only in what
+    // their CU knew of a referenced class are still one class, and splitting them forks `.conflict`s.
+    private val sourcesOfCopies by lazy {
+        index.allTypes.groupBy({ it.ghidraName to it.body.sizeBytes }, { it.id.source })
+    }
+
+    private fun keyed(attribution: Attribution): Map<TypeLocation, List<TypeSlot>> {
+        fun Type.headerKey() = attribution.keyForAst(this, sourcesOfCopies[ghidraName to body.sizeBytes]!!.toSet())
+
+        return index.allTypes.asSequence()
+            .filter { it.body.canBeXRefTarget }
+            .groupBy(::scopeKey)
+            .flatMap { (scopeKey, members) ->
+                when (scopeKey) {
+                    //  A type with no scope files under its header
+                    null -> members.map { it.headerKey() to TypeSlot(it) }
+
+                    // A type with a known C++ scope files under that namespace, where Ghidra's this-param class-struct
+                    // creator looks, so it reuses our filled type instead of making an empty stub.
+                    else -> TypeSlot.scopedFrom(members, index)?.let { listOf(scopeKey to it) } ?: run {
+                        // A scope key whose owners diverge holds two classes sharing a name: each
+                        // member is demoted to its header key, with the namespace kept below it.
+                        debug("canonical-scope-collision", "$scopeKey: divergent bodies → demoted to header keys")
+                        members.map { it.headerKey().within(scopeKey.category) to TypeSlot(it) }
+                    }
+                }
+            }.groupBy({ it.first }, { it.second })
+    }
+
+    // Grouped by location only after keying, so a demoted body outside any namespace and a scope-less
+    // copy of the same name meet in one group, its winner picked from all their voters.
+    fun slots(attribution: Attribution) = keyed(attribution).map { (location, slots) ->
+        val members = slots.flatMap { it.members }
+        classifyGroup(location, slots.flatMap { it.voters })
+            .copy(members = members.map { it.id })
+            .also { reportSmallerBodies(location, it.type, members) }
+    }
+}
 
 /**
  * The assembly every real caller wants. An [Attribution] needs exactly two things — the graph's own
@@ -230,80 +279,30 @@ fun TypeGraph.locateTypes(attribution: Attribution) = locateTypesWith(attributio
  * It had been inlined at the single production call site and copied verbatim into the scope tests,
  * which is what a missing name looks like.
  */
-fun TypeGraph.locateTypes(hints: SourceHints) = locateTypesWith(
+fun TypeGraph.locateTypes(hints: SourceHints) = ScopeLocator(this).locateTypesWith(
     Attribution(
         commonProjectPrefix = commonProjectPrefix(allTypes.map { it.id.source }),
         multiSourceHeaderHints = hints.multiSourceHeaderHints,
     ),
 )
 
-/** Members keyed together, and the voters their winner is picked from: a kept scope's owners, or the member. */
-class Slot(val voters: List<Type>, val members: List<Type>) {
-    constructor(single: Type) : this(listOf(single), listOf(single))
-
-    companion object {
-        /**
-         * One slot for a scope key's [members], or null when its owners diverge. The owners are the
-         * method-bearing members; method-less ones ride along. Counting method-less copies as owners
-         * let every CU's stub `std::type_info` split the vote and empty `/std/type_info`. Methods never
-         * enter [ContentIndex.content], so owners differing only in method flags or order still agree.
-         */
-        fun scopedFrom(members: List<Type>, graph: TypeGraph): Slot? =
-            when (val owners = members.filter { it.demangledClassPath() != null }.ifEmpty { members }) {
-                else if owners.distinctBy { graph.content(it.body) }.size == 1 -> Slot(owners, members)
-                else -> null
-            }
-    }
-}
-
-private fun TypeGraph.locateTypesWith(attribution: Attribution): Map<TypeLocation, LocatedType> = buildMap {
-    // A header key is voted by every copy of a type, so the copies land in one slot. Copies of one class
-    // are one size; name alone also polls same-named classes of another, which then share the slot and its
-    // one body: crypto_mi_test_gcc345's bare 8-byte `sentry` from ostream.tcc voted with istream.tcc's 1-byte
-    // one and was filed under `/std/istream`. Size, not layout: copies whose layouts differ only in what
-    // their CU knew of a referenced class are still one class, and splitting them forks `.conflict`s.
-    val sourcesOfCopies = allTypes.groupBy({ it.ghidraName to it.body.sizeBytes }, { it.id.source })
-    fun Type.headerKey() = attribution.keyForAst(this, sourcesOfCopies.getValue(ghidraName to body.sizeBytes).toSet())
-
-    val nesting = ScopeLocator(this@locateTypesWith)
-    fun LocatedType.isScopeStated() = location == nesting.scopeKey(type)
-
-    // Ghidra's class-struct lookup matches the category's tail against the namespace path.
-    fun TypeLocation.within(scope: CategoryPath) = TypeLocation(category.extend(*scope.pathElements), name)
-
-    // A type with a known C++ scope files under that namespace, where Ghidra's this-param class-struct
-    // creator looks, so it reuses our filled type instead of making an empty stub. A type with no scope
-    // files under its header. A scope key whose owners diverge holds two classes sharing a name: each
-    // member is demoted to its header key, with the namespace kept below it.
-    val keyed = allTypes.asSequence()
-        .filter { it.body.canBeXRefTarget }
-        .groupBy(nesting::scopeKey)
-        .flatMap { (scopeKey, members) ->
-            when (scopeKey) {
-                null -> members.map { it.headerKey() to Slot(it) }
-
-                else -> Slot.scopedFrom(members, this@locateTypesWith)?.let { listOf(scopeKey to it) } ?: run {
-                    debug("canonical-scope-collision", "$scopeKey: divergent bodies → demoted to header keys")
-                    members.map { it.headerKey().within(scopeKey.category) to Slot(it) }
-                }
-            }
-        }
-
-    // Grouped by location only after keying, so a demoted body outside any namespace and a scope-less
-    // copy of the same name meet in one group, its winner picked from all their voters.
-    val slots = keyed.groupBy({ it.first }, { it.second })
-        .map { (location, slots) ->
-            val members = slots.flatMap { it.members }
-            nesting.classifyGroup(location, slots.flatMap { it.voters })
-                .copy(members = members.map { it.id })
-                .also { nesting.reportSmallerBodies(location, it.type, members) }
-        }
+/**
+ * Canonical (category, ghidraName) → group; drives TypeRegistry slot assignment. XRef-targets are
+ * bucketed into `(category, ghidraName)` slots ([ScopeLocator.classifyGroup] picks each winner), then slots are
+ * unified by **content hash** (§20): gcc spells one header two ways, so one logical type lands in
+ * several slots (named, anonymous copy, typedef aliases) → several DataTypes → the decompiler picks
+ * the wrong same-named one. Within a content class holding exactly one named ghidraName, every slot —
+ * anonymous ones included — collapses onto that name's largest slot. Content, not path, is the signal,
+ * so it reaches headers that don't fold by basename; distinct-named or unnamed classes stay separate.
+ */
+private fun ScopeLocator.locateTypesWith(attribution: Attribution): Map<TypeLocation, LocatedType> = buildMap {
+    fun LocatedType.isScopeStated() = location == scopeKey(type)
 
     // §B: groups with one layout and one name fold into one, so a class's method-less header and `multi`
     // copies join its scope-keyed copy. Layout ignores template arguments, so a layout with two stated
     // scopes (`AbstractRing<Integer>::MultiplicativeGroupT` and its `PolynomialMod2` sibling, §57) stays
     // apart, and its method-less copies keep their own slots.
-    for (equivalent in slots.groupBy { content(it.type.body) }.values) {
+    for (equivalent in slots(attribution).groupBy { index.content(it.type.body) }.values) {
         val named = equivalent.filter { it.type.name != null }
         if (equivalent.size == 1 ||
             equivalent.count { it.isScopeStated() } > 1 ||
@@ -313,7 +312,7 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution): Map<TypeLocatio
             continue
         }
         // Same layout means same size, so the method count decides and the method-bearing copy wins.
-        val winner = named.pickWinner(this@locateTypesWith, { it.type.body }, { it.location.toString() })
+        val winner = named.pickWinner(index, { it.type.body }, { it.location.toString() })
         debug(
             "canonical-content-merged",
             "${winner.location}: ${equivalent.size} groups (${
@@ -329,6 +328,9 @@ data class TypeLocation(val category: CategoryPath, val name: String) : DataType
     constructor(path: String, name: String) : this(CategoryPath(path), name)
 
     override fun toString() = "$category/$name"
+
+    // Ghidra's class-struct lookup matches the category's tail against the namespace path.
+    fun within(scope: CategoryPath) = TypeLocation(category.extend(*scope.pathElements), name)
 }
 
 /**
