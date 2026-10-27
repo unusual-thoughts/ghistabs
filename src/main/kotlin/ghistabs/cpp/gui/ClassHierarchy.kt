@@ -50,6 +50,9 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
 
         /** A class namespace and nothing else (the demangler's, DWARF's): bases unknown. */
         NAMESPACE,
+
+        /** Only a library's: its namespace under an external library, which holds what the program imports. */
+        IMPORTED,
     }
 
     /** A direct base: the class it names ([targetId]), if the program has one for it, else only its [name]. */
@@ -60,6 +63,8 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
      * A function or label in the class's namespace, as the Symbol Tree lists it. An overloaded function
      * is spelled with its [parameters], `this` and the return type left out so overloads line up. [attrs]
      * are what the stabs said of it, else what the program shows; none for a vtable or other ABI object.
+     * An imported one, from the class's namespace under the external [library] it comes from, is listed
+     * with the class the program defines.
      */
     @Serializable
     data class Member(
@@ -74,6 +79,8 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         val variants: List<StructorVariant> = emptyList(),
         /** Its symbol's id, for the symbol actions on it. */
         val symbolId: Long? = null,
+        /** The library it is imported from, for an external function or label. */
+        val library: String? = null,
     ) {
         val label: String get() = (if (isOverloaded && parameters != null) name + parameters else name) +
             variants.takeIf { it.isNotEmpty() }?.joinToString(", ", " [", "]") { it.label }.orEmpty()
@@ -181,14 +188,18 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         // Itanium typeinfo: their bases are the class record's.
         val typeDescriptorByClass: Map<List<String>, Address> by lazy {
             symtab.getSymbols(Msvc.TYPE_DESCRIPTOR).iterator().asSequence()
-                .filterNot { it.parentNamespace.isGlobal }
+                .filterNot { it.parentNamespace.isGlobal || it.isExternal }
                 .associate { it.parentNamespace.getPathList(true).toList() to it.address }
         }
 
         fun build(): ClassHierarchy {
-            val namespaces = classNamespaces().associateByTo(linkedMapOf()) { it.id }
-            val byPath = namespaces.values.associateBy { it.getPathList(true).toList() }
-            val classes = namespaces.values.map { ns ->
+            // A class the program imports from has its namespace under the library too, by the same path
+            // less the library's name: one class, its imports folded into the one the program defines.
+            val twins = classNamespaces().groupBy { it.getPathList(true).toList() }
+            val canonical = twins.values.associateBy { group -> group.firstOrNull { !it.isExternal } ?: group.first() }
+            val idOf = canonical.flatMap { (ns, group) -> group.map { it.id to ns.id } }.toMap()
+            val byPath = canonical.keys.associateBy { it.getPathList(true).toList() }
+            val classes = canonical.map { (ns, group) ->
                 val vftableLabel = primaryVftableLabel(ns)
                 val vftable = vftableLabel?.address
                 val path = ns.getPathList(true).toList()
@@ -204,6 +215,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                         ns.id in record -> Origin.STABS
                         typeinfo != null -> Origin.SWEPT_RTTI
                         vftable != null -> Origin.SWEPT
+                        ns.isExternal -> Origin.IMPORTED
                         else -> Origin.NAMESPACE
                     },
                     vftable = vftable?.toString(),
@@ -212,16 +224,16 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                     structId = struct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
                     structName = struct?.name,
                     isAbstract = program.vftablesOf(ns).any(::hasPureVirtualSlot),
-                    members = membersOf(ns),
-                    bases = basesOf(ns, typeinfo, namespaces.keys) { path -> byPath[path]?.id },
+                    members = membersOf(ns, group - ns),
+                    bases = basesOf(ns, typeinfo, idOf) { path -> byPath[path]?.id },
                 )
             }
             return ClassHierarchy(classes.sortedBy { it.qualifiedName })
         }
 
-        fun basesOf(ns: GhidraClass, typeinfo: Address?, classIds: Set<Long>, idOf: (List<String>) -> Long?) =
+        fun basesOf(ns: GhidraClass, typeinfo: Address?, classIds: Map<Long, Long>, idOf: (List<String>) -> Long?) =
             record[ns.id]?.bases?.map { base ->
-                val target = base.namespaceId?.takeIf { it in classIds }
+                val target = base.namespaceId?.let(classIds::get)
                 val name = base.namespaceId?.let { (symtab.getSymbol(it)?.`object` as? Namespace)?.getName(true) }
                     ?: base.name ?: "?"
                 BaseRef(name, target, base.isVirtual, base.access)
@@ -246,9 +258,11 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         fun vftableStructOf(ns: GhidraClass, label: Symbol?): Structure? = label?.let(program::vftableStructAt)
             ?: program.dataTypeManager.getDataType(ClassNaming.vftablePath(ns)) as? Structure
 
-        fun membersOf(ns: Namespace): List<Member> {
+        /** [ns]'s members, and its [imports]: the same class's namespaces under the libraries it's imported from. */
+        fun membersOf(ns: Namespace, imports: List<Namespace> = emptyList()): List<Member> {
             val virtuals by lazy { program.virtualsOf(ns) }
-            val members = symtab.getSymbols(ns).mapNotNull { sym ->
+            val symbols = (listOf(ns) + imports).flatMap { symtab.getSymbols(it) }
+            val members = symbols.mapNotNull { sym ->
                 when (sym.symbolType) {
                     SymbolType.FUNCTION -> (sym.`object` as? Function)?.let { fn ->
                         val kind = if (fn.isThunk || fn.isThunkLinkage()) MemberKind.THUNK else MemberKind.FUNCTION
@@ -262,13 +276,21 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                             variants = symtab.getSymbols(sym.address).mapNotNull { StructorVariant.of(it.name) }
                                 .distinct().sorted(),
                             symbolId = sym.id,
+                            library = sym.library,
                         )
                     }
 
                     SymbolType.LABEL -> sym.labelKind().let { kind ->
                         val attrs = program.memberAttrs(sym.address)
                             ?: MemberAttrs(virt = VirtKind.STATIC).takeIf { kind == MemberKind.LABEL }
-                        Member(sym.name, sym.address.toString(), kind, attrs = attrs, symbolId = sym.id)
+                        Member(
+                            sym.name,
+                            sym.address.toString(),
+                            kind,
+                            attrs = attrs,
+                            symbolId = sym.id,
+                            library = sym.library,
+                        )
                     }
 
                     else -> null
@@ -301,6 +323,11 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                 ?.map { it.signature }
                 ?: parameters.filterNot { it.isInjected || it.name == Gcc2.IN_CHARGE }.map { it.dataType.displayName }
             ).let { types -> (if (hasVarArgs()) types + "..." else types).joinToString(", ", "(", ")") }
+
+        /** The external library an imported symbol comes from. */
+        val Symbol.library: String? get() = takeIf { it.isExternal }?.let {
+            program.externalManager.getExternalLocation(it)?.libraryName
+        }
 
         /** A this-adjusting thunk by its linkage name, gcc 2.x or Itanium. */
         fun Function.isThunkLinkage() = symtab.getSymbols(entryPoint).any { CxxAbi.looksLikeThunk(it.name) }

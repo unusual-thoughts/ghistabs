@@ -196,7 +196,9 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
                 val sym = symtab.getSymbol(m.symbolId ?: fail("no symbol id for ${cls.qualifiedName}::${m.name}"))
                     ?: fail("no symbol for ${cls.qualifiedName}::${m.name}")
                 (sym.name to sym.address.toString()) mustBe (m.name to m.address)
-                sym.parentNamespace.id mustBe cls.id
+                // An import, from the class's namespace under its library.
+                if (m.library == null) sym.parentNamespace.id mustBe cls.id
+                if (m.library != null) sym.parentNamespace.getPathList(true).toList() mustBe cls.path
             }
         }
     }

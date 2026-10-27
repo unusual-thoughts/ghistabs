@@ -168,6 +168,7 @@ class ClassNode private constructor(
         edge?.isVirtual == true -> if (info?.isAbstract == true) Kind.VIRTUAL_ABSTRACT else Kind.VIRTUAL
         info?.isAbstract == true -> Kind.ABSTRACT
         info?.origin in SWEPT_ORIGINS -> Kind.SWEPT
+        info?.origin == Origin.IMPORTED -> Kind.IMPORTED
         else -> Kind.NORMAL
     }
 
@@ -184,10 +185,11 @@ class ClassNode private constructor(
             Origin.SWEPT_RTTI -> "from its typeinfo"
             Origin.SWEPT -> "from its vtable: bases unknown"
             Origin.NAMESPACE -> "from its namespace alone: bases unknown"
+            Origin.IMPORTED -> "only imported: bases unknown"
             null -> "no class built for it: a plain struct, or only declared"
         }
         append("<br>").append(origin)
-        if (kind != Kind.NORMAL && kind != Kind.SWEPT) {
+        if (kind != Kind.NORMAL && kind != Kind.SWEPT && kind != Kind.IMPORTED) {
             append("<br>").append(if (inverted) kind.derivedLabel else kind.label)
         }
         info?.vftable?.let { append("<br>vftable at ").append(it) }
@@ -208,21 +210,27 @@ class ClassNode private constructor(
 
 /**
  * A function or label of the class above it. Its icon's colour, and its text's ([color]), say its access
- * and virtuality, and a `c`/`v` badge on the icon its cv-qualifiers ([memberIcon]).
+ * and virtuality, or that it is imported, and a `c`/`v` badge on the icon its cv-qualifiers ([memberIcon]).
  */
 class MemberNode(val member: Member) : GTreeNode() {
     override fun getName() = member.label
-    override fun getIcon(expanded: Boolean): Icon = memberIcon(member.kind, member.attrs)
+    override fun getIcon(expanded: Boolean): Icon = memberIcon(member.kind, member.attrs, member.library != null)
     override fun getToolTip(): String = buildString {
         append("<html>").append(escape(member.signature ?: member.name))
         member.attrs?.describe()?.takeIf { it.isNotEmpty() }?.let { append("<br>").append(it) }
+        member.library?.let { append("<br>imported from ").append(escape(it)) }
         append("<br>at ").append(member.address)
     }
 
-    /** Its icon's colours ([memberIcon]) for its text: none for a vtable or other ABI object. */
-    val color: Color? get() = member.attrs?.let { attrs ->
-        val hue = attrs.virt?.let(VIRT_COLORS::get) ?: UNKNOWN_COLOR
-        when (attrs.access) {
+    /** Its icon's colours ([memberIcon]) for its text: none for the program's own vtable or other ABI object. */
+    val color: Color? get() {
+        val attrs = member.attrs
+        val hue = when {
+            member.library != null -> IMPORTED_COLOR
+            attrs == null -> return null
+            else -> attrs.virt?.let(VIRT_COLORS::get) ?: UNKNOWN_COLOR
+        }
+        return when (attrs?.access) {
             Access.PRIVATE -> hue.mix(Color.BLACK, PRIVATE_SHADE)
             Access.PROTECTED -> hue.mix(Color.WHITE, PROTECTED_TINT)
             else -> hue
@@ -263,6 +271,9 @@ private enum class Kind(
     VIRTUAL_ABSTRACT("virtual abstract base class", "abstract, derives virtually", { r, g, _ -> Triple(g, r, g) }),
     NESTED("nested class", "nested class", { _, g, b -> Triple(g, g, b) }),
     SWEPT("class from typeinfo or vtable", "class from typeinfo or vtable", ::greyscale),
+
+    // Orange, as its imported members.
+    IMPORTED("imported class", "imported class", { _, g, b -> Triple(g, g * 3 / 5, b / 2) }),
     ;
 
     // Lazy: painting a themed icon needs the theme up, which a headless test that never draws skips.
@@ -289,21 +300,24 @@ private fun Icon.recolored(recolor: (Int, Int, Int) -> Triple<Int, Int, Int>): I
 }
 
 // Each [MemberKind]'s icon per set of attributes, made once when first drawn.
-private val memberIcons = ConcurrentHashMap<Pair<MemberKind, MemberAttrs?>, Icon>()
+private val memberIcons = ConcurrentHashMap<Triple<MemberKind, MemberAttrs?, Boolean>, Icon>()
 
 /**
  * [kind]'s icon in its [attrs]' colours, as the class icons say their kind: the hue of its virtuality
  * ([VIRT_COLORS]; the function icon's own magenta for a plain member, grey when unknown), darker when
- * private and paler when protected, with a `c`/`v` badge for its cv-qualifiers. A vtable or other ABI
- * object, with no attributes, keeps its icon.
+ * private and paler when protected, with a `c`/`v` badge for its cv-qualifiers. An [imported] member is
+ * [IMPORTED_COLOR] whatever its virtuality. The program's own vtable or other ABI object, with no
+ * attributes, keeps its icon.
  */
-private fun memberIcon(kind: MemberKind, attrs: MemberAttrs?): Icon = memberIcons.getOrPut(kind to attrs?.copy()) {
-    val icon = MEMBER_ICONS.getValue(kind).centered()
-    if (attrs == null) return@getOrPut icon
-    val tinted = icon.tinted(attrs.virt?.let(VIRT_COLORS::get), attrs.access)
-    val badge = "c".takeIf { attrs.isConst }.orEmpty() + "v".takeIf { attrs.isVolatile }.orEmpty()
-    if (badge.isEmpty()) tinted else tinted.badged(badge)
-}
+private fun memberIcon(kind: MemberKind, attrs: MemberAttrs?, imported: Boolean): Icon =
+    memberIcons.getOrPut(Triple(kind, attrs?.copy(), imported)) {
+        val icon = MEMBER_ICONS.getValue(kind).centered()
+        if (attrs == null && !imported) return@getOrPut icon
+        val hue = if (imported) IMPORTED_COLOR else attrs?.virt?.let(VIRT_COLORS::get)
+        val tinted = icon.tinted(hue, attrs?.access)
+        val badge = "c".takeIf { attrs?.isConst == true }.orEmpty() + "v".takeIf { attrs?.isVolatile == true }.orEmpty()
+        if (badge.isEmpty()) tinted else tinted.badged(badge)
+    }
 
 /**
  * [this] icon with every pixel's hue turned to [hue]'s (greyed when null), its saturation and brightness
@@ -383,6 +397,9 @@ private val VIRT_COLORS: Map<VirtKind, Color> = mapOf(
     VirtKind.VIRTUAL to GColor("color.palette.blue"),
 )
 private val UNKNOWN_COLOR: Color = GColor("color.palette.gray")
+
+// What the program imports from a library, as the Symbol Tree's own external functions are drawn apart.
+private val IMPORTED_COLOR: Color = GColor("color.palette.orange")
 private const val PRIVATE_SHADE = 0.4
 private const val PROTECTED_TINT = 0.45
 

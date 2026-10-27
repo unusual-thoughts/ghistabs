@@ -381,6 +381,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
                     ClassHierarchy.Origin.SWEPT_RTTI to "from typeinfo",
                     ClassHierarchy.Origin.SWEPT to "from vtables",
                     ClassHierarchy.Origin.NAMESPACE to "from namespaces alone",
+                    ClassHierarchy.Origin.IMPORTED to "only imported",
                 ).mapNotNull { (origin, from) -> counts[origin]?.let { "$it $from" } }
                     .ifEmpty { listOf("no classes") }.joinToString(", "),
             )
