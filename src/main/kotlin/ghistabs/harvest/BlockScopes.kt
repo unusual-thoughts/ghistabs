@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.VariableLocation
+import ghistabs.rangeUntil
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
@@ -27,6 +28,8 @@ data class BlockScope(
     // Resolved by BlockTreeBuilder.finish; null until then. See [finish] for how it is derived.
     val source: GhidraSourceFile? = null,
 ) : OpenEndRange<Address> {
+    val range get() = start..<endExclusive
+
     /** Innermost block covering [addr], or null when [addr] lies outside this one. */
     fun blockAt(addr: Address): BlockScope? =
         if (addr in this) children.firstNotNullOfOrNull { it.blockAt(addr) } ?: this else null
