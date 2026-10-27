@@ -10,15 +10,11 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
-import ghistabs.cpp.Access
-import ghistabs.cpp.ClassHierarchyRecords
+import ghistabs.cpp.*
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
-import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.MemberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.writeMember
-import ghistabs.cpp.VirtKind
 import ghistabs.diagnose.DiagnosticSink
 
 /**
@@ -69,7 +65,7 @@ fun <K, F> virtualOwners(holders: Map<F, Set<K>>, ancestors: (K) -> Set<K>, hasV
  *
  * Classes are keyed by their type descriptor's address, which every RTTI record names a class by.
  */
-class MsvcClasses(private val program: Program, private val sink: DiagnosticSink) {
+class MsvcClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val options = DataValidationOptions()
     private val symbols = program.symbolTable
 
@@ -77,13 +73,14 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
     private val tableClasses = mutableSetOf<Address>()
 
     /** A class the RTTI describes: its namespace, if the analyzer made one, and its Base Class Array. */
-    private inner class RttiClass(
+    private class RttiClass(
         val typeDescriptor: Address,
         val ns: Namespace?,
         val name: String,
-        val array: List<BaseEntry<Address>>,
+        val bases: List<BaseEntry<Address>>,
     ) {
-        val ancestors = array.drop(1).mapTo(mutableSetOf()) { it.type }
+        val ancestors = bases.drop(1).mapTo(mutableSetOf()) { it.type }
+        val directBases by lazy { directBases(bases) }
     }
 
     data class Result(val classes: Int, val owned: Int, val moved: Int, val shared: Int)
@@ -99,7 +96,7 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
         }
         val shared = owners.values.count { it == null }
         if (shared > 0) {
-            sink.debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
+            debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
         }
         writeRecords(classes)
         return Result(classes.size, owners.size - shared, moved, shared)
@@ -117,12 +114,11 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
             }
             val td = array.first().type
             RttiClass(td, sym.parentNamespace.takeUnless { it.isGlobal }, chd.rtti0Model.descriptorName, array)
-        }.onFailure { sink.warn("msvc-hierarchy-unread", "${sym.name}: ${it.message}", sym.address) }.getOrNull()
+        }.onFailure { warn("msvc-hierarchy-unread", "${sym.name}: ${it.message}", sym.address) }.getOrNull()
     }.toList()
 
     /** Each function a vftable slot holds, and the classes whose tables hold it. */
-    private fun readVftables(): Map<Function, Set<Address>> {
-        val holders = mutableMapOf<Function, MutableSet<Address>>()
+    private fun readVftables() = buildMap {
         // By the meta pointer in front of each table, whose label `RecoverClassesFromRTTIScript` keeps when
         // it renames a class's tables after the bases they serve (`vftable_for_Signable`).
         val ptrSize = program.defaultPointerSize.toLong()
@@ -133,11 +129,10 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
             tableClasses += cls
             for (i in 0 until table.elementCount) {
                 val func = slotFunction(table.getVirtualFunctionPointer(i), at) ?: continue
-                holders.getOrPut(func) { mutableSetOf() } += cls
+                getOrPut(func) { mutableSetOf() } += cls
             }
         }
-        return holders
-    }
+    } as Map<Function, Set<Address>>
 
     /**
      * The function a slot points at, through an incremental-link jump stub. Not an imported one, which
@@ -145,7 +140,7 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
      */
     private fun slotFunction(at: Address?, table: Address): Function? {
         val func = at?.let(program.functionManager::getFunctionAt) ?: return null.also {
-            sink.debug("msvc-vfunction-missing", "no function at $at", table)
+            debug("msvc-vfunction-missing", "no function at $at", table)
         }
         val target = if (func.isThunk) func.getThunkedFunction(true) else func
         return target?.takeUnless { it.isExternal || "purecall" in it.name }
@@ -159,9 +154,8 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
         val entry = func.entryPoint
         if (program.memberAttrs(entry) == null) program.writeMember(entry, MemberAttrs(virt = VirtKind.VIRTUAL))
         val ns = cls.ns?.let(::asClass) ?: return false
-        if (!func.parentNamespace.isGlobal) return false
-        return runCatching { func.setParentNamespace(ns) }
-            .onFailure { sink.warn("msvc-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
+        return func.parentNamespace.isGlobal && runCatching { func.parentNamespace = ns }
+            .onFailure { warn("msvc-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
             .isSuccess
     }
 
@@ -175,7 +169,7 @@ class MsvcClasses(private val program: Program, private val sink: DiagnosticSink
     private fun writeRecords(classes: Map<Address, RttiClass>) {
         val entries = classes.values.mapNotNull { cls ->
             val ns = cls.ns?.let(::asClass) ?: return@mapNotNull null
-            val bases = directBases(cls.array).map { b ->
+            val bases = cls.directBases.map { b ->
                 val base = classes[b.type]
                 val baseNs = base?.ns?.let(::asClass) ?: typeDescriptorClass(b.type)
                 ClassHierarchyRecords.Base(
