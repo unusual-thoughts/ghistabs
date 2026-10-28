@@ -14,7 +14,6 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
-import ghistabs.cpp.abi.SizedStruct
 import ghistabs.cpp.abi.msvcSubobjectOffset
 import ghistabs.diagnose.DiagnosticSink
 
@@ -158,18 +157,15 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return (table?.let(program.listing::getDataAt)?.dataType as? Array)?.numElements
     }
 
+    /** As large as the class is sure to be: what its record says, or its struct, whichever says more. */
     private fun structSize(cls: Long): Long? {
-        val id = records[cls]?.structId ?: return null
-        val struct = program.dataTypeManager.getDataType(id) as? Structure ?: return null
-        return struct.length.toLong().takeUnless { struct.isNotYetDefined }
+        val struct = records[cls]?.structId?.let(program.dataTypeManager::getDataType) as? Structure
+        val structLength = struct?.takeUnless { it.isNotYetDefined }?.length?.toLong()
+        return listOfNotNull(records[cls]?.size, structLength).maxOrNull()
     }
 
-    /** A struct's size where it is the class's `sizeof`, as [SizedStruct.EXACT] says. */
-    private fun exactStructSize(cls: Long): Long? {
-        val id = records[cls]?.structId ?: return null
-        val struct = program.dataTypeManager.getDataType(id) as? Structure ?: return null
-        return struct.length.toLong().takeIf { struct.description == SizedStruct.EXACT }
-    }
+    /** The class's `sizeof`, where its record has it ([ClassHierarchyRecords.Entry.exactSize]). */
+    private fun exactStructSize(cls: Long) = records[cls]?.takeIf { it.exactSize }?.size
 
     private class Reading(val uses: Map<Function, ThisUse<Function>>, val calls: List<ThisCall<Long, Function>>)
 
