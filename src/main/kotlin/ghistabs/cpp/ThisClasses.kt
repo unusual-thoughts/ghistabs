@@ -102,7 +102,8 @@ private const val MAX_ROUNDS = 8
  * [guessThisClasses] over a program: every unnamed function in the global namespace whose convention
  * takes `this` (`__thiscall`, or `__fastcall`, whose first argument comes in the same register), off
  * its callers' decompiled calls, against the classes and bases [ClassHierarchyRecords] holds. Each
- * guess moves the function into its class and leaves an Analysis bookmark saying where it came from.
+ * guess moves the function into its class, a `__fastcall` that takes nothing in EDX becoming a `__thiscall`
+ * ([fastcallToThiscall]), and leaves an Analysis bookmark saying where it came from.
  */
 class ThisClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
@@ -252,6 +253,7 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         }
         return runCatching {
             f.parentNamespace = cls
+            f.fastcallToThiscall()
             program.bookmarkManager.setBookmark(
                 f.entryPoint,
                 BookmarkType.ANALYSIS,
