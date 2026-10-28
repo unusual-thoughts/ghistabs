@@ -2,15 +2,46 @@ package ghistabs.cpp
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.listing.Function
+import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 
 /** Where `this` comes in: ECX under x86 `__thiscall`, the first argument register elsewhere. */
 fun Program.thisStorage(): Address? {
-    val model = functionManager.getCallingConvention("__thiscall") ?: compilerSpec.defaultCallingConvention
+    val model = functionManager.getCallingConvention(THISCALL) ?: compilerSpec.defaultCallingConvention
     return model.getArgLocation(0, null, PointerDataType(dataTypeManager), this).firstVarnode?.address
 }
+
+/**
+ * Make an x86 `__fastcall` that takes nothing in EDX the `__thiscall` it may as well be, and is, once it
+ * is known to be a method: both take the first argument in ECX and the rest on the stack, popped by the
+ * callee, and only `__fastcall` takes a second in EDX. Ghidra picks `__fastcall` for a method whose
+ * only register argument is `this`. The ECX parameter becomes the `this` the convention adds. Whether
+ * it changed it.
+ */
+fun Function.fastcallToThiscall(): Boolean {
+    if (callingConventionName != FASTCALL) return false
+    if (program.functionManager.getCallingConvention(THISCALL) == null) return false
+    val (ecx, edx) = listOf("ECX", "EDX").map { program.language.getRegister(it) ?: return false }
+    if (parameters.any { it.register?.baseRegister == edx.baseRegister }) return false
+    val params = parameters.toList()
+    val rest = if (params.firstOrNull()?.register?.baseRegister == ecx.baseRegister) params.drop(1) else params
+    return runCatching {
+        updateFunction(
+            THISCALL,
+            `return`,
+            rest.map { ParameterImpl(it.name, it.dataType, program, it.source) },
+            Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+            true,
+            signatureSource,
+        )
+    }.isSuccess
+}
+
+private const val FASTCALL = "__fastcall"
+private const val THISCALL = "__thiscall"
 
 /** A pointer as the value it points into ([root]) and how far past it ([offset]). */
 data class PointerInto(val root: Varnode, val offset: Long) {
