@@ -1,11 +1,14 @@
 package ghistabs.cpp.abi
 
+import ghidra.app.cmd.data.rtti.Rtti1Model
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.cmd.data.rtti.Rtti4Model
 import ghidra.app.cmd.data.rtti.VfTableModel
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -24,9 +27,28 @@ import ghistabs.toClass
 
 /**
  * One entry of a class's RTTI Base Class Array: the class [descriptor] that describes it, how many entries after
- * it are that class's own bases ([contained]), and how the most derived class holds it.
+ * it are that class's own bases ([contained]), how the most derived class holds it, and where in it: [offset],
+ * the descriptor's `mdisp`, which for a virtual base is from wherever its vbtable puts it instead.
  */
-data class BaseEntry(val descriptor: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean)
+data class BaseEntry(
+    val descriptor: Address,
+    val contained: Int,
+    val isVirtual: Boolean,
+    val isPublic: Boolean,
+    val offset: Int = 0,
+) {
+    /** An entry by its Base Class Descriptor's `attributes`. */
+    constructor(descriptor: Address, contained: Int, attributes: Int, offset: Int = 0) : this(
+        descriptor,
+        contained,
+        isVirtual = attributes and Msvc.BCD_VBOFCONTOBJ != 0,
+        isPublic = attributes and Msvc.BCD_NONPUBLIC == 0,
+        offset = offset,
+    )
+
+    /** The entry a Base Class Descriptor makes. */
+    constructor(bcd: Rtti1Model) : this(bcd.rtti0Address, bcd.numBases, bcd.attributes, bcd.mDisp)
+}
 
 /**
  * The direct bases among a Base Class Array, whose first entry is the class itself and the rest its
@@ -92,7 +114,14 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     // Each vftable, by the class it serves and where in that class's object its vptr sits.
     private val tables = mutableMapOf<Address, Pair<Address, Long>>()
 
-    data class Result(val classes: Int, val owned: Int, val moved: Int, val shared: Int, val structors: Int)
+    data class Result(
+        val classes: Int,
+        val owned: Int,
+        val moved: Int,
+        val shared: Int,
+        val structors: Int,
+        val sized: Int,
+    )
 
     fun recover(monitor: TaskMonitor = TaskMonitor.DUMMY): Result {
         val classes = readHierarchies().associateBy { it.descriptor }
@@ -107,9 +136,15 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         if (shared > 0) {
             debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
         }
-        val structors = nameStructors(classes, holders, monitor)
+        val structors = findStructors(classes, holders, monitor)
+        val named = structors.count { (func, structor) ->
+            val cls = classes[structor.first]?.ns?.toClass() ?: return@count false
+            nameStructor(func, cls, structor.second)
+        }
+        val ctors = structors.filterValues { it.second == StructorKind.CONSTRUCTOR }.mapValues { it.value.first }
+        val sized = sizeStructs(classes, NewSizeReader<Address>(program, this).read(ctors, monitor))
         writeRecords(classes)
-        return Result(classes.size, owners.size - shared, moved, shared, structors)
+        return Result(classes.size, owners.size - shared, moved, shared, named, sized)
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }
@@ -118,10 +153,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         runCatching {
             val chd = Rtti3Model(program, sym.address, options)
             val bca = chd.rtti2Model
-            val array = (0..<chd.rtti1Count).map { i ->
-                val bcd = bca.getRtti1Model(i)
-                BaseEntry(bcd.rtti0Address, bcd.numBases, bcd.pDisp >= 0, bcd.attributes and Msvc.BCD_NONPUBLIC == 0)
-            }
+            val array = (0..<chd.rtti1Count).map { BaseEntry(bca.getRtti1Model(it)) }
             val td = array.first().descriptor
             RttiClass(td, sym.parentNamespace.takeUnless { it.isGlobal }, chd.rtti0Model.descriptorName, array)
         }.onFailure { warn("msvc-hierarchy-unread", "${sym.name}: ${it.message}", sym.address) }.getOrNull()
@@ -170,28 +202,76 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             .isSuccess
     }
 
-    /**
-     * Find each class's constructors, destructor and deleting destructor ([structors]) off the functions
-     * that store its vptrs, and move each into the class and name it, unless something put or named it
-     * already. How many it moved or named.
-     */
-    private fun nameStructors(
+    /** Each class's constructors, destructor and deleting destructor ([structors]), off the vptrs they store. */
+    private fun findStructors(
         classes: Map<Address, RttiClass>,
         holders: Map<Function, Set<Address>>,
         monitor: TaskMonitor,
-    ): Int {
+    ): Map<Function, Pair<Address, StructorKind>> {
         val reading = VptrStoreReader(program, tables, this).read(holders.keys, monitor)
-        val found = structors(
+        return structors(
             reading.stores,
             holders,
             { reading.thisCalls[it].orEmpty() },
             { classes[it]?.ancestors.orEmpty() },
             Msvc.constructorsReturnThis,
         )
-        return found.count { (func, structor) ->
-            val cls = classes[structor.first]?.ns?.toClass() ?: return@count false
-            nameStructor(func, cls, structor.second)
+    }
+
+    /**
+     * Give each class's struct the size [sizeBounds] finds, off the sizes it is allocated with
+     * ([allocated]), its bases' offsets and its vptrs': a struct there is none of is made, empty, in the
+     * class's category, where `RecoverClassesFromRTTIScript` and shift-D look for it, and one shorter is
+     * grown. How many it made or grew.
+     */
+    private fun sizeStructs(classes: Map<Address, RttiClass>, allocated: Map<Address, Long>): Int {
+        val bases = classes.mapValues { (_, cls) ->
+            cls.directBases.filterNot { it.isVirtual }.map { it.descriptor to it.offset.toLong() }
         }
+        val vptrs = tables.values.groupBy({ it.first }, { it.second }).mapValues { (_, at) -> at.max() }
+        val bounds = sizeBounds(bases, vptrs, allocated, program.defaultPointerSize.toLong())
+        return bounds.count { (descriptor, size) ->
+            val ns = classes[descriptor]?.ns?.toClass() ?: return@count false
+            size.size > 0 && sizeStruct(ns, size)
+        }
+    }
+
+    private fun sizeStruct(ns: GhidraClass, bounds: SizeBounds): Boolean {
+        val dtm = program.dataTypeManager
+        val size = bounds.size.toInt()
+        val how = when {
+            bounds.exact != null -> "Size from `operator new` and the RTTI"
+            else -> "At least as large as the RTTI says its vptrs and bases reach"
+        }
+        val struct = dtm.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
+        return runCatching {
+            when {
+                struct == null -> {
+                    val stub = StructureDataType(ClassNaming.vftableCategory(ns), ns.name, size, dtm)
+                    stub.description = how
+                    dtm.addDataType(stub, DataTypeConflictHandler.KEEP_HANDLER)
+                    true
+                }
+
+                struct.isNotYetDefined -> {
+                    struct.setLength(size)
+                    struct.description = how
+                    true
+                }
+
+                struct.length < size -> {
+                    struct.growStructure(size - struct.length)
+                    true
+                }
+
+                else -> {
+                    if (bounds.exact != null && struct.length > size) {
+                        debug("msvc-struct-oversized", "${ns.getName(true)}: ${struct.length} > new's $size")
+                    }
+                    false
+                }
+            }
+        }.onFailure { warn("msvc-struct-unsized", "${ns.getName(true)} -> $size: $it") }.getOrDefault(false)
     }
 
     private fun nameStructor(func: Function, cls: GhidraClass, kind: StructorKind): Boolean {

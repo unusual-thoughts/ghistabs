@@ -42,7 +42,8 @@ class MsvcClassAnalyzer :
             log.appendMsg(
                 NAME,
                 "${result.classes} class(es), ${result.owned} virtual function(s) owned, ${result.moved} moved, " +
-                    "${result.shared} shared, ${result.structors} constructor(s) and destructor(s) named",
+                    "${result.shared} shared, ${result.structors} constructor(s) and destructor(s) named, " +
+                    "${result.sized} class struct(s) made or grown",
             )
         }
         return true
