@@ -77,6 +77,10 @@
         background: var(--dark-bg-header) !important;
         color: var(--dark-text-primary) !important;
     }
+    /* Hard-coded #404040 / #383838 in the stock sheet. */
+    .ui-autocomplete .search-result-desc, .ui-menu .ui-state-active .search-result-desc {
+        color: var(--dark-text-placeholder) !important;
+    }
     .ui-autocomplete-category {
         background: var(--dark-bg-header) !important;
         color: var(--dark-text-muted) !important;
