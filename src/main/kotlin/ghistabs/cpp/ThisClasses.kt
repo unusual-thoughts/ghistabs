@@ -14,6 +14,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
+import ghistabs.cpp.abi.SizedStruct
 import ghistabs.cpp.abi.msvcSubobjectOffset
 import ghistabs.diagnose.DiagnosticSink
 
@@ -46,10 +47,11 @@ fun <K> commonClass(classes: Collection<K>, chain: (K) -> List<K>): K? {
  * known: the caller's own `this`, when the caller is a method of a [known] class or one guessed here,
  * or an object the caller built with a constructor. Called on objects of several classes, it belongs
  * to their [commonClass]; and then to whichever base that class shares its address with that does
- * all the method does ([uses]) as well: reaches no further into the object than that base's own
- * methods do ([sizeHint] when its struct says more), calls no slot past the end of its vftable
- * ([slotCount]), and calls nothing on `this` that belongs to a class below it. Decompiled with `this`
- * as that base, the method would read the same.
+ * all the method does ([uses]) as well: reaches no further into the object than the base is large
+ * ([exactSize]) or, not knowing that, than its own methods reach ([sizeHint] when its struct says
+ * more), calls no slot past the end of its vftable ([slotCount]), and calls nothing on `this` that
+ * belongs to a class below it. Decompiled with `this` as that base, the method would read the same.
+ * A method reaching past the common class's own exact size is none of its.
  *
  * Guesses feed the next round's callers, until none changes.
  */
@@ -62,10 +64,11 @@ fun <K, F> guessThisClasses(
     chain: (K) -> List<K>,
     slotCount: (K) -> Int?,
     sizeHint: (K) -> Long? = { null },
+    exactSize: (K) -> Long? = { null },
 ): Map<F, ThisClassGuess<K>> {
     val reach = mutableMapOf<K, Long>()
     for ((f, cls) in known) uses[f]?.let { reach.merge(cls, it.extent, ::maxOf) }
-    fun extent(cls: K) = listOfNotNull(reach[cls], sizeHint(cls)).maxOrNull()
+    fun extent(cls: K) = exactSize(cls) ?: listOfNotNull(reach[cls], sizeHint(cls)).maxOrNull()
 
     val sites = calls.filter { it.callee in candidates }.groupBy { it.callee }
     var guessed = emptyMap<F, ThisClassGuess<K>>()
@@ -88,6 +91,8 @@ fun <K, F> guessThisClasses(
         val next = sites.mapNotNull { (f, calls) ->
             val classes = calls.mapNotNull { it.built ?: classOf(it.caller) }
             val common = commonClass(classes, chain) ?: return@mapNotNull null
+            val reaches = uses[f]?.extent ?: 0
+            if (exactSize(common)?.let { reaches > it } == true) return@mapNotNull null
             f to ThisClassGuess(refine(f, common), common, classes.size)
         }.toMap()
         if (next == guessed) return next
@@ -130,6 +135,7 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             ::chain,
             ::slotCount,
             ::structSize,
+            ::exactStructSize,
         )
         return guesses.count { (f, guess) -> place(f, guess) }
     }
@@ -156,6 +162,13 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val id = records[cls]?.structId ?: return null
         val struct = program.dataTypeManager.getDataType(id) as? Structure ?: return null
         return struct.length.toLong().takeUnless { struct.isNotYetDefined }
+    }
+
+    /** A struct's size where it is the class's `sizeof`, as [SizedStruct.EXACT] says. */
+    private fun exactStructSize(cls: Long): Long? {
+        val id = records[cls]?.structId ?: return null
+        val struct = program.dataTypeManager.getDataType(id) as? Structure ?: return null
+        return struct.length.toLong().takeIf { struct.description == SizedStruct.EXACT }
     }
 
     private class Reading(val uses: Map<Function, ThisUse<Function>>, val calls: List<ThisCall<Long, Function>>)

@@ -55,6 +55,26 @@ class ThisClassesTest {
     }
 
     @Test
+    fun `an exact size lets a guess move up to a base, and rules out a class too small`() {
+        val sizes = mapOf("A" to 8L, "B" to 12L, "D" to 16L)
+        fun guessed(extent: Long) = guessThisClasses(
+            setOf("f"),
+            mapOf("d" to "D"),
+            listOf(ThisCall("d", "f")),
+            mapOf("f" to ThisUse(extent, emptySet(), emptySet<String>())),
+            ::chain,
+            slots::get,
+            exactSize = sizes::get,
+        )["f"]?.cls
+
+        // no method of A's or B's reaches anywhere, but their sizes are known
+        guessed(8) mustBe "A"
+        guessed(12) mustBe "B"
+        // past D's own size: none of D's
+        guessed(20).mustBeNull()
+    }
+
+    @Test
     fun `a guess makes its function's own calls on this evidence for the next round`() {
         val calls = listOf<ThisCall<String, String>>(ThisCall("d", "f"), ThisCall("f", "g"))
         guess(calls)["g"]?.cls mustBe "D"
