@@ -239,10 +239,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     private fun sizeStruct(ns: GhidraClass, bounds: SizeBounds): Boolean {
         val dtm = program.dataTypeManager
         val size = bounds.size.toInt()
-        val how = when {
-            bounds.exact != null -> "Size from `operator new` and the RTTI"
-            else -> "At least as large as the RTTI says its vptrs and bases reach"
-        }
+        val how = if (bounds.exact != null) SizedStruct.EXACT else SizedStruct.AT_LEAST
         val struct = dtm.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
         return runCatching {
             when {

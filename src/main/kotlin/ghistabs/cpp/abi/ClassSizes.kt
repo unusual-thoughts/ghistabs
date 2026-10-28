@@ -18,6 +18,15 @@ data class SizeBounds(val atLeast: Long, val atMost: Long?, val exact: Long?) {
 }
 
 /**
+ * The description of a class struct whose size [SizeBounds] found: [EXACT], which a reader may take as
+ * the class's `sizeof`, or [AT_LEAST], a floor it may grow past.
+ */
+object SizedStruct {
+    const val EXACT = "Size from `operator new` and the RTTI"
+    const val AT_LEAST = "At least as large as the RTTI says its vptrs and bases reach"
+}
+
+/**
  * Each class's [SizeBounds], from where its non-virtual direct bases sit in it ([bases], by offset),
  * the furthest vptr in it ([vptrs]), and the sizes it is allocated with ([allocated]).
  *
