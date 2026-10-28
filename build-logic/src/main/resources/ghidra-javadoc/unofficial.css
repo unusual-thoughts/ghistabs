@@ -17,6 +17,12 @@ a.unofficial {
     text-decoration: underline dotted;
 }
 
+/* A search box result, which is no link. */
+.ui-autocomplete li.unofficial .search-result-label {
+    color: var(--unofficial-color) !important;
+    text-decoration: underline dotted;
+}
+
 .unofficial-banner {
     margin: 0 0 1em;
     padding: 6px 10px;

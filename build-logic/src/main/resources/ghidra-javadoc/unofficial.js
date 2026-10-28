@@ -26,6 +26,17 @@
         a.title = "Not in Ghidra's API javadoc (" + module + ")";
     }
 
+    // The search box's results are no links: jQuery UI keeps each one's index entry on its <li>, and
+    // search.js's getURL makes the page's path from the doc root of it.
+    function markResult(li) {
+        const item = window.jQuery && jQuery(li).data("ui-autocomplete-item");
+        if (!item || !item.indexItem || typeof getURL !== "function") return;
+        const module = moduleOf(new URL(getURL(item.indexItem, item.category), root));
+        if (module === undefined) return;
+        li.classList.add("unofficial");
+        li.title = "Not in Ghidra's API javadoc (" + module + ")";
+    }
+
     function mark() {
         // The page sets pathtoroot after the scripts javadoc adds have run.
         root = new URL(typeof pathtoroot === "string" ? pathtoroot : "./", location.href);
@@ -45,6 +56,8 @@
                     if (n.nodeType !== 1) return;
                     if (n.matches("a[href]")) markLink(n);
                     n.querySelectorAll("a[href]").forEach(markLink);
+                    if (n.matches("li.result-item")) markResult(n);
+                    n.querySelectorAll("li.result-item").forEach(markResult);
                 });
             });
         }).observe(document.body, { childList: true, subtree: true });
