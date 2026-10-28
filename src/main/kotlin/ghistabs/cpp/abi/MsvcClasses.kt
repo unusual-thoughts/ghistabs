@@ -23,7 +23,17 @@ import ghistabs.toClass
  * One entry of a class's RTTI Base Class Array: the class [descriptor] that describes it, how many entries after
  * it are that class's own bases ([contained]), and how the most derived class holds it.
  */
-data class BaseEntry(val descriptor: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean)
+data class BaseEntry(val descriptor: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean) {
+    companion object {
+        /** An entry by its Base Class Descriptor's `attributes`. */
+        fun of(descriptor: Address, contained: Int, attributes: Int) = BaseEntry(
+            descriptor,
+            contained,
+            isVirtual = attributes and Msvc.BCD_VBOFCONTOBJ != 0,
+            isPublic = attributes and Msvc.BCD_NONPUBLIC == 0,
+        )
+    }
+}
 
 /**
  * The direct bases among a Base Class Array, whose first entry is the class itself and the rest its
@@ -112,7 +122,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             val bca = chd.rtti2Model
             val array = (0..<chd.rtti1Count).map { i ->
                 val bcd = bca.getRtti1Model(i)
-                BaseEntry(bcd.rtti0Address, bcd.numBases, bcd.pDisp >= 0, bcd.attributes and Msvc.BCD_NONPUBLIC == 0)
+                BaseEntry.of(bcd.rtti0Address, bcd.numBases, bcd.attributes)
             }
             val td = array.first().descriptor
             RttiClass(td, sym.parentNamespace.takeUnless { it.isGlobal }, chd.rtti0Model.descriptorName, array)
