@@ -208,7 +208,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             if (moves) func.parentNamespace = cls
             val renames = func.parentNamespace == cls && func.symbol.source == SourceType.DEFAULT
             if (renames) func.setName(name, SourceType.ANALYSIS)
-            moves || renames
+            val retyped = func.parentNamespace == cls && func.fastcallToThiscall()
+            moves || renames || retyped
         }.onFailure {
             warn("msvc-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)
         }
