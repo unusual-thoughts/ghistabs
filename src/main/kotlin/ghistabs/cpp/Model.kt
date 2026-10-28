@@ -40,13 +40,30 @@ interface MemberDecl {
  */
 @Serializable
 data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : CustomOption {
-    /** A direct base: the class built for it ([namespaceId]), or only its [name] when none was. */
+    /**
+     * A direct base: the class built for it ([namespaceId]), or only its [name] when none was, and
+     * where it sits in the class ([offset], in bytes), when it is not virtual and its source says.
+     */
     @Serializable
-    data class Base(val namespaceId: Long?, val name: String?, val isVirtual: Boolean, val access: Access)
+    data class Base(
+        val namespaceId: Long?,
+        val name: String?,
+        val isVirtual: Boolean,
+        val access: Access,
+        val offset: Long? = null,
+    )
 
-    /** A class's struct, by datatype id, and its direct bases in declaration order. */
+    /**
+     * A class's struct, by datatype id, its direct bases in declaration order, and its [size] where
+     * something says: the class's `sizeof` if [exactSize], else as large as it is sure to be.
+     */
     @Serializable
-    data class Entry(val structId: Long?, val bases: List<Base>)
+    data class Entry(
+        val structId: Long?,
+        val bases: List<Base>,
+        val size: Long? = null,
+        val exactSize: Boolean = false,
+    )
 
     override fun readState(properties: GProperties) {
         classes = GPropertiesFormat.decode<ClassHierarchyRecords>(properties).classes
