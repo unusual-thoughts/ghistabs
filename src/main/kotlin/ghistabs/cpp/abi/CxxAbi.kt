@@ -142,6 +142,7 @@ sealed interface CxxAbi : CxxMemberNaming {
             Gcc2Thunks.looksLikeVtable(symbolName) -> Gcc2Thunks
             Gcc2Plain.looksLikeVtable(symbolName) -> Gcc2Plain
             Itanium.looksLikeVtable(symbolName) -> Itanium
+            Msvc.looksLikeVtable(symbolName) -> Msvc
             else -> null
         }
 
@@ -201,6 +202,7 @@ sealed interface CxxAbi : CxxMemberNaming {
         fun mangledBy(name: String): CxxAbi? = when {
             Itanium.isProbablyMangled(name) -> Itanium
             Gcc2.isProbablyMangled(name) -> Gcc2Thunks
+            Msvc.isProbablyMangled(name) -> Msvc
             else -> null
         }
     }
