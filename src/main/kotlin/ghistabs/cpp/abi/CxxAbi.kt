@@ -132,6 +132,13 @@ sealed interface CxxAbi : CxxMemberNaming {
      */
     fun VtableRecord.vfptrOffset(program: Program): Long? = null
 
+    /**
+     * Whether a constructor hands back the object it built, which is what tells one from a destructor
+     * among the functions that store a vptr ([structors]). MSVC's do and its destructors return nothing;
+     * Itanium's return nothing either, but on ARM, where both return `this`, so neither tells there.
+     */
+    val constructorsReturnThis: Boolean get() = false
+
     companion object {
         /**
          * Which ABI a vtable symbol's spelling states, or null if it spells no vtable at all. A

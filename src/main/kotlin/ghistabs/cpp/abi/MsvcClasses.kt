@@ -9,7 +9,10 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.SourceType
+import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.*
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
@@ -63,7 +66,8 @@ fun <K, F> virtualOwners(holders: Map<F, Set<K>>, ancestors: (K) -> Set<K>, hasV
  * Class records and members for a binary whose only C++ information is the MSVC RTTI that Ghidra's
  * `Windows x86 PE RTTI Analyzer` has laid and labelled: each class's direct bases off its Class Hierarchy
  * Descriptor, written to [ClassHierarchyRecords], and each virtual function off the vftables, moved into
- * the class it belongs to ([virtualOwners]) and marked virtual for the Class Hierarchy window.
+ * the class it belongs to ([virtualOwners]) and marked virtual for the Class Hierarchy window, and each
+ * constructor and destructor, found by the vptrs it stores ([structors]), moved there and named.
  *
  * Classes are keyed by their type descriptor's address, which every RTTI record names a class by.
  */
@@ -85,9 +89,12 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val directBases by lazy { directBases(bases) }
     }
 
-    data class Result(val classes: Int, val owned: Int, val moved: Int, val shared: Int)
+    // Each vftable, by the class it serves and where in that class's object its vptr sits.
+    private val tables = mutableMapOf<Address, Pair<Address, Long>>()
 
-    fun recover(): Result {
+    data class Result(val classes: Int, val owned: Int, val moved: Int, val shared: Int, val structors: Int)
+
+    fun recover(monitor: TaskMonitor = TaskMonitor.DUMMY): Result {
         val classes = readHierarchies().associateBy { it.descriptor }
         val holders = readVftables()
         val owners = virtualOwners(holders, { classes[it]?.ancestors.orEmpty() }, { it in tableClasses })
@@ -100,8 +107,9 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         if (shared > 0) {
             debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
         }
+        val structors = nameStructors(classes, holders, monitor)
         writeRecords(classes)
-        return Result(classes.size, owners.size - shared, moved, shared)
+        return Result(classes.size, owners.size - shared, moved, shared, structors)
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }
@@ -129,6 +137,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             val table = runCatching { VfTableModel(program, at, options) }.getOrNull() ?: continue
             val cls = runCatching { table.rtti0Model.address }.getOrNull() ?: continue
             tableClasses += cls
+            program.msvcSubobjectOffset(at)?.let { tables[at] = cls to it.toLong() }
             for (i in 0 until table.elementCount) {
                 val func = slotFunction(table.getVirtualFunctionPointer(i), at) ?: continue
                 getOrPut(func) { mutableSetOf() } += cls
@@ -159,6 +168,56 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return func.parentNamespace.isGlobal && runCatching { func.parentNamespace = ns }
             .onFailure { warn("msvc-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
             .isSuccess
+    }
+
+    /**
+     * Find each class's constructors, destructor and deleting destructor ([structors]) off the functions
+     * that store its vptrs, and move each into the class and name it, unless something put or named it
+     * already. How many it moved or named.
+     */
+    private fun nameStructors(
+        classes: Map<Address, RttiClass>,
+        holders: Map<Function, Set<Address>>,
+        monitor: TaskMonitor,
+    ): Int {
+        val reading = VptrStoreReader(program, tables, this).read(holders.keys, monitor)
+        val found = structors(
+            reading.stores,
+            holders,
+            { reading.thisCalls[it].orEmpty() },
+            { classes[it]?.ancestors.orEmpty() },
+            Msvc.constructorsReturnThis,
+        )
+        return found.count { (func, structor) ->
+            val cls = classes[structor.first]?.ns?.toClass() ?: return@count false
+            nameStructor(func, cls, structor.second)
+        }
+    }
+
+    private fun nameStructor(func: Function, cls: GhidraClass, kind: StructorKind): Boolean {
+        val name = when (kind) {
+            StructorKind.CONSTRUCTOR -> cls.name
+
+            StructorKind.DESTRUCTOR -> "~${cls.name}"
+
+            StructorKind.DELETING_DESTRUCTOR ->
+                if (func.testsVectorFlag()) Msvc.VECTOR_DELETING_DESTRUCTOR else Msvc.SCALAR_DELETING_DESTRUCTOR
+        }
+        return runCatching {
+            val moves = func.parentNamespace.isGlobal
+            if (moves) func.parentNamespace = cls
+            val renames = func.parentNamespace == cls && func.symbol.source == SourceType.DEFAULT
+            if (renames) func.setName(name, SourceType.ANALYSIS)
+            moves || renames
+        }.onFailure {
+            warn("msvc-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)
+        }
+            .getOrDefault(false)
+    }
+
+    /** A vector deleting destructor tests its flags for bit 2, which says an array is going. */
+    private fun Function.testsVectorFlag() = program.listing.getInstructions(body, true).any { insn ->
+        insn.pcode.any { op -> op.opcode == PcodeOp.INT_AND && op.inputs.any { it.isConstant && it.offset == 2L } }
     }
 
     /**
