@@ -32,9 +32,9 @@ class MsvcTest {
     @Test
     fun `a base is virtual by its descriptor's flag, not by sitting inside a virtual base`() {
         // class D : virtual B, with B : A: A has a pDisp too, but only B is declared virtual
-        BaseEntry.of(td("B"), 1, 0x40 or Msvc.BCD_VBOFCONTOBJ).isVirtual mustBe true
-        BaseEntry.of(td("A"), 0, 0x40).isVirtual mustBe false
-        BaseEntry.of(td("P"), 0, 0x40 or 0x4).isPublic mustBe false
+        BaseEntry(td("B"), 1, 0x40 or Msvc.BCD_VBOFCONTOBJ).isVirtual mustBe true
+        BaseEntry(td("A"), 0, 0x40).isVirtual mustBe false
+        BaseEntry(td("P"), 0, 0x40 or 0x4).isPublic mustBe false
     }
 
     private val bases = mapOf(
