@@ -227,6 +227,7 @@ class ClassApplier(
                 if (baseNs == null) dt?.name ?: "?" else null,
                 base.isVirtual,
                 base.access,
+                (base.offsetBits / Byte.SIZE_BITS).takeUnless { base.isVirtual },
             )
         }
         val structId = program.dataTypeManager.getID(structDt).takeIf { it >= 0 }

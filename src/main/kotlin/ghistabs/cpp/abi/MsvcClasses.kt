@@ -6,9 +6,7 @@ import ghidra.app.cmd.data.rtti.Rtti4Model
 import ghidra.app.cmd.data.rtti.VfTableModel
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -142,9 +140,9 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             nameStructor(func, cls, structor.second)
         }
         val ctors = structors.filterValues { it.second == StructorKind.CONSTRUCTOR }.mapValues { it.value.first }
-        val sized = sizeStructs(classes, NewSizeReader<Address>(program, this).read(ctors, monitor))
-        writeRecords(classes)
-        return Result(classes.size, owners.size - shared, moved, shared, named, sized)
+        val sizes = sizeClasses(classes, NewSizeReader<Address>(program, this).read(ctors, monitor))
+        writeRecords(classes, sizes)
+        return Result(classes.size, owners.size - shared, moved, shared, named, sizes.size)
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }
@@ -219,56 +217,25 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     }
 
     /**
-     * Give each class's struct the size [sizeBounds] finds, off the sizes it is allocated with
-     * ([allocated]), its bases' offsets and its vptrs': a struct there is none of is made, empty, in the
-     * class's category, where `RecoverClassesFromRTTIScript` and shift-D look for it, and one shorter is
-     * grown. How many it made or grew.
+     * Each class's [SizeBounds], off the sizes it is allocated with ([allocated]), its bases' offsets and
+     * its vptrs'. A struct shorter than an exact size is grown to it; none is made where there is none, as
+     * `RecoverClassesFromRTTIScript` takes any struct of a class's name for its layout and so would not
+     * compute its own from the decompiled field accesses. The sizes go to the class records instead.
      */
-    private fun sizeStructs(classes: Map<Address, RttiClass>, allocated: Map<Address, Long>): Int {
+    private fun sizeClasses(classes: Map<Address, RttiClass>, allocated: Map<Address, Long>): Map<Address, SizeBounds> {
         val bases = classes.mapValues { (_, cls) ->
             cls.directBases.filterNot { it.isVirtual }.map { it.descriptor to it.offset.toLong() }
         }
         val vptrs = tables.values.groupBy({ it.first }, { it.second }).mapValues { (_, at) -> at.max() }
         val bounds = sizeBounds(bases, vptrs, allocated, program.defaultPointerSize.toLong())
-        return bounds.count { (descriptor, size) ->
-            val ns = classes[descriptor]?.ns?.toClass() ?: return@count false
-            size.size > 0 && sizeStruct(ns, size)
+        for ((descriptor, size) in bounds) {
+            val exact = size.exact ?: continue
+            val ns = classes[descriptor]?.ns?.toClass() ?: continue
+            val struct = classStruct(ns)?.takeUnless { it.isNotYetDefined || it.length >= exact } ?: continue
+            runCatching { struct.growStructure((exact - struct.length).toInt()) }
+                .onFailure { warn("msvc-struct-ungrown", "${ns.getName(true)} -> $exact: $it") }
         }
-    }
-
-    private fun sizeStruct(ns: GhidraClass, bounds: SizeBounds): Boolean {
-        val dtm = program.dataTypeManager
-        val size = bounds.size.toInt()
-        val how = if (bounds.exact != null) SizedStruct.EXACT else SizedStruct.AT_LEAST
-        val struct = dtm.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
-        return runCatching {
-            when {
-                struct == null -> {
-                    val stub = StructureDataType(ClassNaming.vftableCategory(ns), ns.name, size, dtm)
-                    stub.description = how
-                    dtm.addDataType(stub, DataTypeConflictHandler.KEEP_HANDLER)
-                    true
-                }
-
-                struct.isNotYetDefined -> {
-                    struct.setLength(size)
-                    struct.description = how
-                    true
-                }
-
-                struct.length < size -> {
-                    struct.growStructure(size - struct.length)
-                    true
-                }
-
-                else -> {
-                    if (bounds.exact != null && struct.length > size) {
-                        debug("msvc-struct-oversized", "${ns.getName(true)}: ${struct.length} > new's $size")
-                    }
-                    false
-                }
-            }
-        }.onFailure { warn("msvc-struct-unsized", "${ns.getName(true)} -> $size: $it") }.getOrDefault(false)
+        return bounds.filterValues { it.size > 0 }
     }
 
     private fun nameStructor(func: Function, cls: GhidraClass, kind: StructorKind): Boolean {
@@ -302,7 +269,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
      * Each class's entry, over its own from an earlier run: a one-shot after `RecoverClassesFromRTTIScript`
      * finds the struct the script filed. Other classes' entries are kept.
      */
-    private fun writeRecords(classes: Map<Address, RttiClass>) {
+    private fun writeRecords(classes: Map<Address, RttiClass>, sizes: Map<Address, SizeBounds>) {
         val entries = classes.values.mapNotNull { cls ->
             val ns = cls.ns?.toClass() ?: return@mapNotNull null
             val bases = cls.directBases.map { b ->
@@ -313,9 +280,11 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
                     if (baseNs == null) base?.name ?: "?" else null,
                     b.isVirtual,
                     if (b.isPublic) Access.PUBLIC else Access.PRIVATE,
+                    b.offset.toLong().takeUnless { b.isVirtual },
                 )
             }
-            ns.id to ClassHierarchyRecords.Entry(classStructId(ns), bases)
+            val size = sizes[cls.descriptor]
+            ns.id to ClassHierarchyRecords.Entry(classStructId(ns), bases, size?.size, size?.exact != null)
         }
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
@@ -326,10 +295,12 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         ?.parentNamespace?.toClass()
 
     /** The struct `RecoverClassesFromRTTIScript` or a user filed for the class, where shift-D finds it. */
+    private fun classStruct(ns: GhidraClass) =
+        program.dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
+
     private fun classStructId(ns: GhidraClass): Long? {
-        val dtm = program.dataTypeManager
-        val struct = dtm.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure ?: return null
-        return dtm.getID(struct).takeIf { it >= 0 }
+        val struct = classStruct(ns) ?: return null
+        return program.dataTypeManager.getID(struct).takeIf { it >= 0 }
     }
 }
 
