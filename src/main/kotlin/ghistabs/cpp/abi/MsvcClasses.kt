@@ -3,7 +3,6 @@ package ghistabs.cpp.abi
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.cmd.data.rtti.Rtti4Model
 import ghidra.app.cmd.data.rtti.VfTableModel
-import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Structure
@@ -18,11 +17,11 @@ import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.writeMember
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.pointerAt
+import ghistabs.toClass
 
 /**
- * One entry of a class's RTTI Base Class Array: the class it describes, by the address of its type
- * descriptor ([descriptor]), how many entries after it are that class's own bases ([contained]),
- * and how the most derived class holds it.
+ * One entry of a class's RTTI Base Class Array: the class [descriptor] that describes it, how many entries after
+ * it are that class's own bases ([contained]), and how the most derived class holds it.
  */
 data class BaseEntry(val descriptor: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean)
 
@@ -37,9 +36,7 @@ fun directBases(array: List<BaseEntry>): List<BaseEntry> {
     val inherited = tops.flatMapTo(mutableSetOf()) { i ->
         array.subList(i + 1, i + 1 + array[i].contained).map { it.descriptor }
     }
-    return tops.map(array::get)
-        .filterNot { it.isVirtual && it.descriptor in inherited }
-        .distinctBy { it.descriptor }
+    return tops.map(array::get).filterNot { it.isVirtual && it.descriptor in inherited }.distinctBy { it.descriptor }
 }
 
 /**
@@ -113,7 +110,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         runCatching {
             val chd = Rtti3Model(program, sym.address, options)
             val bca = chd.rtti2Model
-            val array = (0 until chd.rtti1Count).map { i ->
+            val array = (0..<chd.rtti1Count).map { i ->
                 val bcd = bca.getRtti1Model(i)
                 BaseEntry(bcd.rtti0Address, bcd.numBases, bcd.pDisp >= 0, bcd.attributes and Msvc.BCD_NONPUBLIC == 0)
             }
@@ -158,14 +155,11 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     private fun attach(func: Function, cls: RttiClass): Boolean {
         val entry = func.entryPoint
         if (program.memberAttrs(entry) == null) program.writeMember(entry, MemberAttrs(virt = VirtKind.VIRTUAL))
-        val ns = cls.ns?.let(::asClass) ?: return false
+        val ns = cls.ns?.toClass() ?: return false
         return func.parentNamespace.isGlobal && runCatching { func.parentNamespace = ns }
             .onFailure { warn("msvc-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
             .isSuccess
     }
-
-    private fun asClass(ns: Namespace): GhidraClass? = ns as? GhidraClass
-        ?: runCatching { NamespaceUtils.convertNamespaceToClass(ns) }.getOrNull()
 
     /**
      * Each class's entry, over its own from an earlier run: a one-shot after `RecoverClassesFromRTTIScript`
@@ -173,10 +167,10 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
      */
     private fun writeRecords(classes: Map<Address, RttiClass>) {
         val entries = classes.values.mapNotNull { cls ->
-            val ns = cls.ns?.let(::asClass) ?: return@mapNotNull null
+            val ns = cls.ns?.toClass() ?: return@mapNotNull null
             val bases = cls.directBases.map { b ->
                 val base = classes[b.descriptor]
-                val baseNs = base?.ns?.let(::asClass) ?: typeDescriptorClass(b.descriptor)
+                val baseNs = base?.ns?.toClass() ?: typeDescriptorClass(b.descriptor)
                 ClassHierarchyRecords.Base(
                     baseNs?.id,
                     if (baseNs == null) base?.name ?: "?" else null,
@@ -192,7 +186,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     /** A base with no hierarchy descriptor of its own still has its type descriptor labelled in its class. */
     private fun typeDescriptorClass(at: Address) = symbols.getSymbols(at)
         .firstOrNull { it.name == Msvc.TYPE_DESCRIPTOR && !it.parentNamespace.isGlobal }
-        ?.parentNamespace?.let(::asClass)
+        ?.parentNamespace?.toClass()
 
     /** The struct `RecoverClassesFromRTTIScript` or a user filed for the class, where shift-D finds it. */
     private fun classStructId(ns: GhidraClass): Long? {
