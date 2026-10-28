@@ -2,13 +2,14 @@ package ghistabs.cpp.abi
 
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.pointerInto
+import ghistabs.cpp.thisStorage
 import ghistabs.diagnose.DiagnosticSink
 
 /** What a function that stores a class's vptr is to that class. */
@@ -91,12 +92,7 @@ class VptrStoreReader<K>(
     private val tables: Map<Address, Pair<K, Long>>,
     sink: DiagnosticSink,
 ) : DiagnosticSink by sink {
-    // Where `this` comes in: ECX under x86 __thiscall, the first argument register elsewhere.
-    private val thisStorage = run {
-        val model = program.functionManager.getCallingConvention("__thiscall")
-            ?: program.compilerSpec.defaultCallingConvention
-        model.getArgLocation(0, null, PointerDataType(program.dataTypeManager), program).firstVarnode?.address
-    }
+    private val thisStorage = program.thisStorage()
 
     class Reading<K>(val stores: Map<Function, VptrStores<K>>, val thisCalls: Map<Function, Set<Function>>)
 
@@ -154,36 +150,10 @@ class VptrStoreReader<K>(
         return VptrStores(classes, returnsThis)
     }
 
-    /** How far past `this` [this] points, through copies, casts and constant adds; null if not off `this`. */
-    private fun Varnode.thisOffset(): Long? {
-        var vn = this
-        var offset = 0L
-        repeat(MAX_TRACE) {
-            if (vn.isInput) return offset.takeIf { vn.address == thisStorage }
-            val def = vn.def ?: return null
-            vn = when (def.opcode) {
-                PcodeOp.COPY, PcodeOp.CAST -> def.getInput(0)
-
-                PcodeOp.INT_ADD, PcodeOp.PTRSUB -> {
-                    offset += def.getInput(1).takeIf { it.isConstant }?.offset ?: return null
-                    def.getInput(0)
-                }
-
-                PcodeOp.PTRADD -> {
-                    val (index, size) = def.getInput(1) to def.getInput(2)
-                    if (!index.isConstant || !size.isConstant) return null
-                    offset += index.offset * size.offset
-                    def.getInput(0)
-                }
-
-                else -> return null
-            }
-        }
-        return null
-    }
+    /** How far past `this` [this] points; null if it points into something else. */
+    private fun Varnode.thisOffset() = pointerInto().takeIf { it.isThis(thisStorage) }?.offset
 
     private companion object {
         const val DECOMPILE_TIMEOUT_SECONDS = 30
-        const val MAX_TRACE = 16
     }
 }
