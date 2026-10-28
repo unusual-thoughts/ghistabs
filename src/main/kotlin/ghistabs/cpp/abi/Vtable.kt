@@ -229,20 +229,22 @@ fun Program.renameVtableLabel(at: Address, from: String, to: String, ns: Namespa
  * Whether [label], one of a class's vftable labels ([ClassNaming.isClassVftableLabel]), marks its primary
  * table. Once a class has several they are all `vftable_for_<Base>`, so that is read off the record: an
  * Itanium primary's header is labelled `vtable` rather than `internal_vtable`, and a gcc 2.x one sits at
- * the class's own `_vt` symbol rather than at a `_vt<class><base>` one.
+ * the class's own `_vt` symbol rather than at a `_vt<class><base>` one. MSVC labels every table of a class
+ * `vftable`, and its complete object locator says which subobject it serves ([msvcSubobjectOffset]).
  */
-fun Program.isPrimaryVftable(label: Symbol): Boolean = when (label.name) {
-    ClassNaming.VFTABLE -> true
+fun Program.isPrimaryVftable(label: Symbol): Boolean =
+    msvcSubobjectOffset(label.address)?.let { it == 0 } ?: when (label.name) {
+        ClassNaming.VFTABLE -> true
 
-    ClassNaming.vftableLabel(internal = true) -> false
+        ClassNaming.vftableLabel(internal = true) -> false
 
-    else -> listing.getDataBefore(label.address)?.takeIf { it.maxAddress.next() == label.address }
-        ?.let { symbolTable.getSymbols(it.address) }.orEmpty()
-        .any { it.name == ClassNaming.VTABLE && it.parentNamespace == label.parentNamespace } ||
-        symbolTable.getSymbols(label.address).any {
-            CxxAbi.ofVtableSymbol(it.name)?.isPrimaryVtable(it.name) == true
-        }
-}
+        else -> listing.getDataBefore(label.address)?.takeIf { it.maxAddress.next() == label.address }
+            ?.let { symbolTable.getSymbols(it.address) }.orEmpty()
+            .any { it.name == ClassNaming.VTABLE && it.parentNamespace == label.parentNamespace } ||
+            symbolTable.getSymbols(label.address).any {
+                CxxAbi.ofVtableSymbol(it.name)?.isPrimaryVtable(it.name) == true
+            }
+    }
 
 /**
  * The struct of the class table [label] marks: laid there under Itanium, and found by name under gcc 2.x,

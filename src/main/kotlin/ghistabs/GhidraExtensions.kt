@@ -112,6 +112,9 @@ fun FunctionManager.inHull(addr: Address) = getFunctionWrapping(addr) != null
 
 val Function.isMethod get() = parentNamespace is GhidraClass
 
+fun Namespace.toClass(): GhidraClass? = this as? GhidraClass
+    ?: runCatching { NamespaceUtils.convertNamespaceToClass(this) }.getOrNull()
+
 /** Creates a hierarchy of namespaces, named [parts], in [parent] or Global namespace, with [sourceType],
  *  the final of which will be a [GhidraClass].
  *
