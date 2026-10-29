@@ -139,7 +139,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             val cls = classes[structor.first]?.ns?.toClass() ?: return@count false
             nameStructor(func, cls, structor.second)
         }
-        val ctors = structors.filterValues { it.second == StructorKind.CONSTRUCTOR }.mapValues { it.value.first }
+        val ctors = structors.filterValues { !it.second.isDestructor }.mapValues { it.value.first }
         val sizes = sizeClasses(classes, NewSizeReader(program, Msvc, this).read(ctors, monitor))
         writeRecords(classes, sizes)
         return Result(classes.size, owners.size - shared, moved, shared, named, sizes.size)
@@ -205,7 +205,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         classes: Map<Address, RttiClass>,
         holders: Map<Function, Set<Address>>,
         monitor: TaskMonitor,
-    ): Map<Function, Pair<Address, StructorKind>> {
+    ): Map<Function, Pair<Address, StructorVariant>> {
         val reading = VptrStoreReader(program, tables, this).read(holders.keys, monitor)
         return structors(
             reading.stores,
@@ -238,15 +238,13 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return bounds.filterValues { it.first > 0 }
     }
 
-    private fun nameStructor(func: Function, cls: GhidraClass, kind: StructorKind): Boolean {
-        val name = when (kind) {
-            StructorKind.CONSTRUCTOR -> cls.name
-
-            StructorKind.DESTRUCTOR -> "~${cls.name}"
-
-            StructorKind.DELETING_DESTRUCTOR ->
-                if (func.testsVectorFlag()) Msvc.VECTOR_DELETING_DESTRUCTOR else Msvc.SCALAR_DELETING_DESTRUCTOR
+    private fun nameStructor(func: Function, cls: GhidraClass, found: StructorVariant): Boolean {
+        val variant = when {
+            !found.isDeleting -> found
+            func.testsVectorFlag() -> StructorVariant.VECTOR_DELETING_DTOR
+            else -> StructorVariant.SCALAR_DELETING_DTOR
         }
+        val name = variant.displayName(cls.name)
         return runCatching {
             val moves = func.parentNamespace.isGlobal
             if (moves) func.parentNamespace = cls
