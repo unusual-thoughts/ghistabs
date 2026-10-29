@@ -148,7 +148,18 @@ sealed interface CxxAbi : CxxMemberNaming {
      */
     fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? = null
 
+    /**
+     * The names a scalar `operator new(size)` goes by: its mangled ones under this ABI ([mangledOperatorNew])
+     * and the ones Ghidra's demangler gives it. Not `new[]`, whose size is a count's worth and a cookie.
+     */
+    val operatorNewNames: Set<String> get() = mangledOperatorNew + DEMANGLED_OPERATOR_NEW
+
+    /** `operator new(size)` as this ABI mangles it, for each pointer size. */
+    val mangledOperatorNew: Set<String> get() = emptySet()
+
     companion object {
+        private val DEMANGLED_OPERATOR_NEW = setOf("operator_new", "operator new")
+
         /**
          * Which ABI a vtable symbol's spelling states, or null if it spells no vtable at all. A
          * gcc 2.x *secondary* table answers here too — it is still that ABI's geometry; screening

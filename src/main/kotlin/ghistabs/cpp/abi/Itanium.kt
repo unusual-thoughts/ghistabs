@@ -131,6 +131,9 @@ object Itanium : CxxAbi {
     override val hasRttiHeader get() = true
     override val vptrAtRecordStart get() = false
 
+    // `size_t` is `unsigned int` (j) on 32-bit targets and `unsigned long` (m) on 64-bit ones.
+    override val mangledOperatorNew get() = setOf("_Znwj", "_Znwm")
+
     override fun looksLikeVtable(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
 
     /** Templates have no closed form; [ResolvedVtable.fromSymbol] finds those. */
