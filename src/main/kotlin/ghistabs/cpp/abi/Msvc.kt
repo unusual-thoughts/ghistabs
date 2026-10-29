@@ -3,6 +3,7 @@ package ghistabs.cpp.abi
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.app.util.demangler.DemangledObject
+import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
@@ -46,6 +47,10 @@ object Msvc : CxxAbi {
     override fun headerBytes(ptrSize: Int) = ptrSize.toLong()
 
     override val hasRttiHeader get() = true
+
+    /** `??_7` labels the address point, with the meta pointer in front of it ([headerBytes]) as the record's start. */
+    override fun recordAt(program: Program, at: Address) =
+        VtableRecord(at.subtract(headerBytes(program.defaultPointerSize)), null, this)
 
     override val assignmentOperatorName = "operator="
 

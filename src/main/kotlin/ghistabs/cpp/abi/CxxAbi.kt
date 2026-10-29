@@ -63,13 +63,15 @@ interface CxxMemberNaming {
 }
 
 /**
- * A C++ ABI: how it names members ([CxxMemberNaming]), lays out vtables ([VtableLayout]), and builds and
- * destroys objects ([StructorConvention]). Sealed, because [ofVtableSymbol] enumerates the spellings: a
- * symbol either matches one of these ABIs or names no vtable at all.
+ * A C++ ABI: how it names members ([CxxMemberNaming]), lays out vtables ([VtableLayout]) and spells
+ * them ([VtableSymbols]), and builds and destroys objects ([StructorConvention]). Sealed, because
+ * [ofVtableSymbol] enumerates the spellings: a symbol either matches one of these ABIs or names no
+ * vtable at all.
  */
 sealed interface CxxAbi :
     CxxMemberNaming,
     VtableLayout,
+    VtableSymbols,
     StructorConvention {
     /**
      * [cls]'s direct bases, as this ABI's own records in [program] say, without the stabs: Itanium's

@@ -3,6 +3,7 @@ package ghistabs.cpp.abi
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.app.util.demangler.DemangledObject
+import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
@@ -127,6 +128,9 @@ object Itanium : CxxAbi {
     override fun headerBytes(ptrSize: Int) = vtablePrefixBytes(ptrSize)
 
     override val hasRttiHeader get() = true
+
+    /** Found by its rtti word ([itaniumVtableRecord]), which says how long the header in front of it is. */
+    override fun recordAt(program: Program, at: Address) = program.itaniumVtableRecord(at, this)
 
     // `size_t` is `unsigned int` (j) on 32-bit targets and `unsigned long` (m) on 64-bit ones.
     override val mangledOperatorNew get() = setOf("_Znwj", "_Znwm")

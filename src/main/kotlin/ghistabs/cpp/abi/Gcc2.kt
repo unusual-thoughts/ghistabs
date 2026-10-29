@@ -5,6 +5,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
+import ghidra.program.model.listing.Program
 import ghistabs.Demangler
 import ghistabs.cpp.MemberDecl
 import ghistabs.cpp.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
@@ -273,6 +274,12 @@ sealed interface Gcc2Abi : CxxAbi {
 
     /** gcc 2.x emits no typeinfo pointer, so no rtti word locates the address point. */
     override val hasRttiHeader get() = false
+
+    /** No typeinfo pointer to search for ([hasRttiHeader]) and no vbase/vcall prefix either: no header is laid. */
+    override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
+
+    /** The record start: the reserved entry belongs to the `_vftable` struct, which begins there too. */
+    override fun vptrTarget(record: VtableRecord): Address = record.address
 
     override fun slots(addressPoint: Address, ptrSize: Int) =
         generateSequence(addressPoint) { it.add(entryWords.toLong() * ptrSize) }
