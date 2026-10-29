@@ -108,7 +108,7 @@ open class VtableSweeper(
             val record = program.vtableRecord(addr, abi)
             val targets = record.slots(program)
             if (targets.isEmpty()) {
-                degradation("vtable-swept-empty", qualified, "no function pointers", record.slotsStart)
+                degradation("vtable-swept-empty", qualified, "no function pointers", record.addressPoint)
                 continue
             }
             // The class its demangled `vtable` label sits in, where one does: a stabs import may have moved
@@ -126,7 +126,7 @@ open class VtableSweeper(
                 addSweptSlots(vftable, path.categoryPath, targets, abi)
                 // Itanium puts a primary vptr at 0. gcc 2.x puts it after the fields, and with no class
                 // struct here to read that off, it gets no tag.
-                vftable.describeVxTable(leaf, ClassNaming.VFTABLE, 0L.takeIf { abi.hasRttiHeader })
+                vftable.describeVxTable(leaf, ClassNaming.VFTABLE, abi.primaryVptrOffset)
             }
 
             val addressPoint = record.lay(registry, program, vftable, qualified, ns, source = SWEPT)
@@ -135,7 +135,7 @@ open class VtableSweeper(
             // Itanium packs a class's secondaries into the same record, walkable from the primary's
             // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>` symbol,
             // laid below whether or not the class has a primary at all.
-            if (abi.hasRttiHeader) laySecondaryVtables(record, vftable, leaf, ns, SWEPT)
+            if (record.header != null) laySecondaryVtables(record, vftable, leaf, ns, SWEPT)
         }
         // What the class pass left: gcc 2.x secondaries of classes linked without stabs. No class struct
         // to find the base's vptr in, so these go untagged.
@@ -279,7 +279,7 @@ open class VtableSweeper(
         val ptr = program.defaultPointerSize.toLong()
         val slots = primary.slots(program).size
         // Only a record with slots is laid: an empty one has no function array to put a struct over.
-        val subs = program.secondaryVtables(primary.slotsStart.add(slots * ptr), rtti)
+        val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
             .filter { it.targets.isNotEmpty() }
         val offsets = listOfNotNull(primaryVftable?.let { 0L }) +
             subs.map { with(abi) { it.record.vfptrOffset(program) } }

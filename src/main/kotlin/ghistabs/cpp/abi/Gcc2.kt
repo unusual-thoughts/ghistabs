@@ -270,24 +270,20 @@ sealed interface Gcc2Abi : CxxAbi {
     /** Pointer-wide words per entry: a bare `pfn`, or `{delta, index}` then `pfn`, which comes last. */
     val entryWords: Int
 
-    override fun headerBytes(ptrSize: Int) = 2L * ptrSize
+    /** The reserved entry before the first virtual's (`cp/class.c:skip_rtti_stuff`). */
+    fun headerBytes(ptrSize: Int) = 2L * ptrSize
 
-    /** gcc 2.x emits no typeinfo pointer, so no rtti word locates the address point. */
-    override val hasRttiHeader get() = false
+    override val primaryVptrOffset get() = null
 
-    /** No typeinfo pointer to search for ([hasRttiHeader]) and no vbase/vcall prefix either: no header is laid. */
+    /**
+     * No typeinfo pointer to search for, and no vbase/vcall prefix either: no header is laid. The vptr holds
+     * the record start, so the reserved entry belongs to the `_vftable` struct, which begins there too.
+     */
     override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 
-    /** The record start: the reserved entry belongs to the `_vftable` struct, which begins there too. */
-    override fun addressPoint(record: VtableRecord): Address = record.address
-
-    override fun slots(slotsStart: Address, ptrSize: Int) =
-        generateSequence(slotsStart) { it.add(entryWords.toLong() * ptrSize) }
-            .map { it.add((entryWords - 1L) * ptrSize) }
-
-    /** The vptr holds the record start, which is where the `_vftable` struct begins too: header first. */
-    override fun slotOffset(index: Int, ptrSize: Int) =
-        headerBytes(ptrSize) + (index.toLong() * entryWords + entryWords - 1) * ptrSize
+    /** Past the reserved entry, each `pfn` last in its entry. */
+    override fun slotOffsets(ptrSize: Int) =
+        generateSequence(headerBytes(ptrSize) + (entryWords - 1L) * ptrSize) { it + entryWords.toLong() * ptrSize }
 
     /**
      * The bias a stab's `*<n>` carries: `DECL_VINDEX` counts from the record start, header entries
