@@ -205,7 +205,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         classes: Map<Address, RttiClass>,
         holders: Map<Function, Set<Address>>,
         monitor: TaskMonitor,
-    ): Map<Function, Pair<Address, StructorVariant>> {
+    ): Map<Function, Pair<Address, Structor>> {
         val reading = VptrStoreReader(program, tables, this).read(holders.keys, monitor)
         return structors(
             reading.stores,
@@ -213,6 +213,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             { reading.thisCalls[it].orEmpty() },
             { classes[it]?.ancestors.orEmpty() },
             Msvc.constructorsReturnThis,
+            Msvc.storingStructors,
         )
     }
 
@@ -238,12 +239,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return bounds.filterValues { it.first > 0 }
     }
 
-    private fun nameStructor(func: Function, cls: GhidraClass, found: StructorVariant): Boolean {
-        val variant = when {
-            !found.isDeleting -> found
-            func.testsVectorFlag() -> StructorVariant.VECTOR_DELETING_DTOR
-            else -> StructorVariant.SCALAR_DELETING_DTOR
-        }
+    private fun nameStructor(func: Function, cls: GhidraClass, found: Structor): Boolean {
+        val variant = if (found.isDeleting && func.testsVectorFlag()) MsvcStructor.VECTOR_DELETING_DESTRUCTOR else found
         val name = variant.displayName(cls.name)
         return runCatching {
             val moves = func.parentNamespace.isGlobal
