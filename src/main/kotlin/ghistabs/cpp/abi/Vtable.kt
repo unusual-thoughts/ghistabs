@@ -47,15 +47,18 @@ interface VtableLayout {
     fun recordAt(program: Program, at: Address): VtableRecord
 
     /** Where [record]'s function array starts: past the header laid there, or past [headerBytes] where none is. */
-    fun addressPoint(record: VtableRecord): Address =
+    fun slotsStart(record: VtableRecord): Address =
         record.address.add(record.header?.length?.toLong() ?: headerBytes(record.address.pointerSize))
 
-    /** What a `{vfptr}` pointing into [record] holds, which is where its `vftable` label goes. */
-    fun vptrTarget(record: VtableRecord): Address = addressPoint(record)
+    /**
+     * [record]'s address point, which is what a `{vfptr}` pointing into it holds and where its `vftable`
+     * label goes: by default where its slots start.
+     */
+    fun addressPoint(record: VtableRecord): Address = slotsStart(record)
 
-    /** Where each slot's function pointer sits, in slot order, from a record's [addressPoint] on. */
-    fun slots(addressPoint: Address, ptrSize: Int): Sequence<Address> =
-        generateSequence(addressPoint) { it.add(ptrSize.toLong()) }
+    /** Where each slot's function pointer sits, in slot order, from a record's [slotsStart] on. */
+    fun slots(slotsStart: Address, ptrSize: Int): Sequence<Address> =
+        generateSequence(slotsStart) { it.add(ptrSize.toLong()) }
 
     /** Byte offset of slot [index]'s function pointer from where the record's `_vftable` struct begins. */
     fun slotOffset(index: Int, ptrSize: Int): Long = index.toLong() * ptrSize
@@ -95,17 +98,18 @@ interface VtableLayout {
  * A vtable record, located: where it starts, the [header] laid there, and the [abi] that laid it out. An
  * Itanium record's header is a [vtableHeaderLayout], read back through it ([readHeader]), and its function
  * array starts right after it. A gcc 2.x record has none: its reserved entry belongs to the vftable struct,
- * and its `{vfptr}` holds the record start rather than the address point. Built by [vtableRecord].
+ * and its `{vfptr}` holds the record start, which is its address point, rather than where the slots start.
+ * Built by [vtableRecord].
  */
 data class VtableRecord(val address: Address, val header: StructureDataType?, val abi: CxxAbi) {
     /** Where the function array starts: past the header, or past gcc 2.x's reserved entry. */
-    val addressPoint: Address get() = abi.addressPoint(this)
+    val slotsStart: Address get() = abi.slotsStart(this)
 
     /** The vbase/vcall-offset words in front of `offset_to_top` and the rtti pointer. */
     val prefixWords get() = header?.let { it.numComponents - 2 } ?: 0
 
     /** What a `{vfptr}` pointing into this record holds, where the `vftable` label goes. */
-    val vptrTarget get() = abi.vptrTarget(this)
+    val addressPoint: Address get() = abi.addressPoint(this)
 
     /** Where [header]'s field [name] sits in memory. */
     fun fieldAddress(name: String): Address? = header?.field(name)?.let { address.add(it.offset.toLong()) }
@@ -158,11 +162,11 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     /** Whether a vtable group's own symbol sits on any word of [header]: the walk is past its group. */
     fun opensGroup(program: Program): Boolean =
         generateSequence(address) { it.add(program.defaultPointerSize.toLong()) }
-            .takeWhile { it < addressPoint }
+            .takeWhile { it < slotsStart }
             .any { at -> program.symbolTable.getSymbols(at).any { startsVtableGroup(it.name) } }
 
     /**
-     * Addresses the function-pointer array at [addressPoint], in slot order. Nothing records its
+     * Addresses the function-pointer array at [slotsStart], in slot order. Nothing records its
      * length, so it ends where the entries stop pointing at functions — at the next record's
      * `offset_to_top` or rtti pointer (into .data). A function is one in executable memory, or an import
      * the loader's EXTERNAL block stands in for: an abstract class's slots in a dynamic link hold
@@ -174,7 +178,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     fun slots(program: Program): List<Address> = buildList {
         val ptr = program.defaultPointerSize
         val nulls = mutableListOf<Address>()
-        for (pfn in abi.slots(addressPoint, ptr)) {
+        for (pfn in abi.slots(slotsStart, ptr)) {
             val target = program.pointerAt(pfn) ?: break
             when {
                 target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target
@@ -347,7 +351,7 @@ fun Program.vftableStructAt(label: Symbol): Structure? {
  * is how a sweep tells what is left without the class pass's own bookkeeping. A swept table is
  * labelled [SourceType.ANALYSIS], so a later sweep lays it again rather than skipping it.
  */
-fun Program.isVtableClaimed(record: VtableRecord): Boolean = symbolTable.getSymbols(record.vptrTarget)
+fun Program.isVtableClaimed(record: VtableRecord): Boolean = symbolTable.getSymbols(record.addressPoint)
     .any { it.source == SourceType.IMPORTED && ClassNaming.isClassVftableLabel(it.name) }
 
 /** Where a class's vtable record sits, and which ABI lays it out past the header. */
