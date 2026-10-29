@@ -135,12 +135,12 @@ sealed interface CxxAbi : CxxMemberNaming {
 
     /**
      * Whether a constructor hands back the object it built, which is what tells one from a destructor
-     * among the functions that store a vptr ([structors]). MSVC's do and its destructors return nothing;
+     * among the functions that store a vptr ([StructorFinder]). MSVC's do and its destructors return nothing;
      * Itanium's return nothing either, but on ARM, where both return `this`, so neither tells there.
      */
     val constructorsReturnThis: Boolean get() = false
 
-    /** Which of this ABI's variants [func], found to play [role] ([structors]), is; null if that takes more to tell. */
+    /** Which of this ABI's variants [func], playing [role] ([StructorFinder]), is; null if that takes more. */
     fun structorFor(role: StructorRole, func: Function): Structor? = null
 
     /**
