@@ -1,6 +1,7 @@
 package ghistabs.cpp.abi
 
 import ghidra.app.decompiler.DecompInterface
+import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
@@ -10,7 +11,7 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
 /**
- * The sizes each class can be, from the least to the most ([Long.MAX_VALUE] where nothing bounds it),
+ * The sizes each class, by its type descriptor, can be, from the least to the most ([Long.MAX_VALUE] where nothing bounds it),
  * from where its non-virtual direct bases sit in it ([bases], by offset), the furthest vptr in it
  * ([vptrs]), and the sizes it is allocated with ([allocated]).
  *
@@ -19,15 +20,15 @@ import ghistabs.useWith
  * the bases of a class are laid out one after another, and none overlaps the next. When the two bounds
  * meet, that is its size.
  */
-fun <K> sizeBounds(
-    bases: Map<K, List<Pair<K, Long>>>,
-    vptrs: Map<K, Long>,
-    allocated: Map<K, Long>,
+fun sizeBounds(
+    bases: Map<Address, List<Pair<Address, Long>>>,
+    vptrs: Map<Address, Long>,
+    allocated: Map<Address, Long>,
     ptrSize: Long,
-): Map<K, LongRange> {
+): Map<Address, LongRange> {
     val classes = bases.keys + vptrs.keys + allocated.keys
-    val least = mutableMapOf<K, Long>()
-    fun atLeast(k: K, depth: Int = 0): Long = least.getOrPut(k) {
+    val least = mutableMapOf<Address, Long>()
+    fun atLeast(k: Address, depth: Int = 0): Long = least.getOrPut(k) {
         if (depth > MAX_DEPTH) return 0
         listOfNotNull(
             allocated[k],
@@ -37,7 +38,7 @@ fun <K> sizeBounds(
     }
 
     // Each base, as the classes holding it place it: from its offset to the next base's, or the holder's end.
-    val holders = mutableMapOf<K, MutableList<Pair<K, Long?>>>()
+    val holders = mutableMapOf<Address, MutableList<Pair<Address, Long?>>>()
     for ((holder, held) in bases) {
         val sorted = held.sortedBy { it.second }
         for ((b, at) in sorted) {
@@ -45,8 +46,8 @@ fun <K> sizeBounds(
             holders.getOrPut(b) { mutableListOf() } += holder to next?.minus(at)
         }
     }
-    val most = mutableMapOf<K, Long?>()
-    fun atMost(k: K, depth: Int = 0): Long? = if (k in most) {
+    val most = mutableMapOf<Address, Long?>()
+    fun atMost(k: Address, depth: Int = 0): Long? = if (k in most) {
         most[k]
     } else {
         val bounds = holders[k].orEmpty().mapNotNull { (holder, room) ->
@@ -71,11 +72,11 @@ private const val MAX_DEPTH = 64
  * constructors ([ctors]) runs on, off each constructor's callers' decompilation, `operator new` going by
  * one of [abi]'s [CxxAbi.operatorNewNames].
  */
-class NewSizeReader<K>(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
+class NewSizeReader(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
     DiagnosticSink by sink {
-    fun read(ctors: Map<Function, K>, monitor: TaskMonitor): Map<K, Long> {
+    fun read(ctors: Map<Function, Address>, monitor: TaskMonitor): Map<Address, Long> {
         val callers = ctors.keys.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
-        val sizes = mutableMapOf<K, MutableSet<Long>>()
+        val sizes = mutableMapOf<Address, MutableSet<Long>>()
         DecompInterface().useWith(program) { decomp ->
             for (f in callers) {
                 if (monitor.isCancelled) break
