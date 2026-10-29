@@ -413,7 +413,7 @@ private fun Program.slotTargets(vftable: Address): Sequence<Address> {
     val length = listing.getDataAt(vftable)?.length ?: return emptySequence()
     val abi = symbolTable.getSymbols(vftable).firstNotNullOfOrNull { CxxAbi.ofVtableSymbol(it.name) } ?: Itanium
     val end = vftable.add(length.toLong())
-    return abi.slots(vftable, defaultPointerSize).takeWhile { it < end }
+    return abi.slotOffsets(defaultPointerSize).map(vftable::add).takeWhile { it < end }
         .mapNotNull { runCatching { pointerAt(it) }.getOrNull() }
 }
 
