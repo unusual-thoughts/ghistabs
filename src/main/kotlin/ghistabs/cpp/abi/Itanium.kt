@@ -7,8 +7,10 @@ import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
+import ghistabs.cpp.BaseDecl
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.isTemplated
 import ghistabs.cpp.member
@@ -22,6 +24,7 @@ import ghistabs.namespaces
  * conventional field names, category layout, and vtable geometry. Every ABI-specific site
  * references the constants here rather than re-spelling literals.
  */
+@Suppress("TooManyFunctions")
 object Itanium : CxxAbi {
     // Itanium special-name prefixes (ABI §5.1.4). Cygwin's PE loader prepends '_' → "__ZT*".
 
@@ -170,6 +173,12 @@ object Itanium : CxxAbi {
 
     /** An Itanium-mangled name. The Cygwin PE/COFF loader prepends `_`, so they also appear as `__Z…`. */
     override fun isProbablyMangled(name: String): Boolean = name.trimDoubleUnderscore().startsWith("_Z")
+
+    /** Off the class's `_ZTI` typeinfo object, which GnuDemangler names `typeinfo` in its namespace. */
+    override fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? {
+        val zti = program.symbolTable.getSymbols(cls).firstOrNull { it.name == ClassNaming.TYPEINFO } ?: return null
+        return Rtti.Reader(program).basesOf(zti.address)
+    }
 
     /** Data gcc generated for a class rather than anything the source declares — typeinfo objects,
      *  their name strings, vtables. None of it has a source line of its own. */
