@@ -20,7 +20,6 @@ import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.writeMember
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.length
 import ghistabs.pointerAt
 import ghistabs.toClass
 
@@ -236,7 +235,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             runCatching { struct.growStructure((exact - struct.length).toInt()) }
                 .onFailure { warn("msvc-struct-ungrown", "${ns.getName(true)} -> $exact: $it") }
         }
-        return bounds.filterValues { it.length > 0 }
+        return bounds.filterValues { it.first > 0 }
     }
 
     private fun nameStructor(func: Function, cls: GhidraClass, kind: StructorKind): Boolean {
@@ -285,7 +284,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
                 )
             }
             val size = sizes[cls.descriptor]
-            ns.id to ClassHierarchyRecords.Entry(classStructId(ns), bases, size?.length, size?.length == 1L)
+            ns.id to ClassHierarchyRecords.Entry(classStructId(ns), bases, size?.first, size?.singleOrNull() != null)
         }
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
