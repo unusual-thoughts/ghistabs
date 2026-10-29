@@ -39,6 +39,7 @@ fun IntRange.overlaps(other: IntRange) = other.first in this || first in other
 /** Whether [other] lies within these, an empty [other] included at either end. */
 fun IntRange.includes(other: IntRange) = other.first >= first && other.last <= last
 val IntRange.length get() = endInclusive - start + 1
+val LongRange.length get() = endInclusive - start + 1
 
 /**
  * Runs past `E` for [Double]'s sake: a `Long` tops out at 9.22E
