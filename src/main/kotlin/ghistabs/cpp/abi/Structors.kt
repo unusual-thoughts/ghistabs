@@ -28,10 +28,10 @@ interface Structor {
 }
 
 /**
- * What [structors] takes a vptr-storing [constructor], [destructor] and [deleting] destructor for, as
- * the ABI whose functions it reads names them.
+ * What [StructorFinder] finds a function that stores a vptr does to its class, whatever the ABI. Which of
+ * its [Structor] variants that is takes the ABI's own evidence ([CxxAbi.structorFor]).
  */
-data class StoringStructors(val constructor: Structor, val destructor: Structor, val deleting: Structor)
+enum class StructorRole { CONSTRUCTOR, DESTRUCTOR, DELETING_DESTRUCTOR }
 
 /**
  * What a function does to its `this`: the [classes], by type descriptor, whose vftables it stores where
@@ -47,76 +47,72 @@ fun storedClass(classes: Set<Address>, ancestors: (Address) -> Set<Address>): Ad
     classes.singleOrNull { c -> classes.all { it == c || it in ancestors(c) } }
 
 /**
- * The constructors and destructors among the functions that store vptrs ([storers]), given the
- * functions vftable slots hold, the classes whose tables hold them ([holders]), and what each function
- * calls on its own `this` ([thisCalls]).
- *
- * A constructor is never virtual, so a slot function that runs a structor on its object is a deleting
- * destructor: one that stores its holders' vptr itself has the destructor inlined, and one that calls
- * a storer of theirs calls the destructor. That store can be a base's: a class whose destructor does
- * nothing before its base's leaves the store of its own vptr out. Telling the other storers apart takes
- * the ABI: under one whose constructors return `this` ([constructorsReturnThis]) the rest are
- * constructors if they do and destructors if they don't; under any other only the destructors a
- * deleting one calls are known.
- *
- * Each comes as the ABI calls it ([names]), a deleting destructor as the ABI's first one where it has several.
+ * Finds constructors and destructors off the decompiler, by the vftables of [tables] (each a class and
+ * the subobject offset it serves) they store through `this`.
  */
-fun structors(
-    storers: Map<Function, VptrStores>,
-    holders: Map<Function, Set<Address>>,
-    thisCalls: (Function) -> Set<Function>,
-    ancestors: (Address) -> Set<Address>,
-    constructorsReturnThis: Boolean,
-    names: StoringStructors,
-): Map<Function, Pair<Address, Structor>> = buildMap {
-    val owners = storers.mapNotNull { (f, s) -> storedClass(s.classes, ancestors)?.let { f to it } }.toMap()
-    fun mayDestroy(f: Function) = !constructorsReturnThis || storers[f]?.returnsThis != true
-
-    // The holder whose deleting destructor a slot is, if it tears down a [cls] in the end: [cls] itself, or the
-    // one class deriving from it that the others do too, whose own destructor the compiler left no vptr store in.
-    fun deleting(held: Set<Address>, cls: Address): Address? {
-        val derived = held.filter { it == cls || cls in ancestors(it) }
-        return derived.singleOrNull { c -> derived.all { it == c || c in ancestors(it) } }
-    }
-    for ((slot, held) in holders) {
-        val own = owners[slot]
-        if (own != null) {
-            deleting(held, own)?.let { this[slot] = it to names.deleting }
-            continue
-        }
-        val dtors = thisCalls(slot).filter(::mayDestroy).mapNotNull { f ->
-            owners[f]?.let { cls -> deleting(held, cls)?.let { Triple(f, cls, it) } }
-        }
-        val (dtor, cls, holder) = dtors.singleOrNull() ?: continue
-        this[slot] = holder to names.deleting
-        putIfAbsent(dtor, cls to names.destructor)
-    }
-    if (constructorsReturnThis) {
-        for ((f, cls) in owners) {
-            putIfAbsent(f, cls to if (mayDestroy(f)) names.destructor else names.constructor)
-        }
-    }
-}
-
-/**
- * The vptr stores of every function that writes one of [tables], each a vftable's address and the
- * class and subobject offset it serves, and the functions each of those and of some others calls on its
- * own `this`. Off the decompiler: a store counts only through `this`, at the table's own offset, which
- * leaves out a local object built inline (on the stack, or fresh from `operator new`) and a member
- * object's table stored further in; a call, only with `this` for its first argument, which leaves out
- * a method building and destroying a local of a class it has nothing else to do with.
- */
-class VptrStoreReader(
+class StructorFinder(
     private val program: Program,
     private val tables: Map<Address, Pair<Address, Long>>,
     sink: DiagnosticSink,
 ) : DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
 
-    class Reading(val stores: Map<Function, VptrStores>, val thisCalls: Map<Function, Set<Function>>)
+    /** Each structor's class and role, given the vftable [slots] and the classes whose tables hold them. */
+    fun find(
+        slots: Map<Function, Set<Address>>,
+        ancestors: (Address) -> Set<Address>,
+        constructorsReturnThis: Boolean,
+        monitor: TaskMonitor,
+    ) = read(slots.keys, monitor).roles(slots, ancestors, constructorsReturnThis)
 
-    /** The storers' stores, and what they and [others] call on `this`. */
-    fun read(others: Collection<Function>, monitor: TaskMonitor): Reading {
+    /** What the functions do to `this`: the vptrs each storer stores ([stores]), and what each calls on it. */
+    class Reading(val stores: Map<Function, VptrStores>, val thisCalls: Map<Function, Set<Function>>) {
+        /**
+         * A constructor is never virtual, so a slot that runs a storer on `this` is a deleting destructor,
+         * and the storer it calls the destructor; the store may be a base's, a destructor with nothing to
+         * do before its base's having none of its own. Where constructors return `this`, that tells the
+         * other storers apart.
+         */
+        fun roles(
+            slots: Map<Function, Set<Address>>,
+            ancestors: (Address) -> Set<Address>,
+            constructorsReturnThis: Boolean,
+        ): Map<Function, Pair<Address, StructorRole>> = buildMap {
+            val owners = stores.mapNotNull { (f, s) -> storedClass(s.classes, ancestors)?.let { f to it } }.toMap()
+            fun mayDestroy(f: Function) = !constructorsReturnThis || stores[f]?.returnsThis != true
+
+            // The holder a slot deletes, if it tears down a [cls]: [cls], or the one class below it the others are.
+            fun deleting(held: Set<Address>, cls: Address): Address? {
+                val derived = held.filter { it == cls || cls in ancestors(it) }
+                return derived.singleOrNull { c -> derived.all { it == c || c in ancestors(it) } }
+            }
+            for ((slot, held) in slots) {
+                val own = owners[slot]
+                if (own != null) {
+                    deleting(held, own)?.let { this[slot] = it to StructorRole.DELETING_DESTRUCTOR }
+                    continue
+                }
+                val dtors = thisCalls[slot].orEmpty().filter(::mayDestroy).mapNotNull { f ->
+                    owners[f]?.let { cls -> deleting(held, cls)?.let { Triple(f, cls, it) } }
+                }
+                val (dtor, cls, holder) = dtors.singleOrNull() ?: continue
+                this[slot] = holder to StructorRole.DELETING_DESTRUCTOR
+                putIfAbsent(dtor, cls to StructorRole.DESTRUCTOR)
+            }
+            if (constructorsReturnThis) {
+                for ((f, cls) in owners) {
+                    putIfAbsent(f, cls to if (mayDestroy(f)) StructorRole.DESTRUCTOR else StructorRole.CONSTRUCTOR)
+                }
+            }
+        }
+    }
+
+    /**
+     * The stores of each function writing one of [tables], and what those and [others] call on `this`. A
+     * store counts only through `this` at the table's own offset, which leaves out locals built inline and
+     * member objects; a call, only with `this` first, which leaves out a local built and destroyed.
+     */
+    private fun read(others: Collection<Function>, monitor: TaskMonitor): Reading {
         val writes = mutableMapOf<Function, MutableMap<Address, MutableList<Pair<Address, Long>>>>()
         for ((table, served) in tables) {
             for (ref in program.referenceManager.getReferencesTo(table)) {

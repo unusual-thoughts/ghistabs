@@ -2,6 +2,7 @@ package ghistabs.cpp.abi
 
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.Structure
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
@@ -46,8 +47,8 @@ interface CxxMemberNaming {
             m.mangled?.let(::physnameIsImplicit) == true
     }
 
-    /** In-class display form of a ctor/dtor linkage name, or null for anything else. */
-    fun specialMemberDisplayName(mangled: String, className: String): String?
+    /** Which constructor or destructor of [className] a linkage name mangles, or null for anything else. */
+    fun structorOf(mangled: String, className: String): Structor?
 
     /**
      * A member whose definition the compiler may legitimately have dropped, so a missing Function at
@@ -134,10 +135,13 @@ sealed interface CxxAbi : CxxMemberNaming {
 
     /**
      * Whether a constructor hands back the object it built, which is what tells one from a destructor
-     * among the functions that store a vptr ([structors]). MSVC's do and its destructors return nothing;
+     * among the functions that store a vptr ([StructorFinder]). MSVC's do and its destructors return nothing;
      * Itanium's return nothing either, but on ARM, where both return `this`, so neither tells there.
      */
     val constructorsReturnThis: Boolean get() = false
+
+    /** Which of this ABI's variants [func], playing [role] ([StructorFinder]), is; null if that takes more. */
+    fun structorFor(role: StructorRole, func: Function): Structor? = null
 
     /**
      * The names a scalar `operator new(size)` goes by: its mangled ones under this ABI ([mangledOperatorNew])

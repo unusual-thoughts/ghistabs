@@ -10,7 +10,6 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
-import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
@@ -87,7 +86,7 @@ fun <K, F> virtualOwners(holders: Map<F, Set<K>>, ancestors: (K) -> Set<K>, hasV
  * `Windows x86 PE RTTI Analyzer` has laid and labelled: each class's direct bases off its Class Hierarchy
  * Descriptor, written to [ClassHierarchyRecords], and each virtual function off the vftables, moved into
  * the class it belongs to ([virtualOwners]) and marked virtual for the Class Hierarchy window, and each
- * constructor and destructor, found by the vptrs it stores ([structors]), moved there and named.
+ * constructor and destructor, found by the vptrs it stores ([StructorFinder]), moved there and named.
  *
  * Classes are keyed by their type descriptor's address, which every RTTI record names a class by.
  */
@@ -134,12 +133,13 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         if (shared > 0) {
             debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
         }
-        val structors = findStructors(classes, holders, monitor)
+        val structors = StructorFinder(program, tables, this)
+            .find(holders, { classes[it]?.ancestors.orEmpty() }, Msvc.constructorsReturnThis, monitor)
         val named = structors.count { (func, structor) ->
             val cls = classes[structor.first]?.ns?.toClass() ?: return@count false
             nameStructor(func, cls, structor.second)
         }
-        val ctors = structors.filterValues { !it.second.isDestructor }.mapValues { it.value.first }
+        val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
         val sizes = sizeClasses(classes, NewSizeReader(program, Msvc, this).read(ctors, monitor))
         writeRecords(classes, sizes)
         return Result(classes.size, owners.size - shared, moved, shared, named, sizes.size)
@@ -200,23 +200,6 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             .isSuccess
     }
 
-    /** Each class's constructors, destructor and deleting destructor ([structors]), off the vptrs they store. */
-    private fun findStructors(
-        classes: Map<Address, RttiClass>,
-        holders: Map<Function, Set<Address>>,
-        monitor: TaskMonitor,
-    ): Map<Function, Pair<Address, Structor>> {
-        val reading = VptrStoreReader(program, tables, this).read(holders.keys, monitor)
-        return structors(
-            reading.stores,
-            holders,
-            { reading.thisCalls[it].orEmpty() },
-            { classes[it]?.ancestors.orEmpty() },
-            Msvc.constructorsReturnThis,
-            Msvc.storingStructors,
-        )
-    }
-
     /**
      * Each class's [LongRange], off the sizes it is allocated with ([allocated]), its bases' offsets and
      * its vptrs'. A struct shorter than an exact size is grown to it; none is made where there is none, as
@@ -239,9 +222,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return bounds.filterValues { it.first > 0 }
     }
 
-    private fun nameStructor(func: Function, cls: GhidraClass, found: Structor): Boolean {
-        val variant = if (found.isDeleting && func.testsVectorFlag()) MsvcStructor.VECTOR_DELETING_DESTRUCTOR else found
-        val name = variant.displayName(cls.name)
+    private fun nameStructor(func: Function, cls: GhidraClass, role: StructorRole): Boolean {
+        val name = Msvc.structorFor(role, func).displayName(cls.name)
         return runCatching {
             val moves = func.parentNamespace.isGlobal
             if (moves) func.parentNamespace = cls
@@ -253,11 +235,6 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             warn("msvc-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)
         }
             .getOrDefault(false)
-    }
-
-    /** A vector deleting destructor tests its flags for bit 2, which says an array is going. */
-    private fun Function.testsVectorFlag() = program.listing.getInstructions(body, true).any { insn ->
-        insn.pcode.any { op -> op.opcode == PcodeOp.INT_AND && op.inputs.any { it.isConstant && it.offset == 2L } }
     }
 
     /**

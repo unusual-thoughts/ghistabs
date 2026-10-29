@@ -5,9 +5,9 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.listing.Function
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.cpp.abi.MsvcStructor.CONSTRUCTOR
-import ghistabs.cpp.abi.MsvcStructor.DESTRUCTOR
-import ghistabs.cpp.abi.MsvcStructor.SCALAR_DELETING_DESTRUCTOR
+import ghistabs.cpp.abi.StructorRole.CONSTRUCTOR
+import ghistabs.cpp.abi.StructorRole.DELETING_DESTRUCTOR
+import ghistabs.cpp.abi.StructorRole.DESTRUCTOR
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.AfterEach
@@ -51,14 +51,10 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         holders: Map<String, Set<Address>>,
         calls: Map<String, Set<String>> = emptyMap(),
         constructorsReturnThis: Boolean = true,
-    ) = structors(
+    ) = StructorFinder.Reading(
         storers.mapKeys { fn(it.key) },
-        holders.mapKeys { fn(it.key) },
-        { f -> calls[f.name].orEmpty().mapTo(mutableSetOf(), ::fn) },
-        ancestors::getValue,
-        constructorsReturnThis,
-        Msvc.storingStructors,
-    ).mapKeys { it.key.name }
+        calls.entries.associate { (f, called) -> fn(f) to called.mapTo(mutableSetOf(), ::fn) },
+    ).roles(holders.mapKeys { fn(it.key) }, ancestors::getValue, constructorsReturnThis).mapKeys { it.key.name }
 
     @Test
     fun `a function storing a base's vptr and then its own builds the derived class`() {
@@ -73,7 +69,7 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         found mustBe mapOf(
             "ctor" to (a to CONSTRUCTOR),
             "dtor" to (a to DESTRUCTOR),
-            "slot" to (a to SCALAR_DELETING_DESTRUCTOR),
+            "slot" to (a to DELETING_DESTRUCTOR),
         )
     }
 
@@ -84,7 +80,7 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             "ctor" to stores(a, b, returnsThis = true),
         )
         structors(storers, mapOf("slot" to setOf(b))) mustBe mapOf(
-            "slot" to (b to SCALAR_DELETING_DESTRUCTOR),
+            "slot" to (b to DELETING_DESTRUCTOR),
             "ctor" to (b to CONSTRUCTOR),
         )
     }
@@ -93,7 +89,7 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun `a derived class's destructor with nothing to do leaves only its base's vptr store`() {
         // B's deleting destructor, in B's table alone, calls a destructor that stores A's vptr
         val found = structors(mapOf("dtor" to stores(a)), mapOf("slot" to setOf(b)), mapOf("slot" to setOf("dtor")))
-        found mustBe mapOf("slot" to (b to SCALAR_DELETING_DESTRUCTOR), "dtor" to (a to DESTRUCTOR))
+        found mustBe mapOf("slot" to (b to DELETING_DESTRUCTOR), "dtor" to (a to DESTRUCTOR))
     }
 
     @Test
@@ -106,6 +102,6 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun `without constructors returning this, only a deleting destructor's callee is told`() {
         val storers = mapOf("ctor" to stores(a), "dtor" to stores(a))
         val found = structors(storers, mapOf("slot" to setOf(a)), mapOf("slot" to setOf("dtor")), false)
-        found mustBe mapOf("slot" to (a to SCALAR_DELETING_DESTRUCTOR), "dtor" to (a to DESTRUCTOR))
+        found mustBe mapOf("slot" to (a to DELETING_DESTRUCTOR), "dtor" to (a to DESTRUCTOR))
     }
 }
