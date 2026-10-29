@@ -21,22 +21,22 @@ import ghistabs.diagnose.DiagnosticSink
  * What a function does with its own `this`: how far into the object it reads or writes ([extent]),
  * the vftable slots it calls through ([slots]), and the functions it calls on it ([calls]).
  */
-data class ThisUse<F>(val extent: Long, val slots: Set<Int>, val calls: Set<F>)
+data class ThisUse(val extent: Long, val slots: Set<Int>, val calls: Set<Function>)
 
 /**
  * A call passing an object as [callee]'s `this`: [caller]'s own, or one [caller] built with a
  * constructor of class [built].
  */
-data class ThisCall<K, F>(val caller: F, val callee: F, val built: K? = null)
+data class ThisCall(val caller: Function, val callee: Function, val built: Long? = null)
 
 /** A function's class, as [guessThisClasses] guessed it: [cls], refined up from [common], off [sites] calls. */
-data class ThisClassGuess<K>(val cls: K, val common: K, val sites: Int)
+data class ThisClassGuess(val cls: Long, val common: Long, val sites: Int)
 
 /**
  * The most derived class every one of [classes] is, or shares its address with: the first of the
  * first class's [chain] (itself, then the base at its offset 0, and so on up) that is in every one's.
  */
-fun <K> commonClass(classes: Collection<K>, chain: (K) -> List<K>): K? {
+fun commonClass(classes: Collection<Long>, chain: (Long) -> List<Long>): Long? {
     val chains = classes.map(chain)
     return chains.firstOrNull()?.firstOrNull { c -> chains.all { c in it } }
 }
@@ -52,28 +52,28 @@ fun <K> commonClass(classes: Collection<K>, chain: (K) -> List<K>): K? {
  * belongs to a class below it. Decompiled with `this` as that base, the method would read the same.
  * A method reaching past the common class's own exact size is none of its.
  *
- * Guesses feed the next round's callers, until none changes.
+ * Guesses feed the next round's callers, until none changes. Classes go by their namespaces' ids.
  */
 @Suppress("LongParameterList")
-fun <K, F> guessThisClasses(
-    candidates: Set<F>,
-    known: Map<F, K>,
-    calls: Collection<ThisCall<K, F>>,
-    uses: Map<F, ThisUse<F>>,
-    chain: (K) -> List<K>,
-    slotCount: (K) -> Int?,
-    sizeHint: (K) -> Long? = { null },
-    exactSize: (K) -> Long? = { null },
-): Map<F, ThisClassGuess<K>> {
-    val reach = mutableMapOf<K, Long>()
+fun guessThisClasses(
+    candidates: Set<Function>,
+    known: Map<Function, Long>,
+    calls: Collection<ThisCall>,
+    uses: Map<Function, ThisUse>,
+    chain: (Long) -> List<Long>,
+    slotCount: (Long) -> Int?,
+    sizeHint: (Long) -> Long? = { null },
+    exactSize: (Long) -> Long? = { null },
+): Map<Function, ThisClassGuess> {
+    val reach = mutableMapOf<Long, Long>()
     for ((f, cls) in known) uses[f]?.let { reach.merge(cls, it.extent, ::maxOf) }
-    fun extent(cls: K) = exactSize(cls) ?: listOfNotNull(reach[cls], sizeHint(cls)).maxOrNull()
+    fun extent(cls: Long) = exactSize(cls) ?: listOfNotNull(reach[cls], sizeHint(cls)).maxOrNull()
 
     val sites = calls.filter { it.callee in candidates }.groupBy { it.callee }
-    var guessed = emptyMap<F, ThisClassGuess<K>>()
-    fun classOf(f: F) = known[f] ?: guessed[f]?.cls
+    var guessed = emptyMap<Function, ThisClassGuess>()
+    fun classOf(f: Function) = known[f] ?: guessed[f]?.cls
 
-    fun refine(f: F, common: K): K {
+    fun refine(f: Function, common: Long): Long {
         val use = uses[f] ?: return common
         var cls = common
         for (base in chain(common).drop(1)) {
@@ -167,11 +167,11 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     /** The class's `sizeof`, where its record has it ([ClassHierarchyRecords.Entry.exactSize]). */
     private fun exactStructSize(cls: Long) = records[cls]?.takeIf { it.exactSize }?.size
 
-    private class Reading(val uses: Map<Function, ThisUse<Function>>, val calls: List<ThisCall<Long, Function>>)
+    private class Reading(val uses: Map<Function, ThisUse>, val calls: List<ThisCall>)
 
     private fun read(functions: Set<Function>, known: Map<Function, Long>, monitor: TaskMonitor): Reading {
-        val uses = mutableMapOf<Function, ThisUse<Function>>()
-        val calls = mutableListOf<ThisCall<Long, Function>>()
+        val uses = mutableMapOf<Function, ThisUse>()
+        val calls = mutableListOf<ThisCall>()
         val ctors = known.filter { (f, cls) -> f.name == namespace(cls)?.name }
         val decomp = DecompInterface().also { it.openProgram(program) }
         try {
@@ -191,8 +191,8 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
 
     /** One decompiled function's [use] of its `this`, and the [calls] it makes on objects of known class. */
     private inner class FunctionReading(f: Function, high: HighFunction, ctors: Map<Function, Long>) {
-        val calls = mutableListOf<ThisCall<Long, Function>>()
-        val use: ThisUse<Function>
+        val calls = mutableListOf<ThisCall>()
+        val use: ThisUse
 
         init {
             val ops = high.pcodeOps.asSequence().toList()
@@ -253,7 +253,7 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         }
     }
 
-    private fun place(f: Function, guess: ThisClassGuess<Long>): Boolean {
+    private fun place(f: Function, guess: ThisClassGuess): Boolean {
         val cls = namespace(guess.cls) as? GhidraClass ?: return false
         val refined = if (guess.cls != guess.common) {
             ", refined up from ${namespace(guess.common)?.getName(true)}"
