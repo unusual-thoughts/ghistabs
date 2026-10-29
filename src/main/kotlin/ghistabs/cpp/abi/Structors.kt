@@ -11,6 +11,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.pointerInto
 import ghistabs.cpp.thisStorage
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.useWith
 
 /** What a function that stores a class's vptr is to that class. */
 enum class StructorKind { CONSTRUCTOR, DESTRUCTOR, DELETING_DESTRUCTOR }
@@ -110,8 +111,7 @@ class VptrStoreReader<K>(
         if (writes.isEmpty() || thisStorage == null) return Reading(emptyMap(), emptyMap())
         val stores = mutableMapOf<Function, VptrStores<K>>()
         val thisCalls = mutableMapOf<Function, Set<Function>>()
-        val decomp = DecompInterface().also { it.openProgram(program) }
-        try {
+        DecompInterface().useWith(program) { decomp ->
             for (func in writes.keys + others) {
                 if (monitor.isCancelled) break
                 val high = decomp.decompileFunction(func, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction
@@ -122,8 +122,6 @@ class VptrStoreReader<K>(
                 writes[func]?.let { stores[func] = high.vptrStores(it) }
                 thisCalls[func] = high.thisCalls()
             }
-        } finally {
-            decomp.dispose()
         }
         return Reading(stores, thisCalls)
     }
