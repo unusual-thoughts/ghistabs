@@ -37,31 +37,23 @@ interface VtableSymbols {
  * point the vptr holds, then one pointer per slot.
  */
 interface VtableLayout {
-    /** Bytes of header before the first virtual's entry. */
-    fun headerBytes(ptrSize: Int): Long
-
-    /** Whether a typeinfo pointer sits in the header, which is what locates an address point. */
-    val hasRttiHeader: Boolean
+    /**
+     * Where a primary vptr sits in its object, where the ABI fixes that: at 0 under Itanium and MSVC. Null
+     * under gcc 2.x, which puts it after the fields, where only the class struct can say.
+     */
+    val primaryVptrOffset: Long? get() = 0L
 
     /** The record at [at], a class's vtable symbol. */
     fun recordAt(program: Program, at: Address): VtableRecord
 
-    /** Where [record]'s function array starts: past the header laid there, or past [headerBytes] where none is. */
-    fun slotsStart(record: VtableRecord): Address =
-        record.address.add(record.header?.length?.toLong() ?: headerBytes(record.address.pointerSize))
-
     /**
-     * [record]'s address point, which is what a `{vfptr}` pointing into it holds and where its `vftable`
-     * label goes: by default where its slots start.
+     * [record]'s address point, which is what a `{vfptr}` pointing into it holds, where its `vftable` label
+     * goes and where the `_vftable` struct begins: by default right past the header laid there.
      */
-    fun addressPoint(record: VtableRecord): Address = slotsStart(record)
+    fun addressPoint(record: VtableRecord): Address = record.address.add(record.header?.length?.toLong() ?: 0L)
 
-    /** Where each slot's function pointer sits, in slot order, from a record's [slotsStart] on. */
-    fun slots(slotsStart: Address, ptrSize: Int): Sequence<Address> =
-        generateSequence(slotsStart) { it.add(ptrSize.toLong()) }
-
-    /** Byte offset of slot [index]'s function pointer from where the record's `_vftable` struct begins. */
-    fun slotOffset(index: Int, ptrSize: Int): Long = index.toLong() * ptrSize
+    /** Where each slot's function pointer sits, in slot order, in bytes from the address point. */
+    fun slotOffsets(ptrSize: Int): Sequence<Long> = generateSequence(0L) { it + ptrSize }
 
     /**
      * Entries the header occupies in a stab's slot numbering (`*<n>`): none where the vptr already
@@ -102,9 +94,6 @@ interface VtableLayout {
  * Built by [vtableRecord].
  */
 data class VtableRecord(val address: Address, val header: StructureDataType?, val abi: CxxAbi) {
-    /** Where the function array starts: past the header, or past gcc 2.x's reserved entry. */
-    val slotsStart: Address get() = abi.slotsStart(this)
-
     /** The vbase/vcall-offset words in front of `offset_to_top` and the rtti pointer. */
     val prefixWords get() = header?.let { it.numComponents - 2 } ?: 0
 
@@ -162,11 +151,11 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     /** Whether a vtable group's own symbol sits on any word of [header]: the walk is past its group. */
     fun opensGroup(program: Program): Boolean =
         generateSequence(address) { it.add(program.defaultPointerSize.toLong()) }
-            .takeWhile { it < slotsStart }
+            .takeWhile { it < addressPoint }
             .any { at -> program.symbolTable.getSymbols(at).any { startsVtableGroup(it.name) } }
 
     /**
-     * Addresses the function-pointer array at [slotsStart], in slot order. Nothing records its
+     * Addresses the function-pointer array off [addressPoint], in slot order. Nothing records its
      * length, so it ends where the entries stop pointing at functions — at the next record's
      * `offset_to_top` or rtti pointer (into .data). A function is one in executable memory, or an import
      * the loader's EXTERNAL block stands in for: an abstract class's slots in a dynamic link hold
@@ -178,7 +167,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     fun slots(program: Program): List<Address> = buildList {
         val ptr = program.defaultPointerSize
         val nulls = mutableListOf<Address>()
-        for (pfn in abi.slots(slotsStart, ptr)) {
+        for (pfn in abi.slotOffsets(ptr).map(addressPoint::add)) {
             val target = program.pointerAt(pfn) ?: break
             when {
                 target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target

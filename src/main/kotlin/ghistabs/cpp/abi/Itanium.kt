@@ -124,11 +124,6 @@ object Itanium : CxxAbi {
     /** gcc 3.x spells a member's stab name the way the source does. */
     override val assignmentOperatorName = "operator="
 
-    /** `offset_to_top` then the typeinfo pointer (ABI §2.5.2). */
-    override fun headerBytes(ptrSize: Int) = vtablePrefixBytes(ptrSize)
-
-    override val hasRttiHeader get() = true
-
     /** Found by its rtti word ([itaniumVtableRecord]), which says how long the header in front of it is. */
     override fun recordAt(program: Program, at: Address) = program.itaniumVtableRecord(at, this)
 

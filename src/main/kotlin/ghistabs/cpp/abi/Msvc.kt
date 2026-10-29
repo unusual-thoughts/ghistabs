@@ -43,14 +43,8 @@ object Msvc : CxxAbi {
      */
     const val BCD_VBOFCONTOBJ = 0x10
 
-    /** The meta pointer to the complete object locator, which is where a `{vfptr}` points past. */
-    override fun headerBytes(ptrSize: Int) = ptrSize.toLong()
-
-    override val hasRttiHeader get() = true
-
-    /** `??_7` labels the address point, with the meta pointer in front of it ([headerBytes]) as the record's start. */
-    override fun recordAt(program: Program, at: Address) =
-        VtableRecord(at.subtract(headerBytes(program.defaultPointerSize)), null, this)
+    /** `??_7` labels the address point; the meta pointer to the complete object locator in front is no slot. */
+    override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 
     override val assignmentOperatorName = "operator="
 

@@ -428,7 +428,7 @@ class ClassApplier(
         // Read off the laid struct, which records where gcc 2.x put the vptr (after the fields). Not
         // off the record's offset_to_top: a primary's is 0 by definition, and a misread record would
         // only make it wrong. Itanium puts a primary vptr at 0 whatever the struct managed to hold.
-        val vfptrAt = structDt.vfptrOffset()?.toLong() ?: 0L.takeIf { abi.hasRttiHeader }
+        val vfptrAt = structDt.vfptrOffset()?.toLong() ?: abi.primaryVptrOffset
         vftable.describeVxTable(name, ClassNaming.VFTABLE, vfptrAt)
 
         if (record == null) return
@@ -439,7 +439,7 @@ class ClassApplier(
         // gcc 2.x puts no vbase/vcall words in front of the record at all, so the prefix is empty by
         // construction there and the comparison would only ever manufacture a mismatch.
         val virtualBases = registry.virtualBaseStructs(body).map { (_, dt) -> dt?.name ?: "<unresolved base>" }
-        if (abi.hasRttiHeader && record.prefixWords < virtualBases.size) {
+        if (record.header != null && record.prefixWords < virtualBases.size) {
             degradation(
                 "vtable-vbase-count-mismatch",
                 name,
@@ -450,7 +450,7 @@ class ClassApplier(
 
         val addressPoint = record.lay(registry, program, vftable, name, ns, virtualBases)
         debug("vtable-applied", "class=$name abi=$abi", address = addressPoint)
-        if (abi.hasRttiHeader) laySecondaryVtables(record, vftable, name, ns)
+        if (record.header != null) laySecondaryVtables(record, vftable, name, ns)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
@@ -477,7 +477,7 @@ class ClassApplier(
                         func.entryPoint,
                         CommentType.PLATE,
                         "virtual ${m.name}; ${ClassNaming.vftableName(name)} offset " +
-                            "${abi.slotOffset(slot, program.defaultPointerSize)}",
+                            "${abi.slotOffsets(program.defaultPointerSize).elementAt(slot)}",
                     )
                 }
             }
@@ -671,7 +671,7 @@ class ClassApplier(
 
     /**
      * Re-key gcc's `*<n>` onto the address point, which is what every consumer past here counts from:
-     * the slot targets read out of memory, the `<Class>_vftable` component list, and [CxxAbi.slotOffset].
+     * the slot targets read out of memory, the `<Class>_vftable` component list, and [CxxAbi.slotOffsets].
      * A no-op under Itanium, whose vptr already points past the header.
      *
      * An index landing *inside* the header contradicts [CxxAbi.reservedEntries], so the table is laid
