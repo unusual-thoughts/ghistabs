@@ -412,11 +412,9 @@ private fun Program.vftablesOf(ns: Namespace): Sequence<Address> = symbolTable.g
 private fun Program.slotTargets(vftable: Address): Sequence<Address> {
     val length = listing.getDataAt(vftable)?.length ?: return emptySequence()
     val abi = symbolTable.getSymbols(vftable).firstNotNullOfOrNull { CxxAbi.ofVtableSymbol(it.name) } ?: Itanium
-    val ptr = defaultPointerSize
-    val stride = abi.stride(ptr)
-    return (0 until length / stride).asSequence().mapNotNull { i ->
-        runCatching { pointerAt(vftable.add(i * stride + abi.pfnOffset(ptr))) }.getOrNull()
-    }
+    val end = vftable.add(length.toLong())
+    return abi.slots(vftable, defaultPointerSize).takeWhile { it < end }
+        .mapNotNull { runCatching { pointerAt(it) }.getOrNull() }
 }
 
 private val PURE_VIRTUAL = setOf("cxa_pure_virtual", "pure_virtual", "purecall")
