@@ -77,10 +77,11 @@ private const val MAX_DEPTH = 64
 
 /**
  * The sizes each class is allocated with: an `operator new(size)` whose result one of the class's
- * constructors ([ctors]) runs on, off each constructor's callers' decompilation. Not `new[]`, whose
- * size is a count's worth and a cookie.
+ * constructors ([ctors]) runs on, off each constructor's callers' decompilation, `operator new` going by
+ * one of [abi]'s [CxxAbi.operatorNewNames].
  */
-class NewSizeReader<K>(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
+class NewSizeReader<K>(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
+    DiagnosticSink by sink {
     fun read(ctors: Map<Function, K>, monitor: TaskMonitor): Map<K, Long> {
         val callers = ctors.keys.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
         val sizes = mutableMapOf<K, MutableSet<Long>>()
@@ -111,12 +112,9 @@ class NewSizeReader<K>(private val program: Program, sink: DiagnosticSink) : Dia
         return f.getThunkedFunction(true) ?: f
     }
 
-    private fun Function.isOperatorNew() = name in OPERATOR_NEW
+    private fun Function.isOperatorNew() = name in abi.operatorNewNames
 
     private companion object {
         const val DECOMPILE_TIMEOUT_SECONDS = 30
-
-        // As Ghidra's demangler names `??2@YAPAXI@Z` and its 64-bit twin, or the mangled name itself.
-        val OPERATOR_NEW = setOf("operator_new", "operator new", "??2@YAPAXI@Z", "??2@YAPEAX_K@Z")
     }
 }
