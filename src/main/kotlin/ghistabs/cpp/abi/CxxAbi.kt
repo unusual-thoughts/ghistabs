@@ -2,6 +2,7 @@ package ghistabs.cpp.abi
 
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.Structure
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
@@ -48,8 +49,11 @@ interface CxxMemberNaming {
             m.mangled?.let(::physnameIsImplicit) == true
     }
 
-    /** In-class display form of a ctor/dtor linkage name, or null for anything else. */
-    fun specialMemberDisplayName(mangled: String, className: String): String?
+    /**
+     * Which constructor or destructor a linkage name mangles, of [className] where the ABI's mangling
+     * needs the class to tell; null for anything else.
+     */
+    fun structorOf(mangled: String, className: String? = null): Structor?
 
     /**
      * A member whose definition the compiler may legitimately have dropped, so a missing Function at
@@ -135,11 +139,21 @@ sealed interface CxxAbi : CxxMemberNaming {
     fun VtableRecord.vfptrOffset(program: Program): Long? = null
 
     /**
+     * Whether a constructor hands back the object it built, which is what tells one from a destructor
+     * among the functions that store a vptr ([StructorFinder]). MSVC's do and its destructors return nothing;
+     * Itanium's return nothing either, but on ARM, where both return `this`, so neither tells there.
+     */
+    val constructorsReturnThis: Boolean get() = false
+
+    /**
      * [cls]'s direct bases, as this ABI's own records in [program] say, without the stabs: Itanium's
      * typeinfo and MSVC's Base Class Array. Null where there is nothing to read, as under gcc 2.x, whose
      * typeinfo is filled in at run time, rather than a class with no bases.
      */
     fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? = null
+
+    /** Which of this ABI's variants [func], playing [role] ([StructorFinder]), is; null if that takes more. */
+    fun structorFor(role: StructorRole, func: Function): Structor? = null
 
     companion object {
         /**
@@ -203,11 +217,16 @@ sealed interface CxxAbi : CxxMemberNaming {
             return prevailing(symbols.asSequence().map { it.name })
         }
 
+        /** Which constructor or destructor [mangled] is under whichever ABI mangled it. */
+        fun structorOf(mangled: String): Structor? =
+            listOf(Msvc, Gcc2Thunks, Itanium).firstNotNullOfOrNull { it.structorOf(mangled) }
+
         /**
          * Which ABI mangled [name], as a member. Nothing here tells the two gcc 2.x ABIs apart —
          * they mangle members identically and differ only in vtable geometry, which a binary with no
          * vtable symbol has no record of — so [Gcc2Thunks] stands for gcc 2.x.
          */
+
         fun mangledBy(name: String): CxxAbi? = when {
             Itanium.isProbablyMangled(name) -> Itanium
             Gcc2.isProbablyMangled(name) -> Gcc2Thunks

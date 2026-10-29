@@ -24,7 +24,7 @@ class MsvcClassAnalyzer :
     AbstractAnalyzer(
         NAME,
         "Record each class's bases from its MSVC RTTI, and move each virtual function into the class " +
-            "that introduced it",
+            "that introduced it, and its constructors and destructors off the vftable stores they make",
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
@@ -37,12 +37,12 @@ class MsvcClassAnalyzer :
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = ImportProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val result = MsvcClasses(program, sink).recover()
+        val result = MsvcClasses(program, sink).recover(monitor)
         if (result.classes > 0) {
             log.appendMsg(
                 NAME,
                 "${result.classes} class(es), ${result.owned} virtual function(s) owned, ${result.moved} moved, " +
-                    "${result.shared} shared",
+                    "${result.shared} shared, ${result.structors} constructor(s) and destructor(s) named",
             )
         }
         return true
