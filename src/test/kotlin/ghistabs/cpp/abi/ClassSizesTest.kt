@@ -13,9 +13,9 @@ class ClassSizesTest {
             allocated = emptyMap(),
             ptrSize = 4,
         )
-        bounds.getValue("D") mustBe SizeBounds(atLeast = 0x5c, atMost = null, exact = null)
+        bounds.getValue("D") mustBe 0x5cL..Long.MAX_VALUE
         // B ends where S starts
-        bounds.getValue("B") mustBe SizeBounds(atLeast = 4, atMost = 0x58, exact = null)
+        bounds.getValue("B") mustBe 4L..0x58L
     }
 
     @Test
@@ -26,8 +26,8 @@ class ClassSizesTest {
             allocated = mapOf("D" to 0x7cL),
             ptrSize = 4,
         )
-        bounds.getValue("D").size mustBe 0x7c
-        bounds.getValue("S").atMost mustBe 0x24
+        bounds.getValue("D") mustBe 0x7cL..0x7cL
+        bounds.getValue("S").last mustBe 0x24
     }
 
     @Test
@@ -39,7 +39,7 @@ class ClassSizesTest {
             allocated = emptyMap(),
             ptrSize = 4,
         )
-        bounds.getValue("B").exact mustBe 8
-        bounds.getValue("A").atMost mustBe 8
+        bounds.getValue("B") mustBe 8L..8L
+        bounds.getValue("A").last mustBe 8
     }
 }
