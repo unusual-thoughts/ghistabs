@@ -20,6 +20,7 @@ import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.writeMember
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.length
 import ghistabs.pointerAt
 import ghistabs.toClass
 
@@ -217,25 +218,25 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     }
 
     /**
-     * Each class's [SizeBounds], off the sizes it is allocated with ([allocated]), its bases' offsets and
+     * Each class's [LongRange], off the sizes it is allocated with ([allocated]), its bases' offsets and
      * its vptrs'. A struct shorter than an exact size is grown to it; none is made where there is none, as
      * `RecoverClassesFromRTTIScript` takes any struct of a class's name for its layout and so would not
      * compute its own from the decompiled field accesses. The sizes go to the class records instead.
      */
-    private fun sizeClasses(classes: Map<Address, RttiClass>, allocated: Map<Address, Long>): Map<Address, SizeBounds> {
+    private fun sizeClasses(classes: Map<Address, RttiClass>, allocated: Map<Address, Long>): Map<Address, LongRange> {
         val bases = classes.mapValues { (_, cls) ->
             cls.directBases.filterNot { it.isVirtual }.map { it.descriptor to it.offset.toLong() }
         }
         val vptrs = tables.values.groupBy({ it.first }, { it.second }).mapValues { (_, at) -> at.max() }
         val bounds = sizeBounds(bases, vptrs, allocated, program.defaultPointerSize.toLong())
         for ((descriptor, size) in bounds) {
-            val exact = size.exact ?: continue
+            val exact = size.singleOrNull() ?: continue
             val ns = classes[descriptor]?.ns?.toClass() ?: continue
             val struct = classStruct(ns)?.takeUnless { it.isNotYetDefined || it.length >= exact } ?: continue
             runCatching { struct.growStructure((exact - struct.length).toInt()) }
                 .onFailure { warn("msvc-struct-ungrown", "${ns.getName(true)} -> $exact: $it") }
         }
-        return bounds.filterValues { it.size > 0 }
+        return bounds.filterValues { it.length > 0 }
     }
 
     private fun nameStructor(func: Function, cls: GhidraClass, kind: StructorKind): Boolean {
@@ -269,7 +270,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
      * Each class's entry, over its own from an earlier run: a one-shot after `RecoverClassesFromRTTIScript`
      * finds the struct the script filed. Other classes' entries are kept.
      */
-    private fun writeRecords(classes: Map<Address, RttiClass>, sizes: Map<Address, SizeBounds>) {
+    private fun writeRecords(classes: Map<Address, RttiClass>, sizes: Map<Address, LongRange>) {
         val entries = classes.values.mapNotNull { cls ->
             val ns = cls.ns?.toClass() ?: return@mapNotNull null
             val bases = cls.directBases.map { b ->
@@ -284,7 +285,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
                 )
             }
             val size = sizes[cls.descriptor]
-            ns.id to ClassHierarchyRecords.Entry(classStructId(ns), bases, size?.size, size?.exact != null)
+            ns.id to ClassHierarchyRecords.Entry(classStructId(ns), bases, size?.length, size?.length == 1L)
         }
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
