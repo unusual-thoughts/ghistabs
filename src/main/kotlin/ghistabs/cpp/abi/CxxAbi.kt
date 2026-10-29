@@ -3,8 +3,10 @@ package ghistabs.cpp.abi
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
+import ghistabs.cpp.BaseDecl
 import ghistabs.cpp.MemberDecl
 import ghistabs.cpp.templateLeaf
 
@@ -138,6 +140,13 @@ sealed interface CxxAbi : CxxMemberNaming {
      * Itanium's return nothing either, but on ARM, where both return `this`, so neither tells there.
      */
     val constructorsReturnThis: Boolean get() = false
+
+    /**
+     * [cls]'s direct bases, as this ABI's own records in [program] say, without the stabs: Itanium's
+     * typeinfo and MSVC's Base Class Array. Null where there is nothing to read, as under gcc 2.x, whose
+     * typeinfo is filled in at run time, rather than a class with no bases.
+     */
+    fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? = null
 
     companion object {
         /**

@@ -13,6 +13,20 @@ import kotlinx.serialization.Serializable
 /** A C++ member's or base's access, as a stab's visibility marker or an RTTI base flag states it. */
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
+/**
+ * A class's direct base as any source states it: the stabs ([ghistabs.parse.TypeDecl.Aggregate.Base]),
+ * Itanium typeinfo ([ghistabs.cpp.abi.Rtti.Reader.Base]), an MSVC Base Class Array
+ * ([ghistabs.cpp.abi.BaseEntry]) or the class record ([ClassHierarchyRecords.Base]). How it is inherited,
+ * and [offset], in bytes: where a non-virtual base sits in the class, and for a virtual one whatever its
+ * source keeps there instead (Itanium's vbase offset slot, MSVC's offset into the virtual base), or
+ * null when it says nothing.
+ */
+interface BaseDecl {
+    val isVirtual: Boolean
+    val access: Access
+    val offset: Long?
+}
+
 /** Method kind from the stabs method-block trailer: `.` normal, `?` static, `*` virtual. */
 enum class VirtKind { NORMAL, STATIC, VIRTUAL }
 
@@ -48,10 +62,10 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
     data class Base(
         val namespaceId: Long?,
         val name: String?,
-        val isVirtual: Boolean,
-        val access: Access,
-        val offset: Long? = null,
-    )
+        override val isVirtual: Boolean,
+        override val access: Access,
+        override val offset: Long? = null,
+    ) : BaseDecl
 
     /**
      * A class's struct, by datatype id, its direct bases in declaration order, and its [size] where

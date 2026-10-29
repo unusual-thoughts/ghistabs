@@ -1,6 +1,11 @@
 package ghistabs.cpp.abi
 
+import ghidra.app.cmd.data.rtti.Rtti3Model
+import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.app.util.demangler.DemangledObject
+import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.Namespace
+import ghistabs.cpp.BaseDecl
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.isTemplated
 import ghistabs.cpp.leafName
@@ -62,6 +67,14 @@ object Msvc : CxxAbi {
     const val VECTOR_DELETING_DESTRUCTOR = "`vector_deleting_destructor'"
 
     override fun isProbablyMangled(name: String) = name.startsWith("?")
+
+    /** Off the class's Class Hierarchy Descriptor, which the RTTI analyzer labels in its namespace. */
+    override fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? {
+        val chd = program.symbolTable.getSymbols(cls).firstOrNull { it.name == CLASS_HIERARCHY_DESCRIPTOR }
+            ?: return null
+        return runCatching { directBases(Rtti3Model(program, chd.address, DataValidationOptions()).baseClassArray()) }
+            .getOrNull()
+    }
 
     override fun looksLikeVtable(symbolName: String) = symbolName.startsWith(VFTABLE_PREFIX)
 

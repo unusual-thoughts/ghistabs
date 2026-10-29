@@ -7,6 +7,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
 import ghistabs.cpp.Access
+import ghistabs.cpp.BaseDecl
 import ghistabs.cpp.ClassNaming
 
 /**
@@ -159,10 +160,10 @@ class Rtti(private val dtm: DataTypeManager) {
         data class Base(
             val className: String,
             val typeinfo: Address,
-            val isVirtual: Boolean,
-            val access: Access,
-            val offset: Long = 0,
-        )
+            override val isVirtual: Boolean,
+            override val access: Access,
+            override val offset: Long = 0,
+        ) : BaseDecl
 
         private val ptr = program.defaultPointerSize
         private val symtab = program.symbolTable
