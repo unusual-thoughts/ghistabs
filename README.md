@@ -170,80 +170,30 @@ skeleton when you want to see what the stabs *claimed*; read `decomp` when you w
 
 Independent of stabs, enabled by default, each re-runnable and available as one-shot analysis:
 
-- **Struct-return ABI (x86 gcc)** - x86:LE:32 gcc only. gcc/MinGW returns a class in memory
-  through a hidden caller-allocated pointer whenever it is non-trivial for calls, *regardless
-  of size*, while trivial small aggregates really do come back in `EAX`/`EDX:EAX`. No cspec
-  rule can express that, so `x86gcc.cspec` is wrong in both directions at once. This analyzer
-  reads the callee's stack purge (which settles the question: `RET 0x4` vs bare `RET`) and,
-  where it disagrees with the cspec, reassigns the function to a derived calling convention
-  (`__thiscall_memret`, `__cdecl_regret`, …) installed as a program spec extension.
-- **Deferred stack pops (x86)** - gcc leaves a call's arguments pushed when the code ahead only
-  addresses through `EBP`, so two paths can meet with `ESP` a few bytes apart, and the
-  decompiler then turns every later push past the merge into a store through a pointer
-  (`*(undefined4 *)(puVar7 + -0x14) = 0x42350c`). This analyzer finds those merges and pops the dead
-  bytes at the call that left them, through a call-site override whose derived convention pops
-  that much more (`__cdecl_pop16`, …). A function's overrides are kept only if the decompiler
-  then makes fewer stores through pointers. It also gives MinGW `_Name@N` import stubs the
-  `N`-byte purge Ghidra leaves at 0.
-- **In-Function Gap Disassembler** - disassembles undefined bytes that lie *inside* a
-  function's extent: hot/cold split holes and exception landing pads reachable only by
-  unwinding. Only runs where every byte of the gap decodes cleanly.
-- **Filler Byte Condenser** - collapses GAS `.p2align` padding in code (NOP idioms and the
-  jump-over-fill form) into `Alignment` data, so it isn't mistaken for undescribed data.
-- **GCC C++ vftables** - lays a `<Class>_vftable` at every gcc vtable symbol, Itanium `_ZTV…` (gcc 3+) or
-  gcc 2.x `_vt…`, each slot typed off the function it points at, under the class
-  namespace with the labels Ghidra's RTTI scripts use (`vftable`, `vftable_for_<Base>`, …), so virtual calls resolve to
-  named slots even with no stabs. On a binary with stabs the importer runs this sweep as soon
-  as its class pass has laid the classes the stabs describe, and the sweep leaves those alone.
-  Ghidra's `RecoverClassesFromRTTIScript` skips any vtable that already has a struct under
-  `/ClassDataTypes`, so it recovers nothing for these classes and retypes their methods' `this` to an
-  empty placeholder: run it on a program analysed with this analyzer off and no stabs import.
-- **GCC SJLJ exception tables** - lays the LSDA (`.gcc_except_table` entry) of every function a
-  MinGW gcc built with SJLJ exceptions: header, call-site, action and type tables, each field typed
-  and commented, labelled `lsda` in the function's namespace. Ghidra's own `GCC Exception Handlers`
-  analyzer finds LSDAs through `.eh_frame`, which an SJLJ binary has none of, so it never runs on
-  these. The tables are found through the prologue that fills the function's unwind context
-  (`movl $___gxx_personality_sj0` then `movl $LSDA` one word above), so stripped binaries are
-  covered too.
-- **GCC SJLJ unwind context** - runs after GCC SJLJ exception tables, on the functions it found.
-  Each one's unwind context becomes a local `fc` of type `SjLj_Function_Context`, including the
-  `__builtin_setjmp` buffer that gcc's own stabs leave out, and the `_Unwind_SjLj_*` calls, the
-  SJLJ personality routines and the `__cxa_*` throw and catch calls get their signatures
-  wherever nothing more definite than analysis typed them. The decompiler then shows
-  `fc.call_site = 2` and `fc.jbuf.resume = …` instead of raw stack slots, and `--elide-sjlj`
-  drops those stores by the context's type. Each `fc.call_site` store also gets a pre comment,
-  shown in the decompiler, saying what its LSDA entry does if the call throws, such as
-  `SJLJ call site 2, landing pad 1: catch (CryptoPP::InvalidArgument), cleanup`, and the receiver's
-  comment lists every landing pad the same way, as Ghidra's own analyzer comments a DWARF function's
-  try and catch ranges. On a binary with stabs, the importer runs it itself
-  after applying its symbols, so a type or signature the stabs give is the one kept.
-- **Itanium typeinfo** - lays a typed struct at every gcc 3+ typeinfo symbol (`_ZTI…`): the
-  `__class_type_info`, `__si_class_type_info` or `__vmi_class_type_info` layout its vtable
-  pointer names, with a vmi one's base array sized to its base count and the base offsets shown
-  in decimal. A typeinfo that already carries a struct is left alone.
-- **Itanium virtual bases** - runs after GCC C++ vftables and lays the virtual bases a class
-  struct lacks, at the offset its `_ZTV` gives. The class's typeinfo names the virtual bases,
-  and its demangled `vtable` label's namespace finds its struct. A class deriving from a
-  `basic_ifstream<char>` that no debug info defines gets a `_vbase_ios_base` where the
-  vtable puts `basic_ios`, plus `basic_ios`'s own vptr: when nothing defines a virtual base,
-  the first base of it that something does is laid. It skips a base already in place and
-  reports one that would overrun the struct or cover laid fields. On a binary with stabs, the
-  importer runs it itself once its labels are demangled; turning the analyzer off turns that
-  off too.
-- **Class-method this-pointer** - gives class methods back the automatic `this` that Ghidra's
-  *Decompiler Parameter ID* takes away when it commits a signature in custom storage. It
-  re-applies the parameters with dynamic storage, so Ghidra derives `this` from the class
-  struct again. It also helps C++ binaries with no stabs, and can be re-run alone after
-  Decompiler Parameter ID.
-- **Non-returning functions (reachability)** - marks a function non-returning when every path
-  through it ends in a call to a non-returning function, such as a project `error()` that
-  calls `exit`. Ghidra's own walk only examines a function when its call sites look damaged,
-  which `error()`'s never do. Anything the control-flow graph can't resolve counts as
-  returning. It runs after the importer, since on a stripped binary most of these functions
-  only exist once the import has created them.
+| Analyzer | Runs on | What it does |
+|---|---|---|
+| **Itanium RTTI symbols** | gcc 3+ | Puts back the `_ZTS`/`_ZTI`/`_ZTV` labels a stripped binary lost, from the RTTI it kept. Runs early, so everything keyed off those symbols sees them. |
+| **In-Function Gap Disassembler** | any | Disassembles undefined bytes *inside* a function's extent: hot/cold split holes and exception landing pads reachable only by unwinding. Only where every byte of the gap decodes cleanly. |
+| **Filler Byte Condenser** | any | Collapses GAS `.p2align` padding in code (NOP idioms and the jump-over-fill form) into `Alignment` data, so it isn't mistaken for undescribed data. |
+| **GCC SJLJ exception tables** | MinGW gcc, SJLJ | Lays the LSDA (`.gcc_except_table` entry) of every function with SJLJ exceptions: header, call-site, action and type tables, typed and commented, labelled `lsda`. Ghidra's `GCC Exception Handlers` finds LSDAs through `.eh_frame`, which an SJLJ binary lacks. The tables are found through the prologue that fills the unwind context, so stripped binaries are covered too. |
+| **Struct-return ABI (x86 gcc)** | x86:LE:32 gcc | gcc returns a class in memory whenever it is non-trivial for calls, whatever its size, which `x86gcc.cspec` can't express. Reads the callee's stack purge (`RET 0x4` vs bare `RET`) and, where it disagrees with the cspec, moves the function to a derived convention (`__thiscall_memret`, `__cdecl_regret`, …). |
+| **Deferred stack pops (x86)** | x86 gcc | Finds where two paths meet with `ESP` apart because gcc left a call's arguments pushed, and pops the dead bytes at that call through a call-site override (`__cdecl_pop16`, …), kept only if the decompiler then makes fewer stores through pointers. Also gives MinGW `_Name@N` import stubs their `N`-byte purge. |
+| **GCC C++ vftables** | gcc (Itanium `_ZTV…`, gcc 2.x `_vt…`) | Lays a `<Class>_vftable` at every vtable symbol, each slot typed off the function it points at, under the class namespace with the labels Ghidra's RTTI scripts use (`vftable`, `vftable_for_<Base>`, …). With stabs, the importer runs it after its class pass and it leaves those classes alone. |
+| **Itanium typeinfo** | gcc 3+ | Lays the `__class_type_info`, `__si_class_type_info` or `__vmi_class_type_info` struct its vtable pointer names at every `_ZTI…`, a vmi one's base array sized to its base count. |
+| **Itanium virtual bases** | gcc 3+ | Lays the virtual bases a class struct lacks, at the offset its `_ZTV` gives, as its typeinfo names them. When nothing defines a virtual base, lays the first base of it that something does. With stabs, the importer runs it once its labels are demangled. |
+| **GCC SJLJ unwind context** | MinGW gcc, SJLJ | Types each function's unwind context as a local `fc` of type `SjLj_Function_Context`, and the `_Unwind_SjLj_*`, personality and `__cxa_*` calls, so the decompiler shows `fc.call_site = 2` instead of raw stack slots. Each `fc.call_site` store gets a comment saying what its LSDA entry does if the call throws. With stabs, the importer runs it after applying its symbols. |
+| **Class-method this-pointer** | any C++ | Gives class methods back the automatic `this` that *Decompiler Parameter ID* takes away when it commits a signature in custom storage. |
+| **Non-returning functions (reachability)** | any | Marks a function non-returning when every path ends in a call to a non-returning function, such as a project `error()` that calls `exit`. Runs after the importer, which creates most of these functions on a stripped binary. |
+| **MSVC RTTI classes** | MSVC / clang-cl PE | Off the RTTI that Ghidra's `Windows x86 PE RTTI Analyzer` laid: records each class's bases for the Class Hierarchy window, moves each virtual function into the class that introduced it, and finds constructors, destructors and deleting destructors by the vftables they store through `this`. It names them (`Foo`, `~Foo`, `` `scalar_deleting_destructor' ``) and makes a `__fastcall` that takes nothing in `EDX` the `__thiscall` it is. Also records each class's size, exact from `operator new` or at least what its bases and vptrs reach, and each base's offset. |
+| **Method classes from this** | any C++ with `__thiscall` | Moves each unnamed function that takes a `this` into the class its callers pass it objects of: a known method's own `this`, or an object a constructor built. Several classes give their common base; a guess moves up to a base when that base does all the function does. Runs after MSVC RTTI classes, whose methods are the evidence, and leaves an Analysis bookmark on each guess. |
 
 The Gap Disassembler, Filler Byte Condenser and SJLJ exception tables run before the importer, mostly so its data-coverage report doesn't flag
 compiler scaffolding as missing.
+
+Ghidra's `RecoverClassesFromRTTIScript` skips any vtable that already has a struct under `/ClassDataTypes`, so after
+*GCC C++ vftables* it recovers nothing for those classes and retypes their methods' `this` to an empty placeholder: run it
+on a program analysed with that analyzer off and no stabs import. *MSVC RTTI classes* makes no class struct, so the script
+still computes its own.
 
 ## Headless CLI
 
