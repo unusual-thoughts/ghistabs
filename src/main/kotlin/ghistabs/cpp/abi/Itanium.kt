@@ -6,6 +6,7 @@ import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
@@ -22,6 +23,7 @@ import ghistabs.namespaces
  * conventional field names, category layout, and vtable geometry. Every ABI-specific site
  * references the constants here rather than re-spelling literals.
  */
+@Suppress("TooManyFunctions")
 object Itanium : CxxAbi {
     // Itanium special-name prefixes (ABI §5.1.4). Cygwin's PE loader prepends '_' → "__ZT*".
 
@@ -214,9 +216,11 @@ object Itanium : CxxAbi {
     override fun physnameIsImplicit(physname: String): Boolean =
         physname.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(physname)
 
-    /** In-class display form of a ctor/dtor linkage name: its [ItaniumStructor]'s. */
-    override fun specialMemberDisplayName(mangled: String, className: String): String? =
-        ItaniumStructor.of(mangled)?.displayName(className)
+    override fun structorOf(mangled: String, className: String) = ItaniumStructor.of(mangled)
+
+    /** Only the deleting destructor: vptr stores alone don't tell a complete object's structors from a base's. */
+    override fun structorFor(role: StructorRole, func: Function) =
+        ItaniumStructor.DELETING_DTOR.takeIf { role == StructorRole.DELETING_DESTRUCTOR }
 }
 
 // Cygwin's PE loader prepends one more `_`: `__ZTV…`.

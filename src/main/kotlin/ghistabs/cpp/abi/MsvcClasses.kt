@@ -10,7 +10,6 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
-import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
@@ -139,7 +138,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             val cls = classes[structor.first]?.ns?.toClass() ?: return@count false
             nameStructor(func, cls, structor.second)
         }
-        val ctors = structors.filterValues { !it.second.isDestructor }.mapValues { it.value.first }
+        val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
         val sizes = sizeClasses(classes, NewSizeReader(program, Msvc, this).read(ctors, monitor))
         writeRecords(classes, sizes)
         return Result(classes.size, owners.size - shared, moved, shared, named, sizes.size)
@@ -205,7 +204,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         classes: Map<Address, RttiClass>,
         holders: Map<Function, Set<Address>>,
         monitor: TaskMonitor,
-    ): Map<Function, Pair<Address, Structor>> {
+    ): Map<Function, Pair<Address, StructorRole>> {
         val reading = VptrStoreReader(program, tables, this).read(holders.keys, monitor)
         return structors(
             reading.stores,
@@ -213,7 +212,6 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             { reading.thisCalls[it].orEmpty() },
             { classes[it]?.ancestors.orEmpty() },
             Msvc.constructorsReturnThis,
-            Msvc.storingStructors,
         )
     }
 
@@ -239,9 +237,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return bounds.filterValues { it.first > 0 }
     }
 
-    private fun nameStructor(func: Function, cls: GhidraClass, found: Structor): Boolean {
-        val variant = if (found.isDeleting && func.testsVectorFlag()) MsvcStructor.VECTOR_DELETING_DESTRUCTOR else found
-        val name = variant.displayName(cls.name)
+    private fun nameStructor(func: Function, cls: GhidraClass, role: StructorRole): Boolean {
+        val name = Msvc.structorFor(role, func).displayName(cls.name)
         return runCatching {
             val moves = func.parentNamespace.isGlobal
             if (moves) func.parentNamespace = cls
@@ -253,11 +250,6 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             warn("msvc-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)
         }
             .getOrDefault(false)
-    }
-
-    /** A vector deleting destructor tests its flags for bit 2, which says an array is going. */
-    private fun Function.testsVectorFlag() = program.listing.getInstructions(body, true).any { insn ->
-        insn.pcode.any { op -> op.opcode == PcodeOp.INT_AND && op.inputs.any { it.isConstant && it.offset == 2L } }
     }
 
     /**
