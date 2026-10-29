@@ -61,13 +61,6 @@ object Msvc : CxxAbi {
 
     override val mangledOperatorNew get() = setOf("??2@YAPAXI@Z", "??2@YAPEAX_K@Z")
 
-    /**
-     * What Ghidra's demangler names a deleting destructor, `??_G` and `??_E`: the slot that destroys
-     * one object, or an array of them when its flags argument has bit 2 set.
-     */
-    const val SCALAR_DELETING_DESTRUCTOR = "`scalar_deleting_destructor'"
-    const val VECTOR_DELETING_DESTRUCTOR = "`vector_deleting_destructor'"
-
     override fun isProbablyMangled(name: String) = name.startsWith("?")
 
     /** Off the class's Class Hierarchy Descriptor, which the RTTI analyzer labels in its namespace. */
