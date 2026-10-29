@@ -34,6 +34,13 @@ object Msvc : CxxAbi {
     private const val BCD_PRIVORPROTINCOMPOBJ = 0x8
     const val BCD_NONPUBLIC = BCD_NOTVISIBLE or BCD_PRIVORPROTBASE or BCD_PRIVORPROTINCOMPOBJ
 
+    /**
+     * The base is virtual where the class that names it does: `BCD_VBOFCONTOBJ`, what clang's MSVC
+     * emitter calls `IsVirtual`. Not its pDisp, which is set as well for a non-virtual base that sits
+     * inside a virtual one.
+     */
+    const val BCD_VBOFCONTOBJ = 0x10
+
     override fun stride(ptrSize: Int) = ptrSize.toLong()
     override fun pfnOffset(ptrSize: Int) = 0L
 
