@@ -28,6 +28,42 @@ interface Structor {
 }
 
 /**
+ * How an ABI's structors behave, as far as [StructorFinder] and the sizes `operator new` gives
+ * ([NewSizeReader]) need to know.
+ */
+interface StructorConvention {
+    /**
+     * Whether a constructor hands back the object it built, which is what tells one from a destructor
+     * among the functions that store a vptr. MSVC's do and its destructors return nothing; Itanium's
+     * return nothing either, but on ARM, where both return `this`, so neither tells there.
+     */
+    val constructorsReturnThis: Boolean get() = false
+
+    /** Which of this ABI's variants [func], playing [role], is; null if that takes more. */
+    fun structorFor(role: StructorRole, func: Function): Structor? = null
+
+    /**
+     * The names a scalar `operator new(size)` goes by: its mangled ones under this ABI ([mangledOperatorNew])
+     * and the ones Ghidra's demangler gives it. Not `new[]`, whose size is a count's worth and a cookie.
+     */
+    val operatorNewNames: Set<String> get() = mangledOperatorNew + DEMANGLED_OPERATOR_NEW
+
+    /** `operator new(size)` as this ABI mangles it, for each pointer size. */
+    val mangledOperatorNew: Set<String> get() = emptySet()
+
+    /** The names a scalar `operator delete(void *)` goes by: what a deleting destructor frees `this` with. */
+    val operatorDeleteNames: Set<String> get() = mangledOperatorDelete + DEMANGLED_OPERATOR_DELETE
+
+    /** `operator delete(void *)`, and its sized form, as this ABI mangles them. */
+    val mangledOperatorDelete: Set<String> get() = emptySet()
+
+    private companion object {
+        val DEMANGLED_OPERATOR_NEW = setOf("operator_new", "operator new")
+        val DEMANGLED_OPERATOR_DELETE = setOf("operator_delete", "operator delete")
+    }
+}
+
+/**
  * What [StructorFinder] finds a function that stores a vptr does to its class, whatever the ABI. Which of
  * its [Structor] variants that is takes the ABI's own evidence ([CxxAbi.structorFor]).
  */
@@ -47,8 +83,9 @@ fun storedClass(classes: Set<Address>, ancestors: (Address) -> Set<Address>): Ad
     classes.singleOrNull { c -> classes.all { it == c || it in ancestors(c) } }
 
 /**
- * Finds constructors and destructors off the decompiler, by the vftables of [tables] (each a class and
- * the subobject offset it serves) they store through `this`.
+ * Finds constructors and destructors off the decompiler, by the vtables of [tables] they store through
+ * `this`: each table's address point, its class, and how far into the object its vptr sits (the
+ * subobject's offset, plus the vptr's within it, which only gcc 2.x puts anywhere but 0).
  */
 class StructorFinder(
     private val program: Program,
@@ -61,25 +98,26 @@ class StructorFinder(
     fun find(
         slots: Map<Function, Set<Address>>,
         ancestors: (Address) -> Set<Address>,
-        constructorsReturnThis: Boolean,
+        convention: StructorConvention,
         monitor: TaskMonitor,
-    ) = read(slots.keys, monitor).roles(slots, ancestors, constructorsReturnThis)
+    ) = read(slots.keys, monitor).roles(slots, ancestors, convention)
 
     /** What the functions do to `this`: the vptrs each storer stores ([stores]), and what each calls on it. */
     class Reading(val stores: Map<Function, VptrStores>, val thisCalls: Map<Function, Set<Function>>) {
         /**
-         * A constructor is never virtual, so a slot that runs a storer on `this` is a deleting destructor,
-         * and the storer it calls the destructor; the store may be a base's, a destructor with nothing to
-         * do before its base's having none of its own. Where constructors return `this`, that tells the
-         * other storers apart.
+         * A constructor is never virtual, so a slot that runs a storer on `this` destroys it: a deleting
+         * destructor if it then frees it, and the storer it calls the destructor; the store may be a base's,
+         * a destructor with nothing to do before its base's having none of its own. Where constructors
+         * return `this`, that tells the other storers apart.
          */
         fun roles(
             slots: Map<Function, Set<Address>>,
             ancestors: (Address) -> Set<Address>,
-            constructorsReturnThis: Boolean,
+            convention: StructorConvention,
         ): Map<Function, Pair<Address, StructorRole>> = buildMap {
+            val returnsThis = convention.constructorsReturnThis
             val owners = stores.mapNotNull { (f, s) -> storedClass(s.classes, ancestors)?.let { f to it } }.toMap()
-            fun mayDestroy(f: Function) = !constructorsReturnThis || stores[f]?.returnsThis != true
+            fun mayDestroy(f: Function) = !returnsThis || stores[f]?.returnsThis != true
 
             // The holder a slot deletes, if it tears down a [cls]: [cls], or the one class below it the others are.
             fun deleting(held: Set<Address>, cls: Address): Address? {
@@ -88,23 +126,29 @@ class StructorFinder(
             }
             for ((slot, held) in slots) {
                 val own = owners[slot]
-                if (own != null) {
-                    deleting(held, own)?.let { this[slot] = it to StructorRole.DELETING_DESTRUCTOR }
-                    continue
+                when {
+                    // Itanium's vtable holds the complete object destructor too, which frees nothing.
+                    !frees(slot, convention) -> own?.let { this[slot] = it to StructorRole.DESTRUCTOR }
+
+                    own != null -> deleting(held, own)?.let { this[slot] = it to StructorRole.DELETING_DESTRUCTOR }
+
+                    else -> thisCalls[slot].orEmpty().filter(::mayDestroy)
+                        .mapNotNull { f -> owners[f]?.let { cls -> deleting(held, cls)?.let { Triple(f, cls, it) } } }
+                        .singleOrNull()?.let { (dtor, cls, holder) ->
+                            this[slot] = holder to StructorRole.DELETING_DESTRUCTOR
+                            putIfAbsent(dtor, cls to StructorRole.DESTRUCTOR)
+                        }
                 }
-                val dtors = thisCalls[slot].orEmpty().filter(::mayDestroy).mapNotNull { f ->
-                    owners[f]?.let { cls -> deleting(held, cls)?.let { Triple(f, cls, it) } }
-                }
-                val (dtor, cls, holder) = dtors.singleOrNull() ?: continue
-                this[slot] = holder to StructorRole.DELETING_DESTRUCTOR
-                putIfAbsent(dtor, cls to StructorRole.DESTRUCTOR)
             }
-            if (constructorsReturnThis) {
+            if (returnsThis) {
                 for ((f, cls) in owners) {
                     putIfAbsent(f, cls to if (mayDestroy(f)) StructorRole.DESTRUCTOR else StructorRole.CONSTRUCTOR)
                 }
             }
         }
+
+        private fun frees(f: Function, convention: StructorConvention) =
+            thisCalls[f].orEmpty().any { it.name in convention.operatorDeleteNames }
     }
 
     /**

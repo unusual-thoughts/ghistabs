@@ -64,19 +64,13 @@ interface CxxMemberNaming {
 
 /**
  * A C++ ABI: how it names members ([CxxMemberNaming]), lays out vtables ([VtableLayout]), and builds and
- * destroys objects. Sealed, because [ofVtableSymbol] enumerates the spellings: a symbol either matches
- * one of these ABIs or names no vtable at all.
+ * destroys objects ([StructorConvention]). Sealed, because [ofVtableSymbol] enumerates the spellings: a
+ * symbol either matches one of these ABIs or names no vtable at all.
  */
 sealed interface CxxAbi :
     CxxMemberNaming,
-    VtableLayout {
-    /**
-     * Whether a constructor hands back the object it built, which is what tells one from a destructor
-     * among the functions that store a vptr ([StructorFinder]). MSVC's do and its destructors return nothing;
-     * Itanium's return nothing either, but on ARM, where both return `this`, so neither tells there.
-     */
-    val constructorsReturnThis: Boolean get() = false
-
+    VtableLayout,
+    StructorConvention {
     /**
      * [cls]'s direct bases, as this ABI's own records in [program] say, without the stabs: Itanium's
      * typeinfo and MSVC's Base Class Array. Null where there is nothing to read, as under gcc 2.x, whose
@@ -84,21 +78,7 @@ sealed interface CxxAbi :
      */
     fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? = null
 
-    /** Which of this ABI's variants [func], playing [role] ([StructorFinder]), is; null if that takes more. */
-    fun structorFor(role: StructorRole, func: Function): Structor? = null
-
-    /**
-     * The names a scalar `operator new(size)` goes by: its mangled ones under this ABI ([mangledOperatorNew])
-     * and the ones Ghidra's demangler gives it. Not `new[]`, whose size is a count's worth and a cookie.
-     */
-    val operatorNewNames: Set<String> get() = mangledOperatorNew + DEMANGLED_OPERATOR_NEW
-
-    /** `operator new(size)` as this ABI mangles it, for each pointer size. */
-    val mangledOperatorNew: Set<String> get() = emptySet()
-
     companion object {
-        private val DEMANGLED_OPERATOR_NEW = setOf("operator_new", "operator new")
-
         /**
          * Which ABI a vtable symbol's spelling states, or null if it spells no vtable at all. A
          * gcc 2.x *secondary* table answers here too — it is still that ABI's geometry; screening

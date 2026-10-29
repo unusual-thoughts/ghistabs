@@ -293,6 +293,9 @@ sealed interface Gcc2Abi : CxxAbi {
     /** `new` calls libgcc's `__builtin_new`; a program's own global `operator new` is `__nw__FUi`. */
     override val mangledOperatorNew get() = setOf("__builtin_new", "__nw__FUi", "__nw__FUl")
 
+    /** A destructor in charge of freeing calls `__builtin_delete`; a program's own is `__dl__FPv`. */
+    override val mangledOperatorDelete get() = setOf("__builtin_delete", "__dl__FPv")
+
     override fun isPrimaryVtable(symbolName: String) = Gcc2.looksLikePrimaryVtable(symbolName)
 
     override fun demangledVtableClass(obj: DemangledObject) = Gcc2.demangledVtableClass(obj)

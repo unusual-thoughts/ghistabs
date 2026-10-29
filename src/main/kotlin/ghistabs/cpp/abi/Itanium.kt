@@ -130,6 +130,7 @@ object Itanium : CxxAbi {
 
     // `size_t` is `unsigned int` (j) on 32-bit targets and `unsigned long` (m) on 64-bit ones.
     override val mangledOperatorNew get() = setOf("_Znwj", "_Znwm")
+    override val mangledOperatorDelete get() = setOf("_ZdlPv", "_ZdlPvj", "_ZdlPvm")
 
     override fun looksLikeVtable(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
 

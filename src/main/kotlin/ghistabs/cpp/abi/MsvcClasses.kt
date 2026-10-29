@@ -135,7 +135,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
         }
         val structors = StructorFinder(program, tables, this)
-            .find(holders, { classes[it]?.ancestors.orEmpty() }, Msvc.constructorsReturnThis, monitor)
+            .find(holders, { classes[it]?.ancestors.orEmpty() }, Msvc, monitor)
         val named = structors.count { (func, structor) ->
             val cls = classes[structor.first]?.ns?.toClass() ?: return@count false
             nameStructor(func, cls, structor.second)
