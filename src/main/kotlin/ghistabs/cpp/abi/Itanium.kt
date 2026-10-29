@@ -219,9 +219,6 @@ object Itanium : CxxAbi {
         StructorVariant.of(mangled)?.displayName(className)
 }
 
-/** A constructor or destructor name, as gcc's mangle.cc writes them (`write_special_name_constructor`). */
-private val STRUCTOR_CODE = Regex("""CI[12]|C[1-4]|D[0124]""")
-
 // Cygwin's PE loader prepends one more `_`: `__ZTV…`.
 
 /** Whether [symbolName] names a group of vtable records: a `_ZTV`, a `_ZTC` or a VTT. */
@@ -242,65 +239,6 @@ internal fun typeinfoTypeOf(symbolName: String) = symbolName.trimDoubleUnderscor
     .takeIf { it.startsWith(Itanium.TYPEINFO_PREFIX) }?.removePrefix(Itanium.TYPEINFO_PREFIX)
 
 private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
-
-/**
- * A constructor's or destructor's variant, by its Itanium linkage name ([of]). gcc >= 3 emits one
- * function per variant it needs, all under the one name the source gives.
- */
-enum class StructorVariant(val code: String, val label: String) {
-    COMPLETE_CTOR("C1", "complete"),
-    BASE_CTOR("C2", "base"),
-
-    /** In the ABI; gcc never emits it. */
-    ALLOCATING_CTOR("C3", "allocating"),
-
-    /** gcc's "unified" one, which both of the above call to share code. */
-    UNIFIED_CTOR("C4", "unified"),
-
-    /** gcc >= 7's constructor inherited from a base (`using Base::Base`). */
-    COMPLETE_INHERITING_CTOR("CI1", "complete inheriting"),
-    BASE_INHERITING_CTOR("CI2", "base inheriting"),
-    DELETING_DTOR("D0", "deleting"),
-    COMPLETE_DTOR("D1", "complete"),
-    BASE_DTOR("D2", "base"),
-    UNIFIED_DTOR("D4", "unified"),
-    ;
-
-    val isDestructor get() = code[0] == 'D'
-
-    /**
-     * How the class [className] spells this member in its own body: `Foo`, `~Foo`. Every variant carries
-     * the one source-level name; Ghidra tells them apart by address.
-     */
-    fun displayName(className: String) = if (isDestructor) "~$className" else className
-
-    companion object {
-        private val byCode = entries.associateBy { it.code }
-
-        /**
-         * Which variant of a constructor or destructor [symbolName] mangles (`_ZN3FooC2Ev` is Foo's base
-         * object constructor), or null for any other name. The demangler prints every variant alike, so
-         * this asks it where the variant's code sits instead: the one `C1`-like spelling that, with the
-         * name cut short before it, still demangles to the same structor of the same class. One inside an
-         * identifier (`3AC1`) or a parameter's type cuts the name somewhere else.
-         */
-        fun of(symbolName: String): StructorVariant? {
-            val fn = Demangler.of(symbolName) as? DemangledFunction ?: return null
-            return STRUCTOR_CODE.findAll(symbolName).firstNotNullOfOrNull { code ->
-                val stub = symbolName.substring(0, code.range.first) + (if (code.value[0] == 'D') "D1Ev" else "C1Ev")
-                val probe = Demangler.of(stub) as? DemangledFunction
-                val cls = fn.namespace ?: return@firstNotNullOfOrNull null
-                // An inheriting constructor demangles under its base's name (`_ZN1BCI21AEi` is `B::A(int)`).
-                val sameName = probe?.name == fn.name || code.value.startsWith("CI")
-                byCode[code.value].takeIf {
-                    probe != null && sameName && probe.namespace?.namespaceString == cls.namespaceString &&
-                        // A structor takes its class's name, less template arguments and ABI tags.
-                        probe.name.removePrefix("~") == cls.name.substringBefore('<').substringBefore("[abi:")
-                }
-            }
-        }
-    }
-}
 
 /** What an Itanium special name ([Itanium.specialName]) is. */
 enum class SpecialName {
