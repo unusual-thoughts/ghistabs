@@ -192,6 +192,13 @@ class ClassNode private constructor(
         if (kind != Kind.NORMAL && kind != Kind.SWEPT && kind != Kind.IMPORTED) {
             append("<br>").append(if (inverted) kind.derivedLabel else kind.label)
         }
+        // Inverted, the clause is the derived class's: where that one holds the class above.
+        edge?.offset?.let {
+            append(if (inverted) "<br>holds it at 0x" else "<br>at offset 0x").append(it.toString(HEX))
+        }
+        info?.size?.let {
+            append(if (info.exactSize) "<br>size 0x" else "<br>size at least 0x").append(it.toString(HEX))
+        }
         info?.vftable?.let { append("<br>vftable at ").append(it) }
         if (info?.vftable == null) info?.typeinfo?.let { append("<br>typeinfo at ").append(it) }
     }
@@ -438,3 +445,5 @@ private fun escape(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").rep
 
 /** Namespaces before classes, then by name, as upstream sorts them. */
 private val NODE_ORDER = compareBy<GTreeNode>({ it is ClassNode }, { it.name.lowercase() }, { it.name })
+
+private const val HEX = 16

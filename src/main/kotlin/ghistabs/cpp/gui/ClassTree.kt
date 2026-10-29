@@ -23,7 +23,10 @@ import ghidra.framework.model.DomainObjectListener
 import ghidra.framework.plugintool.ComponentProviderAdapter
 import ghidra.framework.plugintool.Plugin
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.DataTypeConflictHandler
+import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolType
 import ghidra.program.util.FunctionSignatureFieldLocation
@@ -230,11 +233,15 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
         addLocalAction(
             object : DockingAction("Edit class struct", plugin.name) {
                 override fun actionPerformed(context: ActionContext?) {
-                    selectedClass?.structId?.let { openStruct(it) }
+                    val cls = selectedClass ?: return
+                    (cls.structId ?: createStruct(cls))?.let { openStruct(it) }
                 }
             }.apply {
                 popupMenuData = MenuData(arrayOf("Edit class struct"), STRUCT_ICON)
-                popupWhen { selectedClass?.structId != null }
+                popupWhen {
+                    selectedClass?.let { it.structId != null || it.origin != ClassHierarchy.Origin.IMPORTED } ==
+                        true
+                }
             },
         )
         addLocalAction(
@@ -431,6 +438,21 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
     private fun openSelected() = program?.apply { selectedNode?.let(::addressOf)?.let { goTo(it) } }
 
     private val selectedClass get() = (tree.selectionPath?.lastPathComponent as? ClassNode)?.info
+
+    /**
+     * A struct for [cls], which has none, where Ghidra files a class's, as long as its class record says
+     * it is at least ([ClassHierarchy.ClassInfo.size]); its datatype id.
+     */
+    private fun createStruct(cls: ClassHierarchy.ClassInfo): Long? {
+        val program = program ?: return null
+        val ns = program.symbolTable.getSymbol(cls.id)?.`object` as? GhidraClass ?: return null
+        val dtm = program.dataTypeManager
+        return program.runTransaction("Create class struct") {
+            val struct = VariableUtilities.findOrCreateClassStruct(ns, dtm)
+            cls.size?.takeIf { struct.isZeroLength }?.let { struct.growStructure(it.toInt()) }
+            dtm.getID(dtm.resolve(struct, DataTypeConflictHandler.DEFAULT_HANDLER))
+        }
+    }
 
     private fun openStruct(id: Long) = program?.apply {
         dataTypeManager.getDataType(id)?.let {

@@ -54,6 +54,11 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         diamond.origin mustBe Origin.STABS
         diamond.baseSpelling() mustBe listOf("public Left", "public Right", "public Named")
         diamond.bases.all { hierarchy[it] != null }.mustBeTrue("Diamond's bases resolve to classes: ${diamond.bases}")
+        // Laid one after another from the start; a virtual base has no fixed place.
+        val offsets = diamond.bases.map { it.offset }
+        offsets.first() mustBe 0L
+        offsets.zipWithNext().all { (a, b) -> a != null && b != null && a < b }.mustBeTrue("increasing: $offsets")
+        hierarchy.cls("Left").bases.single().offset mustBe null
 
         for (side in listOf("Left", "Right")) hierarchy.cls(side).baseSpelling() mustBe listOf("virtual public Base")
         hierarchy.cls("Circle").bases.map { hierarchy[it]?.qualifiedName to it.access } mustBe
@@ -88,6 +93,8 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val diamond = root.children.single { it.name == "Diamond" }
         diamond.children.filterIsInstance<ClassNode>().map(GTreeNode::getName) mustBe listOf("Left", "Right", "Named")
         diamond.children.first().children.map(GTreeNode::getName) mustBe listOf("virtual Base")
+        val right = diamond.children.filterIsInstance<ClassNode>()[1]
+        ("at offset 0x" in right.toolTip).mustBeTrue(right.toolTip)
         diamond.children.first().children.single().isLeaf.mustBeTrue()
         "virtual base class" mustBeIn diamond.children.first().children.single().toolTip
     }
