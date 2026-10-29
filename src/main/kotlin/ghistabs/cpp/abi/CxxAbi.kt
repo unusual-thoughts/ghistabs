@@ -2,6 +2,7 @@ package ghistabs.cpp.abi
 
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.Structure
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
@@ -46,8 +47,8 @@ interface CxxMemberNaming {
             m.mangled?.let(::physnameIsImplicit) == true
     }
 
-    /** In-class display form of a ctor/dtor linkage name, or null for anything else. */
-    fun specialMemberDisplayName(mangled: String, className: String): String?
+    /** Which constructor or destructor of [className] a linkage name mangles, or null for anything else. */
+    fun structorOf(mangled: String, className: String): Structor?
 
     /**
      * A member whose definition the compiler may legitimately have dropped, so a missing Function at
@@ -138,6 +139,9 @@ sealed interface CxxAbi : CxxMemberNaming {
      * Itanium's return nothing either, but on ARM, where both return `this`, so neither tells there.
      */
     val constructorsReturnThis: Boolean get() = false
+
+    /** Which of this ABI's variants [func], found to play [role] ([structors]), is; null if that takes more to tell. */
+    fun structorFor(role: StructorRole, func: Function): Structor? = null
 
     /**
      * The names a scalar `operator new(size)` goes by: its mangled ones under this ABI ([mangledOperatorNew])

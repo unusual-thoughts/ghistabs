@@ -28,10 +28,10 @@ interface Structor {
 }
 
 /**
- * What [structors] takes a vptr-storing [constructor], [destructor] and [deleting] destructor for, as
- * the ABI whose functions it reads names them.
+ * What [structors] finds a function that stores a vptr does to its class, whatever the ABI. Which of
+ * its [Structor] variants that is takes the ABI's own evidence ([CxxAbi.structorFor]).
  */
-data class StoringStructors(val constructor: Structor, val destructor: Structor, val deleting: Structor)
+enum class StructorRole { CONSTRUCTOR, DESTRUCTOR, DELETING_DESTRUCTOR }
 
 /**
  * What a function does to its `this`: the [classes], by type descriptor, whose vftables it stores where
@@ -59,7 +59,6 @@ fun storedClass(classes: Set<Address>, ancestors: (Address) -> Set<Address>): Ad
  * constructors if they do and destructors if they don't; under any other only the destructors a
  * deleting one calls are known.
  *
- * Each comes as the ABI calls it ([names]), a deleting destructor as the ABI's first one where it has several.
  */
 fun structors(
     storers: Map<Function, VptrStores>,
@@ -67,8 +66,7 @@ fun structors(
     thisCalls: (Function) -> Set<Function>,
     ancestors: (Address) -> Set<Address>,
     constructorsReturnThis: Boolean,
-    names: StoringStructors,
-): Map<Function, Pair<Address, Structor>> {
+): Map<Function, Pair<Address, StructorRole>> {
     val owners = storers.mapNotNull { (f, s) -> storedClass(s.classes, ancestors)?.let { f to it } }.toMap()
     fun mayDestroy(f: Function) = !constructorsReturnThis || storers[f]?.returnsThis != true
 
@@ -78,23 +76,23 @@ fun structors(
         val derived = held.filter { it == cls || cls in ancestors(it) }
         return derived.singleOrNull { c -> derived.all { it == c || c in ancestors(it) } }
     }
-    val found = mutableMapOf<Function, Pair<Address, Structor>>()
+    val found = mutableMapOf<Function, Pair<Address, StructorRole>>()
     for ((slot, held) in holders) {
         val own = owners[slot]
         if (own != null) {
-            deleting(held, own)?.let { found[slot] = it to names.deleting }
+            deleting(held, own)?.let { found[slot] = it to StructorRole.DELETING_DESTRUCTOR }
             continue
         }
         val dtors = thisCalls(slot).filter(::mayDestroy).mapNotNull { f ->
             owners[f]?.let { cls -> deleting(held, cls)?.let { Triple(f, cls, it) } }
         }
         val (dtor, cls, holder) = dtors.singleOrNull() ?: continue
-        found[slot] = holder to names.deleting
-        found.putIfAbsent(dtor, cls to names.destructor)
+        found[slot] = holder to StructorRole.DELETING_DESTRUCTOR
+        found.putIfAbsent(dtor, cls to StructorRole.DESTRUCTOR)
     }
     if (constructorsReturnThis) {
         for ((f, cls) in owners) {
-            found.putIfAbsent(f, cls to if (mayDestroy(f)) names.destructor else names.constructor)
+            found.putIfAbsent(f, cls to if (mayDestroy(f)) StructorRole.DESTRUCTOR else StructorRole.CONSTRUCTOR)
         }
     }
     return found
