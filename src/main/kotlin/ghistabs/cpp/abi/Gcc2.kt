@@ -279,10 +279,10 @@ sealed interface Gcc2Abi : CxxAbi {
     override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 
     /** The record start: the reserved entry belongs to the `_vftable` struct, which begins there too. */
-    override fun vptrTarget(record: VtableRecord): Address = record.address
+    override fun addressPoint(record: VtableRecord): Address = record.address
 
-    override fun slots(addressPoint: Address, ptrSize: Int) =
-        generateSequence(addressPoint) { it.add(entryWords.toLong() * ptrSize) }
+    override fun slots(slotsStart: Address, ptrSize: Int) =
+        generateSequence(slotsStart) { it.add(entryWords.toLong() * ptrSize) }
             .map { it.add((entryWords - 1L) * ptrSize) }
 
     /** The vptr holds the record start, which is where the `_vftable` struct begins too: header first. */

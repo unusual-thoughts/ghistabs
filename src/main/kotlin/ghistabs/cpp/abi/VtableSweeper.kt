@@ -108,7 +108,7 @@ open class VtableSweeper(
             val record = program.vtableRecord(addr, abi)
             val targets = record.slots(program)
             if (targets.isEmpty()) {
-                degradation("vtable-swept-empty", qualified, "no function pointers", record.addressPoint)
+                degradation("vtable-swept-empty", qualified, "no function pointers", record.slotsStart)
                 continue
             }
             // The class its demangled `vtable` label sits in, where one does: a stabs import may have moved
@@ -279,7 +279,7 @@ open class VtableSweeper(
         val ptr = program.defaultPointerSize.toLong()
         val slots = primary.slots(program).size
         // Only a record with slots is laid: an empty one has no function array to put a struct over.
-        val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
+        val subs = program.secondaryVtables(primary.slotsStart.add(slots * ptr), rtti)
             .filter { it.targets.isNotEmpty() }
         val offsets = listOfNotNull(primaryVftable?.let { 0L }) +
             subs.map { with(abi) { it.record.vfptrOffset(program) } }
@@ -288,7 +288,7 @@ open class VtableSweeper(
         primaryVftable?.let {
             val label = ClassNaming.vftableLabel(internal = false, construction, bases.firstOrNull())
             nameTable(it, ClassNaming.vftableName(path, 0, offsets.size, bases.firstOrNull()), label, leaf, 0L)
-            program.renameVtableLabel(primary.vptrTarget, ClassNaming.vftableLabel(false, construction), label, ns)
+            program.renameVtableLabel(primary.addressPoint, ClassNaming.vftableLabel(false, construction), label, ns)
         }
         val first = offsets.size - subs.size
         subs.forEachIndexed { i, sub ->

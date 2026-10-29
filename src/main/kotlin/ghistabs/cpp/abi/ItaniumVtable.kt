@@ -132,7 +132,7 @@ internal fun Program.itaniumVtableRecord(ztv: Address, abi: CxxAbi): VtableRecor
 
 /** A record of an Itanium `_ZTV` group: where its fixed words sit, and the function pointers it holds. */
 data class SubVtable(val record: VtableRecord, val targets: List<Address>) {
-    fun endOfSlots(ptrSize: Int): Address = record.addressPoint.add(targets.size.toLong() * ptrSize)
+    fun endOfSlots(ptrSize: Int): Address = record.slotsStart.add(targets.size.toLong() * ptrSize)
 }
 
 /**
