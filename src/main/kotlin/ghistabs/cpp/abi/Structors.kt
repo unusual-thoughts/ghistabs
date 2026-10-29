@@ -68,7 +68,7 @@ fun structors(
     ancestors: (Address) -> Set<Address>,
     constructorsReturnThis: Boolean,
     names: StoringStructors,
-): Map<Function, Pair<Address, Structor>> {
+): Map<Function, Pair<Address, Structor>> = buildMap {
     val owners = storers.mapNotNull { (f, s) -> storedClass(s.classes, ancestors)?.let { f to it } }.toMap()
     fun mayDestroy(f: Function) = !constructorsReturnThis || storers[f]?.returnsThis != true
 
@@ -78,26 +78,24 @@ fun structors(
         val derived = held.filter { it == cls || cls in ancestors(it) }
         return derived.singleOrNull { c -> derived.all { it == c || c in ancestors(it) } }
     }
-    val found = mutableMapOf<Function, Pair<Address, Structor>>()
     for ((slot, held) in holders) {
         val own = owners[slot]
         if (own != null) {
-            deleting(held, own)?.let { found[slot] = it to names.deleting }
+            deleting(held, own)?.let { this[slot] = it to names.deleting }
             continue
         }
         val dtors = thisCalls(slot).filter(::mayDestroy).mapNotNull { f ->
             owners[f]?.let { cls -> deleting(held, cls)?.let { Triple(f, cls, it) } }
         }
         val (dtor, cls, holder) = dtors.singleOrNull() ?: continue
-        found[slot] = holder to names.deleting
-        found.putIfAbsent(dtor, cls to names.destructor)
+        this[slot] = holder to names.deleting
+        putIfAbsent(dtor, cls to names.destructor)
     }
     if (constructorsReturnThis) {
         for ((f, cls) in owners) {
-            found.putIfAbsent(f, cls to if (mayDestroy(f)) names.destructor else names.constructor)
+            putIfAbsent(f, cls to if (mayDestroy(f)) names.destructor else names.constructor)
         }
     }
-    return found
 }
 
 /**
