@@ -87,7 +87,7 @@ fun <K, F> virtualOwners(holders: Map<F, Set<K>>, ancestors: (K) -> Set<K>, hasV
  * `Windows x86 PE RTTI Analyzer` has laid and labelled: each class's direct bases off its Class Hierarchy
  * Descriptor, written to [ClassHierarchyRecords], and each virtual function off the vftables, moved into
  * the class it belongs to ([virtualOwners]) and marked virtual for the Class Hierarchy window, and each
- * constructor and destructor, found by the vptrs it stores ([structors]), moved there and named.
+ * constructor and destructor, found by the vptrs it stores ([StructorFinder]), moved there and named.
  *
  * Classes are keyed by their type descriptor's address, which every RTTI record names a class by.
  */
@@ -134,7 +134,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         if (shared > 0) {
             debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
         }
-        val structors = findStructors(classes, holders, monitor)
+        val structors = StructorFinder(program, tables, this)
+            .find(holders, { classes[it]?.ancestors.orEmpty() }, Msvc.constructorsReturnThis, monitor)
         val named = structors.count { (func, structor) ->
             val cls = classes[structor.first]?.ns?.toClass() ?: return@count false
             nameStructor(func, cls, structor.second)
@@ -197,22 +198,6 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return func.parentNamespace.isGlobal && runCatching { func.parentNamespace = ns }
             .onFailure { warn("msvc-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
             .isSuccess
-    }
-
-    /** Each class's constructors, destructor and deleting destructor ([structors]), off the vptrs they store. */
-    private fun findStructors(
-        classes: Map<Address, RttiClass>,
-        holders: Map<Function, Set<Address>>,
-        monitor: TaskMonitor,
-    ): Map<Function, Pair<Address, StructorRole>> {
-        val reading = VptrStoreReader(program, tables, this).read(holders.keys, monitor)
-        return structors(
-            reading.stores,
-            holders,
-            { reading.thisCalls[it].orEmpty() },
-            { classes[it]?.ancestors.orEmpty() },
-            Msvc.constructorsReturnThis,
-        )
     }
 
     /**

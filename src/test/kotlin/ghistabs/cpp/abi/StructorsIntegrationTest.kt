@@ -51,13 +51,10 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         holders: Map<String, Set<Address>>,
         calls: Map<String, Set<String>> = emptyMap(),
         constructorsReturnThis: Boolean = true,
-    ) = structors(
+    ) = StructorFinder.Reading(
         storers.mapKeys { fn(it.key) },
-        holders.mapKeys { fn(it.key) },
-        { f -> calls[f.name].orEmpty().mapTo(mutableSetOf(), ::fn) },
-        ancestors::getValue,
-        constructorsReturnThis,
-    ).mapKeys { it.key.name }
+        calls.entries.associate { (f, called) -> fn(f) to called.mapTo(mutableSetOf(), ::fn) },
+    ).roles(holders.mapKeys { fn(it.key) }, ancestors::getValue, constructorsReturnThis).mapKeys { it.key.name }
 
     @Test
     fun `a function storing a base's vptr and then its own builds the derived class`() {
