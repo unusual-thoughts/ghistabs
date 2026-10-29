@@ -22,19 +22,28 @@ import ghistabs.toClass
 
 /**
  * One entry of a class's RTTI Base Class Array: the class [descriptor] that describes it, how many entries after
- * it are that class's own bases ([contained]), and how the most derived class holds it.
+ * it are that class's own bases ([contained]), how the most derived class holds it, and where in it: [offset],
+ * the descriptor's `mdisp`, which for a virtual base is from wherever its vbtable puts it instead. MSVC says
+ * only whether a base is public, so one that isn't reads as private.
  */
-data class BaseEntry(val descriptor: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean) {
+data class BaseEntry(
+    val descriptor: Address,
+    val contained: Int,
+    override val isVirtual: Boolean,
+    override val access: Access,
+    override val offset: Long = 0,
+) : BaseDecl {
     /** An entry by its Base Class Descriptor's `attributes`. */
-    constructor(descriptor: Address, contained: Int, attributes: Int) : this(
+    constructor(descriptor: Address, contained: Int, attributes: Int, offset: Long = 0) : this(
         descriptor,
         contained,
         isVirtual = attributes and Msvc.BCD_VBOFCONTOBJ != 0,
-        isPublic = attributes and Msvc.BCD_NONPUBLIC == 0,
+        access = if (attributes and Msvc.BCD_NONPUBLIC == 0) Access.PUBLIC else Access.PRIVATE,
+        offset = offset,
     )
 
     /** The entry a Base Class Descriptor makes. */
-    constructor(bcd: Rtti1Model) : this(bcd.rtti0Address, bcd.numBases, bcd.attributes)
+    constructor(bcd: Rtti1Model) : this(bcd.rtti0Address, bcd.numBases, bcd.attributes, bcd.mDisp.toLong())
 }
 
 /**
@@ -121,8 +130,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     private fun readHierarchies() = labelled(Msvc.CLASS_HIERARCHY_DESCRIPTOR).mapNotNull { sym ->
         runCatching {
             val chd = Rtti3Model(program, sym.address, options)
-            val bca = chd.rtti2Model
-            val array = (0..<chd.rtti1Count).map { BaseEntry(bca.getRtti1Model(it)) }
+            val array = chd.baseClassArray()
             val td = array.first().descriptor
             RttiClass(td, sym.parentNamespace.takeUnless { it.isGlobal }, chd.rtti0Model.descriptorName, array)
         }.onFailure { warn("msvc-hierarchy-unread", "${sym.name}: ${it.message}", sym.address) }.getOrNull()
@@ -184,7 +192,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
                     baseNs?.id,
                     if (baseNs == null) base?.name ?: "?" else null,
                     b.isVirtual,
-                    if (b.isPublic) Access.PUBLIC else Access.PRIVATE,
+                    b.access,
+                    b.offset.takeUnless { b.isVirtual },
                 )
             }
             ns.id to ClassHierarchyRecords.Entry(classStructId(ns), bases)
@@ -203,6 +212,11 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val struct = dtm.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure ?: return null
         return dtm.getID(struct).takeIf { it >= 0 }
     }
+}
+
+/** The Base Class Array a Class Hierarchy Descriptor points at: the class itself first, then its bases. */
+fun Rtti3Model.baseClassArray(): List<BaseEntry> = rtti2Model.let { bca ->
+    (0..<rtti1Count).map { BaseEntry(bca.getRtti1Model(it)) }
 }
 
 /**

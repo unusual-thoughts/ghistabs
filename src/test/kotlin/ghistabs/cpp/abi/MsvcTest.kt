@@ -2,6 +2,7 @@ package ghistabs.cpp.abi
 
 import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace
+import ghistabs.cpp.Access
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.Test
@@ -13,7 +14,7 @@ class MsvcTest {
     private fun td(name: String) = space.getAddress(name.hashCode().toLong() and 0xffff)
 
     private fun entry(type: String, contained: Int = 0, isVirtual: Boolean = false) =
-        BaseEntry(td(type), contained, isVirtual, isPublic = true)
+        BaseEntry(td(type), contained, isVirtual, Access.PUBLIC)
 
     @Test
     fun `direct bases step over each base's own`() {
@@ -34,7 +35,7 @@ class MsvcTest {
         // class D : virtual B, with B : A: A has a pDisp too, but only B is declared virtual
         BaseEntry(td("B"), 1, 0x40 or Msvc.BCD_VBOFCONTOBJ).isVirtual mustBe true
         BaseEntry(td("A"), 0, 0x40).isVirtual mustBe false
-        BaseEntry(td("P"), 0, 0x40 or 0x4).isPublic mustBe false
+        BaseEntry(td("P"), 0, 0x40 or 0x4).access mustBe Access.PRIVATE
     }
 
     private val bases = mapOf(
