@@ -214,9 +214,9 @@ object Itanium : CxxAbi {
     override fun physnameIsImplicit(physname: String): Boolean =
         physname.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(physname)
 
-    /** In-class display form of a ctor/dtor linkage name: its [StructorVariant]'s. */
+    /** In-class display form of a ctor/dtor linkage name: its [ItaniumStructor]'s. */
     override fun specialMemberDisplayName(mangled: String, className: String): String? =
-        StructorVariant.of(mangled)?.displayName(className)
+        ItaniumStructor.of(mangled)?.displayName(className)
 }
 
 // Cygwin's PE loader prepends one more `_`: `__ZTV…`.
@@ -239,6 +239,65 @@ internal fun typeinfoTypeOf(symbolName: String) = symbolName.trimDoubleUnderscor
     .takeIf { it.startsWith(Itanium.TYPEINFO_PREFIX) }?.removePrefix(Itanium.TYPEINFO_PREFIX)
 
 private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
+
+/**
+ * A constructor's or destructor's variant, by the code in its Itanium linkage name ([of]). gcc >= 3 emits
+ * one function per variant it needs, all under the one name the source gives.
+ */
+enum class ItaniumStructor(val code: String, val label: String, override val isDestructor: Boolean) : Structor {
+    COMPLETE_CTOR("C1", "complete", false),
+    BASE_CTOR("C2", "base", false),
+
+    /** In the ABI; gcc never emits it. */
+    ALLOCATING_CTOR("C3", "allocating", false),
+
+    /** gcc's "unified" one, which both of the above call to share code. */
+    UNIFIED_CTOR("C4", "unified", false),
+
+    /** gcc >= 7's constructor inherited from a base (`using Base::Base`). */
+    COMPLETE_INHERITING_CTOR("CI1", "complete inheriting", false),
+    BASE_INHERITING_CTOR("CI2", "base inheriting", false),
+    DELETING_DTOR("D0", "deleting", true),
+    COMPLETE_DTOR("D1", "complete", true),
+    BASE_DTOR("D2", "base", true),
+    UNIFIED_DTOR("D4", "unified", true),
+    ;
+
+    override val isDeleting get() = this == DELETING_DTOR
+
+    /** Every variant carries the one source-level name; Ghidra tells them apart by address. */
+    override fun displayName(className: String) = if (isDestructor) "~$className" else className
+
+    companion object {
+        private val byCode = entries.associateBy { it.code }
+
+        /** A constructor or destructor name, as gcc's mangle.cc writes them (`write_special_name_constructor`). */
+        private val STRUCTOR_CODE = Regex("""CI[12]|C[1-4]|D[0124]""")
+
+        /**
+         * Which variant of a constructor or destructor [symbolName] mangles (`_ZN3FooC2Ev` is Foo's base
+         * object constructor), or null for any other name. The demangler prints every variant alike, so
+         * this asks it where the variant's code sits instead: the one `C1`-like spelling that, with the
+         * name cut short before it, still demangles to the same structor of the same class. One inside an
+         * identifier (`3AC1`) or a parameter's type cuts the name somewhere else.
+         */
+        fun of(symbolName: String): ItaniumStructor? {
+            val fn = Demangler.of(symbolName) as? DemangledFunction ?: return null
+            return STRUCTOR_CODE.findAll(symbolName).firstNotNullOfOrNull { code ->
+                val stub = symbolName.substring(0, code.range.first) + (if (code.value[0] == 'D') "D1Ev" else "C1Ev")
+                val probe = Demangler.of(stub) as? DemangledFunction
+                val cls = fn.namespace ?: return@firstNotNullOfOrNull null
+                // An inheriting constructor demangles under its base's name (`_ZN1BCI21AEi` is `B::A(int)`).
+                val sameName = probe?.name == fn.name || code.value.startsWith("CI")
+                byCode[code.value].takeIf {
+                    probe != null && sameName && probe.namespace?.namespaceString == cls.namespaceString &&
+                        // A structor takes its class's name, less template arguments and ABI tags.
+                        probe.name.removePrefix("~") == cls.name.substringBefore('<').substringBefore("[abi:")
+                }
+            }
+        }
+    }
+}
 
 /** What an Itanium special name ([Itanium.specialName]) is. */
 enum class SpecialName {
