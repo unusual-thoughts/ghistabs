@@ -140,7 +140,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             nameStructor(func, cls, structor.second)
         }
         val ctors = structors.filterValues { it.second == StructorKind.CONSTRUCTOR }.mapValues { it.value.first }
-        val sizes = sizeClasses(classes, NewSizeReader<Address>(program, this).read(ctors, monitor))
+        val sizes = sizeClasses(classes, NewSizeReader<Address>(program, Msvc, this).read(ctors, monitor))
         writeRecords(classes, sizes)
         return Result(classes.size, owners.size - shared, moved, shared, named, sizes.size)
     }
