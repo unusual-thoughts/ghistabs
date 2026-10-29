@@ -17,16 +17,16 @@ import ghistabs.useWith
 enum class StructorKind { CONSTRUCTOR, DESTRUCTOR, DELETING_DESTRUCTOR }
 
 /**
- * What a function does to its `this`: the [classes] whose vftables it stores where they belong in it,
- * and whether it hands `this` back ([returnsThis]).
+ * What a function does to its `this`: the [classes], by type descriptor, whose vftables it stores where
+ * they belong in it, and whether it hands `this` back ([returnsThis]).
  */
-data class VptrStores<K>(val classes: Set<K>, val returnsThis: Boolean)
+data class VptrStores(val classes: Set<Address>, val returnsThis: Boolean)
 
 /**
  * The class a function storing [classes]' vftables builds or tears down: the most derived of them,
  * which the others are bases of, inlined. Null for classes that are not one line of descent.
  */
-fun <K> storedClass(classes: Set<K>, ancestors: (K) -> Set<K>): K? =
+fun storedClass(classes: Set<Address>, ancestors: (Address) -> Set<Address>): Address? =
     classes.singleOrNull { c -> classes.all { it == c || it in ancestors(c) } }
 
 /**
@@ -42,23 +42,23 @@ fun <K> storedClass(classes: Set<K>, ancestors: (K) -> Set<K>): K? =
  * constructors if they do and destructors if they don't; under any other only the destructors a
  * deleting one calls are known.
  */
-fun <K, F> structors(
-    storers: Map<F, VptrStores<K>>,
-    holders: Map<F, Set<K>>,
-    thisCalls: (F) -> Set<F>,
-    ancestors: (K) -> Set<K>,
+fun structors(
+    storers: Map<Function, VptrStores>,
+    holders: Map<Function, Set<Address>>,
+    thisCalls: (Function) -> Set<Function>,
+    ancestors: (Address) -> Set<Address>,
     constructorsReturnThis: Boolean,
-): Map<F, Pair<K, StructorKind>> {
+): Map<Function, Pair<Address, StructorKind>> {
     val owners = storers.mapNotNull { (f, s) -> storedClass(s.classes, ancestors)?.let { f to it } }.toMap()
-    fun mayDestroy(f: F) = !constructorsReturnThis || storers[f]?.returnsThis != true
+    fun mayDestroy(f: Function) = !constructorsReturnThis || storers[f]?.returnsThis != true
 
     // The holder whose deleting destructor a slot is, if it tears down a [cls] in the end: [cls] itself, or the
     // one class deriving from it that the others do too, whose own destructor the compiler left no vptr store in.
-    fun deleting(held: Set<K>, cls: K): K? {
+    fun deleting(held: Set<Address>, cls: Address): Address? {
         val derived = held.filter { it == cls || cls in ancestors(it) }
         return derived.singleOrNull { c -> derived.all { it == c || c in ancestors(it) } }
     }
-    val found = mutableMapOf<F, Pair<K, StructorKind>>()
+    val found = mutableMapOf<Function, Pair<Address, StructorKind>>()
     for ((slot, held) in holders) {
         val own = owners[slot]
         if (own != null) {
@@ -88,18 +88,18 @@ fun <K, F> structors(
  * object's table stored further in; a call, only with `this` for its first argument, which leaves out
  * a method building and destroying a local of a class it has nothing else to do with.
  */
-class VptrStoreReader<K>(
+class VptrStoreReader(
     private val program: Program,
-    private val tables: Map<Address, Pair<K, Long>>,
+    private val tables: Map<Address, Pair<Address, Long>>,
     sink: DiagnosticSink,
 ) : DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
 
-    class Reading<K>(val stores: Map<Function, VptrStores<K>>, val thisCalls: Map<Function, Set<Function>>)
+    class Reading(val stores: Map<Function, VptrStores>, val thisCalls: Map<Function, Set<Function>>)
 
     /** The storers' stores, and what they and [others] call on `this`. */
-    fun read(others: Collection<Function>, monitor: TaskMonitor): Reading<K> {
-        val writes = mutableMapOf<Function, MutableMap<Address, MutableList<Pair<K, Long>>>>()
+    fun read(others: Collection<Function>, monitor: TaskMonitor): Reading {
+        val writes = mutableMapOf<Function, MutableMap<Address, MutableList<Pair<Address, Long>>>>()
         for ((table, served) in tables) {
             for (ref in program.referenceManager.getReferencesTo(table)) {
                 val at = ref.fromAddress
@@ -109,7 +109,7 @@ class VptrStoreReader<K>(
             }
         }
         if (writes.isEmpty() || thisStorage == null) return Reading(emptyMap(), emptyMap())
-        val stores = mutableMapOf<Function, VptrStores<K>>()
+        val stores = mutableMapOf<Function, VptrStores>()
         val thisCalls = mutableMapOf<Function, Set<Function>>()
         DecompInterface().useWith(program) { decomp ->
             for (func in writes.keys + others) {
@@ -131,8 +131,8 @@ class VptrStoreReader<K>(
         .mapNotNull { program.functionManager.getFunctionAt(it.getInput(0).address) }
         .mapTo(mutableSetOf()) { it.getThunkedFunction(true) ?: it }
 
-    private fun HighFunction.vptrStores(at: Map<Address, List<Pair<K, Long>>>): VptrStores<K> {
-        val classes = mutableSetOf<K>()
+    private fun HighFunction.vptrStores(at: Map<Address, List<Pair<Address, Long>>>): VptrStores {
+        val classes = mutableSetOf<Address>()
         var returnsThis = false
         for (op in pcodeOps.asSequence()) {
             when (op.opcode) {
