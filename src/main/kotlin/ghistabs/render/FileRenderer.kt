@@ -6,7 +6,7 @@ import ghistabs.chunkOf
 import ghistabs.cpp.VirtKind
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.Gcc2
-import ghistabs.cpp.abi.StructorVariant
+import ghistabs.cpp.abi.ItaniumStructor
 import ghistabs.cpp.member
 import ghistabs.cpp.qualifiedName
 import ghistabs.cpp.templateLeaf
@@ -289,7 +289,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
      */
     private fun TypeDecl.Aggregate<GlobalTypeId>.declaresVirtualDtor() = methods.any { m ->
         val physname = m.mangled ?: return@any false
-        val dtor = StructorVariant.of(physname)?.isDestructor == true || Gcc2.isDtorName(physname)
+        val dtor = ItaniumStructor.of(physname)?.isDestructor == true || Gcc2.isDtorName(physname)
         m.virt == VirtKind.VIRTUAL && dtor
     }
 

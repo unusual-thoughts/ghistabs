@@ -1,7 +1,6 @@
 package ghistabs.cpp.abi
 
 import ghidra.app.decompiler.DecompInterface
-import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
@@ -9,85 +8,30 @@ import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.util.task.TaskMonitor
-import ghistabs.Demangler
 import ghistabs.cpp.pointerInto
 import ghistabs.cpp.thisStorage
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
 /**
- * A constructor's or destructor's variant: Itanium's, by the code in its linkage name ([of]), or MSVC's,
- * whose deleting destructors ([SCALAR_DELETING_DTOR], [VECTOR_DELETING_DTOR]) are functions of their
- * own. gcc >= 3 emits one function per variant it needs, all under the one name the source gives.
+ * A constructor or destructor as its ABI tells its variants apart: [ItaniumStructor] by the code in its
+ * linkage name, [MsvcStructor] by its special name.
  */
-enum class StructorVariant(val code: String, val label: String, val isDestructor: Boolean) {
-    COMPLETE_CTOR("C1", "complete", false),
-    BASE_CTOR("C2", "base", false),
+interface Structor {
+    val isDestructor: Boolean
 
-    /** In the ABI; gcc never emits it. */
-    ALLOCATING_CTOR("C3", "allocating", false),
+    /** A destructor that frees the object too, as the vftable slot for its destructor does. */
+    val isDeleting: Boolean
 
-    /** gcc's "unified" one, which both of the above call to share code. */
-    UNIFIED_CTOR("C4", "unified", false),
-
-    /** gcc >= 7's constructor inherited from a base (`using Base::Base`). */
-    COMPLETE_INHERITING_CTOR("CI1", "complete inheriting", false),
-    BASE_INHERITING_CTOR("CI2", "base inheriting", false),
-    DELETING_DTOR("D0", "deleting", true),
-    COMPLETE_DTOR("D1", "complete", true),
-    BASE_DTOR("D2", "base", true),
-    UNIFIED_DTOR("D4", "unified", true),
-
-    /** MSVC's `??_G`, the slot that destroys and frees one object. */
-    SCALAR_DELETING_DTOR("??_G", "scalar deleting", true),
-
-    /** MSVC's `??_E`, which destroys an array of them instead when its flags argument has bit 2 set. */
-    VECTOR_DELETING_DTOR("??_E", "vector deleting", true),
-    ;
-
-    val isDeleting get() = this == DELETING_DTOR || this == SCALAR_DELETING_DTOR || this == VECTOR_DELETING_DTOR
-
-    /**
-     * How the class [className] spells this member in its own body: `Foo`, `~Foo`. Every Itanium variant
-     * carries the one source-level name, and Ghidra tells them apart by address; an MSVC deleting
-     * destructor goes by the name Ghidra's demangler gives `??_G` or `??_E`.
-     */
-    fun displayName(className: String) = when (this) {
-        SCALAR_DELETING_DTOR -> "`scalar_deleting_destructor'"
-        VECTOR_DELETING_DTOR -> "`vector_deleting_destructor'"
-        else -> if (isDestructor) "~$className" else className
-    }
-
-    companion object {
-        private val byCode = entries.associateBy { it.code }
-
-        /** A constructor or destructor name, as gcc's mangle.cc writes them (`write_special_name_constructor`). */
-        private val STRUCTOR_CODE = Regex("""CI[12]|C[1-4]|D[0124]""")
-
-        /**
-         * Which variant of a constructor or destructor [symbolName] mangles (`_ZN3FooC2Ev` is Foo's base
-         * object constructor), or null for any other name. The demangler prints every variant alike, so
-         * this asks it where the variant's code sits instead: the one `C1`-like spelling that, with the
-         * name cut short before it, still demangles to the same structor of the same class. One inside an
-         * identifier (`3AC1`) or a parameter's type cuts the name somewhere else.
-         */
-        fun of(symbolName: String): StructorVariant? {
-            val fn = Demangler.of(symbolName) as? DemangledFunction ?: return null
-            return STRUCTOR_CODE.findAll(symbolName).firstNotNullOfOrNull { code ->
-                val stub = symbolName.substring(0, code.range.first) + (if (code.value[0] == 'D') "D1Ev" else "C1Ev")
-                val probe = Demangler.of(stub) as? DemangledFunction
-                val cls = fn.namespace ?: return@firstNotNullOfOrNull null
-                // An inheriting constructor demangles under its base's name (`_ZN1BCI21AEi` is `B::A(int)`).
-                val sameName = probe?.name == fn.name || code.value.startsWith("CI")
-                byCode[code.value].takeIf {
-                    probe != null && sameName && probe.namespace?.namespaceString == cls.namespaceString &&
-                        // A structor takes its class's name, less template arguments and ABI tags.
-                        probe.name.removePrefix("~") == cls.name.substringBefore('<').substringBefore("[abi:")
-                }
-            }
-        }
-    }
+    /** How the class [className] spells this member in its own body: `Foo`, `~Foo`. */
+    fun displayName(className: String): String
 }
+
+/**
+ * What [structors] takes a vptr-storing [constructor], [destructor] and [deleting] destructor for, as
+ * the ABI whose functions it reads names them.
+ */
+data class StoringStructors(val constructor: Structor, val destructor: Structor, val deleting: Structor)
 
 /**
  * What a function does to its `this`: the [classes], by type descriptor, whose vftables it stores where
@@ -115,9 +59,7 @@ fun storedClass(classes: Set<Address>, ancestors: (Address) -> Set<Address>): Ad
  * constructors if they do and destructors if they don't; under any other only the destructors a
  * deleting one calls are known.
  *
- * Each comes as the variant it acts as: a [StructorVariant.COMPLETE_CTOR] (MSVC's `??0` builds the whole
- * object, its virtual bases behind a flag), a [StructorVariant.BASE_DTOR] (`??1` leaves those to `??_D`),
- * or a [StructorVariant.DELETING_DTOR], which the ABI's own names tell apart further.
+ * Each comes as the ABI calls it ([names]), a deleting destructor as the ABI's first one where it has several.
  */
 fun structors(
     storers: Map<Function, VptrStores>,
@@ -125,7 +67,8 @@ fun structors(
     thisCalls: (Function) -> Set<Function>,
     ancestors: (Address) -> Set<Address>,
     constructorsReturnThis: Boolean,
-): Map<Function, Pair<Address, StructorVariant>> {
+    names: StoringStructors,
+): Map<Function, Pair<Address, Structor>> {
     val owners = storers.mapNotNull { (f, s) -> storedClass(s.classes, ancestors)?.let { f to it } }.toMap()
     fun mayDestroy(f: Function) = !constructorsReturnThis || storers[f]?.returnsThis != true
 
@@ -135,23 +78,23 @@ fun structors(
         val derived = held.filter { it == cls || cls in ancestors(it) }
         return derived.singleOrNull { c -> derived.all { it == c || c in ancestors(it) } }
     }
-    val found = mutableMapOf<Function, Pair<Address, StructorVariant>>()
+    val found = mutableMapOf<Function, Pair<Address, Structor>>()
     for ((slot, held) in holders) {
         val own = owners[slot]
         if (own != null) {
-            deleting(held, own)?.let { found[slot] = it to StructorVariant.DELETING_DTOR }
+            deleting(held, own)?.let { found[slot] = it to names.deleting }
             continue
         }
         val dtors = thisCalls(slot).filter(::mayDestroy).mapNotNull { f ->
             owners[f]?.let { cls -> deleting(held, cls)?.let { Triple(f, cls, it) } }
         }
         val (dtor, cls, holder) = dtors.singleOrNull() ?: continue
-        found[slot] = holder to StructorVariant.DELETING_DTOR
-        found.putIfAbsent(dtor, cls to StructorVariant.BASE_DTOR)
+        found[slot] = holder to names.deleting
+        found.putIfAbsent(dtor, cls to names.destructor)
     }
     if (constructorsReturnThis) {
         for ((f, cls) in owners) {
-            found.putIfAbsent(f, cls to if (mayDestroy(f)) StructorVariant.BASE_DTOR else StructorVariant.COMPLETE_CTOR)
+            found.putIfAbsent(f, cls to if (mayDestroy(f)) names.destructor else names.constructor)
         }
     }
     return found
