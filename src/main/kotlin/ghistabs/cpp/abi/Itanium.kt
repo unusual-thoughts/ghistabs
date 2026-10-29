@@ -6,6 +6,7 @@ import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
@@ -220,13 +221,12 @@ object Itanium : CxxAbi {
     override fun physnameIsImplicit(physname: String): Boolean =
         physname.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(physname)
 
-    /** In-class display form of a ctor/dtor linkage name: its [StructorVariant]'s. */
-    override fun specialMemberDisplayName(mangled: String, className: String): String? =
-        StructorVariant.of(mangled)?.displayName(className)
-}
+    override fun structorOf(mangled: String, className: String?) = ItaniumStructor.of(mangled)
 
-/** A constructor or destructor name, as gcc's mangle.cc writes them (`write_special_name_constructor`). */
-private val STRUCTOR_CODE = Regex("""CI[12]|C[1-4]|D[0124]""")
+    /** Only the deleting destructor: vptr stores alone don't tell a complete object's structors from a base's. */
+    override fun structorFor(role: StructorRole, func: Function) =
+        ItaniumStructor.DELETING_DTOR.takeIf { role == StructorRole.DELETING_DESTRUCTOR }
+}
 
 // Cygwin's PE loader prepends one more `_`: `__ZTV…`.
 
@@ -250,38 +250,38 @@ internal fun typeinfoTypeOf(symbolName: String) = symbolName.trimDoubleUnderscor
 private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
 
 /**
- * A constructor's or destructor's variant, by its Itanium linkage name ([of]). gcc >= 3 emits one
- * function per variant it needs, all under the one name the source gives.
+ * A constructor's or destructor's variant, by the code in its Itanium linkage name ([of]). gcc >= 3 emits
+ * one function per variant it needs, all under the one name the source gives.
  */
-enum class StructorVariant(val code: String, val label: String) {
-    COMPLETE_CTOR("C1", "complete"),
-    BASE_CTOR("C2", "base"),
+enum class ItaniumStructor(val code: String, val label: String, override val isDestructor: Boolean) : Structor {
+    COMPLETE_CTOR("C1", "complete", false),
+    BASE_CTOR("C2", "base", false),
 
     /** In the ABI; gcc never emits it. */
-    ALLOCATING_CTOR("C3", "allocating"),
+    ALLOCATING_CTOR("C3", "allocating", false),
 
     /** gcc's "unified" one, which both of the above call to share code. */
-    UNIFIED_CTOR("C4", "unified"),
+    UNIFIED_CTOR("C4", "unified", false),
 
     /** gcc >= 7's constructor inherited from a base (`using Base::Base`). */
-    COMPLETE_INHERITING_CTOR("CI1", "complete inheriting"),
-    BASE_INHERITING_CTOR("CI2", "base inheriting"),
-    DELETING_DTOR("D0", "deleting"),
-    COMPLETE_DTOR("D1", "complete"),
-    BASE_DTOR("D2", "base"),
-    UNIFIED_DTOR("D4", "unified"),
+    COMPLETE_INHERITING_CTOR("CI1", "complete inheriting", false),
+    BASE_INHERITING_CTOR("CI2", "base inheriting", false),
+    DELETING_DTOR("D0", "deleting", true),
+    COMPLETE_DTOR("D1", "complete", true),
+    BASE_DTOR("D2", "base", true),
+    UNIFIED_DTOR("D4", "unified", true),
     ;
 
-    val isDestructor get() = code[0] == 'D'
+    override val isDeleting get() = this == DELETING_DTOR
 
-    /**
-     * How the class [className] spells this member in its own body: `Foo`, `~Foo`. Every variant carries
-     * the one source-level name; Ghidra tells them apart by address.
-     */
-    fun displayName(className: String) = if (isDestructor) "~$className" else className
+    /** Every variant carries the one source-level name; Ghidra tells them apart by address. */
+    override fun displayName(className: String) = if (isDestructor) "~$className" else className
 
     companion object {
         private val byCode = entries.associateBy { it.code }
+
+        /** A constructor or destructor name, as gcc's mangle.cc writes them (`write_special_name_constructor`). */
+        private val STRUCTOR_CODE = Regex("""CI[12]|C[1-4]|D[0124]""")
 
         /**
          * Which variant of a constructor or destructor [symbolName] mangles (`_ZN3FooC2Ev` is Foo's base
@@ -290,7 +290,7 @@ enum class StructorVariant(val code: String, val label: String) {
          * name cut short before it, still demangles to the same structor of the same class. One inside an
          * identifier (`3AC1`) or a parameter's type cuts the name somewhere else.
          */
-        fun of(symbolName: String): StructorVariant? {
+        fun of(symbolName: String): ItaniumStructor? {
             val fn = Demangler.of(symbolName) as? DemangledFunction ?: return null
             return STRUCTOR_CODE.findAll(symbolName).firstNotNullOfOrNull { code ->
                 val stub = symbolName.substring(0, code.range.first) + (if (code.value[0] == 'D') "D1Ev" else "C1Ev")

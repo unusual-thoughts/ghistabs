@@ -3,6 +3,7 @@
 package ghistabs
 
 import ghidra.app.cmd.function.CallDepthChangeInfo
+import ghidra.app.decompiler.DecompInterface
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.PseudoData
 import ghidra.app.util.bin.FileByteProvider
@@ -439,3 +440,10 @@ fun <R> Any.withProgram(
     monitor: TaskMonitor? = null,
     func: (Program) -> R,
 ): R = loadProgram(binary, compiler, log, monitor).use { func(it.program) }
+
+/** [f] over this decompiler open on [program], null if it would not open; disposed of either way. */
+fun <T> DecompInterface.useWith(program: Program, f: (DecompInterface) -> T): T? = try {
+    if (openProgram(program)) f(this) else null
+} finally {
+    dispose()
+}
