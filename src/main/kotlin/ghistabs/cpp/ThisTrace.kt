@@ -2,6 +2,7 @@ package ghistabs.cpp
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
@@ -40,8 +41,8 @@ fun Function.fastcallToThiscall(): Boolean {
     }.isSuccess
 }
 
-private const val FASTCALL = "__fastcall"
-private const val THISCALL = "__thiscall"
+private const val FASTCALL = CompilerSpec.CALLING_CONVENTION_fastcall
+private const val THISCALL = CompilerSpec.CALLING_CONVENTION_thiscall
 
 /** A pointer as the value it points into ([root]) and how far past it ([offset]). */
 data class PointerInto(val root: Varnode, val offset: Long) {
@@ -53,34 +54,27 @@ data class PointerInto(val root: Varnode, val offset: Long) {
  * Trace a decompiled pointer back through copies, casts and constant adds, and through a phi whose
  * other inputs are all null, as a pointer from `new` checked before its constructor runs is.
  */
-fun Varnode.pointerInto(): PointerInto {
-    var vn = this
-    var offset = 0L
-    repeat(MAX_TRACE) {
-        val def = vn.def ?: return PointerInto(vn, offset)
-        vn = when (def.opcode) {
-            PcodeOp.COPY, PcodeOp.CAST -> def.getInput(0)
+fun Varnode.pointerInto(offset: Long = 0, depth: Int = 0): PointerInto = when (
+    (def?.opcode)?.takeIf { depth < MAX_TRACE }
+) {
+    PcodeOp.COPY, PcodeOp.CAST -> def.getInput(0).pointerInto(offset, depth + 1)
 
-            PcodeOp.INT_ADD, PcodeOp.PTRSUB -> {
-                val by = def.getInput(1).takeIf { it.isConstant } ?: return PointerInto(vn, offset)
-                offset += by.offset
-                def.getInput(0)
-            }
+    PcodeOp.INT_ADD, PcodeOp.PTRSUB -> def.getInput(1).takeIf { it.isConstant }?.let { by ->
+        def.getInput(0).pointerInto(offset + by.offset, depth + 1)
+    }
 
-            PcodeOp.PTRADD -> {
-                val (index, size) = def.getInput(1) to def.getInput(2)
-                if (!index.isConstant || !size.isConstant) return PointerInto(vn, offset)
-                offset += index.offset * size.offset
-                def.getInput(0)
-            }
-
-            PcodeOp.MULTIEQUAL -> def.inputs.filterNot { it.isConstant && it.offset == 0L }.singleOrNull()
-                ?: return PointerInto(vn, offset)
-
-            else -> return PointerInto(vn, offset)
+    PcodeOp.PTRADD -> {
+        val (index, size) = def.getInput(1) to def.getInput(2)
+        when {
+            !index.isConstant || !size.isConstant -> null
+            else -> def.getInput(0).pointerInto(offset + index.offset * size.offset, depth + 1)
         }
     }
-    return PointerInto(vn, offset)
-}
+
+    PcodeOp.MULTIEQUAL -> def.inputs.filterNot { it.isConstant && it.offset == 0L }.singleOrNull()
+        ?.pointerInto(offset, depth + 1)
+
+    else -> null
+} ?: PointerInto(this, offset)
 
 private const val MAX_TRACE = 16

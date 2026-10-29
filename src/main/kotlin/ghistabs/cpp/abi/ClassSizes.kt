@@ -7,18 +7,10 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.pointerInto
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.useWith
 
 /**
- * What is known of a class's size: [exact], from an `operator new` its constructor runs on, or the
- * object's own bounds, [atLeast] and [atMost].
- */
-data class SizeBounds(val atLeast: Long, val atMost: Long?, val exact: Long?) {
-    /** The size to give the class's struct: the exact one, or as much as is sure. */
-    val size get() = exact ?: atLeast
-}
-
-/**
- * Each class's [SizeBounds], from where its non-virtual direct bases sit in it ([bases], by offset),
+ * Each class's [LongRange], from where its non-virtual direct bases sit in it ([bases], by offset),
  * the furthest vptr in it ([vptrs]), and the sizes it is allocated with ([allocated]).
  *
  * A class reaches at least past its last vptr and each base's own least size, and a base reaches at
@@ -31,7 +23,7 @@ fun <K> sizeBounds(
     vptrs: Map<K, Long>,
     allocated: Map<K, Long>,
     ptrSize: Long,
-): Map<K, SizeBounds> {
+): Map<K, LongRange> {
     val classes = bases.keys + vptrs.keys + allocated.keys
     val least = mutableMapOf<K, Long>()
     fun atLeast(k: K, depth: Int = 0): Long = least.getOrPut(k) {
@@ -67,9 +59,7 @@ fun <K> sizeBounds(
     }
 
     return classes.associateWith { k ->
-        val lo = atLeast(k)
-        val hi = atMost(k)
-        SizeBounds(lo, hi, allocated[k] ?: hi?.takeIf { it == lo })
+        allocated[k]?.let { it..it } ?: atLeast(k)..(atMost(k) ?: Long.MAX_VALUE)
     }
 }
 
@@ -85,8 +75,7 @@ class NewSizeReader<K>(private val program: Program, private val abi: CxxAbi, si
     fun read(ctors: Map<Function, K>, monitor: TaskMonitor): Map<K, Long> {
         val callers = ctors.keys.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
         val sizes = mutableMapOf<K, MutableSet<Long>>()
-        val decomp = DecompInterface().also { it.openProgram(program) }
-        try {
+        DecompInterface().useWith(program) { decomp ->
             for (f in callers) {
                 if (monitor.isCancelled) break
                 val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
@@ -97,8 +86,6 @@ class NewSizeReader<K>(private val program: Program, private val abi: CxxAbi, si
                     size?.let { sizes.getOrPut(cls) { mutableSetOf() } += it.offset }
                 }
             }
-        } finally {
-            decomp.dispose()
         }
         return sizes.mapValues { (cls, all) ->
             if (all.size > 1) debug("msvc-new-sizes", "$cls allocated with sizes $all")
