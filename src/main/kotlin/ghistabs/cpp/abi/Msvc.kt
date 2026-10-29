@@ -3,7 +3,9 @@ package ghistabs.cpp.abi
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.app.util.demangler.DemangledObject
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
+import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
 import ghistabs.cpp.BaseDecl
 import ghistabs.cpp.ClassNaming
@@ -61,12 +63,22 @@ object Msvc : CxxAbi {
 
     override val mangledOperatorNew get() = setOf("??2@YAPAXI@Z", "??2@YAPEAX_K@Z")
 
-    /** What a vptr store makes of a function ([structors]): a deleting destructor is scalar until its flags say. */
-    val storingStructors = StoringStructors(
-        MsvcStructor.CONSTRUCTOR,
-        MsvcStructor.DESTRUCTOR,
-        MsvcStructor.SCALAR_DELETING_DESTRUCTOR,
-    )
+    /** A class's one constructor and destructor, and its deleting one, scalar unless it tests the vector flag. */
+    override fun structorFor(role: StructorRole, func: Function) = when (role) {
+        StructorRole.CONSTRUCTOR -> MsvcStructor.CONSTRUCTOR
+
+        StructorRole.DESTRUCTOR -> MsvcStructor.DESTRUCTOR
+
+        StructorRole.DELETING_DESTRUCTOR -> when {
+            func.testsVectorFlag() -> MsvcStructor.VECTOR_DELETING_DESTRUCTOR
+            else -> MsvcStructor.SCALAR_DELETING_DESTRUCTOR
+        }
+    }
+
+    /** A vector deleting destructor tests its flags for bit 2, which says an array is going. */
+    private fun Function.testsVectorFlag() = program.listing.getInstructions(body, true).any { insn ->
+        insn.pcode.any { op -> op.opcode == PcodeOp.INT_AND && op.inputs.any { it.isConstant && it.offset == 2L } }
+    }
 
     override fun isProbablyMangled(name: String) = name.startsWith("?")
 
@@ -91,11 +103,9 @@ object Msvc : CxxAbi {
     override fun demangledVtableClass(obj: DemangledObject) =
         obj.namespaces.qualifiedName.takeIf { obj.name.trim('`', '\'') == ClassNaming.VFTABLE && it.isNotEmpty() }
 
-    /** `??0` mangles a constructor and `??1` a destructor, whichever class they are scoped to. */
-    override fun specialMemberDisplayName(mangled: String, className: String) = when {
-        mangled.startsWith("??0") -> className.leafName
-        mangled.startsWith("??1") -> "~${className.leafName}"
-        else -> null
+    /** By its special name's code (`??0`, `??_G`), whichever class it is scoped to. */
+    override fun structorOf(mangled: String, className: String) = MsvcStructor.entries.firstOrNull {
+        mangled.startsWith(it.code)
     }
 
     /** `a::b::Foo` as the name a vftable or type descriptor spells it: `Foo@b@a@@`. Not for templates. */
@@ -126,5 +136,6 @@ enum class MsvcStructor(
     ;
 
     /** The source spelling, or for a special function the name Ghidra's demangler gives it. */
-    override fun displayName(className: String) = demangled ?: if (isDestructor) "~$className" else className
+    override fun displayName(className: String) =
+        demangled ?: if (isDestructor) "~${className.leafName}" else className.leafName
 }

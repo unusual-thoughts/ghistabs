@@ -322,7 +322,7 @@ class ClassApplier(
         // __thiscall choice below must win.
         if (!program.applyDemangling(member.addr, member.mangledName)) {
             func.parentNamespace = ns
-            val fallbackName = abi.specialMemberDisplayName(member.mangledName, name) ?: m.name
+            val fallbackName = abi.structorOf(member.mangledName, name)?.displayName(name) ?: m.name
             if (func.name != fallbackName) func.setName(fallbackName, source)
             degradation(
                 "method-demangle-fallback",

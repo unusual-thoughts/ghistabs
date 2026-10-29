@@ -302,13 +302,9 @@ sealed interface Gcc2Abi : CxxAbi {
     )
 
     /** The inverse of [Gcc2.physnamePrefix]'s ctor/dtor forms — `__9TiXmlNode`, `_._9TiXmlNode`. */
-    override fun specialMemberDisplayName(mangled: String, className: String): String? {
+    override fun structorOf(mangled: String, className: String): Gcc2Structor? {
         val mangledClass = Gcc2.mangleClassName(className)
-        return when {
-            mangled.startsWith("_._$mangledClass") -> "~$className"
-            mangled.startsWith("__$mangledClass") -> className
-            else -> null
-        }
+        return Gcc2Structor.entries.firstOrNull { mangled.startsWith("${it.prefix}$mangledClass") }
     }
 }
 
@@ -355,4 +351,18 @@ data object Gcc2Plain : Gcc2Abi {
         add(ShortDataType.dataType, "slot${slot}__delta", "this-adjustment for slot $slot")
         add(ShortDataType.dataType, "slot${slot}__index", "unused; gcc 2.x always emits 0")
     }
+}
+
+/**
+ * A gcc 2.x constructor or destructor: one of each per class. The destructor frees the object too
+ * when its in-charge argument says so, so no function of its own deletes.
+ */
+enum class Gcc2Structor(val prefix: String, override val isDestructor: Boolean) : Structor {
+    DESTRUCTOR("_._", true),
+    CONSTRUCTOR("__", false),
+    ;
+
+    override val isDeleting get() = false
+
+    override fun displayName(className: String) = if (isDestructor) "~$className" else className
 }
