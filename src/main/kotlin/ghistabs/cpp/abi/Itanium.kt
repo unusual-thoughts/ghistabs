@@ -120,9 +120,6 @@ object Itanium : CxxAbi {
     /** Vtable header before the function-pointer array: offset_to_top + rtti = 2 pointers. */
     fun vtablePrefixBytes(ptrSize: Int) = 2L * ptrSize.toLong()
 
-    override fun stride(ptrSize: Int) = ptrSize.toLong()
-    override fun pfnOffset(ptrSize: Int) = 0L
-
     /** gcc 3.x spells a member's stab name the way the source does. */
     override val assignmentOperatorName = "operator="
 
@@ -130,7 +127,6 @@ object Itanium : CxxAbi {
     override fun headerBytes(ptrSize: Int) = vtablePrefixBytes(ptrSize)
 
     override val hasRttiHeader get() = true
-    override val vptrAtRecordStart get() = false
 
     // `size_t` is `unsigned int` (j) on 32-bit targets and `unsigned long` (m) on 64-bit ones.
     override val mangledOperatorNew get() = setOf("_Znwj", "_Znwm")

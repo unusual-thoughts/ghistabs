@@ -95,7 +95,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     fun slots(program: Program): List<Address> = buildList {
         val ptr = program.defaultPointerSize
         val nulls = mutableListOf<Address>()
-        for (pfn in generateSequence(addressPoint) { it + abi.stride(ptr) }.map { it + abi.pfnOffset(ptr) }) {
+        for (pfn in abi.slots(addressPoint, ptr)) {
             val target = program.pointerAt(pfn) ?: break
             when {
                 target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target

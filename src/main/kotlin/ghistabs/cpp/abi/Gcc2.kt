@@ -1,6 +1,7 @@
 package ghistabs.cpp.abi
 
 import ghidra.app.util.demangler.DemangledObject
+import ghidra.program.model.address.Address
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
@@ -265,13 +266,29 @@ object Gcc2 {
  * site skips the header (`tinyxml_aout_gcc295.o` dispatches through `add eax,0x8`).
  */
 sealed interface Gcc2Abi : CxxAbi {
-    override fun stride(ptrSize: Int) = ptrSize.toLong()
-    override fun pfnOffset(ptrSize: Int) = 0L
+    /** Pointer-wide words per entry: a bare `pfn`, or `{delta, index}` then `pfn`, which comes last. */
+    val entryWords: Int
+
     override fun headerBytes(ptrSize: Int) = 2L * ptrSize
 
     /** gcc 2.x emits no typeinfo pointer, so no rtti word locates the address point. */
     override val hasRttiHeader get() = false
-    override val vptrAtRecordStart get() = true
+
+    override fun slots(addressPoint: Address, ptrSize: Int) =
+        generateSequence(addressPoint) { it.add(entryWords.toLong() * ptrSize) }
+            .map { it.add((entryWords - 1L) * ptrSize) }
+
+    /** The vptr holds the record start, which is where the `_vftable` struct begins too: header first. */
+    override fun slotOffset(index: Int, ptrSize: Int) =
+        headerBytes(ptrSize) + (index.toLong() * entryWords + entryWords - 1) * ptrSize
+
+    /**
+     * The bias a stab's `*<n>` carries: `DECL_VINDEX` counts from the record start, header entries
+     * included. Measured: `cv_mscom_elf_i386_gcc281`'s dtors are `*1` with one 8-byte entry reserved,
+     * `tinyxml_aout_gcc295.o`'s are `*2` with two pointer-wide ones, while `_ZTVSt9type_info`'s stabs
+     * declare 0/1/5 for an Itanium record whose vptr is already past its header.
+     */
+    override fun reservedEntries(ptrSize: Int) = (headerBytes(ptrSize) / (entryWords.toLong() * ptrSize)).toInt()
 
     /** `new` calls libgcc's `__builtin_new`; a program's own global `operator new` is `__nw__FUi`. */
     override val mangledOperatorNew get() = setOf("__builtin_new", "__nw__FUi", "__nw__FUl")
@@ -314,6 +331,8 @@ sealed interface Gcc2Abi : CxxAbi {
 
 /** `__vt_`: the `this` adjustment moved into a thunk, so an entry is the pfn. */
 data object Gcc2Thunks : Gcc2Abi {
+    override val entryWords get() = 1
+
     override fun looksLikeVtable(symbolName: String) = Gcc2.looksLikeThunkVtable(symbolName)
 
     override fun vtableCandidates(className: String) =
@@ -330,11 +349,9 @@ data object Gcc2Thunks : Gcc2Abi {
  * twice as wide, with pfn in the second word.
  */
 data object Gcc2Plain : Gcc2Abi {
-    override fun stride(ptrSize: Int) = 2L * ptrSize
-
     /** `delta` and `index` are a `short` each: one 32-bit word. (`-fhuge-objects` would widen
      *  both to `long`; no corpus binary uses it.) */
-    override fun pfnOffset(ptrSize: Int) = ptrSize.toLong()
+    override val entryWords get() = 2
 
     override fun looksLikeVtable(symbolName: String) =
         Gcc2.looksLikeVtable(symbolName) && !Gcc2.looksLikeThunkVtable(symbolName)

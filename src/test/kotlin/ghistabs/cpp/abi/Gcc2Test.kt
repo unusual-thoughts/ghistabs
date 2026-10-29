@@ -172,13 +172,12 @@ class Gcc2Test {
      */
     @Test
     fun onlyTheNoThunkFormHasWideEntriesWithAnOffsetPfn() {
-        Itanium.stride(4) mustBe 4L
-        Gcc2Thunks.stride(4) mustBe 4L
-        Gcc2Plain.stride(4) mustBe 8L
-
-        Itanium.pfnOffset(4) mustBe 0L
-        Gcc2Thunks.pfnOffset(4) mustBe 0L
-        Gcc2Plain.pfnOffset(4) mustBe 4L
+        // slot 1's pfn: past one entry, and for gcc 2.x the 8-byte header the struct starts with too
+        Itanium.slotOffset(1, 4) mustBe 4L
+        Gcc2Thunks.slotOffset(1, 4) mustBe 12L
+        Gcc2Plain.slotOffset(1, 4) mustBe 20L
+        Gcc2Thunks.reservedEntries(4) mustBe 2
+        Gcc2Plain.reservedEntries(4) mustBe 1
     }
 
     @Test

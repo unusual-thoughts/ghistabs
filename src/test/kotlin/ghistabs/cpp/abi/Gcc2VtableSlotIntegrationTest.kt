@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 /**
  * PR #11 review flagged `vtableSlotTargets` as reading a gcc 2.x record's reserved header word as
  * though it were the first virtual's function pointer. It doesn't: [Vtable.vtableRecord] already
- * advances `addressPoint` past the header for a [CxxAbi.vptrAtRecordStart] ABI (the same 2-pointer
+ * advances `addressPoint` past the header for a gcc 2.x ABI (the same 2-pointer
  * width [Itanium.vtablePrefixBytes] computes, which [Gcc2Abi.headerBytes] independently arrives at
  * too — see its doc). This builds a minimal record of each gcc 2.x entry shape by hand — no thunks
  * (bare pfn) and no-thunk (`{delta,index,pfn}`) — and checks the first slot [VtableRecord.slots]

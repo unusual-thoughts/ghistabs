@@ -42,14 +42,10 @@ object Msvc : CxxAbi {
      */
     const val BCD_VBOFCONTOBJ = 0x10
 
-    override fun stride(ptrSize: Int) = ptrSize.toLong()
-    override fun pfnOffset(ptrSize: Int) = 0L
-
     /** The meta pointer to the complete object locator, which is where a `{vfptr}` points past. */
     override fun headerBytes(ptrSize: Int) = ptrSize.toLong()
 
     override val hasRttiHeader get() = true
-    override val vptrAtRecordStart get() = false
 
     override val assignmentOperatorName = "operator="
 
