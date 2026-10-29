@@ -1,5 +1,6 @@
 package ghistabs.cpp.abi
 
+import ghidra.app.cmd.data.rtti.Rtti1Model
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.cmd.data.rtti.Rtti4Model
 import ghidra.app.cmd.data.rtti.VfTableModel
@@ -23,7 +24,18 @@ import ghistabs.toClass
  * One entry of a class's RTTI Base Class Array: the class [descriptor] that describes it, how many entries after
  * it are that class's own bases ([contained]), and how the most derived class holds it.
  */
-data class BaseEntry(val descriptor: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean)
+data class BaseEntry(val descriptor: Address, val contained: Int, val isVirtual: Boolean, val isPublic: Boolean) {
+    /** An entry by its Base Class Descriptor's `attributes`. */
+    constructor(descriptor: Address, contained: Int, attributes: Int) : this(
+        descriptor,
+        contained,
+        isVirtual = attributes and Msvc.BCD_VBOFCONTOBJ != 0,
+        isPublic = attributes and Msvc.BCD_NONPUBLIC == 0,
+    )
+
+    /** The entry a Base Class Descriptor makes. */
+    constructor(bcd: Rtti1Model) : this(bcd.rtti0Address, bcd.numBases, bcd.attributes)
+}
 
 /**
  * The direct bases among a Base Class Array, whose first entry is the class itself and the rest its
@@ -110,10 +122,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         runCatching {
             val chd = Rtti3Model(program, sym.address, options)
             val bca = chd.rtti2Model
-            val array = (0..<chd.rtti1Count).map { i ->
-                val bcd = bca.getRtti1Model(i)
-                BaseEntry(bcd.rtti0Address, bcd.numBases, bcd.pDisp >= 0, bcd.attributes and Msvc.BCD_NONPUBLIC == 0)
-            }
+            val array = (0..<chd.rtti1Count).map { BaseEntry(bca.getRtti1Model(it)) }
             val td = array.first().descriptor
             RttiClass(td, sym.parentNamespace.takeUnless { it.isGlobal }, chd.rtti0Model.descriptorName, array)
         }.onFailure { warn("msvc-hierarchy-unread", "${sym.name}: ${it.message}", sym.address) }.getOrNull()
