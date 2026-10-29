@@ -58,9 +58,18 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         IMPORTED,
     }
 
-    /** A direct base: the class it names ([targetId]), if the program has one for it, else only its [name]. */
+    /**
+     * A direct base: the class it names ([targetId]), if the program has one for it, else only its [name],
+     * and where it sits in the class ([offset]), for a non-virtual one whose place is known.
+     */
     @Serializable
-    data class BaseRef(val name: String, val targetId: Long?, val isVirtual: Boolean, val access: Access?)
+    data class BaseRef(
+        val name: String,
+        val targetId: Long?,
+        val isVirtual: Boolean,
+        val access: Access?,
+        val offset: Long? = null,
+    )
 
     /**
      * A function or label in the class's namespace, as the Symbol Tree lists it. An overloaded function
@@ -129,6 +138,8 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         val members: List<Member>,
         /** Its direct bases, in declaration order. */
         val bases: List<BaseRef>,
+        /** Its size, as its struct has it, while that struct is not an empty stub. */
+        val size: Long? = null,
     ) {
         val name: String get() = path.last()
         val qualifiedName: String get() = path.joinToString("::")
@@ -229,6 +240,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                     isAbstract = program.vftablesOf(ns).any(::hasPureVirtualSlot),
                     members = membersOf(ns, group - ns),
                     bases = basesOf(ns, typeinfo, idOf) { path -> byPath[path]?.id },
+                    size = struct?.takeUnless { it.isZeroLength }?.length?.toLong(),
                 )
             }
             return ClassHierarchy(classes.sortedBy { it.qualifiedName })
@@ -239,9 +251,10 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                 val target = base.namespaceId?.let(classIds::get)
                 val name = base.namespaceId?.let { (symtab.getSymbol(it)?.`object` as? Namespace)?.getName(true) }
                     ?: base.name ?: "?"
-                BaseRef(name, target, base.isVirtual, base.access)
+                BaseRef(name, target, base.isVirtual, base.access, base.offset.takeUnless { base.isVirtual })
             } ?: typeinfo?.let(rtti::basesOf).orEmpty().map { base ->
-                BaseRef(base.className, idOf(base.className.nameSegments), base.isVirtual, base.access)
+                val offset = base.offset.takeUnless { base.isVirtual }
+                BaseRef(base.className, idOf(base.className.nameSegments), base.isVirtual, base.access, offset)
             }
 
         fun classNamespaces(): Sequence<GhidraClass> = symtab.classNamespaces.asSequence()
