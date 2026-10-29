@@ -11,9 +11,9 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
 /**
- * The sizes each class, by its type descriptor, can be, from the least to the most ([Long.MAX_VALUE] where nothing bounds it),
- * from where its non-virtual direct bases sit in it ([bases], by offset), the furthest vptr in it
- * ([vptrs]), and the sizes it is allocated with ([allocated]).
+ * The sizes each class, by its type descriptor, can be, from the least to the most ([Long.MAX_VALUE]
+ * where nothing bounds it), from where its non-virtual direct bases sit in it ([bases], by offset), the
+ * furthest vptr in it ([vptrs]), and the sizes it is allocated with ([allocated]).
  *
  * A class reaches at least past its last vptr and each base's own least size, and a base reaches at
  * most up to the next base of the class that holds it, or that class's end, which bounds it from above:
