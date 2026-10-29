@@ -12,17 +12,11 @@ import ghidra.program.model.block.BasicBlockModel
 import ghidra.program.model.block.CodeBlock
 import ghidra.program.model.data.FunctionDefinitionDataType
 import ghidra.program.model.lang.PrototypeModel
-import ghidra.program.model.listing.BookmarkType
+import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.FunctionSignature
-import ghidra.program.model.listing.Instruction
-import ghidra.program.model.listing.Program
-import ghidra.program.model.pcode.HighFunction
-import ghidra.program.model.pcode.HighFunctionDBUtil
-import ghidra.program.model.pcode.PcodeOp
-import ghidra.program.model.pcode.Varnode
-import ghidra.program.model.pcode.XmlEncode
+import ghidra.program.model.pcode.*
 import ghidra.util.task.TaskMonitor
+import ghistabs.useWith
 
 /**
  * gcc defers popping a call's arguments (`-fdefer-pop`, on at -O1 and up, and the default for some
@@ -85,16 +79,10 @@ class DeferredPopAnalyzer :
             }
         plans.forEach { (_, plan) -> plan.unfixed.forEach { (merge, into) -> program.bookmarkUnfixed(merge, into) } }
         val fixable = plans.filter { it.second.pops.isNotEmpty() }
-        if (fixable.isEmpty()) return true
-
-        val decomp = DecompInterface().also { it.openProgram(program) }
-        try {
+        return fixable.isEmpty() || DecompInterface().useWith(program) { decomp ->
             val kept = fixable.count { (f, plan) -> program.applyExtraPops(decomp, f, plan.pops, monitor, log) }
             if (kept > 0) log.appendMsg(NAME, "popped deferred arguments in $kept function(s)")
-        } finally {
-            decomp.dispose()
-        }
-        return true
+        } != null
     }
 
     companion object {
