@@ -35,9 +35,6 @@ open class VtableSweeper(
     internal val symtab = program.symbolTable
     internal val dtm = program.dataTypeManager
 
-    /** Where tables are laid, labelled as [source]. */
-    internal fun layer(source: SourceType = SourceType.IMPORTED) = VtableLayer(registry, program, source)
-
     /**
      * A demangled parameter's type as the stabs import made it, before Ghidra's lookup, which misses
      * `std::_Ios_Openmode` filed under no namespace. Null for none.
@@ -115,7 +112,7 @@ open class VtableSweeper(
                 vftable.describeVxTable(leaf, ClassNaming.VFTABLE, abi.primaryVptrOffset)
             }
 
-            val addressPoint = record.lay(layer(SWEPT), vftable, qualified, ns)
+            val addressPoint = record.lay(registry, program, vftable, qualified, ns, source = SWEPT)
             debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
             laid++
             // Itanium's secondaries follow the primary; gcc 2.x's have symbols of their own, laid below.
@@ -182,7 +179,15 @@ open class VtableSweeper(
                     }
                 }
             }
-            val at = record.lay(layer(SWEPT), vftable, ns.name, ns, VtableRole(construction = true))
+            val at = record.lay(
+                registry,
+                program,
+                vftable,
+                ns.name,
+                ns,
+                VtableRole(construction = true),
+                source = SWEPT,
+            )
             debug("vtable-construction", "$name: ${targets.size} slot(s)", at)
             laySecondaryVtables(record, vftable, ns.name, ns, SWEPT, construction = true)
         }
@@ -268,7 +273,7 @@ open class VtableSweeper(
             val vftable = internalVftable(at, ClassNaming.internalSlotCategory(path, i), sub.targets, abi)
             val role = VtableRole(internal = true, construction, base)
             vftable.describeVxTable(leaf, role.vftableLabel, offsets[index])
-            val laidAt = sub.record.lay(layer(source), vftable, leaf, ns, role)
+            val laidAt = sub.record.lay(registry, program, vftable, leaf, ns, role, source = source)
             debug("vtable-secondary", "class=$leaf index=$index base=$base slots=${sub.targets.size}", address = laidAt)
         }
     }
@@ -318,7 +323,7 @@ open class VtableSweeper(
             val vfptrAt = classStruct?.vfptrOffsetOfBase(base)?.toLong()
             val role = VtableRole(internal = true, base = name)
             vftable.describeVxTable(leaf, role.vftableLabel, vfptrAt)
-            record.lay(layer(source), vftable, leaf, ns, role)
+            record.lay(registry, program, vftable, leaf, ns, role, source = source)
             debug(
                 "vtable-secondary",
                 "class=$className index=$index base=$base slots=${targets.size}",

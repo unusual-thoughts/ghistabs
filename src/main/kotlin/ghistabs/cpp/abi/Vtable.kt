@@ -171,14 +171,15 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
      * is only labelled.
      */
     fun lay(
-        layer: VtableLayer,
+        registry: DtmRegistry,
+        program: Program,
         vftable: Structure?,
         className: String,
         ns: Namespace,
         role: VtableRole = VtableRole.PRIMARY,
         virtualBases: List<String> = emptyList(),
+        source: SourceType = SourceType.IMPORTED,
     ): Address {
-        val (registry, program, source) = layer
         val vftableLabel = role.vftableLabel
         // gcc 2.x declares the record itself (`__vtbl_ptr_type __vt_9TiXmlNode[20]`), which knows its length
         // better than anything here, and a virtual call resolves off the vptr's type, not the data there.
@@ -216,9 +217,6 @@ data class VtableRole(val internal: Boolean = false, val construction: Boolean =
         val PRIMARY = VtableRole()
     }
 }
-
-/** Where [VtableRecord.lay] lays: in [program], its types resolved through [registry], labelled as [source]. */
-data class VtableLayer(val registry: DtmRegistry, val program: Program, val source: SourceType = SourceType.IMPORTED)
 
 /** gcc's two destructor entries, complete and deleting: the only slots it leaves null. */
 private const val DESTRUCTOR_SLOTS = 2
