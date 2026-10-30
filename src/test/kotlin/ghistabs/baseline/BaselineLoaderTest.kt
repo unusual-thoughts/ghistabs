@@ -103,4 +103,73 @@ class BaselineLoaderTest {
 
         BaselineLoader.load(shifted).counters["text-data-no-coverage"] mustBe CounterRange(316, 356)
     }
+
+    /** Two modes that disagree give one range over both, whichever is recorded first. */
+    @Test
+    fun write_coversEveryModeWhicheverRanLast(@TempDir tempDir: File) {
+        val committed = baselineOf(tempDir, "committed.json", "replaced-demangler" to CounterRange(805, 805))
+        val after = mapOf("replaced-demangler" to 805L)
+        val concurrent = mapOf("replaced-demangler" to 810L, "vtable-typeinfo-stub-laid" to 3L)
+        val written = listOf(listOf(after, concurrent), listOf(concurrent, after)).map { observed ->
+            val shifted = File(tempDir, "shifted.json")
+            BaselineWriter.write(shifted, observed, "shifted", committed, emptyMap(), complete = true)
+            BaselineLoader.load(shifted).counters
+        }
+
+        written[0] mustBe written[1]
+        written[0]["replaced-demangler"] mustBe CounterRange(805, 810)
+        // Never reported in AFTER is 0 there.
+        written[0]["vtable-typeinfo-stub-laid"] mustBe CounterRange(0, 3)
+    }
+
+    /** With a mode still to run, what the committed baseline allows is widened, never narrowed. */
+    @Test
+    fun write_keepsTheCommittedRangeWhileAModeIsMissing(@TempDir tempDir: File) {
+        val committed = baselineOf(
+            tempDir,
+            "committed.json",
+            "replaced-demangler" to CounterRange(805, 810),
+            "demangler-rtti-match" to CounterRange(3, 3),
+        )
+        val shifted = File(tempDir, "shifted.json")
+
+        val afterOnly = listOf(mapOf("replaced-demangler" to 812L))
+        BaselineWriter.write(shifted, afterOnly, "shifted", committed, emptyMap(), complete = false)
+
+        val counters = BaselineLoader.load(shifted).counters
+        counters["replaced-demangler"] mustBe CounterRange(805, 812)
+        // Not reported by the mode that ran, so 0 there, and still 3 for the one to come.
+        counters["demangler-rtti-match"] mustBe CounterRange(0, 3)
+    }
+
+    /** Each mode's record reads back as it was observed. */
+    @Test
+    fun observations_readBackEveryRecordedMode(@TempDir tempDir: File) {
+        val obs = Observations(tempDir)
+        obs.record("fixture", "AFTER", "fixture.exe", mapOf("a" to 1L), mapOf("a" to listOf("x")))
+        obs.record("fixture", "CONCURRENT", "fixture.exe", mapOf("a" to 2L), mapOf("a" to listOf("y")))
+
+        obs.fixtures() mustBe setOf("fixture")
+        obs.load("fixture", listOf("AFTER", "CONCURRENT")).map { it.counters.getValue("a") } mustBe
+            listOf(CounterRange(1, 1, listOf("x")), CounterRange(2, 2, listOf("y")))
+    }
+
+    /** A fixture whose modes left its committed ranges gets a shifted baseline over both; one inside them none. */
+    @Test
+    fun writeBaselines_shiftsOnlyTheFixturesThatDrifted(@TempDir tempDir: File) {
+        val baselines = File(tempDir, "baselines").apply { mkdirs() }
+        baselineOf(baselines, "moved-baseline.json", "c" to CounterRange(805, 805))
+        baselineOf(baselines, "steady-baseline.json", "c" to CounterRange(1, 2))
+        val obs = Observations(File(tempDir, "observed"))
+        obs.record("moved", "AFTER", "moved.exe", mapOf("c" to 805L), emptyMap())
+        obs.record("moved", "CONCURRENT", "moved.exe", mapOf("c" to 810L), emptyMap())
+        obs.record("steady", "AFTER", "steady.exe", mapOf("c" to 1L), emptyMap())
+        obs.record("steady", "CONCURRENT", "steady.exe", mapOf("c" to 2L), emptyMap())
+        val shifted = File(tempDir, "shifted")
+
+        writeBaselines(File(tempDir, "observed"), baselines, shifted, regenerate = false)
+
+        shifted.list()?.toSet() mustBe setOf("moved-baseline.json")
+        BaselineLoader.load(File(shifted, "moved-baseline.json")).counters["c"] mustBe CounterRange(805, 810)
+    }
 }
