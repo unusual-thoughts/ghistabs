@@ -69,7 +69,8 @@ open class VtableSweeper(
             for (sym in symtab.symbolIterator) {
                 val (cls, base) = Gcc2.secondaryVtableClasses(sym.name) ?: continue
                 val abi = CxxAbi.ofVtableSymbol(sym.name) ?: continue
-                getOrPut(cls) { mutableListOf() } += base to program.vtableRecord(sym.address, abi)
+                getOrPut(cls) { mutableListOf() } +=
+                    base to program.vtableRecord(sym.address, abi).copy(internal = true)
             }
         }.mapValues { (_, tables) -> tables.distinctBy { it.second.address }.sortedBy { it.second.address } }
     }
@@ -167,7 +168,7 @@ open class VtableSweeper(
         for (sym in groups) {
             val ns = constructionNamespace(sym.name) ?: continue
             val name = ns.getName(true)
-            val record = program.vtableRecord(sym.address)
+            val record = program.vtableRecord(sym.address).copy(construction = true)
             val targets = record.slots(program)
             val path = ClassNaming.vftablePath(ns)
             // A base with no virtuals of its own (`Left`) has a header and no slots: nothing to type.
@@ -181,9 +182,9 @@ open class VtableSweeper(
                     }
                 }
             }
-            val at = record.lay(registry, program, vftable, ns, VtableRole(construction = true), source = SWEPT)
+            val at = record.lay(registry, program, vftable, ns, source = SWEPT)
             debug("vtable-construction", "$name: ${targets.size} slot(s)", at)
-            laySecondaryVtables(record, vftable, ns.name, ns, SWEPT, construction = true)
+            laySecondaryVtables(record, vftable, ns.name, ns, SWEPT)
         }
     }
 
@@ -233,7 +234,7 @@ open class VtableSweeper(
      * Lays the secondary vtables behind [primary], found off memory, as the stabs may declare fewer
      * virtuals than the table holds. Once there are several, each table, [primaryVftable] included, is
      * named after the base whose vptr points into it, as Ghidra's `RTTIGccClassRecoverer` does
-     * ([ClassNaming.vftableName]); a [construction] group's labels stay as they are.
+     * ([ClassNaming.vftableName]); a construction group's labels stay as they are.
      */
     internal fun laySecondaryVtables(
         primary: VtableRecord,
@@ -241,14 +242,14 @@ open class VtableSweeper(
         leaf: String,
         ns: Namespace,
         source: SourceType = SourceType.IMPORTED,
-        construction: Boolean = false,
     ) {
         val abi = primary.abi
+        val construction = primary.construction
         val rtti = primary.rttiOf(program) ?: return
         val ptr = program.defaultPointerSize.toLong()
         val slots = primary.slots(program).size
         // A record without slots has nothing to lay a struct over.
-        val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
+        val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti, construction)
             .filter { it.targets.isNotEmpty() }
         val offsets = listOfNotNull(primaryVftable?.let { 0L }) +
             subs.map { with(abi) { it.record.vfptrOffset(program) } }
@@ -265,9 +266,8 @@ open class VtableSweeper(
             val base = bases.getOrNull(index)
             val at = path.categoryPath.at(ClassNaming.vftableName(path, index, offsets.size, base))
             val vftable = internalVftable(at, ClassNaming.internalSlotCategory(path, i), sub.targets, abi)
-            val role = VtableRole(internal = true, construction, base)
-            vftable.describeVxTable(leaf, role.vftableLabel, offsets[index])
-            val laidAt = sub.record.lay(registry, program, vftable, ns, role, source = source)
+            vftable.describeVxTable(leaf, ClassNaming.vftableLabel(internal = true, construction, base), offsets[index])
+            val laidAt = sub.record.lay(registry, program, vftable, ns, base, source = source)
             debug("vtable-secondary", "class=$leaf index=$index base=$base slots=${sub.targets.size}", address = laidAt)
         }
     }
@@ -315,9 +315,8 @@ open class VtableSweeper(
             val at = path.categoryPath.at(ClassNaming.vftableName(path, index, count, name))
             val vftable = internalVftable(at, ClassNaming.internalSlotCategory(path, i), targets, record.abi)
             val vfptrAt = classStruct?.vfptrOffsetOfBase(base)?.toLong()
-            val role = VtableRole(internal = true, base = name)
-            vftable.describeVxTable(leaf, role.vftableLabel, vfptrAt)
-            record.lay(registry, program, vftable, ns, role, source = source)
+            vftable.describeVxTable(leaf, ClassNaming.vftableLabel(internal = true, base = name), vfptrAt)
+            record.lay(registry, program, vftable, ns, name, source = source)
             debug(
                 "vtable-secondary",
                 "class=$className index=$index base=$base slots=${targets.size}",

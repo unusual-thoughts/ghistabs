@@ -68,9 +68,16 @@ interface VtableLayout {
 
 /**
  * A vtable record ([vtableRecord]): where it starts, the [header] in front of its address point, and its [abi].
- * Only Itanium's has a header ([ghistabs.cpp.abi.itanium.vtableHeaderLayout]).
+ * Only Itanium's has a header ([ghistabs.cpp.abi.itanium.vtableHeaderLayout]). [internal] for a secondary,
+ * [construction] for one in a `_ZTC` group, which its labels say as Ghidra's do ([ClassNaming.vftableLabel]).
  */
-data class VtableRecord(val address: Address, val header: StructureDataType?, val abi: CxxAbi) {
+data class VtableRecord(
+    val address: Address,
+    val header: StructureDataType?,
+    val abi: CxxAbi,
+    val internal: Boolean = false,
+    val construction: Boolean = false,
+) {
     /** The vbase/vcall-offset words in front of `offset_to_top` and the rtti pointer. */
     val prefixWords get() = header?.let { it.numComponents - 2 } ?: 0
 
@@ -165,7 +172,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     }
 
     /**
-     * Labels and lays this record as [ns]'s table in [role], and returns its address point, where the
+     * Labels and lays this record as [ns]'s table serving [base], and returns its address point, where the
      * [vftable] struct and the `vftable` label go. An Itanium header is laid in front, each word commented
      * with what it holds for [ns], whose [virtualBases] name its vbase offsets. A gcc 2.x record
      * is only labelled.
@@ -175,11 +182,11 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
         program: Program,
         vftable: Structure?,
         ns: Namespace,
-        role: VtableRole = VtableRole.PRIMARY,
+        base: String? = null,
         virtualBases: List<String> = emptyList(),
         source: SourceType = SourceType.IMPORTED,
     ): Address {
-        val vftableLabel = role.vftableLabel
+        val vftableLabel = ClassNaming.vftableLabel(internal, construction, base)
         // gcc 2.x declares the record itself (`__vtbl_ptr_type __vt_9TiXmlNode[20]`), which knows its length
         // better than anything here, and a virtual call resolves off the vptr's type, not the data there.
         if (header == null) {
@@ -188,7 +195,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
             return address
         }
 
-        program.labelVtable(address, role.vtableLabel, ns, source)
+        program.labelVtable(address, ClassNaming.vtableLabel(internal, construction), ns, source)
         program.forceCreateData(address, registry.resolveLayout(header))
         for (i in 0 until prefixWords) {
             fieldAddress(vtableOffsetField(i))?.let {
@@ -201,19 +208,6 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
         vftable?.let { program.forceCreateData(addressPoint, it) }
         program.labelVtable(addressPoint, vftableLabel, ns, source)
         return addressPoint
-    }
-}
-
-/**
- * Which of a class's tables a record is: a secondary ([internal]), one in a `_ZTC` group ([construction]),
- * and the [base] it serves once the class has several. Its labels are Ghidra's ([ClassNaming.vftableLabel]).
- */
-data class VtableRole(val internal: Boolean = false, val construction: Boolean = false, val base: String? = null) {
-    val vtableLabel get() = ClassNaming.vtableLabel(internal, construction)
-    val vftableLabel get() = ClassNaming.vftableLabel(internal, construction, base)
-
-    companion object {
-        val PRIMARY = VtableRole()
     }
 }
 
