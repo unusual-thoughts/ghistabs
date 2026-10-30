@@ -126,13 +126,15 @@ internal class VfptrPlacement(private val registry: DtmRegistry, private val mod
      * decompiler falls back to `vfptr[4].~TiXmlBase`. The `_base_` component survives, so the
      * subobject still models the inheritance.
      *
-     * False when the base cannot be split, leaving the caller to report the inherited case.
+     * False when the base cannot be split, leaving the caller to report the inherited case. [vfptr] is the
+     * pointer put in, to the class's own vftable unless a secondary's.
      */
-    private fun splitBase(
+    internal fun splitBase(
         structDt: Structure,
         classPath: List<String>,
         vptrOffset: Int,
         baseComp: DataTypeComponent?,
+        vfptr: DataType = ownVfptr(classPath),
     ): Boolean {
         val className = classPath.last()
         val baseDt = baseComp?.dataType as? Structure ?: return false
@@ -162,7 +164,6 @@ internal class VfptrPlacement(private val registry: DtmRegistry, private val mod
         val tail = split.tail?.baseFieldsRun(baseDt)
         if (head == null && tail == null) return false
 
-        val vfptr = ownVfptr(classPath)
         return runCatching {
             head?.let { structDt.replaceAtOffset(baseOff, it, it.length, baseComp.fieldName, baseComp.comment) }
             structDt.replaceAtOffset(baseOff + vptrInBase, vfptr, vfptr.length, ClassUtils.VFPTR, "vtable pointer")

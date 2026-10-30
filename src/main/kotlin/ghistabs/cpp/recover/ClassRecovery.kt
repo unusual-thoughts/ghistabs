@@ -57,7 +57,7 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         val shared: Int,
         val structors: Int,
         val sized: Int,
-        val virtualBases: Int = 0,
+        val laid: Int,
     )
 
     fun recover(read: AbiClasses, monitor: TaskMonitor): Result {
@@ -79,10 +79,11 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         }
         val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
         val sizes = sizeClasses(read.classes, NewSizeReader(program, abi, this).read(ctors, monitor))
+        val laid = ClassLayouts(program, abi, this).layAll(read.recorded, ctors, monitor)
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
             structors.map { (f, structor) -> f to structor.first }
         writeRecords(read.recorded, placed.groupBy({ it.second }, { it.first }), ctors.keys)
-        return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size)
+        return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size, laid)
     }
 
     /**
@@ -109,17 +110,11 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
                     program.functionManager.getFunctionAt(at)?.let { it.getThunkedFunction(true) ?: it } == func
                 }
                 if (slot < 0) continue
-                val base = if (cls.vftables.size > 1) servedBase(cls, record) else null
+                val base = if (cls.vftables.size > 1) cls.servedBase(record, program) else null
                 return "$VFUNCTION${slot + 1}" + base?.let { "_for_${it.name}" }.orEmpty()
             }
         }
         return null
-    }
-
-    /** The direct base of [cls] whose subobject [record]'s vptr sits in: the first at its offset. */
-    private fun servedBase(cls: ClassDecl, record: VtableRecord): ClassDecl? {
-        val at = record.vfptrOffset(program) ?: return null
-        return cls.bases.firstOrNull { !it.isVirtual && (it.offset ?: 0L) == at }?.cls
     }
 
     /**
@@ -168,7 +163,7 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
             val ns = cls.ns?.toClass() ?: continue
             val length = size.first.toInt()
             runCatching {
-                when (val struct = classStruct(ns)) {
+                when (val struct = program.classStruct(ns)) {
                     null -> program.dataTypeManager.addDataType(
                         StructureDataType(ClassNaming.vftableCategory(ns), ns.name, length),
                         DataTypeConflictHandler.KEEP_HANDLER,
@@ -215,16 +210,26 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
 
-    /** The class's struct where `RecoverClassesFromRTTIScript` files it. */
-    private fun classStruct(ns: GhidraClass) =
-        program.dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
-
     private fun classStructId(ns: GhidraClass): Long? {
-        val struct = classStruct(ns) ?: return null
+        val struct = program.classStruct(ns) ?: return null
         return program.dataTypeManager.getID(struct).takeIf { it >= 0 }
     }
 
     private companion object {
         const val VFUNCTION = "vfunction"
     }
+}
+
+/** The class's struct where `RecoverClassesFromRTTIScript` files it. */
+fun Program.classStruct(ns: GhidraClass) =
+    dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
+
+/**
+ * The base of this class whose subobject [record]'s vptr sits in: the first direct non-virtual base at its
+ * offset, else the virtual base there.
+ */
+fun ClassDecl.servedBase(record: VtableRecord, program: Program): ClassDecl? {
+    val at = record.vfptrOffset(program) ?: return null
+    return bases.firstOrNull { !it.isVirtual && (it.offset ?: 0L) == at }?.cls
+        ?: virtualBases.firstOrNull { it.offset == at }?.cls
 }

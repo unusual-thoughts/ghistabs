@@ -43,7 +43,7 @@ class ItaniumClassAnalyzer :
                 NAME,
                 "${result.classes} class(es), ${result.owned} virtual function(s) owned, ${result.moved} moved, " +
                     "${result.shared} shared, ${result.structors} constructor(s) and destructor(s) named, " +
-                    "${result.sized} class size(s) recorded",
+                    "${result.sized} class size(s) recorded, ${result.laid} struct(s) laid",
             )
         }
         return true

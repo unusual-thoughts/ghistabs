@@ -64,6 +64,9 @@ interface ClassDecl {
      */
     val virtualBases: List<ClassBase> get() = emptyList()
 
+    /** Where its vbptrs sit, MSVC's, which point at its vbtables; Itanium keeps vbase offsets in the vtable. */
+    val vbptrs: Set<Long> get() = emptySet()
+
     /** Whether this class derives from [other], directly or not. */
     fun derivesFrom(other: ClassDecl) = other in ancestors
 }
