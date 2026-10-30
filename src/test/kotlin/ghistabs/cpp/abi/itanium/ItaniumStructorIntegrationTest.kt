@@ -5,7 +5,7 @@ import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
-/** [ghistabs.cpp.abi.ItaniumStructor.of] asks Ghidra's demangler, which needs the Ghidra application up. */
+/** [ghistabs.cpp.abi.itanium.ItaniumStructor.of] asks Ghidra's demangler, which needs the Ghidra application up. */
 @Tag("integration")
 class ItaniumStructorIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test

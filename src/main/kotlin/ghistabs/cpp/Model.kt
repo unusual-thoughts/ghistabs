@@ -14,12 +14,9 @@ import kotlinx.serialization.Serializable
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
 /**
- * A class's direct base as any source states it: the stabs ([ghistabs.parse.TypeDecl.Aggregate.Base]),
- * Itanium typeinfo ([ghistabs.cpp.abi.itanium.Rtti.Reader.Base]), an MSVC Base Class Array
- * ([ghistabs.cpp.abi.msvc.BaseEntry]) or the class record ([ClassHierarchyRecords.Base]). How it is inherited,
- * and [offset], in bytes: where a non-virtual base sits in the class, and for a virtual one whatever its
- * source keeps there instead (Itanium's vbase offset slot, MSVC's offset into the virtual base), or
- * null when it says nothing.
+ * A class's direct base, from stabs, Itanium typeinfo, an MSVC Base Class Array or the class record.
+ * [offset] is in bytes: a non-virtual base's place in the class, for a virtual one whatever its source
+ * keeps instead (Itanium's vbase offset slot, MSVC's offset into the virtual base), or null if unknown.
  */
 interface BaseDecl {
     val isVirtual: Boolean
@@ -34,8 +31,7 @@ enum class VirtKind { NORMAL, STATIC, VIRTUAL }
 interface MemberDecl {
     val name: String
 
-    /** The physname the declaration states, if any.
-     *  Not always a whole symbol ([ghistabs.cpp.abi.Gcc2Plain.physnameCandidates]). */
+    /** The stated physname, if any; not always a whole symbol (see `Gcc2Plain.physnameCandidates`). */
     val mangled: String?
     val access: Access
     val virt: VirtKind
@@ -44,21 +40,14 @@ interface MemberDecl {
 }
 
 /**
- * A map of each class's struct and direct bases ([Entry]) stored to program option [CLASSES], by
- * the namespace id of the [GhidraClass] the class pass built for it. A class struct holds only the base
- * subobjects it could lay (an empty base takes no bytes, a virtual one sits wherever the most-derived
- * class puts it), and its description names each base by its leaf, which five `…::Base` classes on
- * crypto_mi share. The struct goes by id: typedef shortening may rename it, and a class the CUs define
- * differently is filed under a CU's category (`/dll.cpp/multi/ECP`), so neither is found by the
- * class's name and scope. A base is named by namespace id too: the very class built for it, whatever
- * its name spells. Laid out in its [GProperties] by [GPropertiesFormat].
+ * Each class's struct and direct bases ([Entry]), keyed by the namespace id of its [GhidraClass] and
+ * stored in program option [CLASSES]. Needed because the struct alone loses bases (empty and virtual
+ * ones take no bytes in it, and its description names bases only by leaf), and goes by id because
+ * typedef shortening or per-CU categories can move a struct away from its class's name.
  */
 @Serializable
 data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : CustomOption {
-    /**
-     * A direct base: the class built for it ([namespaceId]), or only its [name] when none was, and
-     * where it sits in the class ([offset], in bytes), when it is not virtual and its source says.
-     */
+    /** A direct base: its class's [namespaceId], or only [name] if none was built, and its [offset] if known. */
     @Serializable
     data class Base(
         val namespaceId: Long?,
@@ -68,10 +57,7 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         override val offset: Long? = null,
     ) : BaseDecl
 
-    /**
-     * A class's struct, by datatype id, its direct bases in declaration order, and its [size] where
-     * something says: the class's `sizeof` if [exactSize], else as large as it is sure to be.
-     */
+    /** A class's struct by datatype id, its direct bases in order, and [size]: exact if [exactSize], else a minimum. */
     @Serializable
     data class Entry(
         val structId: Long?,
@@ -95,7 +81,7 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         fun Program.writeClassRecord(record: Map<Long, Entry>) =
             getOptions(CATEGORY).setCustomOption(CLASSES, ClassHierarchyRecords(record))
 
-        /** Null when no stabs import recorded them: a program imported before the record existed, or with none. */
+        /** Null when no stabs import wrote a record. */
         fun Program.readClassRecord(): Map<Long, Entry>? =
             (getOptions(CATEGORY).getCustomOption(CLASSES, null) as? ClassHierarchyRecords)?.classes
 
@@ -104,9 +90,8 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
 }
 
 /**
- * A member function's or static data member's access, virtuality and cv-qualifiers. The stabs state them
- * all; for a member they don't describe, the hierarchy derives what it can (cv off the mangled name,
- * virtual off the vtables) and leaves the rest null: no mangling or typeinfo records a member's access.
+ * A member function's or static data member's access, virtuality and cv-qualifiers. Stabs give all of
+ * them; otherwise cv comes from the mangled name, virtuality from the vtables, and access stays null.
  */
 @Serializable
 data class MemberAttrs(
@@ -141,7 +126,7 @@ data class MemberAttrs(
     companion object {
         const val MEMBERS = "Stabs Member Attributes"
 
-        /** On the code unit at [at], which creates [MEMBERS] the first time. None there (mid-instruction): not kept. */
+        /** Stores [attrs] on the code unit at [at]; dropped if no code unit starts there. */
         fun Program.writeMember(at: Address, attrs: MemberAttrs) =
             listing.getCodeUnitAt(at)?.setProperty(MEMBERS, attrs)
 
