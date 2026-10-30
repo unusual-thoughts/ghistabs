@@ -6,24 +6,14 @@ import ghidra.app.cmd.data.rtti.Rtti4Model
 import ghidra.app.cmd.data.rtti.VfTableModel
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
-import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.*
-import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
-import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
-import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
-import ghistabs.cpp.MemberAttrs.Companion.writeMember
-import ghistabs.cpp.abi.*
-import ghistabs.cpp.recover.NewSizeReader
-import ghistabs.cpp.recover.StructorFinder
-import ghistabs.cpp.recover.fastcallToThiscall
-import ghistabs.cpp.recover.sizeBounds
-import ghistabs.cpp.recover.vptrOffsets
+import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.recover.AbiClasses
+import ghistabs.cpp.recover.ClassRecovery
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.pointerAt
 import ghistabs.toClass
@@ -66,22 +56,8 @@ fun directBases(array: List<BaseEntry>): List<BaseEntry> {
 }
 
 /**
- * The class a virtual function belongs to: the lowest common ancestor of the classes whose vftables
- * hold it ([holders]). That class may have no vftable, as an abstract base's is often not emitted; one
- * that has one and doesn't hold it means the linker folded separate overrides into one body
- * (`/OPT:ICF`). Null for those, and where no class is common.
- */
-fun virtualOwner(holders: Set<ClassDecl>): ClassDecl? {
-    val common = holders.map { it.ancestors + it }.reduce { a, b -> a intersect b }
-    return common.singleOrNull { c -> common.none { it != c && it.derivesFrom(c) } }
-        ?.takeIf { it in holders || it.vftables.isEmpty() }
-}
-
-/**
- * Classes off the MSVC RTTI Ghidra's RTTI analyzer laid: their bases and sizes for [ClassHierarchyRecords],
- * each virtual function moved into its class ([virtualOwners]) and marked virtual, and each constructor and
- * destructor ([ghistabs.cpp.recover.StructorFinder]) moved there and named. Classes go by their type
- * descriptor's address.
+ * Classes off the MSVC RTTI Ghidra's RTTI analyzer laid, for [ClassRecovery]: their bases, off each Class
+ * Hierarchy Descriptor's Base Class Array, and their vftables. Classes go by their type descriptor's address.
  */
 class MsvcClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val options = DataValidationOptions()
@@ -118,37 +94,12 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         RttiClass(ns, ns?.name ?: "?", emptyList())
     }
 
-    data class Result(
-        val classes: Int,
-        val owned: Int,
-        val moved: Int,
-        val shared: Int,
-        val structors: Int,
-        val sized: Int,
-    )
-
-    fun recover(monitor: TaskMonitor = TaskMonitor.DUMMY): Result {
+    fun recover(monitor: TaskMonitor = TaskMonitor.DUMMY): ClassRecovery.Result {
         val hierarchies = readHierarchies().toMap()
         classes += hierarchies
         val holders = readVftables()
-        val owners = holders.mapValues { (_, hs) -> virtualOwner(hs) }
-        var moved = 0
-        for ((func, owner) in owners) {
-            if (owner != null && attach(func, owner)) moved++
-        }
-        val shared = owners.values.count { it == null }
-        if (shared > 0) {
-            debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
-        }
-        val structors = StructorFinder(program, classes.values, this).find(holders, Msvc, monitor)
-        val named = structors.count { (func, structor) ->
-            val cls = structor.first.ns?.toClass() ?: return@count false
-            nameStructor(func, cls, structor.second)
-        }
-        val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
-        val sizes = sizeClasses(NewSizeReader(program, Msvc, this).read(ctors, monitor))
-        writeRecords(hierarchies.values, sizes)
-        return Result(hierarchies.size, owners.size - shared, moved, shared, named, sizes.size)
+        val read = AbiClasses(classes.values, hierarchies.values, holders)
+        return ClassRecovery(program, Msvc, this).recover(read, monitor)
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }
@@ -188,70 +139,10 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return target?.takeUnless { it.isExternal || "purecall" in it.name }
     }
 
-    /** Marks [func] virtual unless recorded otherwise, and moves it into [cls] if it's global; whether it moved. */
-    private fun attach(func: Function, cls: ClassDecl): Boolean {
-        val entry = func.entryPoint
-        if (program.memberAttrs(entry) == null) program.writeMember(entry, MemberAttrs(virt = VirtKind.VIRTUAL))
-        val ns = cls.ns?.toClass() ?: return false
-        return func.parentNamespace.isGlobal && runCatching { func.parentNamespace = ns }
-            .onFailure { warn("msvc-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
-            .isSuccess
-    }
-
-    /**
-     * Each class's size range, off what it is [allocated] with and its bases' and vptrs' offsets. A struct
-     * shorter than an exact size grows to it, but none is made: `RecoverClassesFromRTTIScript` would take
-     * it for the layout rather than work one out.
-     */
-    private fun sizeClasses(allocated: Map<ClassDecl, Long>): Map<ClassDecl, LongRange> {
-        val all = classes.values.toList()
-        val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, program.defaultPointerSize.toLong())
-        for ((cls, size) in bounds) {
-            val exact = size.singleOrNull() ?: continue
-            val ns = cls.ns?.toClass() ?: continue
-            val struct = classStruct(ns)?.takeUnless { it.isNotYetDefined || it.length >= exact } ?: continue
-            runCatching { struct.growStructure((exact - struct.length).toInt()) }
-                .onFailure { warn("msvc-struct-ungrown", "${ns.getName(true)} -> $exact: $it") }
-        }
-        return bounds.filterValues { it.first > 0 }
-    }
-
-    private fun nameStructor(func: Function, cls: GhidraClass, role: StructorRole): Boolean {
-        val name = Msvc.structorFor(role, func).displayName(cls.name)
-        return runCatching {
-            val moves = func.parentNamespace.isGlobal
-            if (moves) func.parentNamespace = cls
-            val renames = func.parentNamespace == cls && func.symbol.source == SourceType.DEFAULT
-            if (renames) func.setName(name, SourceType.ANALYSIS)
-            val retyped = func.parentNamespace == cls && func.fastcallToThiscall()
-            moves || renames || retyped
-        }.onFailure {
-            warn("msvc-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)
-        }
-            .getOrDefault(false)
-    }
-
-    /** Writes each class's record over an earlier run's, so a rerun finds `RecoverClassesFromRTTIScript`'s struct. */
-    private fun writeRecords(classes: Collection<ClassDecl>, sizes: Map<ClassDecl, LongRange>) {
-        val entries = classes.mapNotNull { cls ->
-            ClassHierarchyRecords.entryOf(cls, cls.ns?.toClass()?.let(::classStructId), sizes[cls])
-        }
-        program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
-    }
-
     /** The class of the type descriptor at [at], for a base with no hierarchy descriptor. */
     private fun typeDescriptorClass(at: Address) = symbols.getSymbols(at)
         .firstOrNull { it.name == Msvc.TYPE_DESCRIPTOR && !it.parentNamespace.isGlobal }
         ?.parentNamespace?.toClass()
-
-    /** The class's struct where `RecoverClassesFromRTTIScript` files it. */
-    private fun classStruct(ns: GhidraClass) =
-        program.dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
-
-    private fun classStructId(ns: GhidraClass): Long? {
-        val struct = classStruct(ns) ?: return null
-        return program.dataTypeManager.getID(struct).takeIf { it >= 0 }
-    }
 }
 
 /** The Base Class Array a Class Hierarchy Descriptor points at: the class itself first, then its bases. */
