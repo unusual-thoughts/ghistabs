@@ -233,6 +233,7 @@ fun FileRenderer.regionsOf(func: Func, cLines: List<DecompLine>): List<Region> =
  */
 fun FileRenderer.dropInlined(regions: List<Region>, func: Func): List<Region> = buildList {
     var marks = ""
+    var lastSjlj: String? = null
     var depth = 0
 
     // A pseudo-call only reads as one from the calling side. In the header's own view the dropped
@@ -283,6 +284,7 @@ fun FileRenderer.dropInlined(regions: List<Region>, func: Func): List<Region> = 
             braces = moved + braces.mapIndexed { i, c -> Brace(c, text.length - braces.length + i) },
         )
         marks = ""
+        lastSjlj = null
         depth = 0
     }
 
@@ -296,9 +298,20 @@ fun FileRenderer.dropInlined(regions: List<Region>, func: Func): List<Region> = 
             // anchorless instead it sorted to the end of the file, 200 rows of bare markers.
             if (calls) {
                 depth += r.lines.sumOf { l -> l.braces.sumOf { if (it.char == '{') 1 else -1 } }
+                // Except the SJLJ bookkeeping gcc scheduled among them: `fc` is this function's
+                // frame, and the call-site comment says what a throw from the code here unwinds to.
+                // Ahead of the call, which stands in for whatever the store protects. gcc re-stores
+                // the index in each stretch it inlined, so one the last already said is said once.
+                for (s in r.lines.mapNotNull { it.sjlj }) {
+                    if (s != lastSjlj) marks += " $s"
+                    lastSjlj = s
+                }
             }
             val call = if (calls) r.pseudoCall(func, renderer.decompile(func).flow, ::entryAddrOf) else null
-            (call ?: r.labelOrNull()?.let { "/* ⇐ inlines $it */" })?.let { marks += " $it" }
+            (call ?: r.labelOrNull()?.let { "/* ⇐ inlines $it */" })?.let {
+                marks += " $it"
+                lastSjlj = null
+            }
             continue
         }
         flush()
