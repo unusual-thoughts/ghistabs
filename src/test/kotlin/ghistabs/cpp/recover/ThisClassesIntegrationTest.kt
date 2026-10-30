@@ -51,23 +51,11 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
-    private fun shapes(sizes: Map<GhidraClass, LongRange> = emptyMap()) = mapOf(
-        a to ThisClassShape(null, sizes[a]),
-        b to ThisClassShape(a, sizes[b]),
-        c to ThisClassShape(a, sizes[c]),
-        d to ThisClassShape(b, sizes[d]),
-    )
-
     private fun call(caller: String, callee: String, built: GhidraClass? = null) =
         ThisCall(fn(caller), fn(callee), built)
 
-    private fun guess(
-        calls: List<ThisCall>,
-        extents: Map<String, Long> = emptyMap(),
-        sizes: Map<GhidraClass, LongRange> = emptyMap(),
-    ) = ThisClassGuesser(shapes(sizes))
-        .guess(ThisReading(extents.map { (f, extent) -> fn(f) to ThisUse(extent) }.toMap(), calls))
-        .mapKeys { it.key.name }
+    private fun guess(calls: List<ThisCall>) =
+        ThisClassGuesser(mapOf(a to null, b to a, c to a, d to b)).guess(calls).mapKeys { it.key.name }
 
     @Test
     fun `a function called on a method's this belongs to that method's class`() {
@@ -88,13 +76,6 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun `an object a constructor built counts as that class, and an unknown caller not at all`() {
         guess(listOf(call("x", "f", built = c), call("y", "f")))["f"] mustBe ThisClassGuess(c, 1)
         guess(listOf(call("y", "f")))["f"].mustBeNull()
-    }
-
-    @Test
-    fun `a function reaching past its class's exact size is none of its`() {
-        val sizes = mapOf(d to 16L..16L)
-        guess(listOf(call("d", "f")), mapOf("f" to 16), sizes)["f"]?.cls mustBe d
-        guess(listOf(call("d", "f")), mapOf("f" to 20), sizes)["f"].mustBeNull()
     }
 
     @Test
