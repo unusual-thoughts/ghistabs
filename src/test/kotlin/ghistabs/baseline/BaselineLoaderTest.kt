@@ -142,15 +142,34 @@ class BaselineLoaderTest {
         counters["demangler-rtti-match"] mustBe CounterRange(0, 3)
     }
 
-    /** Each mode's record reads back as it was observed, with the degradation targets of all of them. */
+    /** Each mode's record reads back as it was observed. */
     @Test
     fun observations_readBackEveryRecordedMode(@TempDir tempDir: File) {
-        val obs = Observations(tempDir, "fixture")
-        obs.record("AFTER", mapOf("a" to 1L), mapOf("a" to listOf("x")))
-        obs.load(listOf("AFTER", "CONCURRENT")) mustBe (listOf(mapOf("a" to 1L)) to false)
+        val obs = Observations(tempDir)
+        obs.record("fixture", "AFTER", "fixture.exe", mapOf("a" to 1L), mapOf("a" to listOf("x")))
+        obs.record("fixture", "CONCURRENT", "fixture.exe", mapOf("a" to 2L), mapOf("a" to listOf("y")))
 
-        obs.record("CONCURRENT", mapOf("a" to 2L), mapOf("a" to listOf("y", "x")))
-        obs.load(listOf("AFTER", "CONCURRENT")) mustBe (listOf(mapOf("a" to 1L), mapOf("a" to 2L)) to true)
-        obs.degradationTargets(listOf("AFTER", "CONCURRENT")) mustBe mapOf("a" to listOf("x", "y"))
+        obs.fixtures() mustBe setOf("fixture")
+        obs.load("fixture", listOf("AFTER", "CONCURRENT")).map { it.counters.getValue("a") } mustBe
+            listOf(CounterRange(1, 1, listOf("x")), CounterRange(2, 2, listOf("y")))
+    }
+
+    /** A fixture whose modes left its committed ranges gets a shifted baseline over both; one inside them none. */
+    @Test
+    fun writeBaselines_shiftsOnlyTheFixturesThatDrifted(@TempDir tempDir: File) {
+        val baselines = File(tempDir, "baselines").apply { mkdirs() }
+        baselineOf(baselines, "moved-baseline.json", "c" to CounterRange(805, 805))
+        baselineOf(baselines, "steady-baseline.json", "c" to CounterRange(1, 2))
+        val obs = Observations(File(tempDir, "observed"))
+        obs.record("moved", "AFTER", "moved.exe", mapOf("c" to 805L), emptyMap())
+        obs.record("moved", "CONCURRENT", "moved.exe", mapOf("c" to 810L), emptyMap())
+        obs.record("steady", "AFTER", "steady.exe", mapOf("c" to 1L), emptyMap())
+        obs.record("steady", "CONCURRENT", "steady.exe", mapOf("c" to 2L), emptyMap())
+        val shifted = File(tempDir, "shifted")
+
+        writeBaselines(File(tempDir, "observed"), baselines, shifted, regenerate = false)
+
+        shifted.list()?.toSet() mustBe setOf("moved-baseline.json")
+        BaselineLoader.load(File(shifted, "moved-baseline.json")).counters["c"] mustBe CounterRange(805, 810)
     }
 }

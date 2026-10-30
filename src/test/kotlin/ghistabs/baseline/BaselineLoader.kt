@@ -4,8 +4,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import java.io.File
-import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
 
 @Serializable
 data class CounterRange(
@@ -117,37 +115,27 @@ object BaselineWriter {
 }
 
 /**
- * What one run mode of a fixture observed, kept beside the other modes' so a baseline written from
+ * What each run mode of each fixture observed, one file per fixture and mode, so a baseline written from
  * them covers every mode ([BaselineWriter.write]) instead of whichever ran last.
  */
-class Observations(private val dir: File, private val fixture: String) {
-    private fun file(mode: String) = File(dir, "$fixture.$mode.json")
+class Observations(private val dir: File) {
+    private fun file(fixture: String, mode: String) = File(dir, "$fixture.$mode.json")
 
-    /**
-     * Run [block] holding this fixture's lock: modes run in parallel forks, and one that read the others'
-     * observations before another recorded its own would otherwise write a baseline missing it, last.
-     */
-    fun <T> locked(block: () -> T): T {
-        dir.mkdirs()
-        val lock = File(dir, "$fixture.lock").toPath()
-        return FileChannel.open(lock, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
-            .use { channel -> channel.lock().use { block() } }
-    }
+    /** Records [counters] for [fixture] in [mode]; [binary] names it in the baselines written from them. */
+    fun record(
+        fixture: String,
+        mode: String,
+        binary: String,
+        counters: Map<String, Long>,
+        degradationTargets: Map<String, List<String>>,
+    ) = BaselineWriter.write(file(fixture, mode), listOf(counters), binary, null, degradationTargets, complete = true)
 
-    fun record(mode: String, counters: Map<String, Long>, degradationTargets: Map<String, List<String>>) =
-        BaselineWriter.write(file(mode), listOf(counters), "observed", null, degradationTargets, complete = true)
+    /** The fixtures any mode recorded. */
+    fun fixtures(): Set<String> = dir.listFiles { f ->
+        f.name.endsWith(".json")
+    }.orEmpty().mapTo(sortedSetOf()) { it.name.removeSuffix(".json").substringBeforeLast('.') }
 
-    /** The counters each of [modes] recorded, in [modes] order, and whether every one of them has. */
-    fun load(modes: Collection<String>): Pair<List<Map<String, Long>>, Boolean> {
-        val seen = modes.filter { file(it).exists() }
-        val counters = seen.map { m -> BaselineLoader.load(file(m)).counters.mapValues { it.value.min } }
-        return counters to (seen.size == modes.size)
-    }
-
-    /** The union of every recorded mode's degradation targets, per counter. */
-    fun degradationTargets(modes: Collection<String>): Map<String, List<String>> = modes
-        .filter { file(it).exists() }
-        .flatMap { m -> BaselineLoader.load(file(m)).counters.entries }
-        .groupBy({ it.key }, { it.value.degrades })
-        .mapValues { (_, lists) -> lists.flatten().distinct().sorted() }
+    /** What [fixture] observed in each of [modes] that recorded it, in [modes] order. */
+    fun load(fixture: String, modes: Collection<String>): List<Baseline> =
+        modes.map { file(fixture, it) }.filter { it.exists() }.map(BaselineLoader::load)
 }

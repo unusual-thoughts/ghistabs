@@ -1,6 +1,8 @@
 import ghistabs.build.registerHeadlessTest
 import ghistabs.build.sourceSets
 
+val observedCounters: File = layout.buildDirectory.dir("test-output/observed-counters").get().asFile
+
 // Run the integration tests per binary × mode
 registerHeadlessTest(
     "integrationTest",
@@ -8,11 +10,26 @@ registerHeadlessTest(
     tag = "integration",
     narrowGeneratedClasses = true,
 ) {
-    finalizedBy(auditTests)
-    // Written per run from every mode's observations: a file left by an earlier run would be merged in.
-    val stale = listOf("observed-counters", "shifted-baselines")
-        .map { layout.buildDirectory.dir("test-output/$it").get().asFile }
-    doFirst { stale.forEach { it.deleteRecursively() } }
+    finalizedBy(writeBaselines, auditTests)
+    // Each mode's counters, for writeBaselines: one an earlier run left would be merged into this run's.
+    val observed = observedCounters
+    doFirst { observed.deleteRecursively() }
+}
+
+// After every mode has run, so a baseline covers all of them rather than whichever finished last:
+// shifted-baselines for the fixtures that drifted, or the committed baselines with -PregenerateBaselines.
+val writeBaselines = tasks.register<JavaExec>("writeBaselines") {
+    description = "Write shifted (or, with -PregenerateBaselines, committed) baselines from integrationTest's counts"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "ghistabs.baseline.WriteBaselinesKt"
+    val observed = observedCounters
+    args(
+        observed,
+        layout.projectDirectory.dir("src/test/resources/baselines").asFile,
+        layout.buildDirectory.dir("test-output/shifted-baselines").get().asFile,
+        providers.gradleProperty("regenerateBaselines").getOrElse(""),
+    )
+    onlyIf { observed.isDirectory }
 }
 
 // Imports a real fixture against exactly what we ship: serializers get reached from class
