@@ -47,14 +47,13 @@ interface ClassDecl {
     val bases: List<ClassBase>
 
     /** Every class this one derives from, directly or not. */
-    val ancestors: Set<ClassDecl>
-        get() = buildSet {
-            val todo = ArrayDeque(bases)
-            while (todo.isNotEmpty()) {
-                val base = todo.removeFirst().cls
-                if (add(base)) todo += base.bases
-            }
+    val ancestors: Set<ClassDecl> get() = buildSet {
+        val todo = ArrayDeque(bases)
+        while (todo.isNotEmpty()) {
+            val base = todo.removeFirst().cls
+            if (add(base)) todo += base.bases
         }
+    }
 
     /** Its own vtables; empty when none was emitted, as for an abstract base. */
     val vftables: List<VtableRecord>

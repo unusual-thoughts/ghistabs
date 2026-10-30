@@ -95,7 +95,6 @@ open class VtableSweeper(
         var laid = 0
         for ((qualified, record) in unclaimed) {
             monitor.increment()
-            val abi = record.abi
             val targets = record.slots(program)
             if (targets.isEmpty()) {
                 degradation("vtable-swept-empty", qualified, "no function pointers", record.addressPoint)
@@ -111,8 +110,8 @@ open class VtableSweeper(
             }
             // Slots the stabs typed, for a class whose vtable they couldn't place, beat any read off targets.
             if (vftable.numComponents == 0) {
-                addSweptSlots(vftable, path.categoryPath, targets, abi)
-                vftable.describeVxTable(leaf, ClassNaming.VFTABLE, abi.primaryVptrOffset)
+                addSweptSlots(vftable, path.categoryPath, targets, record.abi)
+                vftable.describeVxTable(leaf, ClassNaming.VFTABLE, record.abi.primaryVptrOffset)
             }
 
             val addressPoint = record.lay(registry, program, vftable, ns, source = SWEPT)
