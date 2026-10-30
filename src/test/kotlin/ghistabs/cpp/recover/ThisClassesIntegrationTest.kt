@@ -3,9 +3,9 @@ package ghistabs.cpp.recover
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataType
 import ghidra.program.model.listing.Function
+import ghidra.program.model.listing.GhidraClass
+import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.cpp.ClassDecl
-import ghistabs.cpp.TestClass
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.AfterEach
@@ -18,45 +18,57 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var builder: ProgramBuilder
     private val functions = mutableMapOf<String, Function>()
 
+    // class B : A; class C : A; class D : B
+    private lateinit var a: GhidraClass
+    private lateinit var b: GhidraClass
+    private lateinit var c: GhidraClass
+    private lateinit var d: GhidraClass
+
     @BeforeEach
     fun setUp() {
         builder = ProgramBuilder("this-classes", ProgramBuilder._X86)
         builder.createMemory(".text", "0x401000", 0x1000)
+        builder.withTransaction {
+            val symbols = builder.program.symbolTable
+            fun cls(name: String) = symbols.createClass(null, name, SourceType.USER_DEFINED)
+            a = cls("A")
+            b = cls("B")
+            c = cls("C")
+            d = cls("D")
+        }
+        // A method of each, named after it in lower case.
+        listOf(a, b, c, d).forEach { fn(it.name.lowercase(), it) }
     }
 
     @AfterEach
     fun tearDown() = builder.dispose()
 
-    private fun fn(name: String) = functions.getOrPut(name) {
+    /** A function; a method of [cls] if given. */
+    private fun fn(name: String, cls: GhidraClass? = null) = functions.getOrPut(name) {
         val at = "0x%x".format(0x401000 + 0x10 * functions.size)
-        builder.createEmptyFunction(name, at, 1, DataType.DEFAULT)
+        builder.createEmptyFunction(name, at, 1, DataType.DEFAULT).also { f ->
+            cls?.let { builder.withTransaction { f.parentNamespace = it } }
+        }
     }
 
-    // class B : A; class C : A; class D : B
-    private val a = TestClass("A")
-    private val b = TestClass("B", a)
-    private val c = TestClass("C", a)
-    private val d = TestClass("D", b)
+    private fun shapes(sizes: Map<GhidraClass, LongRange> = emptyMap()) = mapOf(
+        a to ThisClassShape(null, sizes[a], 2),
+        b to ThisClassShape(a, sizes[b], 3),
+        c to ThisClassShape(a, sizes[c], 2),
+        d to ThisClassShape(b, sizes[d], 3),
+    )
 
-    private val slots = mapOf<ClassDecl, Int>(a to 2, b to 3, c to 2, d to 3)
-
-    private fun call(caller: String, callee: String, built: ClassDecl? = null) = ThisCall(fn(caller), fn(callee), built)
+    private fun call(caller: String, callee: String, built: GhidraClass? = null) =
+        ThisCall(fn(caller), fn(callee), built)
 
     private fun use(extent: Long, vararg slots: Int, calls: Set<String> = emptySet()) =
         ThisUse(extent, slots.toSet(), calls.mapTo(mutableSetOf(), ::fn))
 
     private fun guess(
         calls: List<ThisCall>,
-        known: Map<String, ClassDecl> = mapOf("a" to a, "b" to b, "c" to c, "d" to d),
         uses: Map<String, ThisUse> = emptyMap(),
-        sizes: Map<ClassDecl, LongRange> = emptyMap(),
-    ) = ThisClassGuesser(sizes, slots).guess(
-        known.mapKeys {
-            fn(it.key)
-        },
-        ThisReading(uses.mapKeys { fn(it.key) }, calls),
-    )
-        .mapKeys { it.key.name }
+        sizes: Map<GhidraClass, LongRange> = emptyMap(),
+    ) = ThisClassGuesser(shapes(sizes)).guess(ThisReading(uses.mapKeys { fn(it.key) }, calls)).mapKeys { it.key.name }
 
     @Test
     fun `a function called on a method's this belongs to that method's class`() {
@@ -77,9 +89,10 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun `a guess moves up to a base that does all the function does`() {
-        val known = mapOf("d" to d, "aCtor" to a, "bCtor" to b)
+        fn("aCtor", a)
+        fn("bCtor", b)
         val uses = mapOf("aCtor" to use(8), "bCtor" to use(16))
-        fun refined(use: ThisUse) = guess(listOf(call("d", "f")), known, uses + ("f" to use))["f"]?.cls
+        fun refined(use: ThisUse) = guess(listOf(call("d", "f")), uses + ("f" to use))["f"]?.cls
 
         refined(use(8, 1)) mustBe a
         // reaches past A's own fields, or calls a slot A's vftable doesn't have
@@ -93,9 +106,8 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun `an exact size lets a guess move up to a base, and rules out a class too small`() {
-        val sizes = mapOf<ClassDecl, LongRange>(a to 8L..8L, b to 12L..12L, d to 16L..16L)
-        fun guessed(extent: Long) =
-            guess(listOf(call("d", "f")), mapOf("d" to d), mapOf("f" to use(extent)), sizes)["f"]?.cls
+        val sizes = mapOf(a to 8L..8L, b to 12L..12L, d to 16L..16L)
+        fun guessed(extent: Long) = guess(listOf(call("d", "f")), mapOf("f" to use(extent)), sizes)["f"]?.cls
 
         // no method of A's or B's reaches anywhere, but their sizes are known
         guessed(8) mustBe a

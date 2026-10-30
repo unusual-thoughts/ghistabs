@@ -24,8 +24,7 @@ class MsvcClassAnalyzer :
     AbstractAnalyzer(
         NAME,
         "Record each class's bases from its MSVC RTTI, and move each virtual function into the class " +
-            "that introduced it, its constructors and destructors off the vftable stores they make, " +
-            "and each unnamed function taking a `this` into the class its callers pass it objects of",
+            "that introduced it, and its constructors and destructors off the vftable stores they make",
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
@@ -44,7 +43,7 @@ class MsvcClassAnalyzer :
                 NAME,
                 "${result.classes} class(es), ${result.owned} virtual function(s) owned, ${result.moved} moved, " +
                     "${result.shared} shared, ${result.structors} constructor(s) and destructor(s) named, " +
-                    "${result.sized} class size(s) recorded, ${result.guessed} method class(es) guessed from this",
+                    "${result.sized} class size(s) recorded",
             )
         }
         return true

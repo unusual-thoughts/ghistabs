@@ -1,6 +1,7 @@
 package ghistabs.cpp.recover
 
 import ghidra.app.decompiler.DecompInterface
+import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -10,7 +11,9 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.ClassDecl
+import ghistabs.cpp.ClassHierarchyRecords
+import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
+import ghistabs.cpp.ClassNaming
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.toClass
 import ghistabs.useWith
@@ -25,62 +28,72 @@ data class ThisUse(val extent: Long, val slots: Set<Int>, val calls: Set<Functio
  * A call passing an object as [callee]'s `this`: [caller]'s own, or one [caller] built with a
  * constructor of class [built].
  */
-data class ThisCall(val caller: Function, val callee: Function, val built: ClassDecl? = null)
-
-/** A function's class, as [ThisClassGuesser] guessed it: [cls], refined up from [common], off [sites] calls. */
-data class ThisClassGuess(val cls: ClassDecl, val common: ClassDecl, val sites: Int)
-
-/** [cls], then the base it shares its address with: its first direct base that isn't virtual, and so on up. */
-fun addressChain(cls: ClassDecl): List<ClassDecl> =
-    generateSequence(cls) { k -> k.bases.firstOrNull { !it.isVirtual }?.cls }.take(MAX_DEPTH).toList()
-
-/**
- * The most derived class every one of [classes] is, or shares its address with: the first of the
- * first class's [addressChain] that is in every one's.
- */
-fun commonClass(classes: Collection<ClassDecl>): ClassDecl? {
-    val chains = classes.map(::addressChain)
-    return chains.firstOrNull()?.firstOrNull { c -> chains.all { c in it } }
-}
+data class ThisCall(val caller: Function, val callee: Function, val built: GhidraClass? = null)
 
 /** What [ThisClasses] read off the decompiled functions: each one's [uses] of `this`, and the [calls] passing one. */
 class ThisReading(val uses: Map<Function, ThisUse>, val calls: Collection<ThisCall>)
 
+/** A function's class, as [ThisClassGuesser] guessed it: [cls], refined up from [common], off [sites] calls. */
+data class ThisClassGuess(val cls: GhidraClass, val common: GhidraClass, val sites: Int)
+
 /**
- * Guesses the class of each function [ThisReading.calls] passes an object whose class is known, off each
- * class's [sizes] and the [slots] of the vftable at its object's start.
+ * A class as the class record holds it, all [ThisClassGuesser] needs of it: the [base] it shares its address
+ * with, its [size] range, and how many [slots] the vftable at the start of its object has, where known.
  */
-class ThisClassGuesser(private val sizes: Map<ClassDecl, LongRange>, private val slots: Map<ClassDecl, Int>) {
+data class ThisClassShape(val base: GhidraClass? = null, val size: LongRange? = null, val slots: Int? = null)
+
+/**
+ * Guesses the classes of the functions called on objects of the classes in [shapes]. A [GhidraClass] hashes
+ * by identity, so each class goes by its one instance among [shapes]' keys, and a function's namespace by id.
+ */
+class ThisClassGuesser(private val shapes: Map<GhidraClass, ThisClassShape>) {
+    private val byId = shapes.keys.associateBy { it.id }
+
+    /** [cls], then the base it shares its address with, and so on up. */
+    fun addressChain(cls: GhidraClass): List<GhidraClass> =
+        generateSequence(cls) { shapes[it]?.base }.take(MAX_DEPTH).toList()
+
     /**
-     * The class of each callee not in [known], off the calls that pass it an object whose class is known:
-     * the caller's own `this`, when the caller is a method of a [known] class or one guessed here, or an
-     * object the caller built with a constructor. Called on objects of several classes, it belongs to their
-     * [commonClass]; and then to whichever base that class shares its address with that does all the method
-     * does: reaches no further into the object than the base is large (its exact size or, not knowing that,
-     * the larger of what its own methods reach and its least size), calls no slot past the end of its
-     * vftable, and calls nothing on `this` that belongs to a class below it. Decompiled with `this` as that
-     * base, the method would read the same. A method reaching past the common class's exact size is none of its.
+     * The most derived class every one of [classes] is, or shares its address with: the first of the
+     * first class's [addressChain] that is in every one's.
+     */
+    fun commonClass(classes: Collection<GhidraClass>): GhidraClass? {
+        val chains = classes.map(::addressChain)
+        return chains.firstOrNull()?.firstOrNull { c -> chains.all { c in it } }
+    }
+
+    /**
+     * The class of each function [reading] has called on an object whose class is known: the caller's own
+     * `this`, when the caller is a method of one of [shapes] or one guessed here, or an object the caller
+     * built with a constructor. Called on objects of several classes, it belongs to their [commonClass]; and
+     * then to whichever base that class shares its address with that does all the function does: reaches
+     * no further into the object than the base is large (its exact size or, not knowing that, the larger of
+     * what its own methods reach and its least size), calls no slot past the end of its vftable, and calls
+     * nothing on `this` that belongs to a class below it. Decompiled with `this` as that base, the function
+     * would read the same. A function reaching past the common class's exact size is none of its.
      *
      * Guesses feed the next round's callers, until none changes.
      */
-    fun guess(known: Map<Function, ClassDecl>, reading: ThisReading): Map<Function, ThisClassGuess> {
+    fun guess(reading: ThisReading): Map<Function, ThisClassGuess> {
         val uses = reading.uses
-        val reach = mutableMapOf<ClassDecl, Long>()
-        for ((f, cls) in known) uses[f]?.let { reach.merge(cls, it.extent, ::maxOf) }
-        fun exactSize(cls: ClassDecl) = sizes[cls]?.singleOrNull()
-        fun extent(cls: ClassDecl) =
-            exactSize(cls) ?: listOfNotNull(reach[cls], sizes[cls]?.first?.takeIf { it > 0 }).maxOrNull()
+        fun known(f: Function) = byId[f.parentNamespace.id]
+        val reach = mutableMapOf<GhidraClass, Long>()
+        for ((f, use) in uses) known(f)?.let { reach.merge(it, use.extent, ::maxOf) }
+        fun exactSize(cls: GhidraClass) = shapes[cls]?.size?.singleOrNull()
+        fun extent(cls: GhidraClass) =
+            exactSize(cls) ?: listOfNotNull(reach[cls], shapes[cls]?.size?.first?.takeIf { it > 0 }).maxOrNull()
 
-        val sites = reading.calls.filter { it.callee !in known }.groupBy { it.callee }
+        val sites = reading.calls.filter { known(it.callee) == null }.groupBy { it.callee }
         var guessed = emptyMap<Function, ThisClassGuess>()
-        fun classOf(f: Function) = known[f] ?: guessed[f]?.cls
+        fun classOf(f: Function) = known(f) ?: guessed[f]?.cls
 
-        fun refine(f: Function, common: ClassDecl): ClassDecl {
+        fun refine(f: Function, common: GhidraClass): GhidraClass {
             val use = uses[f] ?: return common
             var cls = common
             for (base in addressChain(common).drop(1)) {
                 val fits = extent(base)?.let { use.extent <= it } ?: false
-                val inTable = use.slots.maxOrNull()?.let { top -> slots[base]?.let { top < it } ?: false } ?: true
+                val top = use.slots.maxOrNull()
+                val inTable = top == null || shapes[base]?.slots?.let { top < it } ?: false
                 val onBase = use.calls.none { g -> g != f && classOf(g)?.let { it !in addressChain(base) } ?: false }
                 if (!fits || !inTable || !onBase) break
                 cls = base
@@ -107,42 +120,68 @@ private const val MAX_ROUNDS = 8
 private const val MAX_DEPTH = 64
 
 /**
- * [ThisClassGuesser] over a program: every unnamed function in the global namespace whose convention takes
- * `this` (`__thiscall`, or `__fastcall`, whose first argument comes in the same register), off its callers'
- * decompiled calls, against the methods of [classes] and the objects their constructors build. Each guess
- * moves the function into its class, a `__fastcall` that takes nothing in EDX becoming a `__thiscall`
- * ([fastcallToThiscall]), and leaves an Analysis bookmark saying where it came from.
+ * [ThisClassGuesser] over a program, for any ABI: every unnamed function in the global namespace whose
+ * convention takes `this` (`__thiscall`, or `__fastcall`, whose first argument comes in the same register),
+ * off its callers' decompiled calls, against the classes [ClassHierarchyRecords] holds, their methods and the
+ * objects their constructors build. Each guess moves the function into its class, a `__fastcall` that takes
+ * nothing in EDX becoming a `__thiscall` ([fastcallToThiscall]), and leaves an Analysis bookmark saying where
+ * it came from.
  */
-class ThisClasses(private val program: Program, private val classes: Collection<ClassDecl>, sink: DiagnosticSink) :
-    DiagnosticSink by sink {
+class ThisClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
-    private val byNamespace = classes.mapNotNull { cls -> cls.ns?.toClass()?.let { it.id to cls } }.toMap()
+    private val symbols = program.symbolTable
 
-    /** How many it moved, given each constructor's class ([ctors]) and each class's [sizes]. */
-    fun guess(ctors: Map<Function, ClassDecl>, sizes: Map<ClassDecl, LongRange>, monitor: TaskMonitor): Int {
-        if (byNamespace.isEmpty() || thisStorage == null) return 0
+    /** How many it moved. */
+    fun guess(monitor: TaskMonitor): Int {
+        val shapes = shapes()
+        if (shapes.isEmpty() || thisStorage == null) return 0
         val functions = program.functionManager.getFunctions(true).toList()
-        val known = functions.mapNotNull { f -> byNamespace[f.parentNamespace.id]?.let { f to it } }.toMap()
         val candidates = functions.filterTo(mutableSetOf()) { it.isCandidate() }
         if (candidates.isEmpty()) return 0
+        val byId = shapes.keys.associateBy { it.id }
+        val methods = functions.mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
+        // A constructor goes by its class's name, as every ABI's structor pass and stabs name it.
+        val ctors = methods.filter { (f, cls) -> f.name == cls.name }
         val callers = candidates.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
-        val reading = read(candidates + callers + known.keys, candidates, ctors, monitor)
-        val slots = classes.mapNotNull { cls -> slotCount(cls)?.let { cls to it } }.toMap()
-        val guesses = ThisClassGuesser(sizes, slots).guess(known, reading)
-        return guesses.count { (f, guess) -> place(f, guess) }
+        val reading = read(candidates + callers + methods.keys, candidates, ctors, monitor)
+        return ThisClassGuesser(shapes).guess(reading).count { (f, guess) -> place(f, guess) }
+    }
+
+    /** Each recorded class's shape, the base it shares its address with being its non-virtual one at offset 0. */
+    private fun shapes(): Map<GhidraClass, ThisClassShape> {
+        val records = program.readClassRecord().orEmpty()
+        val classes = records.keys.mapNotNull { id ->
+            (symbols.getSymbol(id)?.`object` as? GhidraClass)?.let { id to it }
+        }.toMap()
+        return classes.map { (id, cls) ->
+            val entry = records.getValue(id)
+            val base = entry.bases.firstOrNull { !it.isVirtual && (it.offset ?: 0L) == 0L }?.namespaceId
+            cls to ThisClassShape(base?.let(classes::get), entry.sizeRange(), slotCount(cls))
+        }.toMap()
+    }
+
+    /** The record's size, or its struct's where that says more; unbounded above unless exact. */
+    private fun ClassHierarchyRecords.Entry.sizeRange(): LongRange? {
+        if (exactSize && size != null) return size..size
+        val struct = structId?.let(program.dataTypeManager::getDataType) as? Structure
+        val structLength = struct?.takeUnless { it.isNotYetDefined }?.length?.toLong()
+        val least = listOfNotNull(size, structLength).maxOrNull() ?: return null
+        return least..Long.MAX_VALUE
+    }
+
+    /** Slots in [cls]'s own vftable, labelled [ClassNaming.VFTABLE]; none where it has several so labelled. */
+    private fun slotCount(cls: GhidraClass): Int? {
+        val table = symbols.getSymbols(cls).filter { it.name == ClassNaming.VFTABLE }.singleOrNull() ?: return null
+        return program.listing.getDataAt(table.address)?.numComponents?.takeIf { it > 0 }
     }
 
     private fun Function.isCandidate() = parentNamespace.isGlobal && symbol.source == SourceType.DEFAULT &&
         !isThunk && !isExternal && callingConventionName in THIS_CONVENTIONS
 
-    /** Slots in the vftable at the start of [cls]'s object. */
-    private fun slotCount(cls: ClassDecl) =
-        cls.vftables.firstOrNull { it.vfptrOffset(program) == 0L }?.slots(program)?.size
-
     private fun read(
         functions: Set<Function>,
         candidates: Set<Function>,
-        ctors: Map<Function, ClassDecl>,
+        ctors: Map<Function, GhidraClass>,
         monitor: TaskMonitor,
     ): ThisReading {
         val uses = mutableMapOf<Function, ThisUse>()
@@ -161,14 +200,14 @@ class ThisClasses(private val program: Program, private val classes: Collection<
     }
 
     /** One decompiled function's [use] of its `this`, and the [calls] it makes on objects of known class. */
-    private inner class FunctionReading(f: Function, high: HighFunction, ctors: Map<Function, ClassDecl>) {
+    private inner class FunctionReading(f: Function, high: HighFunction, ctors: Map<Function, GhidraClass>) {
         val calls = mutableListOf<ThisCall>()
         val use: ThisUse
 
         init {
             val ops = high.pcodeOps.asSequence().toList()
             // The objects the function built, by where they point, from their constructor's argument and result.
-            val built = mutableMapOf<Pair<Any, Long>, ClassDecl>()
+            val built = mutableMapOf<Pair<Any, Long>, GhidraClass>()
             for (op in ops) {
                 val cls = op.directCallee()?.let(ctors::get) ?: continue
                 built[op.getInput(1).pointerInto().key()] = cls
@@ -225,12 +264,8 @@ class ThisClasses(private val program: Program, private val classes: Collection<
     }
 
     private fun place(f: Function, guess: ThisClassGuess): Boolean {
-        val cls = guess.cls.ns?.toClass() ?: return false
-        val refined = if (guess.cls != guess.common) {
-            ", refined up from ${guess.common.ns?.getName(true) ?: guess.common.name}"
-        } else {
-            ""
-        }
+        val cls = guess.cls
+        val refined = if (cls != guess.common) ", refined up from ${guess.common.getName(true)}" else ""
         return runCatching {
             f.parentNamespace = cls
             f.fastcallToThiscall()
