@@ -13,7 +13,7 @@ import ghistabs.importer.ImportProbe
 
 /**
  * Guess the class of each unnamed function that takes a `this`, off the objects its callers pass it
- * ([ThisClasses]), once [MsvcClassAnalyzer] or a stabs import has recorded the classes and put their
+ * ([ThisClasses]), once a class pass (MSVC or Itanium RTTI classes) or a stabs import has recorded the classes and put their
  * methods, constructors included, in them.
  */
 class ThisClassAnalyzer :
@@ -24,8 +24,8 @@ class ThisClassAnalyzer :
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
-        // After MSVC RTTI classes, whose methods and constructors are the evidence.
-        priority = AnalysisPriority.LOW_PRIORITY.after().after().after()
+        // After MSVC RTTI classes and Itanium RTTI classes, whose methods and constructors are the evidence.
+        priority = AnalysisPriority.LOW_PRIORITY.after().after().after().after()
         setDefaultEnablement(true)
         setSupportsOneTimeAnalysis()
     }
