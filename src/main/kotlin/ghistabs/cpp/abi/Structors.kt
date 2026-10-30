@@ -1,21 +1,9 @@
 package ghistabs.cpp.abi
 
-import ghidra.app.decompiler.DecompInterface
-import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.Program
-import ghidra.program.model.pcode.HighFunction
-import ghidra.program.model.pcode.PcodeOp
-import ghidra.program.model.pcode.Varnode
-import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.cpp.abi.itanium.ItaniumStructor
 import ghistabs.cpp.abi.msvc.MsvcStructor
 import ghistabs.cpp.recover.StructorFinder
-import ghistabs.cpp.recover.pointerInto
-import ghistabs.cpp.recover.thisStorage
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.useWith
 
 /**
  * A constructor or destructor as its ABI tells its variants apart: [ItaniumStructor] by the code in its
@@ -33,7 +21,7 @@ interface Structor {
 
 /**
  * How an ABI's structors behave, as far as [StructorFinder] and the sizes `operator new` gives
- * ([ghistabs.cpp.NewSizeReader]) need to know.
+ * ([ghistabs.cpp.recover.NewSizeReader]) need to know.
  */
 interface StructorConvention {
     /**

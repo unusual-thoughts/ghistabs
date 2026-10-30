@@ -10,7 +10,6 @@ import ghidra.program.model.pcode.Varnode
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.abi.StructorConvention
 import ghistabs.cpp.abi.StructorRole
-import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
