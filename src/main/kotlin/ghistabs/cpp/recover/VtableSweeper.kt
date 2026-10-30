@@ -18,16 +18,13 @@ import ghistabs.cpp.abi.itanium.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 
-/** One gcc 2.x secondary vtable record: its symbol's [base] and ABI, and where it sits. */
+/** A gcc 2.x secondary vtable: the [base] its symbol names, where it is, and its ABI. */
 internal data class Gcc2SecondaryVtable(val base: String, val address: Address, val abi: CxxAbi)
 
 /**
- * Lays the vtables of classes nothing describes: every `_ZTV…` (and gcc 2.x `_vt…`) symbol whose record
- * no class has claimed ([isVtableClaimed]), typed off whatever sits at the addresses its slots hold.
- * Needs only the symbol table and memory: [ghistabs.entrypoints.GccVftableAnalyzer] runs the sweep,
- * on a binary with no stabs at all as much as after a stabs import. [ghistabs.importer.ClassApplier]
- * extends it only for the table-laying helpers, which it uses on the classes the stabs describe, and
- * never sweeps.
+ * Lays the vtables no class claimed ([isVtableClaimed]), Itanium's and gcc 2.x's, typed off the functions
+ * their slots point at. Needs only symbols and memory, so [ghistabs.entrypoints.GccVftableAnalyzer] sweeps
+ * with or without stabs. [ghistabs.importer.ClassApplier] uses only its table-laying helpers.
  */
 open class VtableSweeper(
     internal open val registry: DtmRegistry,
@@ -39,8 +36,8 @@ open class VtableSweeper(
     internal val dtm = program.dataTypeManager
 
     /**
-     * A demangled parameter's type as an import made it, ahead of Ghidra's own lookup: gcc 3's stabs file
-     * `std::_Ios_Openmode` under no namespace, so the lookup in `/std` misses it. Null for none.
+     * A demangled parameter's type as the stabs import made it, before Ghidra's lookup, which misses
+     * `std::_Ios_Openmode` filed under no namespace. Null for none.
      */
     protected open fun importedType(t: DemangledDataType): DataType? = null
 
@@ -49,7 +46,7 @@ open class VtableSweeper(
         ?: Undefined4DataType.dataType.also { degradation(category, degrades, "demangler gave no type for $this") }
 
     companion object {
-        /** What a swept table's labels carry, so a class laying it later claims it ([isVtableClaimed]). */
+        /** A swept table's label source, below the import's, so a class can still claim it ([isVtableClaimed]). */
         private val SWEPT = SourceType.ANALYSIS
 
         /** How the demangler spells a construction vtable's owner: `Left-in-Diamond`. */
@@ -57,20 +54,16 @@ open class VtableSweeper(
 
         val VTABLES_SWEPT = BoolOption("Vtables Swept", "Vtables no class claimed already laid.", false)
 
-        /** Whether a sweep already ran here since the tables last changed hands. */
+        /** Whether a sweep ran since a class pass last claimed tables. */
         val Program.isVtablesSwept get() = this[VTABLES_SWEPT]
 
-        /** [value] false when a class pass has claimed tables since, so the next sweep looks again. */
+        /** Set [value] false once a class pass claims tables, so the next sweep looks again. */
         fun Program.markVtablesSwept(value: Boolean = true) {
             this[VTABLES_SWEPT] = value
         }
     }
 
-    /**
-     * gcc 2.x secondary vtables (`_vt.<class>.<base>`) by the qualified class they belong to, one per
-     * record in address order: a.out keeps both `_vt$` and its user-label-prefixed `__vt$` at one
-     * address. Empty for any other ABI.
-     */
+    /** gcc 2.x secondary vtables (`_vt.<class>.<base>`) by class, one per record though a.out labels each twice. */
     private val gcc2SecondaryVtables: Map<String, List<Gcc2SecondaryVtable>> by lazy {
         buildMap {
             for (sym in symtab.symbolIterator) {
@@ -82,24 +75,15 @@ open class VtableSweeper(
     }
 
     /**
-     * Lay every `_ZTV…` symbol no class claimed. `buildAndApplyVtable` runs per group, i.e.
-     * only for a class we have a `T`-stab body for; libsupc++ and libstdc++ link without stabs, so
-     * their polymorphic classes (`__cxxabiv1::__si_class_type_info`, `std::basic_filebuf<char,…>`)
-     * own a real vtable that nothing ever visits — 53 of unbouniaf's 58 `_ZTV` symbols.
-     *
-     * Lossy by nature: with no method list the slots can only be named and typed from whatever sits
-     * at the addresses they point to, and the array's length is inferred (see [vtableSlotTargets]).
-     * The class struct is *not* synthesised — this is the vtable level only; §24 covers the same
-     * classes at the typeinfo-record level.
-     *
-     * Returns the number of primary vtables laid, and marks the program [isVtablesSwept].
+     * Lays every vtable no class claimed, mostly those of libraries linked without stabs, then the gcc 2.x
+     * secondaries, construction vtables and VTTs. The slots are named and typed after their targets alone,
+     * and no class struct is made. Returns how many primary vtables it laid, and marks the program swept.
      */
     internal fun sweepUnclaimedVtables(): Int {
         val unclaimed = symtab.symbolIterator
             .mapNotNull { sym -> ResolvedVtable.fromSymbol(sym) }
             .distinctBy { it.address }
-            // A dynamic link's `_ZTVN10__cxxabiv117__class_type_infoE` is an import, labelled in the
-            // loader's EXTERNAL block, which holds no bytes: the shared library has the table.
+            // An imported vtable is labelled in the EXTERNAL block, which holds no bytes.
             .filter { (_, addr, _) -> program.memory.getBlock(addr)?.isInitialized == true }
             .filterNot { (_, addr, abi) -> program.isVtableClaimed(program.vtableRecord(addr, abi)) }
             .toList()
@@ -114,8 +98,7 @@ open class VtableSweeper(
                 degradation("vtable-swept-empty", qualified, "no function pointers", record.addressPoint)
                 continue
             }
-            // The class its demangled `vtable` label sits in, where one does: a stabs import may have moved
-            // it onto the class's shortened name, which the mangled name does not spell.
+            // The class of its demangled `vtable` label, which a stabs import may have given a shortened name.
             val labelled = labelledClass(addr)
             val leaf = labelled?.name ?: canonTemplateName(qualified.leafName)
             val ns = labelled ?: symtab.buildClassNamespaces(qualified.nameSegments)
@@ -123,25 +106,19 @@ open class VtableSweeper(
             val vftable = registry.getOrRegister<Structure>(path) {
                 StructureDataType(path.categoryPath, path.dataTypeName, 0, dtm)
             }
-            // A class whose own group failed to resolve its vtable left its stab-typed slots here;
-            // those beat anything read back off the target addresses.
+            // Slots the stabs typed, for a class whose vtable they couldn't place, beat any read off targets.
             if (vftable.numComponents == 0) {
                 addSweptSlots(vftable, path.categoryPath, targets, abi)
-                // Itanium puts a primary vptr at 0. gcc 2.x puts it after the fields, and with no class
-                // struct here to read that off, it gets no tag.
                 vftable.describeVxTable(leaf, ClassNaming.VFTABLE, abi.primaryVptrOffset)
             }
 
             val addressPoint = record.lay(registry, program, vftable, qualified, ns, source = SWEPT)
             debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
             laid++
-            // Itanium packs a class's secondaries into the same record, walkable from the primary's
-            // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>` symbol,
-            // laid below whether or not the class has a primary at all.
+            // Itanium's secondaries follow the primary; gcc 2.x's have symbols of their own, laid below.
             if (record.header != null) laySecondaryVtables(record, vftable, leaf, ns, SWEPT)
         }
-        // What the class pass left: gcc 2.x secondaries of classes linked without stabs. No class struct
-        // to find the base's vptr in, so these go untagged.
+        // gcc 2.x secondaries of classes without stabs, untagged: there is no class struct to find a vptr in.
         for (cls in gcc2SecondaryVtables.keys) {
             layGcc2SecondaryVtables(
                 cls,
@@ -159,9 +136,8 @@ open class VtableSweeper(
     }
 
     /**
-     * A slot typed off a method's signature has Ghidra create its class's struct, empty, for the `this`
-     * it injects. The libsupc++ typeinfo classes (`__cxxabiv1::__class_type_info`, …) no stab defines are
-     * replaced by their Itanium layout ([Rtti.typeInfoLayout]), as the stabs import does its demangler stubs.
+     * Replaces the empty structs Ghidra made for the `this` of the `__cxxabiv1` typeinfo classes' methods
+     * with their layouts ([Rtti.typeInfoLayout]).
      */
     private fun layTypeinfoClassStubs() {
         val rtti = Rtti(dtm)
@@ -180,12 +156,9 @@ open class VtableSweeper(
         .firstOrNull { it.name == ClassNaming.VTABLE && it.parentNamespace is GhidraClass }?.parentNamespace
 
     /**
-     * Lay every construction vtable group (`_ZTC`, ABI §2.6.4): a base's vtables as its constructor runs
-     * them inside a class with virtual bases, `_ZTC7Diamond0_4Left` being Left's while a Diamond is built.
-     * Its records are a `_ZTV` group's (the rtti word names the base, `_ZTI4Left`), so they are laid as a
-     * swept group, typed off their targets: the slots hold the base's functions and thunks into the
-     * derived object. The labels go in a `Left-in-Diamond` namespace beside the derived class, an ordinary
-     * namespace rather than a class, so the Class Hierarchy doesn't list it.
+     * Lays every construction vtable group (`_ZTC`, ABI §2.6.4), the vtables a base's constructor uses inside
+     * a class with virtual bases: `_ZTC7Diamond0_4Left` is Left's in a Diamond. It is laid like a swept
+     * `_ZTV` group, its labels in a `Left-in-Diamond` namespace beside Diamond, which is no class.
      */
     private fun layConstructionVtables() {
         val groups = symtab.symbolIterator.filter { looksLikeZtc(it.name) }.distinctBy { it.address }
@@ -213,11 +186,9 @@ open class VtableSweeper(
     }
 
     /**
-     * Lay every VTT (`_ZTT`, ABI §2.6.2) as the vtable pointers it is, each commented with the vtable it points
-     * into as the class's typeinfo lays the VTT out ([VttReader]): `vtable for Base-in-Diamond`, `construction
-     * vtable for Left-in-Diamond`. The Demangler analyzer only labels it. A `_ZTT` whose words don't match its
-     * typeinfo is left as it is, and so is a word something already laid over: a stab-typed vftable can run
-     * past its record into the VTT behind it (`Diamond_vftable_for_Named` on hello_elf_gcc34).
+     * Lays every VTT (`_ZTT`, ABI §2.6.2) as pointers, each commented with the vtable it points into
+     * ([VttReader]): `construction vtable for Left-in-Diamond`. One that doesn't match its typeinfo is left
+     * alone, and so is a word already covered, which a stab-typed vftable running long can do.
      */
     private fun layVtts() {
         val symbols = symtab.symbolIterator.toList()
@@ -244,9 +215,8 @@ open class VtableSweeper(
     }
 
     /**
-     * Where [ztc]'s labels go: `<Base>-in-<Derived>`, one namespace beside the derived class, both leaves.
-     * Not the demangler's own namespace chain: it splits `CryptoPP::GeneratableCryptoMaterial-in-CryptoPP::
-     * DL_PrivateKey_GFP<…>` at every `::`, inventing a `GeneratableCryptoMaterial-in-CryptoPP` namespace.
+     * The `<Base>-in-<Derived>` namespace beside the derived class that [ztc]'s labels go in. Not the
+     * demangler's, which splits `A::B-in-A::C` at every `::`.
      */
     private fun constructionNamespace(ztc: String): Namespace? {
         val text = Demangler.of(ztc)?.namespace?.namespaceString ?: return null
@@ -258,16 +228,10 @@ open class VtableSweeper(
     }
 
     /**
-     * Lay the sub-vtables that follow the primary record [primary] (§54). A secondary holds
-     * `_ZTv0_n…`/`_ZThn…` thunks, which are their own symbols with their own names.
-     *
-     * Where the primary ends is read off memory, not off the vftable laid there — `CryptoPP::Base`
-     * declares fewer virtuals than its table holds, which put the walk inside the function array.
-     *
-     * Named as `RTTIGccClassRecoverer` names a class's tables ([ClassNaming.vftableName]): once the group
-     * has more than one, each one, [primaryVftable] included, is named after the direct base whose
-     * subobject its `{vfptr}` sits at, read off the rtti. A [construction] group keeps its
-     * `construction-vftable` labels, as Ghidra's do; only its structs are named that way.
+     * Lays the secondary vtables behind [primary], found off memory, as the stabs may declare fewer
+     * virtuals than the table holds. Once there are several, each table, [primaryVftable] included, is
+     * named after the base whose vptr points into it, as Ghidra's `RTTIGccClassRecoverer` does
+     * ([ClassNaming.vftableName]); a [construction] group's labels stay as they are.
      */
     internal fun laySecondaryVtables(
         primary: VtableRecord,
@@ -281,7 +245,7 @@ open class VtableSweeper(
         val rtti = primary.rttiOf(program) ?: return
         val ptr = program.defaultPointerSize.toLong()
         val slots = primary.slots(program).size
-        // Only a record with slots is laid: an empty one has no function array to put a struct over.
+        // A record without slots has nothing to lay a struct over.
         val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
             .filter { it.targets.isNotEmpty() }
         val offsets = listOfNotNull(primaryVftable?.let { 0L }) +
@@ -310,15 +274,9 @@ open class VtableSweeper(
     }
 
     /**
-     * [className]'s gcc 2.x secondaries, which are not packed behind a primary: each is its own record
-     * under its own symbol, `_vt<m><class><m><base>` — `_vt$9TeeStream$3ios`, the table TeeStream's
-     * virtual `ios` base points at. A class whose polymorphic bases are all virtual has no primary at
-     * all, only these. The label goes at the record start, which is what a gcc 2.x vptr holds: named
-     * after the base, with the primary (if any) renamed after the base it shares its vptr with, as
-     * [laySecondaryVtables] names an Itanium group.
-     *
-     * Tagged at that base's vptr in [classStruct], when there is one to look in: the vptr the table is
-     * for belongs to the base, wherever the class lays it. A record a class already laid is skipped.
+     * Lays [className]'s gcc 2.x secondaries, each a record with its own symbol (`_vt$9TeeStream$3ios`),
+     * named as [laySecondaryVtables] names an Itanium group, and tagged with its base's vptr offset in
+     * [classStruct] where there is one. Records already laid are skipped.
      */
     internal fun layGcc2SecondaryVtables(
         className: String,
@@ -331,8 +289,7 @@ open class VtableSweeper(
         if (records.isEmpty()) return
         val path = ClassNaming.vftablePath(ns, leaf)
         val primaryAt = symtab.getSymbols(ClassNaming.VFTABLE, ns).firstOrNull()?.address
-        // A class with no primary record can still have the struct its stab virtuals filled, which
-        // stays `<leaf>_vftable`: the secondaries are named around it, never into it.
+        // A struct the stabs filled stays `<leaf>_vftable` even with no primary record.
         val primaryVftable = dtm.getDataType(path) as? Structure
         val count = records.size + if (primaryVftable != null) 1 else 0
         val names = when {
@@ -379,7 +336,7 @@ open class VtableSweeper(
         }
     }
 
-    /** [className]'s gcc 2.x secondaries no class laid yet, with their slots; one with none is skipped. */
+    /** [className]'s gcc 2.x secondaries no class laid, with their slots, less any without. */
     private fun unlaidGcc2Secondaries(className: String) =
         gcc2SecondaryVtables[className].orEmpty().mapNotNull { (base, at, abi) ->
             when (val record = program.vtableRecord(at, abi)) {
@@ -392,24 +349,18 @@ open class VtableSweeper(
             }
         }
 
-    /**
-     * What [Rtti] says sits where in the class [primary] is the primary of: a direct base, or a virtual one
-     * its primary chain inherits, per subobject offset.
-     */
+    /** The bases of [primary]'s class by subobject offset, direct and virtual, as its typeinfo [rtti] says. */
     private fun baseSubobjects(primary: VtableRecord, rtti: Address): Map<Long, String> = Rtti.Reader(program).run {
         basesOf(rtti).orEmpty() + virtualBasesOf(rtti)
     }.mapNotNull { base ->
-        // A virtual base's offset is where the vtable keeps its vbase offset, behind the address point.
+        // A virtual base's typeinfo offset locates its vbase offset in the vtable.
         when {
             base.isVirtual -> primary.vbaseOffset(program, base)
             else -> base.offset
         }?.let { it to base.className }
     }.distinctBy { it.first }.toMap()
 
-    /**
-     * The base each table at [offsets] serves, by [subobjects]' name for it shortened as Ghidra shortens
-     * a template (`Base<int>` to `Base`), or whole where that would leave two alike; null when unknown.
-     */
+    /** The base each table at [offsets] is for, its template arguments dropped unless that makes two alike. */
     private fun baseNames(offsets: List<Long?>, subobjects: Map<Long, String>): List<String?> {
         val whole = offsets.map { off -> off?.let(subobjects::get)?.let { canonTemplateName(it.leafName) } }
         val short = whole.map { it?.substringBefore('<') }
@@ -419,10 +370,7 @@ open class VtableSweeper(
         }
     }
 
-    /**
-     * Rename a class's primary table to [name] once it has company. An earlier import's table by that
-     * name gives way to it, references and all, rather than forking a `.conflict`.
-     */
+    /** Renames a primary table to [name], replacing an earlier table of that name rather than forking a `.conflict`. */
     private fun nameTable(vftable: Structure, name: String, label: String, leaf: String, vfptrAt: Long?) {
         if (vftable.name != name) {
             dtm.getDataType(vftable.categoryPath, name)?.takeIf { it != vftable }
@@ -434,10 +382,8 @@ open class VtableSweeper(
     }
 
     /**
-     * The secondary table at [at], typed off its [targets] like a swept table. The table sits beside the
-     * primary, where shift-D finds the class it belongs to. Its slot definitions each get their own
-     * [slotCategory], or a thunk sharing its target's leaf name forks a `.conflict` per slot (1874 on
-     * crypto_mi).
+     * The secondary table at [at], typed off its [targets]. Its slot definitions go in their own
+     * [slotCategory], or a thunk named like its target would fork a `.conflict`.
      */
     private fun internalVftable(
         at: DataTypePath,
@@ -452,7 +398,7 @@ open class VtableSweeper(
         return vftable
     }
 
-    /** Fill [vftable] off [targets] alone: [abi]'s reserved header, then each slot with its adjustment. */
+    /** Fills [vftable] off [targets]: [abi]'s reserved entry, then each slot with its adjustment. */
     private fun addSweptSlots(vftable: Structure, category: CategoryPath, targets: List<Address>, abi: CxxAbi) {
         val used = mutableSetOf<String>()
         with(abi) {
@@ -465,15 +411,9 @@ open class VtableSweeper(
     }
 
     /**
-     * Add the swept slot pointing at [target]. Always `Pointer→FunctionDefinition`, never a bare
-     * `void*`: an abstract class's slots point at `__cxa_pure_virtual`, a real function that honestly
-     * has no signature to recover, and a `void*` there reads as a failure to type it.
-     *
-     * One name serves as both the field name and the definition's — `atLeastOneVtableStructApplied`
-     * requires they agree (RecoveredClassHelper / shift-S round-trip) — so it has to be unique in the
-     * category too: `std::num_get` has six `do_get` overloads and `std::ctype` two of each `do_is`/
-     * `do_widen`/…, and one name across all of them forks a `.conflict` per slot (32 on unbouniaf).
-     * [used] carries the names already spent on this table.
+     * Adds a slot pointing at [target], always as a function definition pointer, even to
+     * `__cxa_pure_virtual`. The field and the definition share a name, as Ghidra's class recovery expects,
+     * so an overload gets a `_1` suffix; [used] holds the names this table spent.
      */
     internal fun addSweptSlot(
         vftable: Structure,
@@ -496,13 +436,12 @@ open class VtableSweeper(
         vftable.add(PointerDataType(registry.registerAgain(funcDef), dtm), name, "$target")
     }
 
-    /** FunctionDefinition [name] carrying what [linkage] declares — the only type source for a slot
-     *  target that has a linkage name and nothing else. Names but does not type an unmangled one. */
+    /** The definition [name] for a target with only its [linkage] name to go by; untyped if that isn't mangled. */
     private fun demangledDefinition(category: CategoryPath, name: String, linkage: String) =
         FunctionDefinitionDataType(category, name, dtm).apply {
             fun DemangledDataType.dt() = slotParameterType("vftable-demangled-untyped", "$category/$name")
             (Demangler.of(linkage) as? DemangledFunction)?.let { df ->
-                // The return's own type even where a parameter's would be refused: `void` has no size either.
+                // `void` has no size either, but a return may be one.
                 df.returnType?.let { t -> returnType = runCatching { t.getDataType(dtm) }.getOrNull() ?: t.dt() }
                 setArguments(
                     *df.formals.mapIndexed { i, t -> ParameterDefinitionImpl("arg$i", t.dt(), null) }.toTypedArray(),

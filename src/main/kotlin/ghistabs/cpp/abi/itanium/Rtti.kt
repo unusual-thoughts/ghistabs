@@ -11,15 +11,9 @@ import ghistabs.cpp.BaseDecl
 import ghistabs.cpp.ClassNaming
 
 /**
- * Authoritative Itanium `__cxxabiv1` typeinfo struct layouts, adapted from Ghidra's
- * `RTTIGccClassRecoverer`. The implementation of last resort for the gcc-internal
- * `__*_type_info_pseudo` records that are absent from the stabs on most fixtures.
- *
- * The layouts stay out of the DTM, so [Reader] reads a typeinfo object off memory without the write a
- * resolve is. Whatever puts one in the DTM goes through [resolveLayout], never `createData` directly: gcc
- * 3.4.5 emits every `_ZTI` as a per-CU COMDAT (`_ZTISt9exception` in 42 CUs), and an auto-named
- * PointerTypedef field never compares isEquivalent to its own resolved form, so resolving the layout
- * afresh each time forks a `.conflict` per reapply.
+ * The Itanium `__cxxabiv1` typeinfo layouts, after Ghidra's `RTTIGccClassRecoverer`, for the typeinfo
+ * structs the stabs leave undefined. They stay out of the DTM, so [Reader] writes nothing; to lay one, go
+ * through [resolveLayout], as resolving one afresh each time forks a `.conflict`.
  */
 class Rtti(private val dtm: DataTypeManager) {
     private val pointerSize = dtm.dataOrganization.pointerSize
@@ -29,13 +23,9 @@ class Rtti(private val dtm: DataTypeManager) {
     private fun struct(name: String) = StructureDataType(ClassNaming.classDataTypesRoot, name, 0, dtm)
 
     /**
-     * Reference layout for an Itanium typeinfo type named [name], keyed on both spellings it reaches
-     * us by: gcc's internal `__*_type_info_pseudo` structs (from stab XRefs via `makePlaceholder`;
-     * `__vmi_…_pseudo<N>` carries the real per-object base count N) and the abstract base classes
-     * themselves as the demangler names them (`std::type_info`, `abi::__class_type_info`,
-     * `abi::__si_class_type_info`, `abi::__vmi_class_type_info`, from libsupc++ symbols that carry no
-     * stabs, via `DemanglerReplacer`). The abstract `__vmi_class_type_info` uses its declared
-     * `__base_info[1]` shape — the class's own sizeof — vs the per-object pseudo's N. Null otherwise.
+     * The layout for the typeinfo type [name]: one of gcc's `__*_type_info_pseudo` structs, whose VMI one
+     * carries its base count (`…_pseudo2`), or a `__cxxabiv1` class as the demangler names it, VMI's with
+     * its declared one base. Null for any other name.
      */
     fun typeInfoLayout(name: String): StructureDataType? = with(Itanium) {
         when (name) {
@@ -61,14 +51,14 @@ class Rtti(private val dtm: DataTypeManager) {
         isPackingEnabled = true
     }
 
-    /** `std::type_info` as a typeinfo that isn't a class's: a fundamental type's, an enum's, a function's. */
+    /** A typeinfo that is no class's: a fundamental type's, an enum's, a function's. */
     val typeInfo = struct("TypeInfoStructure").apply {
         add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
         add(dtm.getPointer(CharDataType()), "typeinfoName", null)
         isPackingEnabled = true
     }
 
-    /** `__pbase_type_info` as a pointer's: its cv-qualifier `__flags`, then the pointee's typeinfo. */
+    /** A pointer's typeinfo: its cv-qualifier `__flags`, then the pointee's typeinfo. */
     val pointerTi = struct("PointerTypeInfoStructure").apply {
         add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
         add(dtm.getPointer(CharDataType()), "typeinfoName", null)
@@ -84,8 +74,8 @@ class Rtti(private val dtm: DataTypeManager) {
         isPackingEnabled = true
     }
 
-    // `__base_class_type_info`: `__offset_flags`' low bits are the `__offset_flags_masks` (ABI §2.9.5),
-    // virtual (0x1) then public (0x2), and the offset sits above the low byte.
+    // `__base_class_type_info` (ABI §2.9.5): `__offset_flags` has virtual (0x1) and public (0x2) in its low
+    // byte and the offset above it.
     val bClassTi = struct("BaseClassTypeInfoStructure").apply {
         add(dtm.getPointer(classTi), "classTypeinfoPtr", null)
 
@@ -128,34 +118,22 @@ class Rtti(private val dtm: DataTypeManager) {
         const val IS_VIRTUAL = "isVirtualBase"
         const val IS_PUBLIC = "isPublicBase"
 
-        // Arbitrary sanity bound: a garbage count must not read megabytes.
+        // Bounds a garbage base count.
         const val MAX_BASES = 256
 
-        // Bound on base chains walked: a typeinfo cycle in garbage must not recurse forever.
+        // Bounds a walk up the bases, against a cycle in garbage.
         const val MAX_BASE_DEPTH = 16
     }
 
     /**
-     * Reads a class's direct bases off its Itanium `_ZTI` typeinfo object (ABI §2.9.5): [Rtti]'s
-     * layouts, read off memory with [dataAt] whether or
-     * not anything typed the object.
-     *
-     * The object's first word is the address point of one of three `__cxxabiv1` vtables, which says the
-     * layout that follows: `__class_type_info` (no bases), `__si_class_type_info` (one public non-virtual
-     * base at offset 0, then `__base_type`), or `__vmi_class_type_info` (`__flags`, `__base_count`, then
-     * one `{__base_type, __offset_flags}` pair per base). In a dynamically linked binary that word is a
-     * relocation to libstdc++, so it's named by the reference Ghidra made for it, as is each base's
-     * typeinfo when it lives in a shared library (`std::exception`).
-     *
-     * gcc 2.x has nothing to read: `__ti<class>` sits in .bss, filled at run time by its `__tf<class>`
-     * function (`__ti4Base` is `B` in hello_elf_gcc295's symbols), so only the stabs give its bases.
+     * Reads a class's bases off its typeinfo object (ABI §2.9.5), typed or not. Its vptr says which of the
+     * three class layouts it has ([TypeinfoKind]); a vptr or base into a shared library is named by Ghidra's
+     * external reference. gcc 2.x fills its typeinfo in at run time, so has nothing to read.
      */
     class Reader(private val program: Program) {
         /**
-         * A direct base. [offset] is `__offset_flags`'s offset: where the base subobject sits in the class,
-         * or for a virtual one where the vtable holds that, relative to the address point (negative).
-         * [typeinfo] is where the base's own typeinfo is, to read its bases in turn: the symbol that named
-         * it, which is in the EXTERNAL block for one a shared library defines.
+         * A direct base, and its own [typeinfo], possibly external. Its [offset] is the subobject's, or for a
+         * virtual base where the vtable keeps that, from the address point (negative).
          */
         data class Base(
             val className: String,
@@ -170,7 +148,7 @@ class Rtti(private val dtm: DataTypeManager) {
 
         private val layouts = Rtti(program.dataTypeManager)
 
-        /** Null when [zti] isn't a class typeinfo this can read, rather than a class with no bases. */
+        /** [zti]'s direct bases; null if it isn't a class typeinfo this can read. */
         fun basesOf(zti: Address): List<Base>? = runCatching {
             when (kindOf(zti)) {
                 TypeinfoKind.CLASS -> emptyList()
@@ -185,10 +163,7 @@ class Rtti(private val dtm: DataTypeManager) {
             }
         }.getOrNull()
 
-        /**
-         * [zti]'s virtual bases whose offsets its primary vtable keeps, each with its vtable offset: its own,
-         * and those of its primary chain (the non-virtual bases at 0, which share that vtable).
-         */
+        /** The virtual bases whose offsets [zti]'s primary vtable keeps: its own, and its bases' at offset 0. */
         fun virtualBasesOf(zti: Address, depth: Int = 0): List<Base> =
             basesOf(zti).orEmpty().takeIf { depth < MAX_BASE_DEPTH }.orEmpty().flatMap { base ->
                 when {
@@ -223,7 +198,7 @@ class Rtti(private val dtm: DataTypeManager) {
             }
         }
 
-        // The vptr is the vtable's address point, two words past its `_ZTV` label.
+        // The vptr points two words past its vtable's `_ZTV` label.
         internal fun kindOf(zti: Address) =
             pointee(zti, Itanium.vtablePrefixBytes(ptr)) { it.vtableClass?.let(TypeinfoKind::ofVtableClass) }
 
@@ -232,10 +207,8 @@ class Rtti(private val dtm: DataTypeManager) {
 
         /**
          * [of] the first symbol the pointer at [at] refers to that it answers for: an external one by
-         * Ghidra's reference to it, else a label [back] bytes before the address the pointer holds. Never
-         * at that address itself when [back] isn't 0: the ELF loader packs its stand-ins for external
-         * objects into the EXTERNAL block, so a `__class_type_info` vtable's address point is where
-         * `__si_class_type_info`'s label sits (hello_elf_gcc12).
+         * Ghidra's reference, else one [back] bytes before its target. Not one at the target itself, which
+         * in the EXTERNAL block can be the next import's label.
          */
         private fun <T : Any> pointee(at: Address, back: Long, of: (Symbol) -> T?): T? {
             val external = program.referenceManager.getReferencesFrom(at)
@@ -250,10 +223,7 @@ class Rtti(private val dtm: DataTypeManager) {
     }
 }
 
-/**
- * Show [this] field's integer value in decimal: an offset reads as `-16`, not `0xfffffff0`. A layout's
- * component settings stay behind when the DTM resolves it, so [resolveLayout] copies them across.
- */
+/** Shows this field in decimal, so an offset reads `-16`; [resolveLayout] carries the setting across. */
 internal fun DataTypeComponent.showDecimal() = apply {
     if (!defaultSettings.isImmutableSettings) {
         FormatSettingsDefinition.DEF.setChoice(defaultSettings, FormatSettingsDefinition.DECIMAL)

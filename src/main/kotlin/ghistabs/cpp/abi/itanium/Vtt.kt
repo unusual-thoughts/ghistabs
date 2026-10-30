@@ -10,41 +10,34 @@ import ghistabs.pointerAt
 import ghistabs.valueAt
 
 /**
- * One VTT word at [address]: what the vtable it points into is for, as an EOL comment, and for the first word
- * of a sub-VTT, the `_ZTC` name of that construction vtable ([constructionVtableName]) and the `offset_to_top`
- * word of its primary record.
+ * A VTT word at [address]: a [comment] saying which vtable it points into, and for a sub-VTT's first, that
+ * construction vtable's `_ZTC` name and its primary record's `offset_to_top` word.
  */
 internal data class VttWord(val address: Address, val comment: String, val construction: Pair<String, Address>?)
 
-/** A class's VTT as its typeinfo lays it out: where it is, and each word. */
+/** A class's VTT, as its typeinfo lays it out. */
 internal data class Vtt(val address: Address, val words: List<VttWord>) {
     val constructionVtables get() = words.mapNotNull { it.construction }
 }
 
 /**
- * Reads VTTs (ABI §2.6.2) off typeinfo alone. A VTT is fixed by the class hierarchy: given which classes
- * have a vptr, the typeinfos say how many words it has and what each one points at. For a class D with
- * virtual bases it holds, in order:
+ * Reads VTTs (ABI §2.6.2) off typeinfo alone, which fixes them once it is known which classes have a vptr.
+ * For a class D with virtual bases a VTT holds, in order:
  *
  * 1. the address point of D's primary vtable;
- * 2. a sub-VTT for each direct non-virtual base with virtual bases, built by these rules less step 4,
- *    starting with that base's construction vtable (`_ZTC<D><offset>_<B>`);
- * 3. the address point of the vtable for each subobject, in inheritance graph order and each virtual
- *    base once, that has a vptr, has virtual bases or is reached through a virtual base, and isn't a
- *    non-virtual primary base;
- * 4. at the top level only, a sub-VTT for each virtual base with virtual bases.
+ * 2. a sub-VTT for each direct non-virtual base with virtual bases, by these rules less step 4, starting
+ *    with its construction vtable (`_ZTC<D><offset>_<B>`);
+ * 3. the address point for each subobject, in inheritance graph order and each virtual base once, that has
+ *    a vptr, has virtual bases or is reached through one, and isn't a non-virtual primary base;
+ * 4. at the top only, a sub-VTT for each virtual base with virtual bases.
  *
- * Which classes have a vptr is the one thing typeinfo doesn't say: a class with virtual bases or a base
- * with a vptr has one, and a class with only virtuals of its own is known by a primary vtable pointing at
- * its typeinfo ([dynamic]). Gcc's VTTs follow these rules on every crypto_mi, xmltest and locale_test VTT.
- *
- * A VTT's first word points at D's primary vtable, which names D by its rtti word. Each word after it is
- * checked against what the rules say it is for, by the rtti word in front of what it points at.
+ * A class has a vptr if it has virtual bases or a base with one, or if a primary vtable points at its
+ * typeinfo ([dynamic]). Each word is checked against what it should point at, by the rtti word there.
  */
 internal class VttReader(
     private val program: Program,
     private val rtti: Rtti.Reader,
-    /** Each class typeinfo's mangled name, `N8CryptoPP9PublicKeyE`. */
+    /** Each class typeinfo's mangled name (`N8CryptoPP9PublicKeyE`), by its address. */
     private val names: Map<Address, String>,
     /** The typeinfos a primary vtable points at, its own or a construction one. */
     private val dynamic: Set<Address>,
@@ -52,7 +45,7 @@ internal class VttReader(
     private val ptr = program.defaultPointerSize.toLong()
     private val word = IntegerDataType.getSignedDataType(program.defaultPointerSize, null)
 
-    /** One subobject of the class a VTT is for, at [delta] from the nearest virtual one ([anchor]) or the class. */
+    /** A subobject of the VTT's class, at [delta] from the nearest virtual base above it ([anchor]) or the class. */
     private inner class Subobject(val typeinfo: Address, val isVirtual: Boolean, val parent: Subobject?, delta: Long) {
         val name = names[typeinfo]
         val shown by lazy {
@@ -70,7 +63,7 @@ internal class VttReader(
             generateSequence(this) { it.parent }.takeWhile { it !== from }.any { it.isVirtual }
     }
 
-    /** One VTT word: the address point of [subobject]'s vtable in [owner]'s group, the first of [owner]'s if [head]. */
+    /** A VTT word: [subobject]'s address point in [owner]'s group, the first of [owner]'s sub-VTT if [head]. */
     private data class Entry(val owner: Subobject, val subobject: Subobject, val head: Boolean)
 
     /** [typeinfo]'s class and its bases, each virtual base once; null if a typeinfo on the way can't be read. */
@@ -115,7 +108,7 @@ internal class VttReader(
         if (top) preorder(sub).filter { it.isVirtual }.forEach { addVtt(it, top = false) }
     }
 
-    /** What the VTT entry at [at] points at: the `offset_to_top` word in front of the address point, and the rtti. */
+    /** The `offset_to_top` word in front of what the VTT entry at [at] points at, and the rtti word. */
     private fun recordOf(at: Address): Pair<Address, Address?>? {
         val top = program.pointerAt(at)?.let { runCatching { it.subtractNoWrap(2 * ptr) }.getOrNull() } ?: return null
         return top to runCatching { program.pointerAt(top.add(ptr)) }.getOrNull()
@@ -123,7 +116,7 @@ internal class VttReader(
 
     private fun offsetToTop(top: Address) = program.valueAt<Scalar>(top, word)?.signedValue
 
-    /** What [entry] points at, said the ABI's way: the vtable for `X-in-D`, or the construction vtable for `B-in-D`. */
+    /** What [entry] points into, as `vtable for X-in-D` or `construction vtable for B-in-D`. */
     private fun comment(entry: Entry, root: Subobject): String {
         val owner = if (entry.owner === root) "${root.shown}" else "${entry.owner.shown}-in-${root.shown}"
         return when {
@@ -134,10 +127,7 @@ internal class VttReader(
         }
     }
 
-    /**
-     * The VTT at [at], or null if what is there isn't the VTT of the class whose primary vtable its first word
-     * points at, as that class's typeinfo describes it.
-     */
+    /** The VTT at [at], or null if it isn't the one the typeinfo of the class its first word names describes. */
     fun vttAt(at: Address): Vtt? {
         val typeinfo = recordOf(at)?.second ?: return null
         val root = hierarchy(typeinfo)?.takeIf { it.hasVirtualBases } ?: return null
@@ -169,15 +159,10 @@ internal class VttReader(
 private val SUBSTITUTION = Regex("S([0-9A-Z]*)_")
 
 /**
- * The `_ZTC` name of the construction vtable for [base] at [offset] in [derived], both mangled as their
- * typeinfo names spell them, or null if no spelling demangles to both.
- *
- * Gcc writes [base] after [derived] in one name, so [base]'s own substitutions count past every component
- * [derived] put in the table: appended as is, `DL_GroupParametersImpl<…, DL_GroupParameters<ECPPoint>>`'s
- * `S5_` names a component of `DL_GroupParameters_EC<ECP>` instead (crypto_mi). They are renumbered by each
- * count in turn until the name demangles to [base] in [derived]. The rest of [base] is spelled out where gcc
- * substitutes what [derived] already said (`…0_St13basic_istreamIwSt11char_traitsIwEE` for gcc's
- * `…0_St13basic_istreamIwS1_E`); it demangles the same.
+ * The `_ZTC` name of the construction vtable for [base] at [offset] in [derived], given as their typeinfo
+ * names, or null if none demangles to both. [base] follows [derived] in one name, so its substitutions
+ * (`S5_`) are renumbered until it does. Where gcc would substitute what [derived] said, it is spelled out,
+ * which demangles the same.
  */
 internal fun constructionVtableName(derived: String, offset: Long, base: String): String? {
     fun demangled(type: String) =
