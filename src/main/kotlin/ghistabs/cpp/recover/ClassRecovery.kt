@@ -137,7 +137,7 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
      * Function ID's.
      */
     private fun Function.guessed() = symbol.source == SourceType.DEFAULT ||
-        symbol.source == SourceType.ANALYSIS && parentNamespace is GhidraClass
+        (symbol.source == SourceType.ANALYSIS && parentNamespace is GhidraClass)
 
     /**
      * Each class's size range, off what it is [allocated] with and its bases' and vptrs' offsets. Each class

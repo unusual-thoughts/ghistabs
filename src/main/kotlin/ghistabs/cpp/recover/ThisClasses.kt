@@ -106,7 +106,7 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val methods = functions.filter { it.isProven() || it in recorded }
             .mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
         // A constructor the debug info names goes by its class's name.
-        val ctors = methods.filter { (f, cls) -> f in recordedCtors || f.isProven() && f.name == cls.name }
+        val ctors = methods.filter { (f, cls) -> f in recordedCtors || (f.isProven() && f.name == cls.name) }
         val calls = buildList {
             DecompInterface().useWith(program) { decomp ->
                 for (f in methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }) {
