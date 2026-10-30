@@ -13,7 +13,8 @@ import ghistabs.useWith
 
 /**
  * Each class's possible size range ([Long.MAX_VALUE] when unbounded above), from its non-virtual bases'
- * offsets, its furthest vptr ([vptrs]) and its allocation sizes ([allocated]).
+ * offsets, its furthest vptr ([vptrs]), the end of the furthest store its constructors make ([stored])
+ * and its allocation sizes ([allocated]).
  *
  * A class is at least as large as its last vptr and each base's minimum. A base is at most as large as
  * the gap to the next base, or to the end of the class holding it.
@@ -23,6 +24,7 @@ fun sizeBounds(
     vptrs: Map<ClassDecl, Long>,
     allocated: Map<ClassDecl, Long>,
     ptrSize: Long,
+    stored: Map<ClassDecl, Long> = emptyMap(),
 ): Map<ClassDecl, LongRange> {
     val placed = classes.associateWith { cls ->
         cls.bases.filterNot { it.isVirtual }.mapNotNull { b -> b.offset?.let { b.cls to it } }
@@ -33,6 +35,7 @@ fun sizeBounds(
         listOfNotNull(
             allocated[k],
             vptrs[k]?.plus(ptrSize),
+            stored[k],
             placed[k].orEmpty().maxOfOrNull { (b, at) -> at + atLeast(b, depth + 1) },
         ).maxOrNull() ?: 0
     }

@@ -78,8 +78,10 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
             nameStructor(func, cls, structor.second)
         }
         val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
-        val sizes = sizeClasses(read.classes, NewSizeReader(program, abi, this).read(ctors, monitor))
-        val laid = ClassLayouts(program, abi, this).layAll(read.recorded, ctors, monitor)
+        val stores = program.constructorStores(ctors, monitor)
+        val reached = stores.mapValues { (_, at) -> at.maxOf { (offset, size) -> offset + size }.toLong() }
+        val sizes = sizeClasses(read.classes, NewSizeReader(program, abi, this).read(ctors, monitor), reached)
+        val laid = ClassLayouts(program, abi, this).layAll(read.recorded, stores)
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
             structors.map { (f, structor) -> f to structor.first }
         writeRecords(read.recorded, placed.groupBy({ it.second }, { it.first }), ctors.keys)
@@ -148,16 +150,18 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         (symbol.source == SourceType.ANALYSIS && parentNamespace is GhidraClass)
 
     /**
-     * Each class's size range, off what it is [allocated] with and its bases' and vptrs' offsets. Each class
+     * Each class's size range, off what it is [allocated] with, its bases' and vptrs' offsets and how far its
+     * constructors store ([reached]). Each class
      * gets a struct of its exact size, or else its least, where `RecoverClassesFromRTTIScript` files one: a
      * stub of undefined bytes when it has none, and its own grown when shorter.
      */
     private fun sizeClasses(
         classes: Collection<ClassDecl>,
         allocated: Map<ClassDecl, Long>,
+        reached: Map<ClassDecl, Long>,
     ): Map<ClassDecl, LongRange> {
         val all = classes.toList()
-        val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, program.defaultPointerSize.toLong())
+        val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, program.defaultPointerSize.toLong(), reached)
         val sized = bounds.filterValues { it.first > 0 }
         for ((cls, size) in sized) {
             val ns = cls.ns?.toClass() ?: continue
