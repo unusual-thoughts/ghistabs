@@ -50,14 +50,13 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         known: Map<String, ClassDecl> = mapOf("a" to a, "b" to b, "c" to c, "d" to d),
         uses: Map<String, ThisUse> = emptyMap(),
         sizes: Map<ClassDecl, LongRange> = emptyMap(),
-    ) = guessThisClasses(
-        calls.mapTo(mutableSetOf()) { it.callee },
-        known.mapKeys { fn(it.key) },
-        calls,
-        uses.mapKeys { fn(it.key) },
-        slots,
-        sizes,
-    ).mapKeys { it.key.name }
+    ) = ThisClassGuesser(sizes, slots).guess(
+        known.mapKeys {
+            fn(it.key)
+        },
+        ThisReading(uses.mapKeys { fn(it.key) }, calls),
+    )
+        .mapKeys { it.key.name }
 
     @Test
     fun `a function called on a method's this belongs to that method's class`() {

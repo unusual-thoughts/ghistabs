@@ -21,6 +21,7 @@ import ghistabs.cpp.MemberAttrs.Companion.writeMember
 import ghistabs.cpp.abi.*
 import ghistabs.cpp.recover.NewSizeReader
 import ghistabs.cpp.recover.StructorFinder
+import ghistabs.cpp.recover.ThisClasses
 import ghistabs.cpp.recover.fastcallToThiscall
 import ghistabs.cpp.recover.sizeBounds
 import ghistabs.cpp.recover.vptrOffsets
@@ -80,8 +81,9 @@ fun virtualOwner(holders: Set<ClassDecl>): ClassDecl? {
 /**
  * Classes off the MSVC RTTI Ghidra's RTTI analyzer laid: their bases and sizes for [ClassHierarchyRecords],
  * each virtual function moved into its class ([virtualOwners]) and marked virtual, and each constructor and
- * destructor ([ghistabs.cpp.recover.StructorFinder]) moved there and named. Classes go by their type
- * descriptor's address.
+ * destructor ([ghistabs.cpp.recover.StructorFinder]) moved there and named, and then each unnamed function
+ * that takes a `this` moved into the class its callers pass it objects of ([ThisClasses]). Classes go by their
+ * type descriptor's address.
  */
 class MsvcClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val options = DataValidationOptions()
@@ -125,6 +127,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val shared: Int,
         val structors: Int,
         val sized: Int,
+        val guessed: Int,
     )
 
     fun recover(monitor: TaskMonitor = TaskMonitor.DUMMY): Result {
@@ -148,7 +151,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
         val sizes = sizeClasses(NewSizeReader(program, Msvc, this).read(ctors, monitor))
         writeRecords(hierarchies.values, sizes)
-        return Result(hierarchies.size, owners.size - shared, moved, shared, named, sizes.size)
+        val guessed = ThisClasses(program, classes.values, this).guess(ctors, sizes, monitor)
+        return Result(hierarchies.size, owners.size - shared, moved, shared, named, sizes.size, guessed)
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }

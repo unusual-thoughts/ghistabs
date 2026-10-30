@@ -1,8 +1,6 @@
 package ghistabs.cpp.recover
 
 import ghidra.app.decompiler.DecompInterface
-import ghidra.program.model.data.Array
-import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -10,15 +8,12 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
-import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.ClassDecl
-import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
-import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.abi.msvc.msvcSubobjectOffset
-import ghistabs.cpp.recordedClasses
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.toClass
+import ghistabs.useWith
 
 /**
  * What a function does with its own `this`: how far into the object it reads or writes ([extent]),
@@ -32,7 +27,7 @@ data class ThisUse(val extent: Long, val slots: Set<Int>, val calls: Set<Functio
  */
 data class ThisCall(val caller: Function, val callee: Function, val built: ClassDecl? = null)
 
-/** A function's class, as [guessThisClasses] guessed it: [cls], refined up from [common], off [sites] calls. */
+/** A function's class, as [ThisClassGuesser] guessed it: [cls], refined up from [common], off [sites] calls. */
 data class ThisClassGuess(val cls: ClassDecl, val common: ClassDecl, val sites: Int)
 
 /** [cls], then the base it shares its address with: its first direct base that isn't virtual, and so on up. */
@@ -48,141 +43,121 @@ fun commonClass(classes: Collection<ClassDecl>): ClassDecl? {
     return chains.firstOrNull()?.firstOrNull { c -> chains.all { c in it } }
 }
 
+/** What [ThisClasses] read off the decompiled functions: each one's [uses] of `this`, and the [calls] passing one. */
+class ThisReading(val uses: Map<Function, ThisUse>, val calls: Collection<ThisCall>)
+
 /**
- * The class each of [candidates] is a method of, off the calls that pass it an object whose class is
- * known: the caller's own `this`, when the caller is a method of a [known] class or one guessed here,
- * or an object the caller built with a constructor. Called on objects of several classes, it belongs
- * to their [commonClass]; and then to whichever base that class shares its address with that does
- * all the method does ([uses]) as well: reaches no further into the object than the base is large
- * (its [sizes], when exact) or, not knowing that, than its own methods reach or its least size, calls
- * no slot past the end of its vftable ([slots]), and calls nothing on `this` that belongs to a class
- * below it. Decompiled with `this` as that base, the method would read the same. A method reaching
- * past the common class's own exact size is none of its.
- *
- * Guesses feed the next round's callers, until none changes.
+ * Guesses the class of each function [ThisReading.calls] passes an object whose class is known, off each
+ * class's [sizes] and the [slots] of the vftable at its object's start.
  */
-fun guessThisClasses(
-    candidates: Set<Function>,
-    known: Map<Function, ClassDecl>,
-    calls: Collection<ThisCall>,
-    uses: Map<Function, ThisUse>,
-    slots: Map<ClassDecl, Int>,
-    sizes: Map<ClassDecl, LongRange> = emptyMap(),
-): Map<Function, ThisClassGuess> {
-    val reach = mutableMapOf<ClassDecl, Long>()
-    for ((f, cls) in known) uses[f]?.let { reach.merge(cls, it.extent, ::maxOf) }
-    fun exactSize(cls: ClassDecl) = sizes[cls]?.takeIf { it.first == it.last }?.first
-    fun extent(cls: ClassDecl) =
-        exactSize(cls) ?: listOfNotNull(reach[cls], sizes[cls]?.first?.takeIf { it > 0 }).maxOrNull()
+class ThisClassGuesser(private val sizes: Map<ClassDecl, LongRange>, private val slots: Map<ClassDecl, Int>) {
+    /**
+     * The class of each callee not in [known], off the calls that pass it an object whose class is known:
+     * the caller's own `this`, when the caller is a method of a [known] class or one guessed here, or an
+     * object the caller built with a constructor. Called on objects of several classes, it belongs to their
+     * [commonClass]; and then to whichever base that class shares its address with that does all the method
+     * does: reaches no further into the object than the base is large (its exact size or, not knowing that,
+     * the larger of what its own methods reach and its least size), calls no slot past the end of its
+     * vftable, and calls nothing on `this` that belongs to a class below it. Decompiled with `this` as that
+     * base, the method would read the same. A method reaching past the common class's exact size is none of its.
+     *
+     * Guesses feed the next round's callers, until none changes.
+     */
+    fun guess(known: Map<Function, ClassDecl>, reading: ThisReading): Map<Function, ThisClassGuess> {
+        val uses = reading.uses
+        val reach = mutableMapOf<ClassDecl, Long>()
+        for ((f, cls) in known) uses[f]?.let { reach.merge(cls, it.extent, ::maxOf) }
+        fun exactSize(cls: ClassDecl) = sizes[cls]?.singleOrNull()
+        fun extent(cls: ClassDecl) =
+            exactSize(cls) ?: listOfNotNull(reach[cls], sizes[cls]?.first?.takeIf { it > 0 }).maxOrNull()
 
-    val sites = calls.filter { it.callee in candidates }.groupBy { it.callee }
-    var guessed = emptyMap<Function, ThisClassGuess>()
-    fun classOf(f: Function) = known[f] ?: guessed[f]?.cls
+        val sites = reading.calls.filter { it.callee !in known }.groupBy { it.callee }
+        var guessed = emptyMap<Function, ThisClassGuess>()
+        fun classOf(f: Function) = known[f] ?: guessed[f]?.cls
 
-    fun refine(f: Function, common: ClassDecl): ClassDecl {
-        val use = uses[f] ?: return common
-        var cls = common
-        for (base in addressChain(common).drop(1)) {
-            val fits = extent(base)?.let { use.extent <= it } ?: false
-            val inTable = use.slots.maxOrNull()?.let { top -> slots[base]?.let { top < it } ?: false } ?: true
-            val onBase = use.calls.none { g -> g != f && classOf(g)?.let { it !in addressChain(base) } ?: false }
-            if (!fits || !inTable || !onBase) break
-            cls = base
+        fun refine(f: Function, common: ClassDecl): ClassDecl {
+            val use = uses[f] ?: return common
+            var cls = common
+            for (base in addressChain(common).drop(1)) {
+                val fits = extent(base)?.let { use.extent <= it } ?: false
+                val inTable = use.slots.maxOrNull()?.let { top -> slots[base]?.let { top < it } ?: false } ?: true
+                val onBase = use.calls.none { g -> g != f && classOf(g)?.let { it !in addressChain(base) } ?: false }
+                if (!fits || !inTable || !onBase) break
+                cls = base
+            }
+            return cls
         }
-        return cls
-    }
 
-    repeat(MAX_ROUNDS) {
-        val next = sites.mapNotNull { (f, calls) ->
-            val classes = calls.mapNotNull { it.built ?: classOf(it.caller) }
-            val common = commonClass(classes) ?: return@mapNotNull null
-            val reaches = uses[f]?.extent ?: 0
-            if (exactSize(common)?.let { reaches > it } == true) return@mapNotNull null
-            f to ThisClassGuess(refine(f, common), common, classes.size)
-        }.toMap()
-        if (next == guessed) return next
-        guessed = next
+        repeat(MAX_ROUNDS) {
+            val next = sites.mapNotNull { (f, calls) ->
+                val classes = calls.mapNotNull { it.built ?: classOf(it.caller) }
+                val common = commonClass(classes) ?: return@mapNotNull null
+                val reaches = uses[f]?.extent ?: 0
+                if (exactSize(common)?.let { reaches > it } == true) return@mapNotNull null
+                f to ThisClassGuess(refine(f, common), common, classes.size)
+            }.toMap()
+            if (next == guessed) return next
+            guessed = next
+        }
+        return guessed
     }
-    return guessed
 }
 
 private const val MAX_ROUNDS = 8
 private const val MAX_DEPTH = 64
 
 /**
- * [guessThisClasses] over a program: every unnamed function in the global namespace whose convention
- * takes `this` (`__thiscall`, or `__fastcall`, whose first argument comes in the same register), off
- * its callers' decompiled calls, against the classes and bases [ClassHierarchyRecords] holds. Each
- * guess moves the function into its class, a `__fastcall` that takes nothing in EDX becoming a `__thiscall`
+ * [ThisClassGuesser] over a program: every unnamed function in the global namespace whose convention takes
+ * `this` (`__thiscall`, or `__fastcall`, whose first argument comes in the same register), off its callers'
+ * decompiled calls, against the methods of [classes] and the objects their constructors build. Each guess
+ * moves the function into its class, a `__fastcall` that takes nothing in EDX becoming a `__thiscall`
  * ([fastcallToThiscall]), and leaves an Analysis bookmark saying where it came from.
  */
-class ThisClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
+class ThisClasses(private val program: Program, private val classes: Collection<ClassDecl>, sink: DiagnosticSink) :
+    DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
-    private val symbols = program.symbolTable
-    private val records = program.readClassRecord().orEmpty()
-    private val classes = program.recordedClasses()
+    private val byNamespace = classes.mapNotNull { cls -> cls.ns?.toClass()?.let { it.id to cls } }.toMap()
 
-    /** How many it moved. */
-    fun guess(monitor: TaskMonitor): Int {
-        if (classes.isEmpty() || thisStorage == null) return 0
+    /** How many it moved, given each constructor's class ([ctors]) and each class's [sizes]. */
+    fun guess(ctors: Map<Function, ClassDecl>, sizes: Map<ClassDecl, LongRange>, monitor: TaskMonitor): Int {
+        if (byNamespace.isEmpty() || thisStorage == null) return 0
         val functions = program.functionManager.getFunctions(true).toList()
-        val known = functions.mapNotNull { f -> f.recordedClass()?.let { f to it } }.toMap()
+        val known = functions.mapNotNull { f -> byNamespace[f.parentNamespace.id]?.let { f to it } }.toMap()
         val candidates = functions.filterTo(mutableSetOf()) { it.isCandidate() }
         if (candidates.isEmpty()) return 0
         val callers = candidates.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
-        val read = read(candidates + callers + known.keys, known, monitor)
-        val slots = classes.values.mapNotNull { cls -> slotCount(cls)?.let { cls to it } }.toMap()
-        val sizes = classes.mapNotNull { (id, cls) -> sizeRange(id)?.let { cls to it } }.toMap()
-        val guesses = guessThisClasses(candidates, known, read.calls, read.uses, slots, sizes)
+        val reading = read(candidates + callers + known.keys, candidates, ctors, monitor)
+        val slots = classes.mapNotNull { cls -> slotCount(cls)?.let { cls to it } }.toMap()
+        val guesses = ThisClassGuesser(sizes, slots).guess(known, reading)
         return guesses.count { (f, guess) -> place(f, guess) }
     }
 
     private fun Function.isCandidate() = parentNamespace.isGlobal && symbol.source == SourceType.DEFAULT &&
         !isThunk && !isExternal && callingConventionName in THIS_CONVENTIONS
 
-    private fun Function.recordedClass() = (parentNamespace as? GhidraClass)?.id?.let(classes::get)
+    /** Slots in the vftable at the start of [cls]'s object. */
+    private fun slotCount(cls: ClassDecl) =
+        cls.vftables.firstOrNull { it.vfptrOffset(program) == 0L }?.slots(program)?.size
 
-    /** Slots in [cls]'s own vftable: the one at offset 0 of its object, where it has several. */
-    private fun slotCount(cls: ClassDecl): Int? {
-        val ns = cls.ns ?: return null
-        val tables = symbols.getSymbols(ns).filter { it.name == ClassNaming.VFTABLE }.map { it.address }
-        val table = tables.singleOrNull() ?: tables.singleOrNull { program.msvcSubobjectOffset(it) == 0 }
-        return (table?.let(program.listing::getDataAt)?.dataType as? Array)?.numElements
-    }
-
-    /**
-     * The class's size range: at least what its record says or its struct, whichever says more, and at most
-     * the record's size where it is exact ([ClassHierarchyRecords.Entry.exactSize]).
-     */
-    private fun sizeRange(id: Long): LongRange? {
-        val entry = records[id] ?: return null
-        if (entry.exactSize && entry.size != null) return entry.size..entry.size
-        val struct = entry.structId?.let(program.dataTypeManager::getDataType) as? Structure
-        val structLength = struct?.takeUnless { it.isNotYetDefined }?.length?.toLong()
-        val least = listOfNotNull(entry.size, structLength).maxOrNull() ?: return null
-        return least..Long.MAX_VALUE
-    }
-
-    private class Reading(val uses: Map<Function, ThisUse>, val calls: List<ThisCall>)
-
-    private fun read(functions: Set<Function>, known: Map<Function, ClassDecl>, monitor: TaskMonitor): Reading {
+    private fun read(
+        functions: Set<Function>,
+        candidates: Set<Function>,
+        ctors: Map<Function, ClassDecl>,
+        monitor: TaskMonitor,
+    ): ThisReading {
         val uses = mutableMapOf<Function, ThisUse>()
         val calls = mutableListOf<ThisCall>()
-        val ctors = known.filter { (f, cls) -> f.name == cls.name }
-        val decomp = DecompInterface().also { it.openProgram(program) }
-        try {
+        DecompInterface().useWith(program) { decomp ->
             for (f in functions) {
                 if (monitor.isCancelled) break
                 val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
                 FunctionReading(f, high, ctors).let {
                     uses[f] = it.use
-                    calls += it.calls
+                    calls += it.calls.filter { c -> c.callee in candidates }
                 }
             }
-        } finally {
-            decomp.dispose()
         }
-        return Reading(uses, calls)
+        return ThisReading(uses, calls)
     }
 
     /** One decompiled function's [use] of its `this`, and the [calls] it makes on objects of known class. */
@@ -250,7 +225,7 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     }
 
     private fun place(f: Function, guess: ThisClassGuess): Boolean {
-        val cls = guess.cls.ns as? GhidraClass ?: return false
+        val cls = guess.cls.ns?.toClass() ?: return false
         val refined = if (guess.cls != guess.common) {
             ", refined up from ${guess.common.ns?.getName(true) ?: guess.common.name}"
         } else {
