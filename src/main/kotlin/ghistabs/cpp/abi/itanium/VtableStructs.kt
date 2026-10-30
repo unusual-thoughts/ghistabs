@@ -75,12 +75,11 @@ fun Program.recordStart(top: Address): Address {
         .lastOrNull() ?: top
 }
 
-/** The record at [start] whose rtti word is at [rttiSlot], or with the bare two-word header if null. */
-private fun Program.recordAt(start: Address, rttiSlot: Address?): VtableRecord {
+/** The header datatype at [start] whose rtti word is at [rttiSlot], or with the bare two-word header if null. */
+private fun Program.headerAt(start: Address, rttiSlot: Address?): StructureDataType {
     val ptr = defaultPointerSize.toLong()
     val prefixWords = rttiSlot?.let { ((it - start) / ptr - 1).toInt() } ?: 0
-    val header = dataTypeManager.vtableHeaderLayout(prefixWords)
-    return VtableRecord(start, header, Itanium)
+    return dataTypeManager.vtableHeaderLayout(prefixWords)
 }
 
 /**
@@ -97,7 +96,7 @@ internal fun Program.itaniumVtableRecord(ztv: Address): VtableRecord {
         .take(MAX_VTABLE_PREFIX_WORDS)
         .takeWhile { holdsTypeinfo(it) || pointerAt(it)?.let(::isCode) != true }
         .firstOrNull(::holdsTypeinfo)
-    return recordAt(ztv, rttiSlot)
+    return VtableRecord(ztv, headerAt(ztv, rttiSlot), Itanium)
 }
 
 /** A record in a vtable group, and the functions its slots point at. */
@@ -115,7 +114,7 @@ private fun Program.subVtableAt(start: Address, rtti: Address, construction: Boo
         .takeWhile { pointerAt(it) == rtti || pointerAt(it)?.let(::isCode) != true }
         // The rtti word follows offset_to_top, so it is never the first.
         .firstOrNull { it > start && pointerAt(it) == rtti }
-        ?.let { recordAt(start, it).copy(internal = true, construction = construction) }
+        ?.let { VtableRecord(start, headerAt(start, it), Itanium, internal = true, construction = construction) }
         ?.let { record -> SubVtable(record, record.slots(this)) }
 
 /**
