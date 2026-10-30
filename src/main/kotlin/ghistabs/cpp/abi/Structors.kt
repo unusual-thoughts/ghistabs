@@ -17,7 +17,7 @@ import ghistabs.cpp.recover.thisStorage
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
-/** A constructor or destructor variant, as its ABI names them: [ItaniumStructor], [MsvcStructor], [Gcc2Structor]. */
+/** A constructor or destructor variant, as its ABI names them: `ItaniumStructor`, `MsvcStructor`, `Gcc2Structor`. */
 interface Structor {
     val isDestructor: Boolean
 
@@ -28,7 +28,7 @@ interface Structor {
     fun displayName(className: String): String
 }
 
-/** How an ABI's constructors and destructors behave, for [StructorFinder] and [ghistabs.cpp.NewSizeReader]. */
+/** How an ABI's constructors and destructors behave, for `StructorFinder` and `NewSizeReader`. */
 interface StructorConvention {
     /** Whether constructors return `this` and destructors don't, as under MSVC, which tells the two apart. */
     val constructorsReturnThis: Boolean get() = false

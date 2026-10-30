@@ -80,7 +80,7 @@ fun <K, F> virtualOwners(holders: Map<F, Set<K>>, ancestors: (K) -> Set<K>, hasV
 /**
  * Classes off the MSVC RTTI Ghidra's RTTI analyzer laid: their bases and sizes for [ClassHierarchyRecords],
  * each virtual function moved into its class ([virtualOwners]) and marked virtual, and each constructor and
- * destructor ([ghistabs.cpp.abi.StructorFinder]) moved there and named. Classes go by their type
+ * destructor ([ghistabs.cpp.recover.StructorFinder]) moved there and named. Classes go by their type
  * descriptor's address.
  */
 class MsvcClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {

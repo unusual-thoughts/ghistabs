@@ -31,7 +31,7 @@ enum class VirtKind { NORMAL, STATIC, VIRTUAL }
 interface MemberDecl {
     val name: String
 
-    /** The stated physname, if any; not always a whole symbol ([ghistabs.cpp.abi.Gcc2Plain.physnameCandidates]). */
+    /** The stated physname, if any; not always a whole symbol (see `Gcc2Plain.physnameCandidates`). */
     val mangled: String?
     val access: Access
     val virt: VirtKind
