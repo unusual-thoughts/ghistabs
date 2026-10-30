@@ -1,6 +1,7 @@
 package ghistabs.cpp.recover
 
 import ghidra.app.decompiler.DecompInterface
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
@@ -15,7 +16,6 @@ import ghistabs.cpp.ClassHierarchyRecords
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.ClassNaming
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.toClass
 import ghistabs.useWith
 
 /**
@@ -117,6 +117,7 @@ class ThisClassGuesser(private val shapes: Map<GhidraClass, ThisClassShape>) {
 }
 
 private const val MAX_ROUNDS = 8
+private const val MAX_PASSES = 8
 private const val MAX_DEPTH = 64
 
 /**
@@ -131,7 +132,10 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     private val thisStorage = program.thisStorage()
     private val symbols = program.symbolTable
 
-    /** How many it moved. */
+    /**
+     * How many it moved. Only what holds evidence is decompiled: the recorded classes' methods, the callers of
+     * their constructors, and then each function guessed, until no guess is new.
+     */
     fun guess(monitor: TaskMonitor): Int {
         val shapes = shapes()
         if (shapes.isEmpty() || thisStorage == null) return 0
@@ -142,9 +146,26 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val methods = functions.mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
         // A constructor goes by its class's name, as every ABI's structor pass and stabs name it.
         val ctors = methods.filter { (f, cls) -> f.name == cls.name }
-        val callers = candidates.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
-        val reading = read(candidates + callers + methods.keys, candidates, ctors, monitor)
-        return ThisClassGuesser(shapes).guess(reading).count { (f, guess) -> place(f, guess) }
+        val guesser = ThisClassGuesser(shapes)
+        val uses = mutableMapOf<Function, ThisUse>()
+        val calls = mutableListOf<ThisCall>()
+        var guesses = emptyMap<Function, ThisClassGuess>()
+        DecompInterface().useWith(program) { decomp ->
+            var next = methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }
+            repeat(MAX_PASSES) {
+                for (f in next) {
+                    if (monitor.isCancelled) return@useWith
+                    val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction
+                    val reading = FunctionReading(f, high ?: continue, ctors)
+                    uses[f] = reading.use
+                    calls += reading.calls.filter { it.callee in candidates }
+                }
+                guesses = guesser.guess(ThisReading(uses, calls))
+                next = guesses.keys - uses.keys
+                if (next.isEmpty()) return@useWith
+            }
+        }
+        return guesses.count { (f, guess) -> place(f, guess) }
     }
 
     /** Each recorded class's shape, the base it shares its address with being its non-virtual one at offset 0. */
@@ -175,29 +196,15 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return program.listing.getDataAt(table.address)?.numComponents?.takeIf { it > 0 }
     }
 
+    /**
+     * An unnamed global function whose first argument comes in where `this` does: under `__thiscall` or
+     * `__fastcall` with MSVC, and under `__cdecl` too with MinGW gcc before 4.7, which passes `this` on the stack.
+     */
     private fun Function.isCandidate() = parentNamespace.isGlobal && symbol.source == SourceType.DEFAULT &&
-        !isThunk && !isExternal && callingConventionName in THIS_CONVENTIONS
+        !isThunk && !isExternal && firstArgument() == thisStorage
 
-    private fun read(
-        functions: Set<Function>,
-        candidates: Set<Function>,
-        ctors: Map<Function, GhidraClass>,
-        monitor: TaskMonitor,
-    ): ThisReading {
-        val uses = mutableMapOf<Function, ThisUse>()
-        val calls = mutableListOf<ThisCall>()
-        DecompInterface().useWith(program) { decomp ->
-            for (f in functions) {
-                if (monitor.isCancelled) break
-                val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
-                FunctionReading(f, high, ctors).let {
-                    uses[f] = it.use
-                    calls += it.calls.filter { c -> c.callee in candidates }
-                }
-            }
-        }
-        return ThisReading(uses, calls)
-    }
+    private fun Function.firstArgument() = (callingConvention ?: program.compilerSpec.defaultCallingConvention)
+        .getArgLocation(0, null, PointerDataType(program.dataTypeManager), program).firstVarnode?.address
 
     /** One decompiled function's [use] of its `this`, and the [calls] it makes on objects of known class. */
     private inner class FunctionReading(f: Function, high: HighFunction, ctors: Map<Function, GhidraClass>) {
@@ -281,7 +288,6 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
 
     companion object {
         const val BOOKMARK = "Method class guess"
-        private val THIS_CONVENTIONS = setOf("__thiscall", "__fastcall")
         private const val DECOMPILE_TIMEOUT_SECONDS = 30
     }
 }
