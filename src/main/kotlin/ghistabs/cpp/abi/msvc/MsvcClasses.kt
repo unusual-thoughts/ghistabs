@@ -66,14 +66,14 @@ fun directBases(array: List<BaseEntry>): List<BaseEntry> {
 
 /**
  * The class a virtual function belongs to: the lowest common ancestor of the classes whose vftables
- * hold it ([holders]). That class may have no vftable ([hasVftable]), as an abstract base's is often not
- * emitted; one that has one and doesn't hold it means the linker folded separate overrides into one body
+ * hold it ([holders]). That class may have no vftable, as an abstract base's is often not emitted; one
+ * that has one and doesn't hold it means the linker folded separate overrides into one body
  * (`/OPT:ICF`). Null for those, and where no class is common.
  */
-fun virtualOwner(holders: Set<ClassDecl>, hasVftable: (ClassDecl) -> Boolean): ClassDecl? {
+fun virtualOwner(holders: Set<ClassDecl>): ClassDecl? {
     val common = holders.map { it.ancestors + it }.reduce { a, b -> a intersect b }
     return common.singleOrNull { c -> common.none { it != c && it.derivesFrom(c) } }
-        ?.takeIf { it in holders || !hasVftable(it) }
+        ?.takeIf { it in holders || it.vftables.isEmpty() }
 }
 
 /**
@@ -85,9 +85,6 @@ fun virtualOwner(holders: Set<ClassDecl>, hasVftable: (ClassDecl) -> Boolean): C
 class MsvcClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val options = DataValidationOptions()
     private val symbols = program.symbolTable
-
-    // The classes with a vftable of their own, which [readVftables] collects.
-    private val tableClasses = mutableSetOf<RttiClass>()
 
     // Every class seen, by type descriptor: those with a hierarchy descriptor, and any other a table or a
     // Base Class Array names, which are known by nothing more than their descriptor.
@@ -104,6 +101,9 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val bases: List<BaseEntry>,
     ) : ClassDecl {
         override val ancestors by lazy { bases.drop(1).mapTo(mutableSetOf()) { classAt(it.descriptor) } }
+
+        // Filled by [readVftables].
+        override val vftables = mutableListOf<Address>()
         val directBases by lazy { directBases(bases) }
     }
 
@@ -127,7 +127,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val hierarchies = readHierarchies().associateBy { it.descriptor }
         classes += hierarchies
         val holders = readVftables()
-        val owners = holders.mapValues { (_, hs) -> virtualOwner(hs) { it in tableClasses } }
+        val owners = holders.mapValues { (_, hs) -> virtualOwner(hs) }
         var moved = 0
         for ((func, owner) in owners) {
             if (owner != null && attach(func, owner)) moved++
@@ -166,7 +166,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             val at = sym.address.add(ptrSize)
             val table = runCatching { VfTableModel(program, at, options) }.getOrNull() ?: continue
             val cls = runCatching { table.rtti0Model.address }.getOrNull()?.let(::classAt) ?: continue
-            tableClasses += cls
+            cls.vftables += at
             program.msvcSubobjectOffset(at)?.let { tables[at] = cls to it.toLong() }
             for (i in 0 until table.elementCount) {
                 val func = slotFunction(table.getVirtualFunctionPointer(i), at) ?: continue

@@ -42,7 +42,11 @@ class MsvcTest {
     }
 
     private val classes = buildMap {
-        fun add(name: String, vararg bases: String) = put(name, TestClass(name, *bases.map(::getValue).toTypedArray()))
+        fun add(name: String, vararg bases: String) {
+            // Every class but Abstract has a vftable of its own.
+            val vftables = listOf(td(name)).takeUnless { name == "Abstract" }.orEmpty()
+            put(name, TestClass(name, *bases.map(::getValue).toTypedArray(), vftables = vftables))
+        }
         add("A")
         add("B", "A")
         add("C", "A")
@@ -54,7 +58,7 @@ class MsvcTest {
     }
 
     private fun owners(holders: Map<String, Set<String>>) = holders.mapValues { (_, names) ->
-        virtualOwner(names.mapTo(mutableSetOf(), classes::getValue)) { it.name != "Abstract" }?.name
+        virtualOwner(names.mapTo(mutableSetOf(), classes::getValue))?.name
     }
 
     @Test

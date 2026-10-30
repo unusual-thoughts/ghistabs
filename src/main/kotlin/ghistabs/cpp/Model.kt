@@ -36,6 +36,9 @@ interface ClassDecl {
     /** Every class this one derives from, directly or not. */
     val ancestors: Set<ClassDecl>
 
+    /** Its own vftables; empty when none was emitted, as for an abstract base. */
+    val vftables: List<Address>
+
     /** Whether this class derives from [other], directly or not. */
     fun derivesFrom(other: ClassDecl) = other in ancestors
 }
