@@ -54,8 +54,8 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private fun call(caller: String, callee: String, built: GhidraClass? = null) =
         ThisCall(fn(caller), fn(callee), built)
 
-    private fun guess(calls: List<ThisCall>, constructors: Set<Function> = emptySet()) =
-        ThisClassGuesser(mapOf(a to null, b to a, c to a, d to b), constructors).guess(calls).mapKeys { it.key.name }
+    private fun guess(calls: List<ThisCall>, recorded: Set<Function> = emptySet()) =
+        ThisClassGuesser(mapOf(a to null, b to a, c to a, d to b), recorded).guess(calls).mapKeys { it.key.name }
 
     @Test
     fun `a function called on a method's this belongs to that method's class`() {
@@ -87,7 +87,7 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
-    fun `a constructor a class pass recorded is evidence though an analysis named it`() {
+    fun `a method a class pass recorded is evidence though an analysis named it`() {
         val ctor = fn("ctor", d)
         builder.withTransaction { ctor.setName("D", SourceType.ANALYSIS) }
         guess(listOf(ThisCall(ctor, fn("f"))), setOf(ctor))["f"] mustBe ThisClassGuess(d, 1)

@@ -33,15 +33,15 @@ data class ThisClassGuess(val cls: GhidraClass, val sites: Int)
  */
 class ThisClassGuesser(
     private val bases: Map<GhidraClass, GhidraClass?>,
-    private val constructors: Set<Function> = emptySet(),
+    private val recorded: Set<Function> = emptySet(),
 ) {
     private val byId = bases.keys.associateBy { it.id }
 
     /** The class [f] is a method of, if one of [bases]. */
     private fun classOf(f: Function) = byId[f.parentNamespace.id]
 
-    /** [classOf] [f], where that is known ([isProven]) or [f] is one of the [constructors] a class pass recorded. */
-    private fun knownClassOf(f: Function) = classOf(f)?.takeIf { f.isProven() || f in constructors }
+    /** [classOf] [f], where that is known ([isProven]) or [f] is one of the methods a class pass [recorded]. */
+    private fun knownClassOf(f: Function) = classOf(f)?.takeIf { f.isProven() || f in recorded }
 
     /** [cls], then the base it shares its address with, and so on up. */
     fun addressChain(cls: GhidraClass): List<GhidraClass> = generateSequence(cls) { bases[it] }.take(MAX_DEPTH).toList()
@@ -65,8 +65,8 @@ class ThisClassGuesser(
 private const val MAX_DEPTH = 64
 
 /**
- * Whether [this]'s class is known, not guessed: its name came with the program or its debug info, from the RTTI
- * through a class pass, or from a user, and not from another analysis such as `RecoverClassesFromRTTIScript`.
+ * Whether [this]'s class is known, not guessed: its name came with the program or its debug info, or from a user,
+ * and not from an analysis such as a class pass or `RecoverClassesFromRTTIScript`.
  */
 fun Function.isProven() = symbol.source == SourceType.IMPORTED || symbol.source == SourceType.USER_DEFINED
 
@@ -74,8 +74,8 @@ fun Function.isProven() = symbol.source == SourceType.IMPORTED || symbol.source 
  * [ThisClassGuesser] over a program, for any ABI: every unnamed function in the global namespace whose
  * convention takes `this` (`__thiscall`, or `__fastcall`, whose first argument comes in the same register),
  * off its callers' decompiled calls, against the classes [ClassHierarchyRecords] holds, their methods and the
- * objects their constructors build. Only a method whose class is known counts ([isProven]), or a constructor a
- * class pass recorded, so neither another guess nor `RecoverClassesFromRTTIScript`'s placements are evidence.
+ * objects their constructors build. Only a method whose class is known counts ([isProven]), or one a class
+ * pass recorded, so neither another guess nor `RecoverClassesFromRTTIScript`'s placements are evidence.
  * Each guess moves the function into its class, a `__fastcall` that takes nothing in EDX becoming a
  * `__thiscall` ([fastcallToThiscall]), and leaves an Analysis bookmark saying where it came from.
  */
@@ -102,11 +102,11 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val candidates = functions.filterTo(mutableSetOf()) { it.isCandidate() }
         if (candidates.isEmpty()) return 0
         val byId = bases.keys.associateBy { it.id }
-        val recorded = recordedConstructors()
+        val (recorded, recordedCtors) = recordedMethods()
         val methods = functions.filter { it.isProven() || it in recorded }
             .mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
         // A constructor the debug info names goes by its class's name.
-        val ctors = methods.filter { (f, cls) -> f in recorded || f.name == cls.name }
+        val ctors = methods.filter { (f, cls) -> f in recordedCtors || f.isProven() && f.name == cls.name }
         val calls = buildList {
             DecompInterface().useWith(program) { decomp ->
                 for (f in methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }) {
@@ -119,12 +119,18 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return ThisClassGuesser(bases, recorded).guess(calls).count { (f, guess) -> place(f, guess) }
     }
 
-    /** The constructors the class passes recorded, still in the class they were recorded for. */
-    private fun recordedConstructors() = program.readClassRecord().orEmpty().flatMapTo(mutableSetOf()) { (id, entry) ->
-        entry.constructors.mapNotNull { offset ->
-            program.functionManager.getFunctionAt(program.addressFactory.defaultAddressSpace.getAddress(offset))
+    /** The methods the class passes recorded, still in the class they were recorded for, and which build. */
+    private fun recordedMethods(): Pair<Set<Function>, Set<Function>> {
+        val space = program.addressFactory.defaultAddressSpace
+        val methods = mutableSetOf<Function>()
+        val ctors = mutableSetOf<Function>()
+        for ((id, entry) in program.readClassRecord().orEmpty()) {
+            fun at(offset: Long) = program.functionManager.getFunctionAt(space.getAddress(offset))
                 ?.takeIf { it.parentNamespace.id == id }
+            entry.methods.mapNotNullTo(methods, ::at)
+            entry.constructors.mapNotNullTo(ctors, ::at)
         }
+        return methods to ctors
     }
 
     /**

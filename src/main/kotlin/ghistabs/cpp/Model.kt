@@ -96,11 +96,17 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
     ) : BaseDecl
 
     /**
-     * A class's struct by datatype id, its direct bases in order, and the [constructors] a class pass found
-     * for it, by entry point offset: those it named as an analysis's guess, which still say its class.
+     * A class's struct by datatype id, its direct bases in order, and the [methods] a class pass placed in it
+     * and which of them are [constructors], by entry point offset: the pass's own conclusions, which its names
+     * can't tell from another analysis's.
      */
     @Serializable
-    data class Entry(val structId: Long?, val bases: List<Base>, val constructors: List<Long> = emptyList())
+    data class Entry(
+        val structId: Long?,
+        val bases: List<Base>,
+        val methods: List<Long> = emptyList(),
+        val constructors: List<Long> = emptyList(),
+    )
 
     override fun readState(properties: GProperties) {
         classes = GPropertiesFormat.decode<ClassHierarchyRecords>(properties).classes
@@ -122,16 +128,21 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
             (getOptions(CATEGORY).getCustomOption(CLASSES, null) as? ClassHierarchyRecords)?.classes
 
         /**
-         * [cls]'s entry, by its namespace's id, with its struct's [structId] and its [constructors]; null if it
-         * has no namespace. A base with no namespace goes by name.
+         * [cls]'s entry, by its namespace's id, with its struct's [structId], its [methods] and [constructors];
+         * null if it has no namespace. A base with no namespace goes by name.
          */
-        fun entryOf(cls: ClassDecl, structId: Long?, constructors: List<Long> = emptyList()): Pair<Long, Entry>? {
+        fun entryOf(
+            cls: ClassDecl,
+            structId: Long?,
+            methods: List<Long> = emptyList(),
+            constructors: List<Long> = emptyList(),
+        ): Pair<Long, Entry>? {
             val ns = cls.ns?.toClass() ?: return null
             val bases = cls.bases.map { b ->
                 val baseNs = b.cls.ns?.toClass()
                 Base(baseNs?.id, if (baseNs == null) b.cls.name else null, b.isVirtual, b.access, b.offset)
             }
-            return ns.id to Entry(structId, bases, constructors)
+            return ns.id to Entry(structId, bases, methods, constructors)
         }
 
         fun Program.areClassesRecorded() = getOptions(CATEGORY).contains(CLASSES)
