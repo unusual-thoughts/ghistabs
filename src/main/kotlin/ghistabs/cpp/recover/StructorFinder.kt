@@ -13,23 +13,16 @@ import ghistabs.cpp.abi.StructorRole
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
-/**
- * What a function does to its `this`: the [classes], by type descriptor, whose vftables it stores where
- * they belong in it, and whether it hands `this` back ([returnsThis]).
- */
+/** The [classes] whose vtables a function stores into `this` where they belong, and whether it returns `this`. */
 data class VptrStores(val classes: Set<Address>, val returnsThis: Boolean)
 
-/**
- * The class a function storing [classes]' vftables builds or tears down: the most derived of them,
- * which the others are bases of, inlined. Null for classes that are not one line of descent.
- */
+/** The class a function storing [classes]' vtables builds or destroys: the one the others are bases of, or null. */
 fun storedClass(classes: Set<Address>, ancestors: (Address) -> Set<Address>): Address? =
     classes.singleOrNull { c -> classes.all { it == c || it in ancestors(c) } }
 
 /**
- * Finds constructors and destructors off the decompiler, by the vtables of [tables] they store through
- * `this`: each table's address point, its class, and how far into the object its vptr sits (the
- * subobject's offset, plus the vptr's within it, which only gcc 2.x puts anywhere but 0).
+ * Finds constructors and destructors by the [tables] they store into `this`, decompiled: each table's class
+ * and its vptr's offset in that class's object, by its address point.
  */
 class StructorFinder(
     private val program: Program,
@@ -38,7 +31,7 @@ class StructorFinder(
 ) : DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
 
-    /** Each structor's class and role, given the vftable [slots] and the classes whose tables hold them. */
+    /** Each structor's class and role, given [slots]: each vtable slot's function, and the classes holding it. */
     fun find(
         slots: Map<Function, Set<Address>>,
         ancestors: (Address) -> Set<Address>,
@@ -46,13 +39,12 @@ class StructorFinder(
         monitor: TaskMonitor,
     ) = read(slots.keys, monitor).roles(slots, ancestors, convention)
 
-    /** What the functions do to `this`: the vptrs each storer stores ([stores]), and what each calls on it. */
+    /** The vptrs each function stores ([stores]), and the functions each calls on `this`. */
     class Reading(val stores: Map<Function, VptrStores>, val thisCalls: Map<Function, Set<Function>>) {
         /**
-         * A constructor is never virtual, so a slot that runs a storer on `this` destroys it: a deleting
-         * destructor if it then frees it, and the storer it calls the destructor; the store may be a base's,
-         * a destructor with nothing to do before its base's having none of its own. Where constructors
-         * return `this`, that tells the other storers apart.
+         * A constructor is never virtual, so a slot that stores vptrs, or calls a function that does,
+         * destroys: a deleting destructor if it frees `this`, and the function it calls the destructor.
+         * Where constructors return `this`, that sorts the other storers.
          */
         fun roles(
             slots: Map<Function, Set<Address>>,
@@ -63,7 +55,7 @@ class StructorFinder(
             val owners = stores.mapNotNull { (f, s) -> storedClass(s.classes, ancestors)?.let { f to it } }.toMap()
             fun mayDestroy(f: Function) = !returnsThis || stores[f]?.returnsThis != true
 
-            // The holder a slot deletes, if it tears down a [cls]: [cls], or the one class below it the others are.
+            // The class a slot held by [held] deletes when it destroys a [cls]: [cls], or the one most derived.
             fun deleting(held: Set<Address>, cls: Address): Address? {
                 val derived = held.filter { it == cls || cls in ancestors(it) }
                 return derived.singleOrNull { c -> derived.all { it == c || c in ancestors(it) } }

@@ -16,10 +16,8 @@ import ghistabs.cpp.abi.VtableRecord
 import ghistabs.namespaces
 
 /**
- * Microsoft Visual C++ ABI facts: the `??_7` vftable spelling, the meta pointer in front of each
- * table, and the labels Ghidra's `Windows x86 PE RTTI Analyzer` puts on the RTTI it lays.
- * [ghistabs.cpp.abi.msvc.MsvcClasses] reads that RTTI back into class records;
- * nothing in the stabs import asks about this ABI, as no compiler that emits stabs mangles this way.
+ * The Microsoft Visual C++ ABI: its `??` special names, and the labels Ghidra's RTTI analyzer puts on the
+ * RTTI, which [ghistabs.cpp.abi.msvc.MsvcClasses] reads. No compiler that emits stabs uses it.
  */
 object Msvc : CxxAbi {
     /** A class's vftable: `??_7Foo@ns@@6B@` is `const ns::Foo::vftable`. */
@@ -40,14 +38,10 @@ object Msvc : CxxAbi {
     private const val BCD_PRIVORPROTINCOMPOBJ = 0x8
     const val BCD_NONPUBLIC = BCD_NOTVISIBLE or BCD_PRIVORPROTBASE or BCD_PRIVORPROTINCOMPOBJ
 
-    /**
-     * The base is virtual where the class that names it does: `BCD_VBOFCONTOBJ`, what clang's MSVC
-     * emitter calls `IsVirtual`. Not its pDisp, which is set as well for a non-virtual base that sits
-     * inside a virtual one.
-     */
+    /** A virtual base (clang's `IsVirtual`). Not a set pDisp, which a base inside a virtual one has too. */
     const val BCD_VBOFCONTOBJ = 0x10
 
-    /** `??_7` labels the address point; the meta pointer to the complete object locator in front is no slot. */
+    /** `??_7` labels the address point; the meta pointer in front is no part of the record. */
     override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 
     override val assignmentOperatorName = "operator="
@@ -63,7 +57,7 @@ object Msvc : CxxAbi {
         "??3@YAXPEAX_K@Z",
     )
 
-    /** A class's one constructor and destructor, and its deleting one, scalar unless it tests the vector flag. */
+    /** The constructor, destructor, or deleting destructor, scalar unless it tests the vector flag. */
     override fun structorFor(role: StructorRole, func: Function) = when (role) {
         StructorRole.CONSTRUCTOR -> MsvcStructor.CONSTRUCTOR
 
@@ -75,7 +69,7 @@ object Msvc : CxxAbi {
         }
     }
 
-    /** A vector deleting destructor tests its flags for bit 2, which says an array is going. */
+    /** Whether this tests its flags for bit 2, which a vector deleting destructor does to free an array. */
     private fun Function.testsVectorFlag() = program.listing.getInstructions(body, true).any { insn ->
         insn.pcode.any { op -> op.opcode == PcodeOp.INT_AND && op.inputs.any { it.isConstant && it.offset == 2L } }
     }
@@ -91,28 +85,28 @@ object Msvc : CxxAbi {
 
     override fun looksLikeVtable(symbolName: String) = symbolName.startsWith(VFTABLE_PREFIX)
 
-    /** Templates have no closed form here either: their arguments mangle as types. */
+    /** A template's name has no closed form, as its arguments mangle as types. */
     override fun vtableCandidates(className: String) = listOfNotNull(
         "$VFTABLE_PREFIX${mangleClassName(className)}6B@".takeUnless { className.isTemplated },
         className.member(ClassNaming.VFTABLE),
     )
 
-    /** Ghidra's demangler names a `??_7` symbol `` `vftable' `` in the class's namespace. */
+    /** Ghidra demangles `??_7` as `` `vftable' `` in the class's namespace. */
     override fun demangledVtableClass(obj: DemangledObject) =
         obj.namespaces.qualifiedName.takeIf { obj.name.trim('`', '\'') == ClassNaming.VFTABLE && it.isNotEmpty() }
 
-    /** By its special name's code (`??0`, `??_G`), whichever class it is scoped to. */
+    /** By its code (`??0`, `??_G`), whichever class it is in. */
     override fun structorOf(mangled: String, className: String?) = MsvcStructor.entries.firstOrNull {
         mangled.startsWith(it.code)
     }
 
-    /** `a::b::Foo` as the name a vftable or type descriptor spells it: `Foo@b@a@@`. Not for templates. */
+    /** `a::b::Foo` as MSVC mangles a class name: `Foo@b@a@@`. Not for templates. */
     fun mangleClassName(name: String) = name.nameSegments.reversed().joinToString("") { "$it@" } + "@"
 }
 
 /**
- * A constructor or destructor by its MSVC special name. A class with virtual bases builds them in its
- * one constructor, behind a flag argument, and destroys them in a destructor of its own.
+ * An MSVC constructor or destructor, by its special name. A class with virtual bases builds them in its
+ * one constructor, behind a flag, and destroys them in [VBASE_DESTRUCTOR].
  */
 enum class MsvcStructor(
     val code: String,
@@ -126,14 +120,14 @@ enum class MsvcStructor(
     DESTRUCTOR("??1", true),
     VBASE_DESTRUCTOR("??_D", true, demangled = "`vbase_destructor'"),
 
-    /** The slot that destroys and frees one object. */
+    /** The vftable slot that destroys and frees one object. */
     SCALAR_DELETING_DESTRUCTOR("??_G", true, true, "`scalar_deleting_destructor'"),
 
-    /** The slot that destroys an array of them instead when its flags argument has bit 2 set. */
+    /** The vftable slot that destroys and frees an array instead when its flags have bit 2 set. */
     VECTOR_DELETING_DESTRUCTOR("??_E", true, true, "`vector_deleting_destructor'"),
     ;
 
-    /** The source spelling, or for a special function the name Ghidra's demangler gives it. */
+    /** The source's name, or for a compiler-made function the one Ghidra's demangler gives it. */
     override fun displayName(className: String) =
         demangled ?: if (isDestructor) "~${className.leafName}" else className.leafName
 }
