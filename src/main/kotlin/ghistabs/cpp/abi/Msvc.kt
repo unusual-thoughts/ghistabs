@@ -79,21 +79,19 @@ object Msvc : CxxAbi {
     override fun isProbablyMangled(name: String) = name.startsWith("?")
 
     /** Off the class's Class Hierarchy Descriptor, which the RTTI analyzer labels in its namespace. */
-    override fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? {
-        val chd = program.symbolTable.getSymbols(cls).firstOrNull { it.name == CLASS_HIERARCHY_DESCRIPTOR }
-            ?: return null
-        return runCatching { directBases(Rtti3Model(program, chd.address, DataValidationOptions()).baseClassArray()) }
-            .getOrNull()
-    }
+    override fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? =
+        program.symbolTable.getSymbols(cls).firstOrNull { it.name == CLASS_HIERARCHY_DESCRIPTOR }?.let { chd ->
+            runCatching { directBases(Rtti3Model(program, chd.address, DataValidationOptions()).baseClassArray()) }
+                .getOrNull()
+        }
 
     override fun looksLikeVtable(symbolName: String) = symbolName.startsWith(VFTABLE_PREFIX)
 
     /** Templates have no closed form here either: their arguments mangle as types. */
-    override fun vtableCandidates(className: String) = if (className.isTemplated) {
-        listOf(className.member(ClassNaming.VFTABLE))
-    } else {
-        listOf("$VFTABLE_PREFIX${mangleClassName(className)}6B@", className.member(ClassNaming.VFTABLE))
-    }
+    override fun vtableCandidates(className: String) = listOfNotNull(
+        "$VFTABLE_PREFIX${mangleClassName(className)}6B@".takeUnless { className.isTemplated },
+        className.member(ClassNaming.VFTABLE),
+    )
 
     /** Ghidra's demangler names a `??_7` symbol `` `vftable' `` in the class's namespace. */
     override fun demangledVtableClass(obj: DemangledObject) =
