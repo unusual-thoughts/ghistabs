@@ -1,8 +1,6 @@
 import ghistabs.build.registerHeadlessTest
 import ghistabs.build.sourceSets
 
-val observedCounters: File = layout.buildDirectory.dir("test-output/observed-counters").get().asFile
-
 // Run the integration tests per binary × mode
 registerHeadlessTest(
     "integrationTest",
@@ -12,7 +10,7 @@ registerHeadlessTest(
 ) {
     finalizedBy(auditTests)
     // Each mode's counters, for WriteBaselinesAuditTest: one an earlier run left would be merged into this run's.
-    val observed = observedCounters
+    val observed = layout.buildDirectory.dir("test-output/observed-counters").get().asFile
     doFirst { observed.deleteRecursively() }
 }
 
