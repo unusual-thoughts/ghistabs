@@ -5,6 +5,7 @@ import ghidra.program.model.address.GenericAddressSpace
 import ghistabs.cpp.Access
 import ghistabs.cpp.TestClass
 import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.VtableRecord
 import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
@@ -44,7 +45,7 @@ class MsvcTest {
     private val classes = buildMap {
         fun add(name: String, vararg bases: String) {
             // Every class but Abstract has a vftable of its own.
-            val vftables = listOf(td(name)).takeUnless { name == "Abstract" }.orEmpty()
+            val vftables = listOf(VtableRecord(td(name), null, Msvc)).takeUnless { name == "Abstract" }.orEmpty()
             put(name, TestClass(name, *bases.map(::getValue).toTypedArray(), vftables = vftables))
         }
         add("A")

@@ -21,16 +21,15 @@ data class VptrStores(val classes: Set<ClassDecl>, val returnsThis: Boolean)
 fun storedClass(classes: Set<ClassDecl>): ClassDecl? =
     classes.singleOrNull { c -> classes.all { it == c || c.derivesFrom(it) } }
 
-/**
- * Finds constructors and destructors by the [tables] they store into `this`, decompiled: each table's class
- * and its vptr's offset in that class's object, by its address point.
- */
-class StructorFinder(
-    private val program: Program,
-    private val tables: Map<Address, Pair<ClassDecl, Long>>,
-    sink: DiagnosticSink,
-) : DiagnosticSink by sink {
+/** Finds constructors and destructors among [classes]' by the vtables they store into `this`, decompiled. */
+class StructorFinder(private val program: Program, classes: Collection<ClassDecl>, sink: DiagnosticSink) :
+    DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
+
+    // Each vtable, by its address point: the class it serves and where in that class's object its vptr sits.
+    private val tables = classes.flatMap { cls ->
+        cls.vftables.mapNotNull { r -> with(r.abi) { r.vfptrOffset(program) }?.let { r.addressPoint to (cls to it) } }
+    }.toMap()
 
     /** Each structor's class and role, given [slots]: each vtable slot's function, and the classes holding it. */
     fun find(slots: Map<Function, Set<ClassDecl>>, convention: StructorConvention, monitor: TaskMonitor) =

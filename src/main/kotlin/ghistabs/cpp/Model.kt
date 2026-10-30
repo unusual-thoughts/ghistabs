@@ -9,6 +9,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.util.ObjectStorage
 import ghidra.util.Saveable
 import ghistabs.GPropertiesFormat
+import ghistabs.cpp.abi.VtableRecord
 import kotlinx.serialization.Serializable
 
 /** A C++ member's or base's access, as a stab's visibility marker or an RTTI base flag states it. */
@@ -36,8 +37,8 @@ interface ClassDecl {
     /** Every class this one derives from, directly or not. */
     val ancestors: Set<ClassDecl>
 
-    /** Its own vftables; empty when none was emitted, as for an abstract base. */
-    val vftables: List<Address>
+    /** Its own vtables; empty when none was emitted, as for an abstract base. */
+    val vftables: List<VtableRecord>
 
     /** Whether this class derives from [other], directly or not. */
     fun derivesFrom(other: ClassDecl) = other in ancestors

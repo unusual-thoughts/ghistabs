@@ -103,16 +103,13 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         override val ancestors by lazy { bases.drop(1).mapTo(mutableSetOf()) { classAt(it.descriptor) } }
 
         // Filled by [readVftables].
-        override val vftables = mutableListOf<Address>()
+        override val vftables = mutableListOf<VtableRecord>()
         val directBases by lazy { directBases(bases) }
     }
 
     private fun classAt(descriptor: Address) = classes.getOrPut(descriptor) {
         RttiClass(descriptor, null, "?", emptyList())
     }
-
-    // Each vftable, by the class it serves and where in that class's object its vptr sits.
-    private val tables = mutableMapOf<Address, Pair<RttiClass, Long>>()
 
     data class Result(
         val classes: Int,
@@ -136,7 +133,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         if (shared > 0) {
             debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
         }
-        val structors = StructorFinder(program, tables, this).find(holders, Msvc, monitor)
+        val structors = StructorFinder(program, classes.values, this).find(holders, Msvc, monitor)
         val named = structors.count { (func, structor) ->
             val cls = structor.first.ns?.toClass() ?: return@count false
             nameStructor(func, cls, structor.second)
@@ -166,8 +163,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             val at = sym.address.add(ptrSize)
             val table = runCatching { VfTableModel(program, at, options) }.getOrNull() ?: continue
             val cls = runCatching { table.rtti0Model.address }.getOrNull()?.let(::classAt) ?: continue
-            cls.vftables += at
-            program.msvcSubobjectOffset(at)?.let { tables[at] = cls to it.toLong() }
+            cls.vftables += Msvc.recordAt(program, at)
             for (i in 0 until table.elementCount) {
                 val func = slotFunction(table.getVirtualFunctionPointer(i), at) ?: continue
                 getOrPut(func) { mutableSetOf() } += cls
@@ -206,9 +202,9 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val bases: Map<ClassDecl, List<Pair<ClassDecl, Long>>> = classes.associate { cls ->
             cls to cls.directBases.filterNot { it.isVirtual }.map { classAt(it.descriptor) to it.offset }
         }
-        val vptrs: Map<ClassDecl, Long> = tables.values.groupBy({
-            it.first
-        }, { it.second }).mapValues { it.value.max() }
+        val vptrs: Map<ClassDecl, Long> = this.classes.values.mapNotNull { cls ->
+            cls.vftables.mapNotNull { with(Msvc) { it.vfptrOffset(program) } }.maxOrNull()?.let { cls to it }
+        }.toMap()
         val bounds = sizeBounds(bases, vptrs, allocated, program.defaultPointerSize.toLong())
         for ((cls, size) in bounds) {
             val exact = size.singleOrNull() ?: continue

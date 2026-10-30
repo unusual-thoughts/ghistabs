@@ -44,6 +44,9 @@ object Msvc : CxxAbi {
     /** `??_7` labels the address point; the meta pointer in front is no part of the record. */
     override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 
+    /** The offset of the subobject the record serves, by its complete object locator. */
+    override fun VtableRecord.vfptrOffset(program: Program) = program.msvcSubobjectOffset(address)?.toLong()
+
     override val assignmentOperatorName = "operator="
 
     override val constructorsReturnThis get() = true
