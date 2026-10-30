@@ -288,20 +288,14 @@ fun Program.vftableStructAt(label: Symbol): Structure? {
 fun Program.isVtableClaimed(record: VtableRecord): Boolean = symbolTable.getSymbols(record.addressPoint)
     .any { it.source == SourceType.IMPORTED && ClassNaming.isClassVftableLabel(it.name) }
 
-/** Where a class's vtable record is, and its ABI. */
-data class ResolvedVtable(val className: String, val address: Address, val abi: CxxAbi) {
-    companion object {
-        /** [className]'s, if [symName] is a vtable symbol at all. */
-        fun of(className: String, symName: String, addr: Address) =
-            CxxAbi.ofVtableSymbol(symName)?.let { ResolvedVtable(className, addr, it) }
+/** The class whose own vtable [sym] is, demangled, and its ABI; null for a secondary or any other symbol. */
+fun primaryVtableOf(sym: Symbol): Pair<String, CxxAbi>? = CxxAbi.ofVtableSymbol(sym.name)
+    ?.takeIf { it.isPrimaryVtable(sym.name) }
+    ?.let { abi -> Demangler.of(sym.name)?.let(abi::demangledVtableClass)?.let { it to abi } }
 
-        /** The class whose own vtable [sym] is, demangled; null for a secondary or any other symbol. */
-        fun fromSymbol(sym: Symbol) = CxxAbi.ofVtableSymbol(sym.name)
-            ?.takeIf { it.isPrimaryVtable(sym.name) }
-            ?.let { abi ->
-                Demangler.of(sym.name)
-                    ?.let(abi::demangledVtableClass)
-                    ?.let { ResolvedVtable(it, sym.address, abi) }
-            }
-    }
-}
+/**
+ * The record at [at] as [abi] reads it; null where memory holds no bytes, as at the EXTERNAL label of a
+ * vtable another object defines.
+ */
+fun Program.definedVtableRecord(at: Address, abi: CxxAbi): VtableRecord? =
+    at.takeIf { memory.getBlock(it)?.isInitialized == true }?.let { abi.recordAt(this, it) }

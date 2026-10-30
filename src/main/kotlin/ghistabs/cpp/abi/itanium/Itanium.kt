@@ -14,7 +14,6 @@ import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
 import ghistabs.cpp.*
 import ghistabs.cpp.abi.CxxAbi
-import ghistabs.cpp.abi.ResolvedVtable
 import ghistabs.cpp.abi.Structor
 import ghistabs.cpp.abi.StructorRole
 import ghistabs.cpp.abi.VtableRecord
@@ -116,7 +115,7 @@ object Itanium : CxxAbi {
 
     override fun looksLikeVtable(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
 
-    /** Templates have no closed form; [ResolvedVtable.Companion.fromSymbol] finds those. */
+    /** Templates have no closed form; [ghistabs.cpp.abi.primaryVtableOf] finds those. */
     override fun vtableCandidates(className: String) = mangleClassName(className).let {
         listOf(
             "$VTABLE_PREFIX$it",

@@ -18,9 +18,6 @@ import ghistabs.cpp.abi.itanium.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 
-/** A gcc 2.x secondary vtable: the [base] its symbol names, where it is, and its ABI. */
-internal data class Gcc2SecondaryVtable(val base: String, val address: Address, val abi: CxxAbi)
-
 /**
  * Lays the vtables no class claimed ([isVtableClaimed]), Itanium's and gcc 2.x's, typed off the functions
  * their slots point at. Needs only symbols and memory, so [ghistabs.entrypoints.GccVftableAnalyzer] sweeps
@@ -63,15 +60,18 @@ open class VtableSweeper(
         }
     }
 
-    /** gcc 2.x secondary vtables (`_vt.<class>.<base>`) by class, one per record though a.out labels each twice. */
-    private val gcc2SecondaryVtables: Map<String, List<Gcc2SecondaryVtable>> by lazy {
+    /**
+     * gcc 2.x secondary vtables (`_vt.<class>.<base>`) by class, each with its base, one per record though
+     * a.out labels each twice.
+     */
+    private val gcc2SecondaryVtables: Map<String, List<Pair<String, VtableRecord>>> by lazy {
         buildMap {
             for (sym in symtab.symbolIterator) {
                 val (cls, base) = Gcc2.secondaryVtableClasses(sym.name) ?: continue
                 val abi = CxxAbi.ofVtableSymbol(sym.name) ?: continue
-                getOrPut(cls) { mutableListOf() } += Gcc2SecondaryVtable(base, sym.address, abi)
+                getOrPut(cls) { mutableListOf() } += base to program.vtableRecord(sym.address, abi)
             }
-        }.mapValues { (_, tables) -> tables.distinctBy { it.address }.sortedBy { it.address } }
+        }.mapValues { (_, tables) -> tables.distinctBy { it.second.address }.sortedBy { it.second.address } }
     }
 
     /**
@@ -81,25 +81,27 @@ open class VtableSweeper(
      */
     internal fun sweepUnclaimedVtables(): Int {
         val unclaimed = symtab.symbolIterator
-            .mapNotNull { sym -> ResolvedVtable.fromSymbol(sym) }
-            .distinctBy { it.address }
-            // An imported vtable is labelled in the EXTERNAL block, which holds no bytes.
-            .filter { (_, addr, _) -> program.memory.getBlock(addr)?.isInitialized == true }
-            .filterNot { (_, addr, abi) -> program.isVtableClaimed(program.vtableRecord(addr, abi)) }
+            .mapNotNull { sym ->
+                primaryVtableOf(sym)?.let { (cls, abi) ->
+                    program.definedVtableRecord(sym.address, abi)?.let { cls to it }
+                }
+            }
+            .distinctBy { (_, record) -> record.address }
+            .filterNot { (_, record) -> program.isVtableClaimed(record) }
             .toList()
 
         monitor.initialize(unclaimed.size.toLong(), "Laying vtables no class claimed")
         var laid = 0
-        for ((qualified, addr, abi) in unclaimed) {
+        for ((qualified, record) in unclaimed) {
             monitor.increment()
-            val record = program.vtableRecord(addr, abi)
+            val abi = record.abi
             val targets = record.slots(program)
             if (targets.isEmpty()) {
                 degradation("vtable-swept-empty", qualified, "no function pointers", record.addressPoint)
                 continue
             }
             // The class of its demangled `vtable` label, which a stabs import may have given a shortened name.
-            val labelled = labelledClass(addr)
+            val labelled = labelledClass(record.address)
             val leaf = labelled?.name ?: canonTemplateName(qualified.leafName)
             val ns = labelled ?: symtab.buildClassNamespaces(qualified.nameSegments)
             val path = ClassNaming.vftablePath(ns, leaf)
@@ -326,15 +328,12 @@ open class VtableSweeper(
 
     /** [className]'s gcc 2.x secondaries no class laid, with their slots, less any without. */
     private fun unlaidGcc2Secondaries(className: String) =
-        gcc2SecondaryVtables[className].orEmpty().mapNotNull { (base, at, abi) ->
-            when (val record = program.vtableRecord(at, abi)) {
-                else if program.isVtableClaimed(record) -> null
-
-                else -> record.slots(program).ifEmpty {
-                    degradation("vtable-secondary-empty", className, "no slots read for base $base", at)
-                    null
-                }?.let { (base to record) to it }
-            }
+        gcc2SecondaryVtables[className].orEmpty().mapNotNull { (base, record) ->
+            if (program.isVtableClaimed(record)) return@mapNotNull null
+            record.slots(program).ifEmpty {
+                degradation("vtable-secondary-empty", className, "no slots read for base $base", record.address)
+                null
+            }?.let { (base to record) to it }
         }
 
     /** The bases of [primary]'s class by subobject offset, direct and virtual, as its typeinfo [rtti] says. */

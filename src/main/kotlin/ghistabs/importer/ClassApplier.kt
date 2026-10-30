@@ -15,7 +15,9 @@ import ghistabs.cpp.*
 import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.cpp.abi.ResolvedVtable
+import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.definedVtableRecord
+import ghistabs.cpp.abi.primaryVtableOf
 import ghistabs.cpp.abi.vtableRecord
 import ghistabs.cpp.recover.VtableSweeper
 import ghistabs.diagnose.DiagnosticSink
@@ -96,7 +98,7 @@ class ClassApplier(
         // subobject is itself the signal — without it buildAndApplyVtable never runs and _ZTV<class>
         // is left unannotated. Virtuals.process walks bases, so the slots still resolve.
         val isPoly = types.isPolymorphic(body)
-        val vtable: ResolvedVtable? by lazy { if (isPoly) resolveVtableAddress() else null }
+        val vtable: VtableRecord? by lazy { if (isPoly) resolveVtable() else null }
         val abi: CxxAbi get() = vtable?.abi ?: fallbackAbi
 
         // [resolveMember]'s answers, misses included, so the reparenting and plate-comment passes resolve
@@ -421,7 +423,7 @@ class ClassApplier(
             return
         }
 
-        val record = vtable?.let { program.vtableRecord(it.address, abi) }
+        val record = vtable
         val targets = record?.slots(program).orEmpty()
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)
@@ -591,13 +593,16 @@ class ClassApplier(
         return PointerDataType(resolved, dtm)
     }
 
-    /** `_ZTV<class>` demangled qualified-class-name → address, built once. Replaces the per-class
-     *  `O(classes × symbols)` demangle scan that made [resolveVtableAddress] pathological on CryptoPP
-     *  (thousands of classes × thousands of symbols). First symbol per class wins (iteration order). */
-    private val vtableAddressByClass: Map<String, ResolvedVtable> by lazy {
+    /**
+     * Each class's vtable record by its demangled qualified name, the first symbol per class winning; null
+     * for a class whose vtable is only named here ([definedVtableRecord]). Built once, so [resolveVtable]
+     * doesn't demangle every symbol for every class.
+     */
+    private val vtableByClass: Map<String, VtableRecord?> by lazy {
         buildMap {
             for (sym in symtab.symbolIterator) {
-                ResolvedVtable.fromSymbol(sym)?.let { putIfAbsent(it.className, it) }
+                val (cls, abi) = primaryVtableOf(sym) ?: continue
+                if (cls !in this) put(cls, program.definedVtableRecord(sym.address, abi))
             }
         }
     }
@@ -607,7 +612,7 @@ class ClassApplier(
      *  `Foo` is worse than leaving it unannotated. A global class is dropped too — there the leaf
      *  already is the qualified name, so the entry would only make the fallback fire as a no-op. */
     private val vtableClassByLeaf: Map<String, String> by lazy {
-        vtableAddressByClass.keys
+        vtableByClass.keys
             .groupBy { it.leafName }
             .mapNotNull { (leaf, qualified) -> qualified.singleOrNull()?.takeIf { it != leaf }?.let { leaf to it } }
             .toMap()
@@ -621,18 +626,17 @@ class ClassApplier(
      */
     private fun Address.isDefined() = program.memory.getBlock(this)?.isInitialized == true
 
-    /** Resolve _ZTV<class> address: try AddressResolver candidates, then the demangled-vtable index. */
-    private fun LocatedClass.resolveVtableAddress(): ResolvedVtable? {
+    /** The class's vtable record: by its candidate symbols, then by the demangled-vtable index. */
+    private fun LocatedClass.resolveVtable(): VtableRecord? {
         val candidates = CxxAbi.vtableCandidates(name)
 
         val resolved = candidates.mapNotNull { sym -> resolver.resolve(sym)?.let { sym to it } }
         resolved.firstNotNullOfOrNull { (sym, at) ->
-            at.takeIf { it.isDefined() }?.let { ResolvedVtable.of(qualifiedClassName, sym, at) }
+            CxxAbi.ofVtableSymbol(sym)?.let { program.definedVtableRecord(at, it) }
         }?.let { return it }
 
-        val indexed = vtableAddressByClass[qualifiedClassName]?.also {
-            if (it.address.isDefined()) return it
-        }
+        val indexed = qualifiedClassName in vtableByClass
+        vtableByClass[qualifiedClassName]?.let { return it }
 
         // Members resolve through [fallbackAbi]: [abi] is what this vtable's lookup is deciding.
         fun MemberDecl.linked() = fallbackAbi.physnameCandidates(this, qualifiedClassName).any {
@@ -642,7 +646,7 @@ class ClassApplier(
         // - A vtable a symbol names only as an external reference is in another object
         // - A vtable of a class none of whose members was linked was never emitted, since gcc lays a vtable
         //   beside its key function and any constructor stores its address
-        if (resolved.isNotEmpty() || indexed != null || body.methods.none { it.linked() }) {
+        if (resolved.isNotEmpty() || indexed || body.methods.none { it.linked() }) {
             debug("vtable-unlinked", "class '$name': neither its vtable nor any member of it is linked here")
             return null
         }
