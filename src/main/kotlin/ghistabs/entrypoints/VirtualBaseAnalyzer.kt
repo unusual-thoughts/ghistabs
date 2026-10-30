@@ -8,13 +8,13 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.abi.VtableVirtualBases
+import ghistabs.cpp.abi.itanium.VirtualBases
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.importer.ImportProbe
 
 /**
  * Lays the virtual bases a class struct lacks where its Itanium vtable says they are
- * ([VtableVirtualBases]), on whatever class structs the program has. After [GccVftableAnalyzer] and the
+ * ([VirtualBases]), on whatever class structs the program has. After [GccVftableAnalyzer] and the
  * Demangler analyzer, whose labels it finds classes by, and after the Stabs Importer, whose recorded class
  * structs it falls back on.
  */
@@ -34,7 +34,7 @@ class VirtualBaseAnalyzer :
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = ImportProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val laid = VtableVirtualBases(program, sink).layAll()
+        val laid = VirtualBases(program, sink).placeAll()
         if (laid > 0) log.appendMsg(NAME, "laid $laid virtual base(s)")
         return true
     }

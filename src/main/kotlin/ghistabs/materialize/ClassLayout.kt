@@ -14,8 +14,6 @@ import ghistabs.index.demangledClassPath
 import ghistabs.index.firstPolymorphicBase
 import ghistabs.index.inheritanceDepth
 import ghistabs.index.virtualBases
-import ghistabs.materialize.VfptrModel
-import ghistabs.materialize.VfptrPlacement
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl

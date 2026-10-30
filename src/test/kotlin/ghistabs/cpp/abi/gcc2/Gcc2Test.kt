@@ -1,7 +1,10 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.gcc2
 
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.test.must
 import ghistabs.test.mustBe
+import ghistabs.test.mustBeNull
 import ghistabs.test.mustNot
 import org.junit.jupiter.api.Test
 
@@ -172,20 +175,19 @@ class Gcc2Test {
      */
     @Test
     fun onlyTheNoThunkFormHasWideEntriesWithAnOffsetPfn() {
-        Itanium.stride(4) mustBe 4L
-        Gcc2Thunks.stride(4) mustBe 4L
-        Gcc2Plain.stride(4) mustBe 8L
-
-        Itanium.pfnOffset(4) mustBe 0L
-        Gcc2Thunks.pfnOffset(4) mustBe 0L
-        Gcc2Plain.pfnOffset(4) mustBe 4L
+        // slot 1's pfn: past one entry, and for gcc 2.x the 8-byte header the struct starts with too
+        Itanium.slotOffsets(4).elementAt(1) mustBe 4L
+        Gcc2Thunks.slotOffsets(4).elementAt(1) mustBe 12L
+        Gcc2Plain.slotOffsets(4).elementAt(1) mustBe 20L
+        Gcc2Thunks.reservedEntries(4) mustBe 2
+        Gcc2Plain.reservedEntries(4) mustBe 1
     }
 
     @Test
-    fun onlyItaniumHasAnRttiHeaderToLocateTheAddressPointBy() {
-        Itanium.hasRttiHeader mustBe true
-        Gcc2Thunks.hasRttiHeader mustBe false
-        Gcc2Plain.hasRttiHeader mustBe false
+    fun onlyGcc2LeavesThePrimaryVptrToTheClassStruct() {
+        Itanium.primaryVptrOffset mustBe 0L
+        Gcc2Thunks.primaryVptrOffset.mustBeNull()
+        Gcc2Plain.primaryVptrOffset.mustBeNull()
     }
 
     /** `hello_elf_gcc295`'s typeinfo objects and functions, `cp/rtti.c`'s `__ti`/`__tf` + mangled type. */

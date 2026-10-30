@@ -1,5 +1,9 @@
 package ghistabs.cpp.abi
 
+import ghistabs.cpp.abi.gcc2.Gcc2Plain
+import ghistabs.cpp.abi.gcc2.Gcc2Thunks
+import ghistabs.cpp.abi.itanium.Itanium
+import ghistabs.cpp.abi.msvc.Msvc
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 

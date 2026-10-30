@@ -1,8 +1,11 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.gcc2
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.VoidDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.itanium.Itanium
+import ghistabs.cpp.abi.vtableRecord
 import ghistabs.test.mustBe
 import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.Tag
@@ -10,8 +13,8 @@ import org.junit.jupiter.api.Test
 
 /**
  * PR #11 review flagged `vtableSlotTargets` as reading a gcc 2.x record's reserved header word as
- * though it were the first virtual's function pointer. It doesn't: [Vtable.vtableRecord] already
- * advances `addressPoint` past the header for a [CxxAbi.vptrAtRecordStart] ABI (the same 2-pointer
+ * though it were the first virtual's function pointer. It doesn't: [Gcc2Abi.slotOffsets] already
+ * start past the header for a gcc 2.x ABI (the same 2-pointer
  * width [Itanium.vtablePrefixBytes] computes, which [Gcc2Abi.headerBytes] independently arrives at
  * too — see its doc). This builds a minimal record of each gcc 2.x entry shape by hand — no thunks
  * (bare pfn) and no-thunk (`{delta,index,pfn}`) — and checks the first slot [VtableRecord.slots]
@@ -55,10 +58,7 @@ class Gcc2VtableSlotIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val ztv = program.addressFactory.defaultAddressSpace.getAddress(ztvAddr.toLong())
 
             val located = program.vtableRecord(ztv, abi)
-            located.addressPoint.mustBe(
-                ztv.add(abi.headerBytes(4)),
-                "addressPoint should land right after the reserved header",
-            )
+            located.addressPoint.mustBe(ztv, "a gcc 2.x vptr holds the record start")
 
             val targets = located.slots(program)
             targets.size.mustBe(2, "expected exactly the two real slots, header excluded")

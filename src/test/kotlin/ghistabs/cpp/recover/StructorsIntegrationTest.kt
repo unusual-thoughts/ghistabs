@@ -1,13 +1,15 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.recover
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.listing.Function
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.cpp.abi.StructorConvention
 import ghistabs.cpp.abi.StructorRole.CONSTRUCTOR
 import ghistabs.cpp.abi.StructorRole.DELETING_DESTRUCTOR
 import ghistabs.cpp.abi.StructorRole.DESTRUCTOR
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.AfterEach
@@ -54,7 +56,17 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     ) = StructorFinder.Reading(
         storers.mapKeys { fn(it.key) },
         calls.entries.associate { (f, called) -> fn(f) to called.mapTo(mutableSetOf(), ::fn) },
-    ).roles(holders.mapKeys { fn(it.key) }, ancestors::getValue, constructorsReturnThis).mapKeys { it.key.name }
+    ).roles(
+        holders.mapKeys {
+            fn(it.key)
+        },
+        ancestors::getValue,
+        convention(constructorsReturnThis),
+    ).mapKeys { it.key.name }
+
+    private fun convention(returnsThis: Boolean) = object : StructorConvention {
+        override val constructorsReturnThis = returnsThis
+    }
 
     @Test
     fun `a function storing a base's vptr and then its own builds the derived class`() {
@@ -65,7 +77,7 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun `constructors return this, destructors don't, and the slot that calls one deletes`() {
         val storers = mapOf("ctor" to stores(a, returnsThis = true), "dtor" to stores(a))
-        val found = structors(storers, mapOf("slot" to setOf(a, b)), mapOf("slot" to setOf("dtor", "free")))
+        val found = structors(storers, mapOf("slot" to setOf(a, b)), mapOf("slot" to setOf("dtor", "free", FREE)))
         found mustBe mapOf(
             "ctor" to (a to CONSTRUCTOR),
             "dtor" to (a to DESTRUCTOR),
@@ -79,7 +91,7 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             "slot" to stores(a, b, returnsThis = true),
             "ctor" to stores(a, b, returnsThis = true),
         )
-        structors(storers, mapOf("slot" to setOf(b))) mustBe mapOf(
+        structors(storers, mapOf("slot" to setOf(b)), mapOf("slot" to setOf(FREE))) mustBe mapOf(
             "slot" to (b to DELETING_DESTRUCTOR),
             "ctor" to (b to CONSTRUCTOR),
         )
@@ -88,7 +100,8 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun `a derived class's destructor with nothing to do leaves only its base's vptr store`() {
         // B's deleting destructor, in B's table alone, calls a destructor that stores A's vptr
-        val found = structors(mapOf("dtor" to stores(a)), mapOf("slot" to setOf(b)), mapOf("slot" to setOf("dtor")))
+        val found =
+            structors(mapOf("dtor" to stores(a)), mapOf("slot" to setOf(b)), mapOf("slot" to setOf("dtor", FREE)))
         found mustBe mapOf("slot" to (b to DELETING_DESTRUCTOR), "dtor" to (a to DESTRUCTOR))
     }
 
@@ -101,7 +114,21 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun `without constructors returning this, only a deleting destructor's callee is told`() {
         val storers = mapOf("ctor" to stores(a), "dtor" to stores(a))
-        val found = structors(storers, mapOf("slot" to setOf(a)), mapOf("slot" to setOf("dtor")), false)
+        val found = structors(storers, mapOf("slot" to setOf(a)), mapOf("slot" to setOf("dtor", FREE)), false)
         found mustBe mapOf("slot" to (a to DELETING_DESTRUCTOR), "dtor" to (a to DESTRUCTOR))
+    }
+
+    @Test
+    fun `a slot that destroys without freeing is a destructor, as Itanium's complete one is`() {
+        // `D1` stores the vptr and frees nothing; `D0` calls it and frees
+        val storers = mapOf("d1" to stores(a), "ctor" to stores(a))
+        val found =
+            structors(storers, mapOf("d1" to setOf(a), "d0" to setOf(a)), mapOf("d0" to setOf("d1", FREE)), false)
+        found mustBe mapOf("d1" to (a to DESTRUCTOR), "d0" to (a to DELETING_DESTRUCTOR))
+    }
+
+    private companion object {
+        // As Ghidra's demangler names it
+        const val FREE = "operator_delete"
     }
 }

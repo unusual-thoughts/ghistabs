@@ -5,7 +5,7 @@ import ghistabs.Demangler
 import ghistabs.chunkOf
 import ghistabs.cpp.VirtKind
 import ghistabs.cpp.abi.CxxAbi
-import ghistabs.cpp.abi.Gcc2
+import ghistabs.cpp.abi.gcc2.Gcc2
 import ghistabs.cpp.member
 import ghistabs.cpp.qualifiedName
 import ghistabs.cpp.templateLeaf
