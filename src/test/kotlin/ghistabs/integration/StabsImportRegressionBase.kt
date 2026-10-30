@@ -94,7 +94,7 @@ val BASELINE_MODES = listOf(Mode.AFTER, Mode.CONCURRENT)
 
 const val OUTPUT_ROOT = "build/test-output"
 
-/** Where [StabsImportRegressionBase.countersWithinBaseline] records each mode's counters for writeBaselines. */
+/** Where [StabsImportRegressionBase.countersWithinBaseline] records each mode's counters, for the baseline audit. */
 val OBSERVED_DIR = File("$OUTPUT_ROOT/observed-counters")
 
 /**
@@ -318,7 +318,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // made assertions on those categories (e.g. empty-scope) silently vacuous.
         val counters = context.diagnostics.snapshotCounters()
         val targets = context.diagnostics.degradationTargets()
-        // Kept per mode: writeBaselines, after integrationTest, writes the shifted or regenerated baseline
+        // Kept per mode: WriteBaselinesAuditTest, after integrationTest, writes the shifted or regenerated baseline
         // from every mode's counts, so it does not depend on which mode finished last.
         if (counters.isNotEmpty()) {
             Observations(
@@ -326,7 +326,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             ).record(fixture.nameWithoutExtension, mode.name, binaryName, counters, targets)
         }
 
-        // -PregenerateBaselines=true has writeBaselines rewrite the baseline from the observed counts
+        // -PregenerateBaselines=true has WriteBaselinesAuditTest rewrite the baseline from the observed counts
         // instead. This has to precede the exists() check below, or a newly added fixture can never get a
         // first baseline: the assumption skips the test before it records anything.
         if (System.getProperty("regenerateBaselines") == "true") return

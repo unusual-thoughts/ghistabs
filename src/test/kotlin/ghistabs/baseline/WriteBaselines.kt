@@ -42,9 +42,3 @@ fun writeBaselines(observedDir: File, baselinesDir: File, shiftedDir: File, rege
 private fun Map<String, Long>.shiftsFrom(baseline: Baseline) =
     baseline.counters.any { (name, range) -> getOrDefault(name, 0L) !in range.min..range.max } ||
         (keys - baseline.counters.keys).isNotEmpty()
-
-/** `observedDir baselinesDir shiftedDir regenerate`, as the writeBaselines task passes them. */
-fun main(args: Array<String>) {
-    val (observed, baselines, shifted, regenerate) = args
-    writeBaselines(File(observed), File(baselines), File(shifted), regenerate == "true")
-}
