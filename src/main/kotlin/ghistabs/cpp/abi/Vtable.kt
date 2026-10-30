@@ -167,14 +167,13 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     /**
      * Labels and lays this record as [ns]'s table in [role], and returns its address point, where the
      * [vftable] struct and the `vftable` label go. An Itanium header is laid in front, each word commented
-     * with what it holds for [className], whose [virtualBases] name its vbase offsets. A gcc 2.x record
+     * with what it holds for [ns], whose [virtualBases] name its vbase offsets. A gcc 2.x record
      * is only labelled.
      */
     fun lay(
         registry: DtmRegistry,
         program: Program,
         vftable: Structure?,
-        className: String,
         ns: Namespace,
         role: VtableRole = VtableRole.PRIMARY,
         virtualBases: List<String> = emptyList(),
@@ -197,7 +196,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
             }
         }
         fieldAddress(Itanium.RTTI)?.let {
-            program.listing.setComment(it, CommentType.EOL, rttiComment(program, className))
+            program.listing.setComment(it, CommentType.EOL, rttiComment(program, ns.getName(true)))
         }
         vftable?.let { program.forceCreateData(addressPoint, it) }
         program.labelVtable(addressPoint, vftableLabel, ns, source)
