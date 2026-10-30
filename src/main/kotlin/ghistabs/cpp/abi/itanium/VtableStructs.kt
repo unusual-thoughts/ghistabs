@@ -75,12 +75,11 @@ fun Program.recordStart(top: Address): Address {
         .lastOrNull() ?: top
 }
 
-/** The record at [start] whose rtti word is at [rttiSlot], or with the bare two-word header if null. */
-private fun Program.recordAt(start: Address, rttiSlot: Address?, abi: CxxAbi): VtableRecord {
+/** The header datatype at [start] whose rtti word is at [rttiSlot], or with the bare two-word header if null. */
+private fun Program.headerAt(start: Address, rttiSlot: Address?): StructureDataType {
     val ptr = defaultPointerSize.toLong()
     val prefixWords = rttiSlot?.let { ((it - start) / ptr - 1).toInt() } ?: 0
-    val header = dataTypeManager.vtableHeaderLayout(prefixWords)
-    return VtableRecord(start, header, abi)
+    return dataTypeManager.vtableHeaderLayout(prefixWords)
 }
 
 /**
@@ -88,7 +87,7 @@ private fun Program.recordAt(start: Address, rttiSlot: Address?, abi: CxxAbi): V
  * bases has vbase/vcall offsets before `offset_to_top`. Without one before the first slot, the header is
  * the bare two words, so the search never reaches the next record's.
  */
-internal fun Program.itaniumVtableRecord(ztv: Address, abi: CxxAbi): VtableRecord {
+internal fun Program.itaniumVtableRecord(ztv: Address): VtableRecord {
     val ptr = defaultPointerSize.toLong()
     fun holdsTypeinfo(slot: Address) =
         pointerAt(slot)?.let { pointee -> symbolTable.getSymbols(pointee).any { it.isTypeinfo } } == true
@@ -97,7 +96,7 @@ internal fun Program.itaniumVtableRecord(ztv: Address, abi: CxxAbi): VtableRecor
         .take(MAX_VTABLE_PREFIX_WORDS)
         .takeWhile { holdsTypeinfo(it) || pointerAt(it)?.let(::isCode) != true }
         .firstOrNull(::holdsTypeinfo)
-    return recordAt(ztv, rttiSlot, abi)
+    return VtableRecord(ztv, headerAt(ztv, rttiSlot), Itanium)
 }
 
 /** A record in a vtable group, and the functions its slots point at. */
@@ -109,13 +108,13 @@ data class SubVtable(val record: VtableRecord, val targets: List<Address>) {
  * The record at [start], or null if it isn't in [rtti]'s group. One without slots still counts: a base
  * with no virtuals of its own still has a header, and the records after it would be lost.
  */
-private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? =
+private fun Program.subVtableAt(start: Address, rtti: Address, construction: Boolean): SubVtable? =
     generateSequence(start) { it.add(defaultPointerSize.toLong()) }
         .take(MAX_VTABLE_PREFIX_WORDS)
         .takeWhile { pointerAt(it) == rtti || pointerAt(it)?.let(::isCode) != true }
         // The rtti word follows offset_to_top, so it is never the first.
         .firstOrNull { it > start && pointerAt(it) == rtti }
-        ?.let { recordAt(start, it, Itanium) }
+        ?.let { VtableRecord(start, headerAt(start, it), Itanium, internal = true, construction = construction) }
         ?.let { record -> SubVtable(record, record.slots(this)) }
 
 /**
@@ -123,7 +122,7 @@ private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? =
  * so the walk goes on while the records share [rtti], and stops at one whose header holds the next
  * group's symbol, which can share it.
  */
-fun Program.secondaryVtables(afterPrimary: Address, rtti: Address): List<SubVtable> =
-    generateSequence(subVtableAt(afterPrimary, rtti)) {
-        subVtableAt(it.endOfSlots(defaultPointerSize), rtti)
+fun Program.secondaryVtables(afterPrimary: Address, rtti: Address, construction: Boolean = false): List<SubVtable> =
+    generateSequence(subVtableAt(afterPrimary, rtti, construction)) {
+        subVtableAt(it.endOfSlots(defaultPointerSize), rtti, construction)
     }.takeWhile { sub -> !sub.record.opensGroup(this) }.toList()

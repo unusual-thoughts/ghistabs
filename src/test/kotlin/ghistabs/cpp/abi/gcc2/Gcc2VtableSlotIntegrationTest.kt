@@ -5,7 +5,6 @@ import ghidra.program.model.data.VoidDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.cpp.abi.VtableRecord
 import ghistabs.cpp.abi.itanium.Itanium
-import ghistabs.cpp.abi.vtableRecord
 import ghistabs.test.mustBe
 import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.Tag
@@ -57,7 +56,7 @@ class Gcc2VtableSlotIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val program = builder.program
             val ztv = program.addressFactory.defaultAddressSpace.getAddress(ztvAddr.toLong())
 
-            val located = program.vtableRecord(ztv, abi)
+            val located = abi.recordAt(program, ztv)
             located.addressPoint.mustBe(ztv, "a gcc 2.x vptr holds the record start")
 
             val targets = located.slots(program)

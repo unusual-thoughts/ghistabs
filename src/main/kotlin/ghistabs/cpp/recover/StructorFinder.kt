@@ -8,36 +8,32 @@ import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.ClassDecl
 import ghistabs.cpp.abi.StructorConvention
 import ghistabs.cpp.abi.StructorRole
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
 /** The [classes] whose vtables a function stores into `this` where they belong, and whether it returns `this`. */
-data class VptrStores(val classes: Set<Address>, val returnsThis: Boolean)
+data class VptrStores(val classes: Set<ClassDecl>, val returnsThis: Boolean)
 
 /** The class a function storing [classes]' vtables builds or destroys: the one the others are bases of, or null. */
-fun storedClass(classes: Set<Address>, ancestors: (Address) -> Set<Address>): Address? =
-    classes.singleOrNull { c -> classes.all { it == c || it in ancestors(c) } }
+fun storedClass(classes: Set<ClassDecl>): ClassDecl? =
+    classes.singleOrNull { c -> classes.all { it == c || c.derivesFrom(it) } }
 
-/**
- * Finds constructors and destructors by the [tables] they store into `this`, decompiled: each table's class
- * and its vptr's offset in that class's object, by its address point.
- */
-class StructorFinder(
-    private val program: Program,
-    private val tables: Map<Address, Pair<Address, Long>>,
-    sink: DiagnosticSink,
-) : DiagnosticSink by sink {
+/** Finds constructors and destructors among [classes]' by the vtables they store into `this`, decompiled. */
+class StructorFinder(private val program: Program, classes: Collection<ClassDecl>, sink: DiagnosticSink) :
+    DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
 
+    // Each vtable, by its address point: the class it serves and where in that class's object its vptr sits.
+    private val tables = classes.flatMap { cls ->
+        cls.vftables.mapNotNull { r -> r.vfptrOffset(program)?.let { r.addressPoint to (cls to it) } }
+    }.toMap()
+
     /** Each structor's class and role, given [slots]: each vtable slot's function, and the classes holding it. */
-    fun find(
-        slots: Map<Function, Set<Address>>,
-        ancestors: (Address) -> Set<Address>,
-        convention: StructorConvention,
-        monitor: TaskMonitor,
-    ) = read(slots.keys, monitor).roles(slots, ancestors, convention)
+    fun find(slots: Map<Function, Set<ClassDecl>>, convention: StructorConvention, monitor: TaskMonitor) =
+        read(slots.keys, monitor).roles(slots, convention)
 
     /** The vptrs each function stores ([stores]), and the functions each calls on `this`. */
     class Reading(val stores: Map<Function, VptrStores>, val thisCalls: Map<Function, Set<Function>>) {
@@ -47,18 +43,17 @@ class StructorFinder(
          * Where constructors return `this`, that sorts the other storers.
          */
         fun roles(
-            slots: Map<Function, Set<Address>>,
-            ancestors: (Address) -> Set<Address>,
+            slots: Map<Function, Set<ClassDecl>>,
             convention: StructorConvention,
-        ): Map<Function, Pair<Address, StructorRole>> = buildMap {
+        ): Map<Function, Pair<ClassDecl, StructorRole>> = buildMap {
             val returnsThis = convention.constructorsReturnThis
-            val owners = stores.mapNotNull { (f, s) -> storedClass(s.classes, ancestors)?.let { f to it } }.toMap()
+            val owners = stores.mapNotNull { (f, s) -> storedClass(s.classes)?.let { f to it } }.toMap()
             fun mayDestroy(f: Function) = !returnsThis || stores[f]?.returnsThis != true
 
             // The class a slot held by [held] deletes when it destroys a [cls]: [cls], or the one most derived.
-            fun deleting(held: Set<Address>, cls: Address): Address? {
-                val derived = held.filter { it == cls || cls in ancestors(it) }
-                return derived.singleOrNull { c -> derived.all { it == c || c in ancestors(it) } }
+            fun deleting(held: Set<ClassDecl>, cls: ClassDecl): ClassDecl? {
+                val derived = held.filter { it == cls || it.derivesFrom(cls) }
+                return derived.singleOrNull { c -> derived.all { it == c || it.derivesFrom(c) } }
             }
             for ((slot, held) in slots) {
                 val own = owners[slot]
@@ -126,8 +121,8 @@ class StructorFinder(
         .mapNotNull { program.functionManager.getFunctionAt(it.getInput(0).address) }
         .mapTo(mutableSetOf()) { it.getThunkedFunction(true) ?: it }
 
-    private fun HighFunction.vptrStores(at: Map<Address, List<Pair<Address, Long>>>): VptrStores {
-        val classes = mutableSetOf<Address>()
+    private fun HighFunction.vptrStores(at: Map<Address, List<Pair<ClassDecl, Long>>>): VptrStores {
+        val classes = mutableSetOf<ClassDecl>()
         var returnsThis = false
         for (op in pcodeOps.asSequence()) {
             when (op.opcode) {

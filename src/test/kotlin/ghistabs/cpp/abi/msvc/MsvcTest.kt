@@ -3,7 +3,9 @@ package ghistabs.cpp.abi.msvc
 import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace
 import ghistabs.cpp.Access
+import ghistabs.cpp.TestClass
 import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.VtableRecord
 import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
@@ -40,19 +42,25 @@ class MsvcTest {
         BaseEntry(td("P"), 0, 0x40 or 0x4).access mustBe Access.PRIVATE
     }
 
-    private val bases = mapOf(
-        "A" to setOf(),
-        "B" to setOf("A"),
-        "C" to setOf("A"),
-        "D" to setOf("B", "A"),
-        "X" to setOf(),
-        "Abstract" to setOf(),
-        "P" to setOf("Abstract"),
-        "Q" to setOf("Abstract"),
-    )
+    private val classes = buildMap {
+        fun add(name: String, vararg bases: String) {
+            // Every class but Abstract has a vftable of its own.
+            val vftables = listOf(VtableRecord(td(name), null, Msvc)).takeUnless { name == "Abstract" }.orEmpty()
+            put(name, TestClass(name, *bases.map(::getValue).toTypedArray(), vftables = vftables))
+        }
+        add("A")
+        add("B", "A")
+        add("C", "A")
+        add("D", "B")
+        add("X")
+        add("Abstract")
+        add("P", "Abstract")
+        add("Q", "Abstract")
+    }
 
-    private fun owners(holders: Map<String, Set<String>>, withTable: Set<String> = bases.keys - "Abstract") =
-        virtualOwners(holders, { bases.getValue(it) }, { it in withTable })
+    private fun owners(holders: Map<String, Set<String>>) = holders.mapValues { (_, names) ->
+        virtualOwner(names.mapTo(mutableSetOf(), classes::getValue))?.name
+    }
 
     @Test
     fun `an inherited function belongs to the class that introduced it`() {

@@ -1,10 +1,11 @@
 package ghistabs.cpp.recover
 
 import ghidra.program.database.ProgramBuilder
-import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.listing.Function
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.cpp.ClassDecl
+import ghistabs.cpp.TestClass
 import ghistabs.cpp.abi.StructorConvention
 import ghistabs.cpp.abi.StructorRole.CONSTRUCTOR
 import ghistabs.cpp.abi.StructorRole.DELETING_DESTRUCTOR
@@ -22,20 +23,15 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var builder: ProgramBuilder
     private val functions = mutableMapOf<String, Function>()
 
-    // class B : A; class X, each by where its type descriptor would be
-    private lateinit var a: Address
-    private lateinit var b: Address
-    private lateinit var x: Address
-    private val ancestors get() = mapOf(a to setOf(), b to setOf(a), x to setOf<Address>())
+    // class B : A; class X
+    private val a = TestClass("A")
+    private val b = TestClass("B", a)
+    private val x = TestClass("X")
 
     @BeforeEach
     fun setUp() {
         builder = ProgramBuilder("structors", ProgramBuilder._X86)
         builder.createMemory(".text", "0x401000", 0x1000)
-        builder.createMemory(".rdata", "0x402000", 0x100)
-        a = builder.addr("0x402000")
-        b = builder.addr("0x402010")
-        x = builder.addr("0x402020")
     }
 
     @AfterEach
@@ -46,11 +42,12 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         builder.createEmptyFunction(name, at, 1, DataType.DEFAULT)
     }
 
-    private fun stores(vararg classes: Address, returnsThis: Boolean = false) = VptrStores(classes.toSet(), returnsThis)
+    private fun stores(vararg classes: ClassDecl, returnsThis: Boolean = false) =
+        VptrStores(classes.toSet(), returnsThis)
 
     private fun structors(
         storers: Map<String, VptrStores>,
-        holders: Map<String, Set<Address>>,
+        holders: Map<String, Set<ClassDecl>>,
         calls: Map<String, Set<String>> = emptyMap(),
         constructorsReturnThis: Boolean = true,
     ) = StructorFinder.Reading(
@@ -60,7 +57,6 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         holders.mapKeys {
             fn(it.key)
         },
-        ancestors::getValue,
         convention(constructorsReturnThis),
     ).mapKeys { it.key.name }
 
@@ -70,8 +66,8 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun `a function storing a base's vptr and then its own builds the derived class`() {
-        storedClass(setOf(a, b), ancestors::getValue) mustBe b
-        storedClass(setOf(a, x), ancestors::getValue).mustBeNull()
+        storedClass(setOf(a, b)) mustBe b
+        storedClass(setOf(a, x)).mustBeNull()
     }
 
     @Test
