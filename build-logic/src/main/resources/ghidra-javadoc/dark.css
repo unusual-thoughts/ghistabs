@@ -1,0 +1,88 @@
+/*
+ * Dark javadoc for `javadoc --add-stylesheet dark.css`, following the OS / browser setting.
+ * Palette and variable mapping from ghidradocs.com's javadoc-dark.css.
+ */
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+
+        /* Backgrounds */
+        --dark-bg-deepest: #0f1419;
+        --dark-bg-section: #1a1f26;
+        --dark-bg-header: #252b33;
+        --dark-bg-row-alt: #1f252c;
+        /* Text */
+        --dark-text-primary: #e7e9ea;
+        --dark-text-soft: #c9d1d9;
+        --dark-text-muted: #bdc4cc;
+        --dark-text-placeholder: #8b949e;
+        /* Accents */
+        --dark-link: #58a6ff;
+        --dark-link-hover: #79b8ff;
+        --dark-accent-orange: #b35900;
+        --dark-accent-red: #ff8080;
+        --dark-accent-red-bg: #3d1515;
+        /* Borders */
+        --dark-border: #2f3640;
+
+        --body-background-color: var(--dark-bg-deepest);
+        --section-background-color: var(--dark-bg-deepest);
+        --detail-background-color: var(--dark-bg-section);
+        --detail-block-color: var(--dark-bg-header);
+        --body-text-color: var(--dark-text-soft);
+        --block-text-color: var(--dark-text-muted);
+        --title-color: var(--dark-text-soft);
+        --navbar-background-color: var(--dark-bg-section);
+        --navbar-text-color: var(--dark-text-soft);
+        --subnav-background-color: var(--dark-bg-header);
+        --subnav-link-color: var(--dark-link);
+        --selected-background-color: var(--dark-accent-orange);
+        --selected-text-color: var(--dark-text-primary);
+        --selected-link-color: var(--dark-text-primary);
+        --table-header-color: var(--dark-bg-header);
+        --even-row-color: var(--dark-bg-section);
+        --odd-row-color: var(--dark-bg-row-alt);
+        --link-color: var(--dark-link);
+        --link-color-active: var(--dark-link-hover);
+        --code-background-color: transparent;
+        --mark-background-color: var(--dark-bg-header);
+        --snippet-background-color: transparent;
+        --snippet-text-color: var(--dark-text-primary);
+        --snippet-highlight-color: var(--dark-accent-orange);
+        --toc-background-color: var(--dark-bg-section);
+        --toc-hover-color: var(--dark-bg-header);
+        --border-color: var(--dark-border);
+        --table-border-color: var(--dark-border);
+        --search-input-background-color: var(--dark-bg-section);
+        --search-input-text-color: var(--dark-text-primary);
+        --search-input-placeholder-color: var(--dark-text-placeholder);
+        --search-tag-highlight-color: var(--dark-accent-orange);
+        --button-border-color: var(--dark-border);
+        --copy-icon-brightness: 200%;
+        --copy-button-background-color-active: rgba(88, 166, 255, 0.3);
+        --invalid-tag-background-color: var(--dark-accent-red-bg);
+        --invalid-tag-text-color: var(--dark-accent-red);
+    }
+
+    pre, code, .type-signature, .member-signature { color: var(--dark-text-primary); }
+    img[src$=".svg"] { filter: invert(0.85); }
+
+    /* The search popup is jQuery UI's, outside the variables. */
+    .ui-autocomplete, .ui-menu .ui-menu-item-wrapper {
+        background: var(--dark-bg-section) !important;
+        color: var(--dark-text-primary) !important;
+        border-color: var(--dark-border) !important;
+    }
+    .ui-menu .ui-state-active, .ui-menu .ui-menu-item-wrapper:hover {
+        background: var(--dark-bg-header) !important;
+        color: var(--dark-text-primary) !important;
+    }
+    /* Hard-coded #404040 / #383838 in the stock sheet. */
+    .ui-autocomplete .search-result-desc, .ui-menu .ui-state-active .search-result-desc {
+        color: var(--dark-text-placeholder) !important;
+    }
+    .ui-autocomplete-category {
+        background: var(--dark-bg-header) !important;
+        color: var(--dark-text-muted) !important;
+    }
+}
