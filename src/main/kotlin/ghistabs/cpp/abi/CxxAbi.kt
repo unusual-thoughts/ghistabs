@@ -61,6 +61,9 @@ interface CxxAbi :
      */
     fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? = null
 
+    /** The record that says where an object's virtual bases sit: Itanium's vtable, MSVC's vbtable. */
+    val virtualBaseRecord: String get() = "vtable"
+
     companion object {
         /** The ABI whose vtable symbol [symbolName] is, a gcc 2.x secondary's included; null if none. */
         fun ofVtableSymbol(symbolName: String): CxxAbi? = when {

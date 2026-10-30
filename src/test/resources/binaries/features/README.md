@@ -18,6 +18,7 @@ and exercised by their own integration test.
 | `latetypedef_elf64_gcc9`, `_gcc10`, `_gcc12` | gcc 9.5.0 / 10.5.0 / 12.4.0, x86-64 PIE | Ubuntu 24.04 `apt-get install gcc-9 gcc-10 gcc-12` | `LateTypedefIntegrationTest` |
 | `hello_gcc345.exe`, `hello_gcc421.exe` | MinGW gcc 3.4.5 / 4.2.1, PE32 | `debian/eol:etch` / `lenny`, package `mingw32`, `-static`; 4.2.1 then `objcopy --remove-section='.debug_*'` | — |
 | `hello_gcc323_fullstabs.exe` | MinGW gcc 3.2.3, PE32, SJLJ | the MinGW-3.1.0-1 bundle rebuilt from its own sources in a sarge i386 chroot, every target library with stabs: `build_mingw323.sh`, then `mingw32-g++ -gstabs+ -O0 -static` | — |
+| `vbase_msvc_clang.exe` | clang 18, i686-pc-windows-msvc, `-O1`, stripped | `clang --target=i686-pc-windows-msvc -O1 -fno-exceptions -c` of `vbase_msvc.cc` and `vbase_msvc_rt.cc`, then `lld-link /nodefaultlib /entry:mainCRTStartup /subsystem:console` | `MsvcVirtualBaseIntegrationTest` |
 
 The `latetypedef` set from `latetypedef.c` + `latetypedef.h` with `gcc-N -gstabs+ -O0 -fdebug-prefix-map=$PWD=/src
 latetypedef.c`. From gcc 10, `-feliminate-unused-debug-symbols` is on by default: each header struct is defined
@@ -71,3 +72,5 @@ Header paths in the stabs read `/mingw/include/c++/3.2.3/...` where a native ins
 msvcrt.dll itself is imported, so the C library proper has no source to describe. `_chkstk` comes from `cygwin.asm` run through
 the assembler, which leaves an `SO /tmp/cc….s` with line records. No DWARF; under wine it prints the same line as
 `hello_gcc345.exe` and exits 8.
+
+`vbase_msvc_clang.exe` is an MSVC-ABI build with virtual inheritance and no CRT: `vbase_msvc_rt.cc` stands in for `operator new`/`delete` and `type_info`'s vftable, which the RTTI type descriptors point at. The constructors are `noinline`, so each stores its class's vftables and vbtables into `this`.
