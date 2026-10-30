@@ -7,9 +7,7 @@ import ghidra.program.model.scalar.Scalar
 import ghistabs.*
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.CxxAbi
-import ghistabs.cpp.abi.Itanium
 import ghistabs.cpp.abi.VtableRecord
-import ghistabs.cpp.abi.isTypeinfo
 import kotlin.math.abs
 
 // The Itanium side of Vtable.kt: a record's header layout (ABI §2.5.2), finding a record's start

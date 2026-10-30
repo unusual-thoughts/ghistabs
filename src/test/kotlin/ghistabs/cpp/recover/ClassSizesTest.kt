@@ -1,8 +1,7 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.recover
 
 import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace
-import ghistabs.cpp.sizeBounds
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 

@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
@@ -13,8 +13,11 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
 import ghistabs.cpp.*
-import ghistabs.cpp.abi.itanium.Rtti
-import ghistabs.cpp.abi.itanium.itaniumVtableRecord
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.ResolvedVtable
+import ghistabs.cpp.abi.Structor
+import ghistabs.cpp.abi.StructorRole
+import ghistabs.cpp.abi.VtableRecord
 import ghistabs.getScalar
 import ghistabs.namespaces
 

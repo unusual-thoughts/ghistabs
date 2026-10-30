@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.msvc
 
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
@@ -9,8 +9,10 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
 import ghistabs.cpp.*
-import ghistabs.cpp.abi.msvc.baseClassArray
-import ghistabs.cpp.abi.msvc.directBases
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.Structor
+import ghistabs.cpp.abi.StructorRole
+import ghistabs.cpp.abi.VtableRecord
 import ghistabs.namespaces
 
 /**

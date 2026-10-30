@@ -1,7 +1,7 @@
 package ghistabs.importer
 
 import ghidra.program.model.address.AddressOutOfBoundsException
-import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.LineEntry
 import ghistabs.index.SourceIndex

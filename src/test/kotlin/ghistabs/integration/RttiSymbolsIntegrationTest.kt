@@ -7,8 +7,8 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.abi.itanium.VtableSweeper
 import ghistabs.cpp.abi.vtableRecord
+import ghistabs.cpp.recover.VtableSweeper
 import ghistabs.diagnose.DummySink
 import ghistabs.entrypoints.RttiSymbolsAnalyzer
 import ghistabs.test.defaultContext

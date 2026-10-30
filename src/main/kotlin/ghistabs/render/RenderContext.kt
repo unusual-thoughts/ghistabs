@@ -4,7 +4,7 @@ import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
 import ghistabs.cpp.Access
-import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.cpp.templateLeaf
 import ghistabs.harvest.*
 import ghistabs.index.TypeGraph

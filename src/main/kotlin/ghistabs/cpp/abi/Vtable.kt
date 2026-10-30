@@ -12,7 +12,9 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.startsVtableGroup
 import ghistabs.cpp.abi.itanium.vtableOffsetField
 import ghistabs.cpp.abi.msvc.msvcSubobjectOffset
 

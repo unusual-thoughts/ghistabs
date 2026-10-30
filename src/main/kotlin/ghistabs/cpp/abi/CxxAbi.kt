@@ -6,6 +6,12 @@ import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.cpp.BaseDecl
 import ghistabs.cpp.MemberDecl
+import ghistabs.cpp.abi.gcc2.Gcc2
+import ghistabs.cpp.abi.gcc2.Gcc2Plain
+import ghistabs.cpp.abi.gcc2.Gcc2Thunks
+import ghistabs.cpp.abi.itanium.Itanium
+import ghistabs.cpp.abi.itanium.SpecialName
+import ghistabs.cpp.abi.msvc.Msvc
 import ghistabs.cpp.templateLeaf
 
 /**
@@ -61,11 +67,10 @@ interface CxxMemberNaming {
 
 /**
  * A C++ ABI: how it names members ([CxxMemberNaming]), lays out vtables ([VtableLayout]) and spells
- * them ([VtableSymbols]), and builds and destroys objects ([StructorConvention]). Sealed, because
- * [ofVtableSymbol] enumerates the spellings: a symbol either matches one of these ABIs or names no
- * vtable at all.
+ * them ([VtableSymbols]), and builds and destroys objects ([StructorConvention]). Each ABI lives in
+ * its own package; [ofVtableSymbol] and the rest of the companion know them all.
  */
-sealed interface CxxAbi :
+interface CxxAbi :
     CxxMemberNaming,
     VtableLayout,
     VtableSymbols,

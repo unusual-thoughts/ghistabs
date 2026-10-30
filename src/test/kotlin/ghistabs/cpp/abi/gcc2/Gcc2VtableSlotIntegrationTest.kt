@@ -1,8 +1,11 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.gcc2
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.VoidDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.itanium.Itanium
+import ghistabs.cpp.abi.vtableRecord
 import ghistabs.test.mustBe
 import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.Tag

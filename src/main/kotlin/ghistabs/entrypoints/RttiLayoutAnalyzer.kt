@@ -11,8 +11,8 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.util.CodeUnitInsertionException
 import ghidra.util.task.TaskMonitor
 import ghistabs.DtmRegistry
-import ghistabs.cpp.abi.isTypeinfo
 import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.isTypeinfo
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.MessageLogSink

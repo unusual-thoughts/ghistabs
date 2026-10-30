@@ -1,7 +1,6 @@
 package ghistabs.cpp.abi.itanium
 
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.cpp.abi.ItaniumStructor
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

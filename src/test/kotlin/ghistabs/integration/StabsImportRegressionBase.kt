@@ -22,11 +22,11 @@ import ghistabs.baseline.BaselineWriter
 import ghistabs.cpp.*
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.cpp.abi.Gcc2
-import ghistabs.cpp.abi.Gcc2Abi
-import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.abi.gcc2.Gcc2
+import ghistabs.cpp.abi.gcc2.Gcc2Abi
 import ghistabs.cpp.abi.isPrimaryVftable
-import ghistabs.cpp.abi.isTypeinfo
+import ghistabs.cpp.abi.itanium.Itanium
+import ghistabs.cpp.abi.itanium.isTypeinfo
 import ghistabs.cpp.abi.vftableStructAt
 import ghistabs.cpp.eh.SjljLsda
 import ghistabs.cpp.eh.SjljLsdaApplier

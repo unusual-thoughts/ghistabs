@@ -19,6 +19,10 @@ import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.writeMember
 import ghistabs.cpp.abi.*
+import ghistabs.cpp.recover.NewSizeReader
+import ghistabs.cpp.recover.StructorFinder
+import ghistabs.cpp.recover.fastcallToThiscall
+import ghistabs.cpp.recover.sizeBounds
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.pointerAt
 import ghistabs.toClass

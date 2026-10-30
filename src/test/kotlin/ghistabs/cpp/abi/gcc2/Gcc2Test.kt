@@ -1,5 +1,7 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.gcc2
 
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull

@@ -11,8 +11,6 @@ import ghistabs.componentsOverlapping
 import ghistabs.cpp.*
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.abi.VtableRecord
-import ghistabs.cpp.abi.typeinfoClass
-import ghistabs.cpp.abi.vtableClass
 import ghistabs.cpp.abi.vtableRecord
 import ghistabs.diagnose.DiagnosticSink
 

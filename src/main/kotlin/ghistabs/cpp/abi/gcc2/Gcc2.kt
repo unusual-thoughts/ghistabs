@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.gcc2
 
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.address.Address
@@ -8,7 +8,11 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghistabs.Demangler
 import ghistabs.cpp.MemberDecl
-import ghistabs.cpp.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.Structor
+import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.gcc2.Gcc2.DEMANGLED_VTABLE_SUFFIX
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.cpp.leafName
 import ghistabs.cpp.nameSegments
 import ghistabs.cpp.qualifiedName

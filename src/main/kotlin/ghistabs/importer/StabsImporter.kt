@@ -1,6 +1,6 @@
 package ghistabs.importer
 
-import ghistabs.cpp.abi.itanium.VtableSweeper.Companion.markVtablesSwept
+import ghistabs.cpp.recover.VtableSweeper.Companion.markVtablesSwept
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.isOverlayDone

@@ -16,7 +16,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.cpp.*
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.cpp.abi.itanium.Rtti
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened

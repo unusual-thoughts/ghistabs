@@ -8,7 +8,6 @@ import ghistabs.Demangler
 import ghistabs.alignTo
 import ghistabs.cStringAt
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.cpp.abi.Itanium
 import ghistabs.cursorAt
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.get

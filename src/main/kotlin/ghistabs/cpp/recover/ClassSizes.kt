@@ -1,4 +1,4 @@
-package ghistabs.cpp
+package ghistabs.cpp.recover
 
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
