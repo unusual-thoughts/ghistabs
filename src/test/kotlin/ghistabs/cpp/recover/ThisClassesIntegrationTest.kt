@@ -52,72 +52,53 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     private fun shapes(sizes: Map<GhidraClass, LongRange> = emptyMap()) = mapOf(
-        a to ThisClassShape(null, sizes[a], 2),
-        b to ThisClassShape(a, sizes[b], 3),
-        c to ThisClassShape(a, sizes[c], 2),
-        d to ThisClassShape(b, sizes[d], 3),
+        a to ThisClassShape(null, sizes[a]),
+        b to ThisClassShape(a, sizes[b]),
+        c to ThisClassShape(a, sizes[c]),
+        d to ThisClassShape(b, sizes[d]),
     )
 
     private fun call(caller: String, callee: String, built: GhidraClass? = null) =
         ThisCall(fn(caller), fn(callee), built)
 
-    private fun use(extent: Long, vararg slots: Int, calls: Set<String> = emptySet()) =
-        ThisUse(extent, slots.toSet(), calls.mapTo(mutableSetOf(), ::fn))
-
     private fun guess(
         calls: List<ThisCall>,
-        uses: Map<String, ThisUse> = emptyMap(),
+        extents: Map<String, Long> = emptyMap(),
         sizes: Map<GhidraClass, LongRange> = emptyMap(),
-    ) = ThisClassGuesser(shapes(sizes)).guess(ThisReading(uses.mapKeys { fn(it.key) }, calls)).mapKeys { it.key.name }
+    ) = ThisClassGuesser(shapes(sizes))
+        .guess(ThisReading(extents.map { (f, extent) -> fn(f) to ThisUse(extent) }.toMap(), calls))
+        .mapKeys { it.key.name }
 
     @Test
     fun `a function called on a method's this belongs to that method's class`() {
-        guess(listOf(call("d", "f")))["f"]?.cls mustBe d
+        guess(listOf(call("d", "f")))["f"] mustBe ThisClassGuess(d, 1)
     }
 
     @Test
-    fun `a function called on objects of sibling classes belongs to their common base`() {
-        guess(listOf(call("b", "f"), call("c", "f")))["f"] mustBe ThisClassGuess(a, a, 2)
-        guess(listOf(call("d", "f"), call("b", "f")))["f"]?.cls mustBe b
+    fun `a function called on a class and on classes derived from it belongs to that class`() {
+        guess(listOf(call("d", "f"), call("b", "f"), call("d", "f")))["f"] mustBe ThisClassGuess(b, 3)
+    }
+
+    @Test
+    fun `a function called on sibling classes belongs to neither, nor to their common base`() {
+        guess(listOf(call("b", "f"), call("c", "f")))["f"].mustBeNull()
     }
 
     @Test
     fun `an object a constructor built counts as that class, and an unknown caller not at all`() {
-        guess(listOf(call("x", "f", built = c), call("y", "f")))["f"] mustBe ThisClassGuess(c, c, 1)
+        guess(listOf(call("x", "f", built = c), call("y", "f")))["f"] mustBe ThisClassGuess(c, 1)
         guess(listOf(call("y", "f")))["f"].mustBeNull()
     }
 
     @Test
-    fun `a guess moves up to a base that does all the function does`() {
-        fn("aCtor", a)
-        fn("bCtor", b)
-        val uses = mapOf("aCtor" to use(8), "bCtor" to use(16))
-        fun refined(use: ThisUse) = guess(listOf(call("d", "f")), uses + ("f" to use))["f"]?.cls
-
-        refined(use(8, 1)) mustBe a
-        // reaches past A's own fields, or calls a slot A's vftable doesn't have
-        refined(use(12)) mustBe b
-        refined(use(8, 2)) mustBe b
-        // reaches past what the methods of every base reach
-        refined(use(20)) mustBe d
-        // calls a method of B's on this
-        refined(use(4, calls = setOf("bCtor"))) mustBe b
+    fun `a function reaching past its class's exact size is none of its`() {
+        val sizes = mapOf(d to 16L..16L)
+        guess(listOf(call("d", "f")), mapOf("f" to 16), sizes)["f"]?.cls mustBe d
+        guess(listOf(call("d", "f")), mapOf("f" to 20), sizes)["f"].mustBeNull()
     }
 
     @Test
-    fun `an exact size lets a guess move up to a base, and rules out a class too small`() {
-        val sizes = mapOf(a to 8L..8L, b to 12L..12L, d to 16L..16L)
-        fun guessed(extent: Long) = guess(listOf(call("d", "f")), mapOf("f" to use(extent)), sizes)["f"]?.cls
-
-        // no method of A's or B's reaches anywhere, but their sizes are known
-        guessed(8) mustBe a
-        guessed(12) mustBe b
-        // past D's own size: none of D's
-        guessed(20).mustBeNull()
-    }
-
-    @Test
-    fun `a guess makes its function's own calls on this evidence for the next round`() {
-        guess(listOf(call("d", "f"), call("f", "g")))["g"]?.cls mustBe d
+    fun `a guess is no evidence for another`() {
+        guess(listOf(call("d", "f"), call("f", "g")))["g"].mustBeNull()
     }
 }
