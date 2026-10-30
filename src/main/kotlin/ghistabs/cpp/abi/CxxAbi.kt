@@ -1,8 +1,5 @@
 package ghistabs.cpp.abi
 
-import ghidra.app.util.demangler.DemangledObject
-import ghidra.program.model.data.Structure
-import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol

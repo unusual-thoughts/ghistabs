@@ -1,6 +1,9 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.abi.TypeinfoKind
+import ghistabs.cpp.abi.isTypeinfo
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Assumptions.assumeTrue

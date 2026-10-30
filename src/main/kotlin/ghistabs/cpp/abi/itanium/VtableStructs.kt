@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
@@ -6,6 +6,10 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
 import ghistabs.*
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.isTypeinfo
 import kotlin.math.abs
 
 // The Itanium side of Vtable.kt: a record's header layout (ABI §2.5.2), finding a record's start
@@ -23,27 +27,27 @@ fun vtableOffsetField(i: Int) = "vcall_vbase_offset_$i"
 /**
  * The header of an Itanium vtable record with [prefixWords] vbase/vcall-offset words in front of
  * `offset_to_top` and the rtti pointer (ABI §2.5.2), one layout per prefix length the way
- * [Rtti.vmiClassTypeInfo] has one per base count. Unresolved, like [Rtti]'s: [vtableRecord] reads a
- * record through it without writing to the DTM, and [VtableRecord.lay] resolves it to lay one.
+ * [Rtti.vmiClassTypeInfo] has one per base count. Unresolved, like [Rtti]'s: [ghistabs.cpp.abi.vtableRecord] reads a
+ * record through it without writing to the DTM, and [ghistabs.cpp.abi.VtableRecord.lay] resolves it to lay one.
  */
-fun vtableHeaderLayout(dtm: DataTypeManager, prefixWords: Int): StructureDataType {
-    val word = Itanium.offsetToTopType(dtm.dataOrganization.pointerSize)
+fun DataTypeManager.vtableHeaderLayout(prefixWords: Int): StructureDataType {
+    val word = Itanium.offsetToTopType(dataOrganization.pointerSize)
     val name = "VtableHeaderStructure${if (prefixWords > 0) prefixWords else ""}"
-    return StructureDataType(ClassNaming.classDataTypesRoot, name, 0, dtm).apply {
+    return StructureDataType(ClassNaming.classDataTypesRoot, name, 0, this).apply {
         // One field a word, not an array: Ghidra shows no comment on a word inside an array inside a struct,
         // and each word gets its own saying which base it is for.
         repeat(prefixWords) { add(word, vtableOffsetField(it), null).showDecimal() }
         add(word, Itanium.OFFSET_TO_TOP, "to top of complete object").showDecimal()
-        add(PointerDataType(dtm), Itanium.RTTI, null)
+        add(PointerDataType(this), Itanium.RTTI, null)
         isPackingEnabled = true
     }
 }
 
 /** What an Itanium primary vtable's address point starts with: `offset_to_top`, the rtti word, and slot 0. */
-fun primaryHeader(dtm: DataTypeManager) = StructureDataType("PrimaryVtableHeader", 0).apply {
-    add(Itanium.offsetToTopType(dtm.dataOrganization.pointerSize), Itanium.OFFSET_TO_TOP, null)
-    add(PointerDataType(dtm), Itanium.RTTI, null)
-    add(PointerDataType(dtm), "slot0", null)
+fun DataTypeManager.primaryHeader() = StructureDataType("PrimaryVtableHeader", 0).apply {
+    add(Itanium.offsetToTopType(dataOrganization.pointerSize), Itanium.OFFSET_TO_TOP, null)
+    add(PointerDataType(this), Itanium.RTTI, null)
+    add(PointerDataType(this), "slot0", null)
     isPackingEnabled = true
 }
 
@@ -99,12 +103,12 @@ fun Program.recordStart(top: Address): Address {
 private fun Program.recordAt(start: Address, rttiSlot: Address?, abi: CxxAbi): VtableRecord {
     val ptr = defaultPointerSize.toLong()
     val prefixWords = rttiSlot?.let { ((it - start) / ptr - 1).toInt() } ?: 0
-    val header = vtableHeaderLayout(dataTypeManager, prefixWords)
+    val header = dataTypeManager.vtableHeaderLayout(prefixWords)
     return VtableRecord(start, header, abi)
 }
 
 /**
- * Locate the fixed words of the Itanium record at [ztv], for [vtableRecord]. The address point is
+ * Locate the fixed words of the Itanium record at [ztv], for [ghistabs.cpp.abi.vtableRecord]. The address point is
  * *not* a fixed `ztv + 2*ptrSize`:
  * a class with a virtual base anywhere in its hierarchy (anything derived from an iostream —
  * `basic_istream` virtually inherits `basic_ios`) has vbase/vcall-offset words before offset_to_top,

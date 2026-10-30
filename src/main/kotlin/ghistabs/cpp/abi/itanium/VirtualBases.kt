@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
@@ -8,16 +8,16 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghistabs.componentsOverlapping
+import ghistabs.cpp.*
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
-import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.isBaseField
-import ghistabs.cpp.leafName
-import ghistabs.cpp.member
-import ghistabs.cpp.placeBase
+import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.typeinfoClass
+import ghistabs.cpp.abi.vtableClass
+import ghistabs.cpp.abi.vtableRecord
 import ghistabs.diagnose.DiagnosticSink
 
 /**
- * Lays the virtual bases a class struct lacks where its Itanium vtable says they are. A class deriving
+ * Places the virtual bases a class struct lacks, where its Itanium vtable says they are. A class deriving
  * from `basic_ifstream<char>` that no debug info defines has no virtual base in its struct; its typeinfo
  * still says `basic_istream` has `basic_ios` as a virtual base whose offset is 12 bytes behind the
  * vtable's address point, and the class's `_ZTV` holds that offset there. When nothing defines
@@ -31,7 +31,7 @@ import ghistabs.diagnose.DiagnosticSink
  * its typeinfo at run time, so has none to read. A struct already holding something where a virtual base
  * goes is taken to have it, and anything that would not fit, or would cover laid bytes, is reported and left.
  */
-class VtableVirtualBases(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
+class VirtualBases(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val dtm = program.dataTypeManager
     private val reader = Rtti.Reader(program)
     private val record = program.readClassRecord().orEmpty()
@@ -43,41 +43,42 @@ class VtableVirtualBases(private val program: Program, sink: DiagnosticSink) : D
     }
 
     /** Lays every class's; returns how many virtual bases it laid. */
-    fun layAll(): Int = program.symbolTable.getSymbols(ClassNaming.VTABLE).iterator().asSequence()
+    fun placeAll(): Int = program.symbolTable.getSymbols(ClassNaming.VTABLE).iterator().asSequence()
         .distinctBy { it.address }
         .sumOf { sym ->
             val struct = sym.vtableClass?.let { structFor(it, sym.parentNamespace) } ?: return@sumOf 0
             val record = runCatching { program.vtableRecord(sym.address) }.getOrNull() ?: return@sumOf 0
             val vbases = record.rttiOf(program)?.let(reader::virtualBasesOf).orEmpty()
             val count = struct.definedComponents.count { it.isBaseField() } + vbases.size
-            vbases.count { lay(struct, record, it, struct.pathName.member(it.className), count) }
+            vbases.count { struct.place(it, record, count) }
         }
 
-    private fun lay(struct: Structure, record: VtableRecord, vbase: Rtti.Reader.Base, at: String, count: Int): Boolean {
+    private fun Structure.place(vbase: Rtti.Reader.Base, record: VtableRecord, count: Int): Boolean {
+        val at = pathName.member(vbase.className)
         val vbaseAt = record.vbaseOffset(program, vbase)?.toInt()
-            .takeIf { struct.isInside(it, vbase, at) } ?: return false
+            .takeIf { isInside(it, vbase, at) } ?: return false
 
         val (found, foundWithin) = definedPart(vbase) ?: return false.also {
             degradation("vbase-undefined", at, "nothing defines it or a base of it")
         }
         // Laid already, by the class layout off the stab's own inheritance line, or by an earlier run.
-        struct.getComponentAt(vbaseAt)?.takeIf { it.offset == vbaseAt }?.dataType?.name?.let { laid ->
+        getComponentAt(vbaseAt)?.takeIf { it.offset == vbaseAt }?.dataType?.name?.let { laid ->
             if (laid == vbase.className.leafName || laid == found.name) return false
         }
-        val (dt, within) = synthesized(vbase, found, foundWithin, roomAt(struct, vbaseAt), at)?.let { it to 0 }
+        val (dt, within) = synthesized(vbase, found, foundWithin, roomAt(vbaseAt), at)?.let { it to 0 }
             ?: (found to foundWithin)
 
         val offset = vbaseAt + within
         when {
-            offset + dt.length > struct.length -> "${dt.name} (${dt.length}b) at +$offset overruns ${struct.length}"
-            struct.componentsOverlapping(offset, dt.length).isNotEmpty() -> "${dt.name} at +$offset covers laid fields"
+            offset + dt.length > length -> "${dt.name} (${dt.length}b) at +$offset overruns $length"
+            componentsOverlapping(offset, dt.length).isNotEmpty() -> "${dt.name} at +$offset covers laid fields"
             else -> null
         }?.let { problem -> return false.also { degradation("vbase-layout-failed", at, problem) } }
 
         val part = "; only its ${dt.name} at +$within is defined"
             .takeUnless { within == 0 && dt.name == vbase.className.leafName }.orEmpty()
         placeBase(
-            struct,
+            this,
             offset,
             dt,
             isVirtual = true,
@@ -127,7 +128,7 @@ class VtableVirtualBases(private val program: Program, sink: DiagnosticSink) : D
 
         // Right past the struct's end: it holds only the non-virtual part, as a forward-declared base
         // sized off the gap its deriving class leaves does, and the offset agrees with that guess. The
-        // deriving class, whose object the virtual base is part of, lays it there.
+        // deriving class, whose object the virtual base is part of, places it there.
         length -> false.also { debug("vbase-past-base-subobject", at) }
 
         else -> false.also {
@@ -138,8 +139,8 @@ class VtableVirtualBases(private val program: Program, sink: DiagnosticSink) : D
     private fun Structure.takeAcceptable() = takeUnless { it.isZeroLength }
 
     /** The bytes from [offset] to the next laid component, or the end of [struct]. */
-    private fun roomAt(struct: Structure, offset: Int) =
-        (struct.definedComponents.map { it.offset }.filter { it > offset }.minOrNull() ?: struct.length) - offset
+    private fun Structure.roomAt(offset: Int) =
+        (definedComponents.map { it.offset }.filter { it > offset }.minOrNull() ?: length) - offset
 
     /** [className]'s struct, by the namespace its demangled labels sit in, else as [recorded]. */
     private fun structFor(className: String, namespace: Namespace?) =

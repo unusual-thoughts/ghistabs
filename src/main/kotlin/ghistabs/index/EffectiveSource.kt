@@ -7,7 +7,9 @@ import ghistabs.cpp.qualifiedName
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
-import ghistabs.parse.*
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SymbolDecl
+import ghistabs.parse.TypeDecl
 
 /**
  * Which file each harvested type *and function* is attributed to, once a source root has had its say

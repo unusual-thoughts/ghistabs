@@ -9,13 +9,15 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
 import ghistabs.cpp.*
+import ghistabs.cpp.abi.msvc.baseClassArray
+import ghistabs.cpp.abi.msvc.directBases
 import ghistabs.namespaces
 
 /**
  * Microsoft Visual C++ ABI facts: the `??_7` vftable spelling, the meta pointer in front of each
- * table, and the labels Ghidra's `Windows x86 PE RTTI Analyzer` puts on the RTTI it lays. [MsvcClasses]
- * reads that RTTI back into class records; nothing in the stabs import asks about this ABI, as no
- * compiler that emits stabs mangles this way.
+ * table, and the labels Ghidra's `Windows x86 PE RTTI Analyzer` puts on the RTTI it lays.
+ * [ghistabs.cpp.abi.msvc.MsvcClasses] reads that RTTI back into class records;
+ * nothing in the stabs import asks about this ABI, as no compiler that emits stabs mangles this way.
  */
 object Msvc : CxxAbi {
     /** A class's vftable: `??_7Foo@ns@@6B@` is `const ns::Foo::vftable`. */

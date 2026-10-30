@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
@@ -12,6 +12,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.cpp.*
+import ghistabs.cpp.abi.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 

@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp
 
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
@@ -6,7 +6,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.pointerInto
+import ghistabs.cpp.abi.CxxAbi
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
@@ -70,7 +70,7 @@ private const val MAX_DEPTH = 64
 /**
  * The sizes each class is allocated with: an `operator new(size)` whose result one of the class's
  * constructors ([ctors]) runs on, off each constructor's callers' decompilation, `operator new` going by
- * one of [abi]'s [CxxAbi.operatorNewNames].
+ * one of [abi]'s [ghistabs.cpp.abi.StructorConvention.operatorNewNames].
  */
 class NewSizeReader(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
     DiagnosticSink by sink {

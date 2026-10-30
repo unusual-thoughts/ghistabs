@@ -29,7 +29,7 @@ interface Structor {
 
 /**
  * How an ABI's structors behave, as far as [StructorFinder] and the sizes `operator new` gives
- * ([NewSizeReader]) need to know.
+ * ([ghistabs.cpp.NewSizeReader]) need to know.
  */
 interface StructorConvention {
     /**

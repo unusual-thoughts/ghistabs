@@ -12,6 +12,9 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.vtableOffsetField
+import ghistabs.cpp.abi.msvc.msvcSubobjectOffset
 
 /** How an ABI spells a vtable's symbol, and which class one names. */
 interface VtableSymbols {
@@ -87,11 +90,11 @@ interface VtableLayout {
 }
 
 /**
- * A vtable record, located: where it starts, the [header] laid there, and the [abi] that laid it out. An
- * Itanium record's header is a [vtableHeaderLayout], read back through it ([readHeader]), and its function
- * array starts right after it. A gcc 2.x record has none: its reserved entry belongs to the vftable struct,
- * and its `{vfptr}` holds the record start, which is its address point, rather than where the slots start.
- * Built by [vtableRecord].
+ * A vtable record, built by [vtableRecord]: where it starts, the [header] laid there, and the [abi] that laid it out.
+ * - An Itanium record's header is a [ghistabs.cpp.abi.itanium.vtableHeaderLayout],
+ *   read back through it ([readHeader]) and its function array starts right after it.
+ * - A gcc 2.x record has none: its reserved entry belongs to the vftable struct,
+ *   and its `{vfptr}` holds the record start, which is its address point, rather than where the slots start.
  */
 data class VtableRecord(val address: Address, val header: StructureDataType?, val abi: CxxAbi) {
     /** The vbase/vcall-offset words in front of `offset_to_top` and the rtti pointer. */
@@ -213,8 +216,8 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
      * once its class has several ([ClassNaming.vftableLabel]); the header's label never takes a base.
      *
      * Itanium points at the address point, and the record's header is laid in front of it as its
-     * [vtableHeaderLayout], resolved through [registry]; the rtti pointee stays an untyped `void*` until
-     * backlog §24 wires it. Each header word also gets an EOL comment saying what it holds for this class,
+     * [ghistabs.cpp.abi.itanium.vtableHeaderLayout], resolved through [registry];
+     * Each header word also gets an EOL comment saying what it holds for this class,
      * which the shared layout cannot. gcc 2.x points at the record start, so its reserved header is *inside*
      * the struct — laid as fields by the caller rather than here, because a header struct there would
      * collide with the vftable covering the same bytes.

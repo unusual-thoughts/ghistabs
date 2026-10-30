@@ -1,9 +1,10 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataUtilities
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.DtmRegistry
+import ghistabs.cpp.abi.Itanium
 import ghistabs.runTransaction
 import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Tag

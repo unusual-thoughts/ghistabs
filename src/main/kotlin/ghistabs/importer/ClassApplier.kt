@@ -16,7 +16,7 @@ import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.ResolvedVtable
-import ghistabs.cpp.abi.VtableSweeper
+import ghistabs.cpp.abi.itanium.VtableSweeper
 import ghistabs.cpp.abi.vtableRecord
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level

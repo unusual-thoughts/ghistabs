@@ -1,6 +1,6 @@
 package ghistabs.importer
 
-import ghistabs.cpp.abi.VtableSweeper.Companion.markVtablesSwept
+import ghistabs.cpp.abi.itanium.VtableSweeper.Companion.markVtablesSwept
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.isOverlayDone
@@ -9,7 +9,6 @@ import ghistabs.importer.ImportOptions.Companion.markOverlayDone
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
 import ghistabs.index.TypeGraph
-import ghistabs.isAnalyzerEnabled
 import ghistabs.materialize.*
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope

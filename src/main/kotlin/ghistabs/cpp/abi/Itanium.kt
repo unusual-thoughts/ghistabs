@@ -12,12 +12,9 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
-import ghistabs.cpp.BaseDecl
-import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.isTemplated
-import ghistabs.cpp.member
-import ghistabs.cpp.nameSegments
-import ghistabs.cpp.qualifiedName
+import ghistabs.cpp.*
+import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.itaniumVtableRecord
 import ghistabs.getScalar
 import ghistabs.namespaces
 
@@ -133,7 +130,7 @@ object Itanium : CxxAbi {
 
     override fun looksLikeVtable(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
 
-    /** Templates have no closed form; [ResolvedVtable.fromSymbol] finds those. */
+    /** Templates have no closed form; [ResolvedVtable.Companion.fromSymbol] finds those. */
     override fun vtableCandidates(className: String) = mangleClassName(className).let {
         listOf(
             "$VTABLE_PREFIX$it",

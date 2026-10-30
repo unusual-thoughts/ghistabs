@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghidra.docking.settings.FormatSettingsDefinition
 import ghidra.program.model.address.Address
@@ -9,6 +9,10 @@ import ghistabs.*
 import ghistabs.cpp.Access
 import ghistabs.cpp.BaseDecl
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.abi.TypeinfoKind
+import ghistabs.cpp.abi.typeinfoClass
+import ghistabs.cpp.abi.vtableClass
 
 /**
  * Authoritative Itanium `__cxxabiv1` typeinfo struct layouts, adapted from Ghidra's

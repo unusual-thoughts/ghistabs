@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.msvc
 
 import ghidra.app.cmd.data.rtti.Rtti1Model
 import ghidra.app.cmd.data.rtti.Rtti3Model
@@ -18,6 +18,7 @@ import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.writeMember
+import ghistabs.cpp.abi.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.pointerAt
 import ghistabs.toClass
@@ -87,7 +88,7 @@ fun <K, F> virtualOwners(holders: Map<F, Set<K>>, ancestors: (K) -> Set<K>, hasV
  * `Windows x86 PE RTTI Analyzer` has laid and labelled: each class's direct bases off its Class Hierarchy
  * Descriptor, written to [ClassHierarchyRecords], and each virtual function off the vftables, moved into
  * the class it belongs to ([virtualOwners]) and marked virtual for the Class Hierarchy window, and each
- * constructor and destructor, found by the vptrs it stores ([StructorFinder]), moved there and named.
+ * constructor and destructor, found by the vptrs it stores ([ghistabs.cpp.abi.StructorFinder]), moved there and named.
  *
  * Classes are keyed by their type descriptor's address, which every RTTI record names a class by.
  */

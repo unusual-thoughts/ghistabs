@@ -13,8 +13,8 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.DtmRegistry
 import ghistabs.buildClassNamespaces
 import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.abi.VtableSweeper
-import ghistabs.cpp.abi.VtableSweeper.Companion.isVtablesSwept
+import ghistabs.cpp.abi.itanium.VtableSweeper
+import ghistabs.cpp.abi.itanium.VtableSweeper.Companion.isVtablesSwept
 import ghistabs.diagnose.CountingSink
 import ghistabs.entrypoints.GccVftableAnalyzer
 import ghistabs.runTransaction

@@ -3,6 +3,9 @@ package ghistabs.cpp.abi
 import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace
 import ghistabs.cpp.Access
+import ghistabs.cpp.abi.msvc.BaseEntry
+import ghistabs.cpp.abi.msvc.directBases
+import ghistabs.cpp.abi.msvc.virtualOwners
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.Test
