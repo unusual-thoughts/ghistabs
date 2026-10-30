@@ -1,6 +1,8 @@
 package ghistabs.cpp.recover
 
+import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -77,7 +79,7 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         }
         val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
         val sizes = sizeClasses(read.classes, NewSizeReader(program, abi, this).read(ctors, monitor))
-        writeRecords(read.recorded, sizes)
+        writeRecords(read.recorded)
         return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size)
     }
 
@@ -92,9 +94,9 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
     }
 
     /**
-     * Each class's size range, off what it is [allocated] with and its bases' and vptrs' offsets. A struct
-     * shorter than an exact size grows to it, but none is made: `RecoverClassesFromRTTIScript` would take
-     * it for the layout rather than work one out.
+     * Each class's size range, off what it is [allocated] with and its bases' and vptrs' offsets. Each class
+     * gets a struct of its exact size, or else its least, where `RecoverClassesFromRTTIScript` files one: a
+     * stub of undefined bytes when it has none, and its own grown when shorter.
      */
     private fun sizeClasses(
         classes: Collection<ClassDecl>,
@@ -102,14 +104,23 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
     ): Map<ClassDecl, LongRange> {
         val all = classes.toList()
         val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, program.defaultPointerSize.toLong())
-        for ((cls, size) in bounds) {
-            val exact = size.singleOrNull() ?: continue
+        val sized = bounds.filterValues { it.first > 0 }
+        for ((cls, size) in sized) {
             val ns = cls.ns?.toClass() ?: continue
-            val struct = classStruct(ns)?.takeUnless { it.isNotYetDefined || it.length >= exact } ?: continue
-            runCatching { struct.growStructure((exact - struct.length).toInt()) }
-                .onFailure { warn("class-struct-ungrown", "${ns.getName(true)} -> $exact: $it") }
+            val length = size.first.toInt()
+            runCatching {
+                val struct = classStruct(ns)
+                when {
+                    struct == null -> program.dataTypeManager.addDataType(
+                        StructureDataType(ClassNaming.vftableCategory(ns), ns.name, length),
+                        DataTypeConflictHandler.KEEP_HANDLER,
+                    )
+
+                    struct.length < length -> struct.growStructure(length - struct.length)
+                }
+            }.onFailure { warn("class-struct-unsized", "${ns.getName(true)} -> $length: $it") }
         }
-        return bounds.filterValues { it.first > 0 }
+        return sized
     }
 
     /** Names a structor the ABI's way, or `Foo` and `~Foo` where the ABI can't tell the variant. */
@@ -130,9 +141,9 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
     }
 
     /** Writes each class's record over an earlier run's, so a rerun finds `RecoverClassesFromRTTIScript`'s struct. */
-    private fun writeRecords(classes: Collection<ClassDecl>, sizes: Map<ClassDecl, LongRange>) {
+    private fun writeRecords(classes: Collection<ClassDecl>) {
         val entries = classes.mapNotNull { cls ->
-            ClassHierarchyRecords.entryOf(cls, cls.ns?.toClass()?.let(::classStructId), sizes[cls])
+            ClassHierarchyRecords.entryOf(cls, cls.ns?.toClass()?.let(::classStructId))
         }
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
