@@ -7,8 +7,8 @@ import ghistabs.at
 
 /**
  * The names Ghidra's class recovery looks for, the same for every ABI: `<Class>_vftable` under
- * `/ClassDataTypes/<ns>/<Class>/`, and the `internal_vftable`, `construction-vftable` and
- * `vftable_for_<Base>` labels `RTTIGccClassRecoverer` gives.
+ * `/ClassDataTypes/<ns>/<Class>/`, `vftable_for_<Base>` once a class has several tables (both
+ * recoverers), and gcc's `internal_vftable` and `construction-vftable` (`RTTIGccClassRecoverer`).
  */
 object ClassNaming {
     val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }

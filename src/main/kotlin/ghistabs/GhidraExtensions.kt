@@ -298,6 +298,9 @@ fun Program.pointerAt(addr: Address): Address? = valueAt(addr, PointerDataType(d
 /** Whether [addr] is in an executable block. */
 fun Program.isCode(addr: Address) = memory.getBlock(addr)?.isExecute == true
 
+/** Whether [addr] is in a block that holds bytes, which an EXTERNAL placeholder doesn't. */
+fun Program.isInitialized(addr: Address) = memory.getBlock(addr)?.isInitialized == true
+
 /** Whether [addr] is in an initialized block that isn't executable. */
 fun Program.isData(addr: Address) = memory.getBlock(addr)?.let { it.isInitialized && !it.isExecute } == true
 

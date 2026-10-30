@@ -7,7 +7,7 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.abi.vtableRecord
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.cpp.recover.VtableSweeper
 import ghistabs.diagnose.DummySink
 import ghistabs.entrypoints.RttiSymbolsAnalyzer
@@ -68,7 +68,7 @@ class RttiSymbolsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             .map { it.name }
         val vtable = named.firstOrNull { it == ClassNaming.VTABLE || it.startsWith("_ZTV") }
         checkNotNull(vtable) { "no vtable at $at: $named" }
-        program.vtableRecord(at).addressPoint.toString() mustBe addressPoint.removePrefix("0x").padStart(8, '0')
+        Itanium.recordAt(program, at).addressPoint.toString() mustBe addressPoint.removePrefix("0x").padStart(8, '0')
     }
 
     /**

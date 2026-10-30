@@ -34,7 +34,7 @@ class VtableRecordIntegrationTest : FeatureFixtureTest() {
         load(fixture)
         val ztv = program.symbolTable.getSymbols("_ZTV7Diamond").firstOrNull()?.address
         assumeTrue(ztv != null, "$fixture has no _ZTV7Diamond")
-        val record = program.vtableRecord(ztv!!)
+        val record = Itanium.recordAt(program, ztv!!)
 
         record.prefixWords mustBe 1
         record.header?.name mustBe "VtableHeaderStructure1"

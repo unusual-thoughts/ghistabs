@@ -63,19 +63,29 @@ interface VtableLayout {
     fun Structure.addEntryAdjustment(slot: Int) = Unit
 
     /** Where the vptr into this record sits in the complete object, if the record says: Itanium's `-offset_to_top`. */
-    fun VtableRecord.vfptrOffset(program: Program): Long? = null
+    fun vfptrOffsetOf(record: VtableRecord, program: Program): Long? = null
 }
 
 /**
- * A vtable record ([vtableRecord]): where it starts, the [header] in front of its address point, and its [abi].
- * Only Itanium's has a header ([ghistabs.cpp.abi.itanium.vtableHeaderLayout]).
+ * A vtable record ([CxxAbi.recordAt]): where it starts, the [header] in front of its address point, and its [abi].
+ * Only Itanium's has a header ([ghistabs.cpp.abi.itanium.vtableHeaderLayout]). [internal] for a secondary,
+ * [construction] for one in a `_ZTC` group, which its labels say as Ghidra's do ([ClassNaming.vftableLabel]).
  */
-data class VtableRecord(val address: Address, val header: StructureDataType?, val abi: CxxAbi) {
+data class VtableRecord(
+    val address: Address,
+    val header: StructureDataType?,
+    val abi: CxxAbi,
+    val internal: Boolean = false,
+    val construction: Boolean = false,
+) {
     /** The vbase/vcall-offset words in front of `offset_to_top` and the rtti pointer. */
     val prefixWords get() = header?.let { it.numComponents - 2 } ?: 0
 
     /** What a vptr into this record holds, where its `vftable` label goes. */
     val addressPoint: Address get() = abi.addressPoint(this)
+
+    /** Where the vptr into this record sits in the complete object, if the ABI knows ([VtableLayout.vfptrOffsetOf]). */
+    fun vfptrOffset(program: Program): Long? = abi.vfptrOffsetOf(this, program)
 
     /** Where [header]'s field [name] sits in memory. */
     fun fieldAddress(name: String): Address? = header?.field(name)?.let { address.add(it.offset.toLong()) }
@@ -165,23 +175,19 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     }
 
     /**
-     * Labels and lays this record, and returns its address point, where the [vftable] struct and the
-     * `vftable` label go. The labels are Ghidra's ([ClassNaming.vftableLabel]): `internal_` on a secondary,
-     * `construction-` in a `_ZTC` group, `vftable_for_<[base]>` once a class has several tables. An Itanium
-     * header is laid in front, each word commented with what it holds for this class. A gcc 2.x record is
-     * only labelled.
+     * Labels and lays this record as [ns]'s table serving [base], and returns its address point, where the
+     * [vftable] struct and the `vftable` label go. An Itanium header is laid in front, each word commented
+     * with what it holds for [ns], whose [virtualBases] name its vbase offsets. A gcc 2.x record
+     * is only labelled.
      */
     fun lay(
         registry: DtmRegistry,
         program: Program,
         vftable: Structure?,
-        className: String,
         ns: Namespace,
-        virtualBases: List<String> = emptyList(),
-        internal: Boolean = false,
-        source: SourceType = SourceType.IMPORTED,
-        construction: Boolean = false,
         base: String? = null,
+        virtualBases: List<String> = emptyList(),
+        source: SourceType = SourceType.IMPORTED,
     ): Address {
         val vftableLabel = ClassNaming.vftableLabel(internal, construction, base)
         // gcc 2.x declares the record itself (`__vtbl_ptr_type __vt_9TiXmlNode[20]`), which knows its length
@@ -200,7 +206,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
             }
         }
         fieldAddress(Itanium.RTTI)?.let {
-            program.listing.setComment(it, CommentType.EOL, rttiComment(program, className))
+            program.listing.setComment(it, CommentType.EOL, rttiComment(program, ns.getName(true)))
         }
         vftable?.let { program.forceCreateData(addressPoint, it) }
         program.labelVtable(addressPoint, vftableLabel, ns, source)
@@ -210,9 +216,6 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
 
 /** gcc's two destructor entries, complete and deleting: the only slots it leaves null. */
 private const val DESTRUCTOR_SLOTS = 2
-
-/** The record whose vtable symbol is at [ztv], as [abi] finds it. */
-fun Program.vtableRecord(ztv: Address, abi: CxxAbi = Itanium): VtableRecord = abi.recordAt(this, ztv)
 
 /** Labels [at], raising an existing label to [SourceType.IMPORTED], which is what [isVtableClaimed] reads. */
 private fun Program.labelVtable(at: Address, label: String, ns: Namespace, source: SourceType) {
@@ -279,20 +282,14 @@ fun Program.vftableStructAt(label: Symbol): Structure? {
 fun Program.isVtableClaimed(record: VtableRecord): Boolean = symbolTable.getSymbols(record.addressPoint)
     .any { it.source == SourceType.IMPORTED && ClassNaming.isClassVftableLabel(it.name) }
 
-/** Where a class's vtable record is, and its ABI. */
-data class ResolvedVtable(val className: String, val address: Address, val abi: CxxAbi) {
-    companion object {
-        /** [className]'s, if [symName] is a vtable symbol at all. */
-        fun of(className: String, symName: String, addr: Address) =
-            CxxAbi.ofVtableSymbol(symName)?.let { ResolvedVtable(className, addr, it) }
+/** The class whose own vtable [sym] is, demangled, and its ABI; null for a secondary or any other symbol. */
+fun primaryVtableOf(sym: Symbol): Pair<String, CxxAbi>? = CxxAbi.ofVtableSymbol(sym.name)
+    ?.takeIf { it.isPrimaryVtable(sym.name) }
+    ?.let { abi -> Demangler.of(sym.name)?.let(abi::demangledVtableClass)?.let { it to abi } }
 
-        /** The class whose own vtable [sym] is, demangled; null for a secondary or any other symbol. */
-        fun fromSymbol(sym: Symbol) = CxxAbi.ofVtableSymbol(sym.name)
-            ?.takeIf { it.isPrimaryVtable(sym.name) }
-            ?.let { abi ->
-                Demangler.of(sym.name)
-                    ?.let(abi::demangledVtableClass)
-                    ?.let { ResolvedVtable(it, sym.address, abi) }
-            }
-    }
-}
+/**
+ * The record at [at] as [abi] reads it; null where memory holds no bytes, as at the EXTERNAL label of a
+ * vtable another object defines.
+ */
+fun Program.definedVtableRecord(at: Address, abi: CxxAbi): VtableRecord? =
+    at.takeIf(::isInitialized)?.let { abi.recordAt(this, it) }
