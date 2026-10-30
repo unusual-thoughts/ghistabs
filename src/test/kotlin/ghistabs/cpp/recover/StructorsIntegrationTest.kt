@@ -108,10 +108,17 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
-    fun `without constructors returning this, only a deleting destructor's callee is told`() {
-        val storers = mapOf("ctor" to stores(a), "dtor" to stores(a))
-        val found = structors(storers, mapOf("slot" to setOf(a)), mapOf("slot" to setOf("dtor", FREE)), false)
-        found mustBe mapOf("slot" to (a to DELETING_DESTRUCTOR), "dtor" to (a to DESTRUCTOR))
+    fun `without constructors returning this, what destructors call destroys and every other storer builds`() {
+        // `dtor` calls the base's destructor; `ctor` the base's constructor
+        val storers = mapOf("ctor" to stores(b), "dtor" to stores(b), "baseCtor" to stores(a), "baseDtor" to stores(a))
+        val calls = mapOf("slot" to setOf("dtor", FREE), "dtor" to setOf("baseDtor"), "ctor" to setOf("baseCtor"))
+        structors(storers, mapOf("slot" to setOf(b)), calls, false) mustBe mapOf(
+            "slot" to (b to DELETING_DESTRUCTOR),
+            "dtor" to (b to DESTRUCTOR),
+            "baseDtor" to (a to DESTRUCTOR),
+            "ctor" to (b to CONSTRUCTOR),
+            "baseCtor" to (a to CONSTRUCTOR),
+        )
     }
 
     @Test
@@ -120,7 +127,7 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val storers = mapOf("d1" to stores(a), "ctor" to stores(a))
         val found =
             structors(storers, mapOf("d1" to setOf(a), "d0" to setOf(a)), mapOf("d0" to setOf("d1", FREE)), false)
-        found mustBe mapOf("d1" to (a to DESTRUCTOR), "d0" to (a to DELETING_DESTRUCTOR))
+        found mustBe mapOf("d1" to (a to DESTRUCTOR), "d0" to (a to DELETING_DESTRUCTOR), "ctor" to (a to CONSTRUCTOR))
     }
 
     private companion object {
