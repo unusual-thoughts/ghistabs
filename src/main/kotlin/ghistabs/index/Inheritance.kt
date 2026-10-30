@@ -3,7 +3,6 @@ package ghistabs.index
 import ghistabs.cpp.VirtKind
 import ghistabs.cpp.isVptrFieldName
 import ghistabs.cpp.member
-import ghistabs.index.TypeGraph
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method

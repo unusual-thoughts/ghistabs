@@ -1,13 +1,15 @@
 package ghistabs.index
 
-import ghistabs.cpp.abi.Gcc2
-import ghistabs.cpp.abi.Itanium
+import ghistabs.cpp.abi.gcc2.Gcc2
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.cpp.isTemplated
 import ghistabs.cpp.qualifiedName
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
-import ghistabs.parse.*
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SymbolDecl
+import ghistabs.parse.TypeDecl
 
 /**
  * Which file each harvested type *and function* is attributed to, once a source root has had its say

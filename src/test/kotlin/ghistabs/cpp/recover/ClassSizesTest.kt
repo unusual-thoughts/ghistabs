@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.recover
 
 import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace

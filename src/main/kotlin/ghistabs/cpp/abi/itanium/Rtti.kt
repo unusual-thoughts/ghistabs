@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghidra.docking.settings.FormatSettingsDefinition
 import ghidra.program.model.address.Address

@@ -1,4 +1,4 @@
-package ghistabs.cpp
+package ghistabs.cpp.recover
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.PointerDataType

@@ -7,7 +7,7 @@ import ghidra.program.model.data.Structure
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.DtmRegistry
-import ghistabs.cpp.abi.Rtti
+import ghistabs.cpp.abi.itanium.Rtti
 import ghistabs.demanglerPath
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics

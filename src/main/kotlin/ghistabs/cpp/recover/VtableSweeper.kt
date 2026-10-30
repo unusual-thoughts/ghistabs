@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.recover
 
 import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
@@ -12,6 +12,9 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.cpp.*
+import ghistabs.cpp.abi.*
+import ghistabs.cpp.abi.gcc2.Gcc2
+import ghistabs.cpp.abi.itanium.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 
@@ -126,7 +129,7 @@ open class VtableSweeper(
                 addSweptSlots(vftable, path.categoryPath, targets, abi)
                 // Itanium puts a primary vptr at 0. gcc 2.x puts it after the fields, and with no class
                 // struct here to read that off, it gets no tag.
-                vftable.describeVxTable(leaf, ClassNaming.VFTABLE, 0L.takeIf { abi.hasRttiHeader })
+                vftable.describeVxTable(leaf, ClassNaming.VFTABLE, abi.primaryVptrOffset)
             }
 
             val addressPoint = record.lay(registry, program, vftable, qualified, ns, source = SWEPT)
@@ -135,7 +138,7 @@ open class VtableSweeper(
             // Itanium packs a class's secondaries into the same record, walkable from the primary's
             // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>` symbol,
             // laid below whether or not the class has a primary at all.
-            if (abi.hasRttiHeader) laySecondaryVtables(record, vftable, leaf, ns, SWEPT)
+            if (record.header != null) laySecondaryVtables(record, vftable, leaf, ns, SWEPT)
         }
         // What the class pass left: gcc 2.x secondaries of classes linked without stabs. No class struct
         // to find the base's vptr in, so these go untagged.
@@ -288,7 +291,7 @@ open class VtableSweeper(
         primaryVftable?.let {
             val label = ClassNaming.vftableLabel(internal = false, construction, bases.firstOrNull())
             nameTable(it, ClassNaming.vftableName(path, 0, offsets.size, bases.firstOrNull()), label, leaf, 0L)
-            program.renameVtableLabel(primary.vptrTarget, ClassNaming.vftableLabel(false, construction), label, ns)
+            program.renameVtableLabel(primary.addressPoint, ClassNaming.vftableLabel(false, construction), label, ns)
         }
         val first = offsets.size - subs.size
         subs.forEachIndexed { i, sub ->

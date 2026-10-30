@@ -2,6 +2,9 @@ package ghistabs.cpp.abi
 
 import ghidra.program.model.address.Address
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.itanium.Itanium
+import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.vtableOffsetField
 import ghistabs.get
 import ghistabs.getScalar
 import ghistabs.integration.FeatureFixtureTest

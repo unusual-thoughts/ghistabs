@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghistabs.cpp.ClassNaming
 import ghistabs.integration.FeatureFixtureTest

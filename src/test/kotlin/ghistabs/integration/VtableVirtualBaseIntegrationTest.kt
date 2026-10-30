@@ -7,9 +7,8 @@ import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.applyDemangling
-import ghistabs.cpp.abi.VtableVirtualBases
+import ghistabs.cpp.abi.itanium.VirtualBases
 import ghistabs.diagnose.DummySink
-import ghistabs.importer.runOnRecords
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
@@ -131,7 +130,7 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
                 DataTypeConflictHandler.DEFAULT_HANDLER,
             ) as Structure
             struct("Core", 8, 0 to "a", 4 to "b")
-            struct("Derived", 32, 8 to "x").also { VtableVirtualBases(program, DummySink).layAll() mustBe 1 }
+            struct("Derived", 32, 8 to "x").also { VirtualBases(program, DummySink).placeAll() mustBe 1 }
         }
 
         (derived.getComponentAt(16).dataType as Structure).getComponentAt(4).dataType.name mustBe "Core"
@@ -154,7 +153,7 @@ class VtableVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
                 StructureDataType(CategoryPath.ROOT, "Derived", 16),
                 DataTypeConflictHandler.DEFAULT_HANDLER,
             )
-            VtableVirtualBases(program, ctx).layAll() mustBe 0
+            VirtualBases(program, ctx).placeAll() mustBe 0
         }
 
         ctx.diagnostics.degradationTargets()["vbase-offset-unreadable"].orEmpty() mustBe emptyList()

@@ -1,20 +1,25 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.msvc
 
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.app.util.demangler.DemangledObject
+import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
 import ghistabs.cpp.*
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.Structor
+import ghistabs.cpp.abi.StructorRole
+import ghistabs.cpp.abi.VtableRecord
 import ghistabs.namespaces
 
 /**
  * Microsoft Visual C++ ABI facts: the `??_7` vftable spelling, the meta pointer in front of each
- * table, and the labels Ghidra's `Windows x86 PE RTTI Analyzer` puts on the RTTI it lays. [MsvcClasses]
- * reads that RTTI back into class records; nothing in the stabs import asks about this ABI, as no
- * compiler that emits stabs mangles this way.
+ * table, and the labels Ghidra's `Windows x86 PE RTTI Analyzer` puts on the RTTI it lays.
+ * [ghistabs.cpp.abi.msvc.MsvcClasses] reads that RTTI back into class records;
+ * nothing in the stabs import asks about this ABI, as no compiler that emits stabs mangles this way.
  */
 object Msvc : CxxAbi {
     /** A class's vftable: `??_7Foo@ns@@6B@` is `const ns::Foo::vftable`. */
@@ -42,20 +47,21 @@ object Msvc : CxxAbi {
      */
     const val BCD_VBOFCONTOBJ = 0x10
 
-    override fun stride(ptrSize: Int) = ptrSize.toLong()
-    override fun pfnOffset(ptrSize: Int) = 0L
-
-    /** The meta pointer to the complete object locator, which is where a `{vfptr}` points past. */
-    override fun headerBytes(ptrSize: Int) = ptrSize.toLong()
-
-    override val hasRttiHeader get() = true
-    override val vptrAtRecordStart get() = false
+    /** `??_7` labels the address point; the meta pointer to the complete object locator in front is no slot. */
+    override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 
     override val assignmentOperatorName = "operator="
 
     override val constructorsReturnThis get() = true
 
     override val mangledOperatorNew get() = setOf("??2@YAPAXI@Z", "??2@YAPEAX_K@Z")
+
+    override val mangledOperatorDelete get() = setOf(
+        "??3@YAXPAX@Z",
+        "??3@YAXPEAX@Z",
+        "??3@YAXPAXI@Z",
+        "??3@YAXPEAX_K@Z",
+    )
 
     /** A class's one constructor and destructor, and its deleting one, scalar unless it tests the vector flag. */
     override fun structorFor(role: StructorRole, func: Function) = when (role) {
@@ -77,21 +83,19 @@ object Msvc : CxxAbi {
     override fun isProbablyMangled(name: String) = name.startsWith("?")
 
     /** Off the class's Class Hierarchy Descriptor, which the RTTI analyzer labels in its namespace. */
-    override fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? {
-        val chd = program.symbolTable.getSymbols(cls).firstOrNull { it.name == CLASS_HIERARCHY_DESCRIPTOR }
-            ?: return null
-        return runCatching { directBases(Rtti3Model(program, chd.address, DataValidationOptions()).baseClassArray()) }
-            .getOrNull()
-    }
+    override fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? =
+        program.symbolTable.getSymbols(cls).firstOrNull { it.name == CLASS_HIERARCHY_DESCRIPTOR }?.let { chd ->
+            runCatching { directBases(Rtti3Model(program, chd.address, DataValidationOptions()).baseClassArray()) }
+                .getOrNull()
+        }
 
     override fun looksLikeVtable(symbolName: String) = symbolName.startsWith(VFTABLE_PREFIX)
 
     /** Templates have no closed form here either: their arguments mangle as types. */
-    override fun vtableCandidates(className: String) = if (className.isTemplated) {
-        listOf(className.member(ClassNaming.VFTABLE))
-    } else {
-        listOf("$VFTABLE_PREFIX${mangleClassName(className)}6B@", className.member(ClassNaming.VFTABLE))
-    }
+    override fun vtableCandidates(className: String) = listOfNotNull(
+        "$VFTABLE_PREFIX${mangleClassName(className)}6B@".takeUnless { className.isTemplated },
+        className.member(ClassNaming.VFTABLE),
+    )
 
     /** Ghidra's demangler names a `??_7` symbol `` `vftable' `` in the class's namespace. */
     override fun demangledVtableClass(obj: DemangledObject) =

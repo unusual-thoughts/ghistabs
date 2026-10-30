@@ -19,7 +19,7 @@ import ghistabs.*
 import ghistabs.cpp.MemberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.writeMember
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.cpp.abi.Itanium.isInlineStdMember
+import ghistabs.cpp.abi.itanium.Itanium.isInlineStdMember
 import ghistabs.cpp.qualifiedName
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink

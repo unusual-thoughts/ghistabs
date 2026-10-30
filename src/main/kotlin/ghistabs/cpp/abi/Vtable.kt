@@ -1,5 +1,6 @@
 package ghistabs.cpp.abi
 
+import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
@@ -11,22 +12,98 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghistabs.*
 import ghistabs.cpp.ClassNaming
+import ghistabs.cpp.abi.itanium.Itanium
+import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.startsVtableGroup
+import ghistabs.cpp.abi.itanium.vtableOffsetField
+import ghistabs.cpp.abi.msvc.msvcSubobjectOffset
+
+/** How an ABI spells a vtable's symbol, and which class one names. */
+interface VtableSymbols {
+    /** Does [symbolName] look like a vtable symbol of this ABI? */
+    fun looksLikeVtable(symbolName: String): Boolean
+
+    /**
+     * Does [symbolName] name a class's *own* table, rather than a base's secondary? Itanium packs a
+     * class's secondaries into the primary record, so every `_ZTV` is one and the default holds;
+     * gcc 2.x gives each secondary its own symbol, which only the mangled spelling distinguishes.
+     */
+    fun isPrimaryVtable(symbolName: String) = looksLikeVtable(symbolName)
+
+    /** Closed-form vtable symbol spellings for [className], most canonical first. */
+    fun vtableCandidates(className: String): List<String>
+
+    /** Qualified class name [obj] names, if it is this ABI's demangled vtable object. */
+    fun demangledVtableClass(obj: DemangledObject): String?
+}
 
 /**
- * A vtable record, located: where it starts, the [header] laid there, and the [abi] that laid it out. An
- * Itanium record's header is a [vtableHeaderLayout], read back through it ([readHeader]), and its function
- * array starts right after it. A gcc 2.x record has none: its reserved entry belongs to the vftable struct,
- * and its `{vfptr}` holds the record start rather than the address point. Built by [vtableRecord].
+ * How an ABI lays out a vtable record. By default the Itanium and MSVC shape: a header before the address
+ * point the vptr holds, then one pointer per slot.
+ */
+interface VtableLayout {
+    /**
+     * Where a primary vptr sits in its object, where the ABI fixes that: at 0 under Itanium and MSVC. Null
+     * under gcc 2.x, which puts it after the fields, where only the class struct can say.
+     */
+    val primaryVptrOffset: Long? get() = 0L
+
+    /** The record at [at], a class's vtable symbol. */
+    fun recordAt(program: Program, at: Address): VtableRecord
+
+    /**
+     * [record]'s address point, which is what a `{vfptr}` pointing into it holds, where its `vftable` label
+     * goes and where the `_vftable` struct begins: by default right past the header laid there.
+     */
+    fun addressPoint(record: VtableRecord): Address = record.address.add(record.header?.length?.toLong() ?: 0L)
+
+    /** Where each slot's function pointer sits, in slot order, in bytes from the address point. */
+    fun slotOffsets(ptrSize: Int): Sequence<Long> = generateSequence(0L) { it + ptrSize }
+
+    /**
+     * Entries the header occupies in a stab's slot numbering (`*<n>`): none where the vptr already
+     * points past it, as Itanium's does.
+     */
+    fun reservedEntries(ptrSize: Int) = 0
+
+    /**
+     * The reserved entry gcc 2.x puts at the front of a record, as struct fields — the `{vfptr}`
+     * points here, so the slots only land on their real byte offsets if the header occupies its own.
+     * `cp/class.c:skip_rtti_stuff` reserves two pointer-wide entries with thunks and one 8-byte
+     * `{delta, index, pfn}` without; 8 bytes either way on 32-bit. Nothing here is a Pointer, which
+     * is what keeps the header out of the slot list everything else counts.
+     */
+    fun Structure.addReservedHeader() = Unit
+
+    /**
+     * The `{delta, index}` half of a gcc 2.x no-thunk entry, which precedes its `pfn` and is what
+     * makes the entry 8 bytes wide. `delta` is live at every call site — the dispatch reads it with
+     * `movswl` and adds it to `this` before the call — so it is a signed short and worth naming.
+     */
+    fun Structure.addEntryAdjustment(slot: Int) = Unit
+
+    /**
+     * Where the `{vfptr}` holding this record's address point sits in the complete object, as far as
+     * the record itself says: Itanium's `offset_to_top`, negated — 0 for a primary, the subobject's
+     * offset for a secondary. A gcc 2.x record states no such word; its tables are placed by the
+     * symbol that names them and the class struct.
+     */
+    fun VtableRecord.vfptrOffset(program: Program): Long? = null
+}
+
+/**
+ * A vtable record, built by [vtableRecord]: where it starts, the [header] laid there, and the [abi] that laid it out.
+ * - An Itanium record's header is a [ghistabs.cpp.abi.itanium.vtableHeaderLayout],
+ *   read back through it ([readHeader]) and its function array starts right after it.
+ * - A gcc 2.x record has none: its reserved entry belongs to the vftable struct,
+ *   and its `{vfptr}` holds the record start, which is its address point, rather than where the slots start.
  */
 data class VtableRecord(val address: Address, val header: StructureDataType?, val abi: CxxAbi) {
-    /** Where the function array starts: past the header, or past gcc 2.x's reserved entry. */
-    val addressPoint: Address get() = address.add(header?.length?.toLong() ?: abi.headerBytes(address.pointerSize))
-
     /** The vbase/vcall-offset words in front of `offset_to_top` and the rtti pointer. */
     val prefixWords get() = header?.let { it.numComponents - 2 } ?: 0
 
     /** What a `{vfptr}` pointing into this record holds, where the `vftable` label goes. */
-    val vptrTarget get() = if (header == null) address else addressPoint
+    val addressPoint: Address get() = abi.addressPoint(this)
 
     /** Where [header]'s field [name] sits in memory. */
     fun fieldAddress(name: String): Address? = header?.field(name)?.let { address.add(it.offset.toLong()) }
@@ -83,7 +160,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
             .any { at -> program.symbolTable.getSymbols(at).any { startsVtableGroup(it.name) } }
 
     /**
-     * Addresses the function-pointer array at [addressPoint], in slot order. Nothing records its
+     * Addresses the function-pointer array off [addressPoint], in slot order. Nothing records its
      * length, so it ends where the entries stop pointing at functions — at the next record's
      * `offset_to_top` or rtti pointer (into .data). A function is one in executable memory, or an import
      * the loader's EXTERNAL block stands in for: an abstract class's slots in a dynamic link hold
@@ -95,7 +172,7 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
     fun slots(program: Program): List<Address> = buildList {
         val ptr = program.defaultPointerSize
         val nulls = mutableListOf<Address>()
-        for (pfn in generateSequence(addressPoint) { it + abi.stride(ptr) }.map { it + abi.pfnOffset(ptr) }) {
+        for (pfn in abi.slotOffsets(ptr).map(addressPoint::add)) {
             val target = program.pointerAt(pfn) ?: break
             when {
                 target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target
@@ -141,8 +218,8 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
      * once its class has several ([ClassNaming.vftableLabel]); the header's label never takes a base.
      *
      * Itanium points at the address point, and the record's header is laid in front of it as its
-     * [vtableHeaderLayout], resolved through [registry]; the rtti pointee stays an untyped `void*` until
-     * backlog §24 wires it. Each header word also gets an EOL comment saying what it holds for this class,
+     * [ghistabs.cpp.abi.itanium.vtableHeaderLayout], resolved through [registry];
+     * Each header word also gets an EOL comment saying what it holds for this class,
      * which the shared layout cannot. gcc 2.x points at the record start, so its reserved header is *inside*
      * the struct — laid as fields by the caller rather than here, because a header struct there would
      * collide with the vftable covering the same bytes.
@@ -190,13 +267,9 @@ data class VtableRecord(val address: Address, val header: StructureDataType?, va
 private const val DESTRUCTOR_SLOTS = 2
 
 /**
- * The record at [ztv], the address of a class's vtable symbol. An Itanium one is found by its rtti
- * word ([itaniumVtableRecord]). A gcc 2.x record has no typeinfo pointer to search for
- * ([CxxAbi.hasRttiHeader]) and no vbase/vcall prefix either, so it gets no header layout, and its
- * address point is past the reserved entry.
+ * The record at [ztv], the address of a class's vtable symbol, as [abi] finds it ([VtableLayout.recordAt]).
  */
-fun Program.vtableRecord(ztv: Address, abi: CxxAbi = Itanium): VtableRecord =
-    if (abi.hasRttiHeader) itaniumVtableRecord(ztv, abi) else VtableRecord(ztv, null, abi)
+fun Program.vtableRecord(ztv: Address, abi: CxxAbi = Itanium): VtableRecord = abi.recordAt(this, ztv)
 
 /**
  * `createLabel` hands back a label already there as it stands, so a class laying a table an earlier
@@ -272,7 +345,7 @@ fun Program.vftableStructAt(label: Symbol): Structure? {
  * is how a sweep tells what is left without the class pass's own bookkeeping. A swept table is
  * labelled [SourceType.ANALYSIS], so a later sweep lays it again rather than skipping it.
  */
-fun Program.isVtableClaimed(record: VtableRecord): Boolean = symbolTable.getSymbols(record.vptrTarget)
+fun Program.isVtableClaimed(record: VtableRecord): Boolean = symbolTable.getSymbols(record.addressPoint)
     .any { it.source == SourceType.IMPORTED && ClassNaming.isClassVftableLabel(it.name) }
 
 /** Where a class's vtable record sits, and which ABI lays it out past the header. */

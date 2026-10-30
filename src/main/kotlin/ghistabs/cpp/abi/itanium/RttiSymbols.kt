@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
@@ -108,7 +108,7 @@ class RttiSymbols(
      * construction vtables, which leaves the rest one each; the PE section order settles what doesn't.
      */
     private fun labelVtables(typeinfos: List<TypeInfoRecord>): Int {
-        val header = primaryHeader(dtm)
+        val header = dtm.primaryHeader()
 
         // The offset_to_top words in front of a pointer to this typeinfo that start a primary vtable
         fun TypeInfoRecord.primaryVtables() = sitesByTarget[address]?.mapNotNull { it.plusWords(-1) }

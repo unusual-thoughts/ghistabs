@@ -1,12 +1,18 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.gcc2
 
 import ghidra.app.util.demangler.DemangledObject
+import ghidra.program.model.address.Address
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
+import ghidra.program.model.listing.Program
 import ghistabs.Demangler
 import ghistabs.cpp.MemberDecl
-import ghistabs.cpp.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.Structor
+import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.gcc2.Gcc2.DEMANGLED_VTABLE_SUFFIX
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.cpp.leafName
 import ghistabs.cpp.nameSegments
 import ghistabs.cpp.qualifiedName
@@ -265,16 +271,37 @@ object Gcc2 {
  * site skips the header (`tinyxml_aout_gcc295.o` dispatches through `add eax,0x8`).
  */
 sealed interface Gcc2Abi : CxxAbi {
-    override fun stride(ptrSize: Int) = ptrSize.toLong()
-    override fun pfnOffset(ptrSize: Int) = 0L
-    override fun headerBytes(ptrSize: Int) = 2L * ptrSize
+    /** Pointer-wide words per entry: a bare `pfn`, or `{delta, index}` then `pfn`, which comes last. */
+    val entryWords: Int
 
-    /** gcc 2.x emits no typeinfo pointer, so no rtti word locates the address point. */
-    override val hasRttiHeader get() = false
-    override val vptrAtRecordStart get() = true
+    /** The reserved entry before the first virtual's (`cp/class.c:skip_rtti_stuff`). */
+    fun headerBytes(ptrSize: Int) = 2L * ptrSize
+
+    override val primaryVptrOffset get() = null
+
+    /**
+     * No typeinfo pointer to search for, and no vbase/vcall prefix either: no header is laid. The vptr holds
+     * the record start, so the reserved entry belongs to the `_vftable` struct, which begins there too.
+     */
+    override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
+
+    /** Past the reserved entry, each `pfn` last in its entry. */
+    override fun slotOffsets(ptrSize: Int) =
+        generateSequence(headerBytes(ptrSize) + (entryWords - 1L) * ptrSize) { it + entryWords.toLong() * ptrSize }
+
+    /**
+     * The bias a stab's `*<n>` carries: `DECL_VINDEX` counts from the record start, header entries
+     * included. Measured: `cv_mscom_elf_i386_gcc281`'s dtors are `*1` with one 8-byte entry reserved,
+     * `tinyxml_aout_gcc295.o`'s are `*2` with two pointer-wide ones, while `_ZTVSt9type_info`'s stabs
+     * declare 0/1/5 for an Itanium record whose vptr is already past its header.
+     */
+    override fun reservedEntries(ptrSize: Int) = (headerBytes(ptrSize) / (entryWords.toLong() * ptrSize)).toInt()
 
     /** `new` calls libgcc's `__builtin_new`; a program's own global `operator new` is `__nw__FUi`. */
     override val mangledOperatorNew get() = setOf("__builtin_new", "__nw__FUi", "__nw__FUl")
+
+    /** A destructor in charge of freeing calls `__builtin_delete`; a program's own is `__dl__FPv`. */
+    override val mangledOperatorDelete get() = setOf("__builtin_delete", "__dl__FPv")
 
     override fun isPrimaryVtable(symbolName: String) = Gcc2.looksLikePrimaryVtable(symbolName)
 
@@ -314,6 +341,8 @@ sealed interface Gcc2Abi : CxxAbi {
 
 /** `__vt_`: the `this` adjustment moved into a thunk, so an entry is the pfn. */
 data object Gcc2Thunks : Gcc2Abi {
+    override val entryWords get() = 1
+
     override fun looksLikeVtable(symbolName: String) = Gcc2.looksLikeThunkVtable(symbolName)
 
     override fun vtableCandidates(className: String) =
@@ -330,11 +359,9 @@ data object Gcc2Thunks : Gcc2Abi {
  * twice as wide, with pfn in the second word.
  */
 data object Gcc2Plain : Gcc2Abi {
-    override fun stride(ptrSize: Int) = 2L * ptrSize
-
     /** `delta` and `index` are a `short` each: one 32-bit word. (`-fhuge-objects` would widen
      *  both to `long`; no corpus binary uses it.) */
-    override fun pfnOffset(ptrSize: Int) = ptrSize.toLong()
+    override val entryWords get() = 2
 
     override fun looksLikeVtable(symbolName: String) =
         Gcc2.looksLikeVtable(symbolName) && !Gcc2.looksLikeThunkVtable(symbolName)

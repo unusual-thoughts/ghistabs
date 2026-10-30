@@ -1,8 +1,9 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.app.util.demangler.DemangledObject
+import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
@@ -11,12 +12,12 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
-import ghistabs.cpp.BaseDecl
-import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.isTemplated
-import ghistabs.cpp.member
-import ghistabs.cpp.nameSegments
-import ghistabs.cpp.qualifiedName
+import ghistabs.cpp.*
+import ghistabs.cpp.abi.CxxAbi
+import ghistabs.cpp.abi.ResolvedVtable
+import ghistabs.cpp.abi.Structor
+import ghistabs.cpp.abi.StructorRole
+import ghistabs.cpp.abi.VtableRecord
 import ghistabs.getScalar
 import ghistabs.namespaces
 
@@ -120,24 +121,19 @@ object Itanium : CxxAbi {
     /** Vtable header before the function-pointer array: offset_to_top + rtti = 2 pointers. */
     fun vtablePrefixBytes(ptrSize: Int) = 2L * ptrSize.toLong()
 
-    override fun stride(ptrSize: Int) = ptrSize.toLong()
-    override fun pfnOffset(ptrSize: Int) = 0L
-
     /** gcc 3.x spells a member's stab name the way the source does. */
     override val assignmentOperatorName = "operator="
 
-    /** `offset_to_top` then the typeinfo pointer (ABI §2.5.2). */
-    override fun headerBytes(ptrSize: Int) = vtablePrefixBytes(ptrSize)
-
-    override val hasRttiHeader get() = true
-    override val vptrAtRecordStart get() = false
+    /** Found by its rtti word ([itaniumVtableRecord]), which says how long the header in front of it is. */
+    override fun recordAt(program: Program, at: Address) = program.itaniumVtableRecord(at, this)
 
     // `size_t` is `unsigned int` (j) on 32-bit targets and `unsigned long` (m) on 64-bit ones.
     override val mangledOperatorNew get() = setOf("_Znwj", "_Znwm")
+    override val mangledOperatorDelete get() = setOf("_ZdlPv", "_ZdlPvj", "_ZdlPvm")
 
     override fun looksLikeVtable(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
 
-    /** Templates have no closed form; [ResolvedVtable.fromSymbol] finds those. */
+    /** Templates have no closed form; [ResolvedVtable.Companion.fromSymbol] finds those. */
     override fun vtableCandidates(className: String) = mangleClassName(className).let {
         listOf(
             "$VTABLE_PREFIX$it",

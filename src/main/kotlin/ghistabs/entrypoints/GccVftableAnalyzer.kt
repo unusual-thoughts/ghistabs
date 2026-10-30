@@ -9,8 +9,8 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.DtmRegistry
-import ghistabs.cpp.abi.VtableSweeper
-import ghistabs.cpp.abi.VtableSweeper.Companion.isVtablesSwept
+import ghistabs.cpp.recover.VtableSweeper
+import ghistabs.cpp.recover.VtableSweeper.Companion.isVtablesSwept
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.importer.ImportProbe
 

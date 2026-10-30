@@ -15,8 +15,8 @@ enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
 /**
  * A class's direct base as any source states it: the stabs ([ghistabs.parse.TypeDecl.Aggregate.Base]),
- * Itanium typeinfo ([ghistabs.cpp.abi.Rtti.Reader.Base]), an MSVC Base Class Array
- * ([ghistabs.cpp.abi.BaseEntry]) or the class record ([ClassHierarchyRecords.Base]). How it is inherited,
+ * Itanium typeinfo ([ghistabs.cpp.abi.itanium.Rtti.Reader.Base]), an MSVC Base Class Array
+ * ([ghistabs.cpp.abi.msvc.BaseEntry]) or the class record ([ClassHierarchyRecords.Base]). How it is inherited,
  * and [offset], in bytes: where a non-virtual base sits in the class, and for a virtual one whatever its
  * source keeps there instead (Itanium's vbase offset slot, MSVC's offset into the virtual base), or
  * null when it says nothing.
@@ -30,11 +30,12 @@ interface BaseDecl {
 /** Method kind from the stabs method-block trailer: `.` normal, `?` static, `*` virtual. */
 enum class VirtKind { NORMAL, STATIC, VIRTUAL }
 
-/** What a class member's declaration states, which is all [CxxMemberNaming] spells its symbol from. */
+/** What a class member's declaration states, which is all [ghistabs.cpp.abi.CxxMemberNaming] spells its symbol from. */
 interface MemberDecl {
     val name: String
 
-    /** The physname the declaration states, if any: not always a whole symbol ([physnameCandidates]). */
+    /** The physname the declaration states, if any.
+     *  Not always a whole symbol ([ghistabs.cpp.abi.Gcc2Plain.physnameCandidates]). */
     val mangled: String?
     val access: Access
     val virt: VirtKind

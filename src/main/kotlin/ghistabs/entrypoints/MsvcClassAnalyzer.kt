@@ -8,7 +8,7 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.abi.MsvcClasses
+import ghistabs.cpp.abi.msvc.MsvcClasses
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.importer.ImportProbe
 

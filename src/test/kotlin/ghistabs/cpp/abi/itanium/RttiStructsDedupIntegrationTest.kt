@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi
+package ghistabs.cpp.abi.itanium
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataUtilities
