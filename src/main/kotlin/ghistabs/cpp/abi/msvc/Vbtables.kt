@@ -87,7 +87,7 @@ class Vbtables(private val program: Program, classes: Collection<ClassDecl>, sin
         runCatching { program.addressFactory.defaultAddressSpace.getAddress(value) }.getOrNull()
             ?.takeIf(program.memory::contains)
 
-    /** Whether [at] may be a vbtable: its first entry, from the vbptr back to the subobject holding it, is not positive. */
+    /** Whether [at] may be a vbtable: its first entry, from the vbptr back to its subobject, is not positive. */
     private fun mayBeVbtable(at: Address) = runCatching { program.memory.getInt(at) <= 0 }.getOrDefault(false)
 
     private companion object {
