@@ -6,6 +6,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.ClassDecl
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
@@ -18,14 +19,14 @@ import ghistabs.useWith
  * the gap to the next base, or to the end of the class holding it.
  */
 fun sizeBounds(
-    bases: Map<Address, List<Pair<Address, Long>>>,
-    vptrs: Map<Address, Long>,
-    allocated: Map<Address, Long>,
+    bases: Map<ClassDecl, List<Pair<ClassDecl, Long>>>,
+    vptrs: Map<ClassDecl, Long>,
+    allocated: Map<ClassDecl, Long>,
     ptrSize: Long,
-): Map<Address, LongRange> {
+): Map<ClassDecl, LongRange> {
     val classes = bases.keys + vptrs.keys + allocated.keys
-    val least = mutableMapOf<Address, Long>()
-    fun atLeast(k: Address, depth: Int = 0): Long = least.getOrPut(k) {
+    val least = mutableMapOf<ClassDecl, Long>()
+    fun atLeast(k: ClassDecl, depth: Int = 0): Long = least.getOrPut(k) {
         if (depth > MAX_DEPTH) return 0
         listOfNotNull(
             allocated[k],
@@ -35,7 +36,7 @@ fun sizeBounds(
     }
 
     // Each base, as the classes holding it place it: from its offset to the next base's, or the holder's end.
-    val holders = mutableMapOf<Address, MutableList<Pair<Address, Long?>>>()
+    val holders = mutableMapOf<ClassDecl, MutableList<Pair<ClassDecl, Long?>>>()
     for ((holder, held) in bases) {
         val sorted = held.sortedBy { it.second }
         for ((b, at) in sorted) {
@@ -43,8 +44,8 @@ fun sizeBounds(
             holders.getOrPut(b) { mutableListOf() } += holder to next?.minus(at)
         }
     }
-    val most = mutableMapOf<Address, Long?>()
-    fun atMost(k: Address, depth: Int = 0): Long? = if (k in most) {
+    val most = mutableMapOf<ClassDecl, Long?>()
+    fun atMost(k: ClassDecl, depth: Int = 0): Long? = if (k in most) {
         most[k]
     } else {
         val bounds = holders[k].orEmpty().mapNotNull { (holder, room) ->
@@ -70,9 +71,9 @@ private const val MAX_DEPTH = 64
  */
 class NewSizeReader(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
     DiagnosticSink by sink {
-    fun read(ctors: Map<Function, Address>, monitor: TaskMonitor): Map<Address, Long> {
+    fun read(ctors: Map<Function, ClassDecl>, monitor: TaskMonitor): Map<ClassDecl, Long> {
         val callers = ctors.keys.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
-        val sizes = mutableMapOf<Address, MutableSet<Long>>()
+        val sizes = mutableMapOf<ClassDecl, MutableSet<Long>>()
         DecompInterface().useWith(program) { decomp ->
             for (f in callers) {
                 if (monitor.isCancelled) break
@@ -86,7 +87,7 @@ class NewSizeReader(private val program: Program, private val abi: CxxAbi, sink:
             }
         }
         return sizes.mapValues { (cls, all) ->
-            if (all.size > 1) debug("msvc-new-sizes", "$cls allocated with sizes $all")
+            if (all.size > 1) debug("msvc-new-sizes", "${cls.name} allocated with sizes $all")
             all.max()
         }
     }

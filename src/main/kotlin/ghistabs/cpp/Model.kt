@@ -5,6 +5,7 @@ import ghidra.framework.options.GProperties
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.Namespace
 import ghidra.util.ObjectStorage
 import ghidra.util.Saveable
 import ghistabs.GPropertiesFormat
@@ -22,6 +23,21 @@ interface BaseDecl {
     val isVirtual: Boolean
     val access: Access
     val offset: Long?
+}
+
+/**
+ * A class as a recovery pass knows it: its name, the namespace built for it if any, and every class it
+ * derives from. Equal by identity, so each source keeps one per class.
+ */
+interface ClassDecl {
+    val name: String
+    val ns: Namespace?
+
+    /** Every class this one derives from, directly or not. */
+    val ancestors: Set<ClassDecl>
+
+    /** Whether this class derives from [other], directly or not. */
+    fun derivesFrom(other: ClassDecl) = other in ancestors
 }
 
 /** Method kind from the stabs method-block trailer: `.` normal, `?` static, `*` virtual. */

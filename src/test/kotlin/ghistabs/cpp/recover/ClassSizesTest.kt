@@ -1,17 +1,14 @@
 package ghistabs.cpp.recover
 
-import ghidra.program.model.address.AddressSpace
-import ghidra.program.model.address.GenericAddressSpace
+import ghistabs.cpp.TestClass
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 class ClassSizesTest {
-    // Each class by where its type descriptor would be.
-    private val space = GenericAddressSpace("ram", 32, AddressSpace.TYPE_RAM, 0)
-    private val a = space.getAddress(0x100)
-    private val b = space.getAddress(0x200)
-    private val d = space.getAddress(0x300)
-    private val s = space.getAddress(0x400)
+    private val a = TestClass("A")
+    private val b = TestClass("B")
+    private val d = TestClass("D")
+    private val s = TestClass("S")
 
     @Test
     fun `a class is at least as large as its last vptr and its bases reach`() {
