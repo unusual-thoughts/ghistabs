@@ -6,9 +6,8 @@ package ghistabs.cpp
 // when a mangled token is available, these are the string-only fallbacks and predicates.
 
 /**
- * gcc's vtable-pointer member: `_vptr$<Class>` through gcc 4.x, `_vptr.<Class>` from gcc 12, bare
- * `_vptr` in between. The name is the only signal — the type it carries (`__vtbl_ptr_type *`) is
- * one CU-shared node reused by every polymorphic record, so it identifies nothing.
+ * gcc's vtable-pointer member: `_vptr$<Class>` through 4.x, `_vptr.<Class>` from 12, `_vptr` between.
+ * Its type, `__vtbl_ptr_type *`, is shared by every class, so only the name tells.
  */
 fun isVptrFieldName(name: String) = name.startsWith("_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
 
@@ -60,7 +59,7 @@ val String.outermostTemplate: String get() = nameSegments.let { segments ->
     segments.take(first + 1).qualifiedName.templateName
 }
 
-/** Whitespace around template punctuation — gcc is inconsistent (`< `, `, `, ` >`, `> >`). */
+/** Whitespace around template punctuation, which gcc spells inconsistently (`< `, ` >`, `> >`). */
 private val TEMPLATE_PUNCT = Regex("""\s*([<>,])\s*""")
 
 /**

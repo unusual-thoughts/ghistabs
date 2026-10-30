@@ -15,10 +15,9 @@ import ghistabs.plus
 import kotlin.math.abs
 
 /**
- * One function's SJLJ registration, as its prologue fills its `SjLj_Function_Context`: the
- * `movl $personality, d(%ebp)` / `movl $lsda, d+4(%ebp)` pair, [store] being the second and
- * [lsdaDisplacement] its `d+4`, and the receiver its `movl $resume, d+12(%ebp)` stores into
- * `jbuf[1]`, when one is near.
+ * One function's SJLJ registration: the prologue's `movl $personality, d(%ebp)` / `movl $lsda, d+4(%ebp)`
+ * pair ([store] is the second, [lsdaDisplacement] its `d+4`), and the receiver stored into `jbuf[1]`
+ * when found nearby.
  */
 data class Registration(
     val store: Address,
@@ -44,10 +43,9 @@ private const val TRACE = 16
 private const val MOV_IMM32_EBP = "11000111 ..000101"
 
 /**
- * Every LSDA a registration in [set] stores after a personality routine, by its address. The
- * personality is whatever every such pair stores first: a stripped binary has no
- * `___gxx_personality_sj0` to look up, so a target is taken as one when it is named one, or when at
- * least [MIN_UNNAMED_PERSONALITY] of the LSDAs stored after it, and nine in ten of them, parse.
+ * Every LSDA the registrations in [set] store, by address. A stored target counts as the personality
+ * routine when named one or, unnamed, when at least [MIN_UNNAMED_PERSONALITY] of its LSDAs and nine in
+ * ten of them parse.
  */
 fun Program.sjljLsdas(set: AddressSetView, monitor: TaskMonitor): Map<Address, StoredLsda> {
     val parsed = mutableMapOf<Address, SjljLsda?>()
@@ -64,10 +62,8 @@ fun Program.sjljLsdas(set: AddressSetView, monitor: TaskMonitor): Map<Address, S
 private fun Program.isPersonality(at: Address) = symbolTable.getSymbols(at).any { it.name.endsWith("personality_sj0") }
 
 /**
- * Every personality/LSDA store pair in the executable bytes of [set], whose two immediates both land
- * in memory: a `movl $imm32, d(%ebp)` and, within [WINDOW] bytes after it, one to `d+4`. gcc
- * schedules the prologue, so the two need not be adjacent, and either may take a disp8 or a disp32
- * whichever side of -128 its slot falls. Read from the bytes, so before or without disassembly.
+ * Every `movl $imm32, d(%ebp)` followed within [WINDOW] bytes by one to `d+4`, both immediates in
+ * memory, in the executable bytes of [set]. Scans bytes, so it needs no disassembly.
  */
 fun Program.sjljRegistrations(set: AddressSetView, monitor: TaskMonitor): List<Registration> {
     val space = addressFactory.defaultAddressSpace

@@ -16,11 +16,9 @@ fun Program.thisStorage(): Address? {
 }
 
 /**
- * Make an x86 `__fastcall` that takes nothing in EDX the `__thiscall` it may as well be, and is, once it
- * is known to be a method: both take the first argument in ECX and the rest on the stack, popped by the
- * callee, and only `__fastcall` takes a second in EDX. Ghidra picks `__fastcall` for a method whose
- * only register argument is `this`. The ECX parameter becomes the `this` the convention adds. Whether
- * it changed it.
+ * Turns a method's x86 `__fastcall` with nothing in EDX into the `__thiscall` it really is, the ECX
+ * parameter becoming `this`. Ghidra picks `__fastcall` when `this` is the only register argument.
+ * Returns whether it changed anything.
  */
 fun Function.fastcallToThiscall(): Boolean {
     if (callingConventionName != FASTCALL) return false
@@ -51,8 +49,8 @@ data class PointerInto(val root: Varnode, val offset: Long) {
 }
 
 /**
- * Trace a decompiled pointer back through copies, casts and constant adds, and through a phi whose
- * other inputs are all null, as a pointer from `new` checked before its constructor runs is.
+ * Traces a decompiled pointer back through copies, casts and constant adds, and through a phi whose
+ * other inputs are null (a `new` result checked before its constructor runs).
  */
 fun Varnode.pointerInto(offset: Long = 0, depth: Int = 0): PointerInto = when (
     (def?.opcode)?.takeIf { depth < MAX_TRACE }

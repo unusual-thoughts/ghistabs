@@ -7,11 +7,9 @@ import ghidra.program.model.gclass.ClassUtils
 import ghistabs.diagnose.DiagnosticSink
 
 /**
- * Describe [this] as [owner]'s [table], the one the `{vfptr}` at [vfptrOffset] in the class points at.
- * The description leads with the offset tag `ClassUtils.isVTable` (12.1+) recognises a table by, one
- * per table at its own `{vfptr}`'s offset, so a secondary carries the offset of the subobject it
- * serves. No offset, no tag: a guessed one would point Ghidra's vxtable replacement at the wrong word,
- * and a negative one can only come from a misread record.
+ * Describes this struct as [owner]'s [table], led by the offset tag Ghidra 12.1's `ClassUtils.isVTable`
+ * matches: the [offset] of the `{vfptr}` that points at it. Without a known, non-negative offset there
+ * is no tag, since a wrong one would misplace Ghidra's vxtable replacement.
  */
 internal fun Structure.describeVxTable(owner: String, table: String, offset: Long?) {
     val vfptrOffset = offset?.takeIf { it >= 0 }
@@ -21,11 +19,7 @@ internal fun Structure.describeVxTable(owner: String, table: String, offset: Lon
     description = listOfNotNull(tag, text).joinToString(" ")
 }
 
-/**
- * Offset of the first `{vfptr}` in [this], looking through base subobjects in layout order — so it
- * finds the pointer a class inherits through its primary base as well as one it owns, wherever the
- * ABI put it (gcc 2.x appends it after the class's own fields).
- */
+/** Offset of the first `{vfptr}` in this struct, its own or one inherited through a base subobject. */
 internal fun Structure.vfptrOffset(): Int? = definedComponents.firstNotNullOfOrNull { c ->
     when {
         c.fieldName == ClassUtils.VFPTR -> c.offset
@@ -43,10 +37,8 @@ internal fun Structure.primaryBase(): String? {
 }
 
 /**
- * Offset in [this] of the `{vfptr}` inside the base subobject [base] names, looking through base
- * subobjects in layout order — where a gcc 2.x secondary vtable's pointer sits in the class. The base
- * is found by name, whole: a primary base `VfptrModel.SPLIT_BASE` took apart is a `_fields_` run
- * with no vptr left, and its table is the class's own.
+ * Offset of the `{vfptr}` inside base subobject [base], where a gcc 2.x secondary vtable's pointer
+ * sits. Matches only a whole base: a split primary base has no vptr of its own.
  */
 internal fun Structure.vfptrOffsetOfBase(base: String): Int? = definedComponents.firstNotNullOfOrNull { c ->
     val dt = c.dataType as? Structure
