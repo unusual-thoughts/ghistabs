@@ -10,6 +10,7 @@ import ghidra.util.ObjectStorage
 import ghidra.util.Saveable
 import ghistabs.GPropertiesFormat
 import ghistabs.cpp.abi.VtableRecord
+import ghistabs.toClass
 import kotlinx.serialization.Serializable
 
 /** A C++ member's or base's access, as a stab's visibility marker or an RTTI base flag states it. */
@@ -26,16 +27,34 @@ interface BaseDecl {
     val offset: Long?
 }
 
+/** A direct base of a class a recovery pass knows: the base's [cls], and how the class holds it. */
+data class ClassBase(
+    val cls: ClassDecl,
+    override val isVirtual: Boolean,
+    override val access: Access,
+    override val offset: Long?,
+) : BaseDecl
+
 /**
- * A class as a recovery pass knows it: its name, the namespace built for it if any, and every class it
- * derives from. Equal by identity, so each source keeps one per class.
+ * A class as a recovery pass knows it: its name, the namespace built for it if any, and its direct bases.
+ * Equal by identity, so each source keeps one per class.
  */
 interface ClassDecl {
     val name: String
     val ns: Namespace?
 
+    /** Its direct bases, in declaration order. */
+    val bases: List<ClassBase>
+
     /** Every class this one derives from, directly or not. */
     val ancestors: Set<ClassDecl>
+        get() = buildSet {
+            val todo = ArrayDeque(bases)
+            while (todo.isNotEmpty()) {
+                val base = todo.removeFirst().cls
+                if (add(base)) todo += base.bases
+            }
+        }
 
     /** Its own vtables; empty when none was emitted, as for an abstract base. */
     val vftables: List<VtableRecord>
@@ -104,6 +123,19 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         /** Null when no stabs import wrote a record. */
         fun Program.readClassRecord(): Map<Long, Entry>? =
             (getOptions(CATEGORY).getCustomOption(CLASSES, null) as? ClassHierarchyRecords)?.classes
+
+        /**
+         * [cls]'s entry, by its namespace's id, with its struct's [structId] and [size] range; null if it has
+         * no namespace. A base with no namespace goes by name.
+         */
+        fun entryOf(cls: ClassDecl, structId: Long?, size: LongRange?): Pair<Long, Entry>? {
+            val ns = cls.ns?.toClass() ?: return null
+            val bases = cls.bases.map { b ->
+                val baseNs = b.cls.ns?.toClass()
+                Base(baseNs?.id, if (baseNs == null) b.cls.name else null, b.isVirtual, b.access, b.offset)
+            }
+            return ns.id to Entry(structId, bases, size?.first, size?.singleOrNull() != null)
+        }
 
         fun Program.areClassesRecorded() = getOptions(CATEGORY).contains(CLASSES)
     }

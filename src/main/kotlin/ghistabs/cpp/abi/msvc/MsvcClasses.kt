@@ -23,6 +23,7 @@ import ghistabs.cpp.recover.NewSizeReader
 import ghistabs.cpp.recover.StructorFinder
 import ghistabs.cpp.recover.fastcallToThiscall
 import ghistabs.cpp.recover.sizeBounds
+import ghistabs.cpp.recover.vptrOffsets
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.pointerAt
 import ghistabs.toClass
@@ -92,23 +93,29 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
 
     /**
      * A class the RTTI describes, by its type descriptor: its namespace, if the analyzer made one, and its
-     * Base Class Array, which lists every base, direct or not, after the class itself.
+     * Base Class Array ([array]), which lists every base, direct or not, after the class itself.
      */
     private inner class RttiClass(
-        val descriptor: Address,
         override val ns: Namespace?,
         override val name: String,
-        val bases: List<BaseEntry>,
+        private val array: List<BaseEntry>,
     ) : ClassDecl {
-        override val ancestors by lazy { bases.drop(1).mapTo(mutableSetOf()) { classAt(it.descriptor) } }
+        override val bases by lazy {
+            directBases(array).map { ClassBase(classAt(it.descriptor), it.isVirtual, it.access, it.classOffset()) }
+        }
+        override val ancestors by lazy { super.ancestors }
 
         // Filled by [readVftables].
         override val vftables = mutableListOf<VtableRecord>()
-        val directBases by lazy { directBases(bases) }
     }
 
+    // `mdisp` is no offset in the class for a virtual base.
+    private fun BaseEntry.classOffset() = offset.takeUnless { isVirtual }
+
+    /** The class with type descriptor [descriptor]; one known by its descriptor alone if no hierarchy names it. */
     private fun classAt(descriptor: Address) = classes.getOrPut(descriptor) {
-        RttiClass(descriptor, null, "?", emptyList())
+        val ns = typeDescriptorClass(descriptor)
+        RttiClass(ns, ns?.name ?: "?", emptyList())
     }
 
     data class Result(
@@ -121,7 +128,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     )
 
     fun recover(monitor: TaskMonitor = TaskMonitor.DUMMY): Result {
-        val hierarchies = readHierarchies().associateBy { it.descriptor }
+        val hierarchies = readHierarchies().toMap()
         classes += hierarchies
         val holders = readVftables()
         val owners = holders.mapValues { (_, hs) -> virtualOwner(hs) }
@@ -139,8 +146,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             nameStructor(func, cls, structor.second)
         }
         val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
-        val sizes = sizeClasses(hierarchies.values, NewSizeReader(program, Msvc, this).read(ctors, monitor))
-        writeRecords(hierarchies, sizes)
+        val sizes = sizeClasses(NewSizeReader(program, Msvc, this).read(ctors, monitor))
+        writeRecords(hierarchies.values, sizes)
         return Result(hierarchies.size, owners.size - shared, moved, shared, named, sizes.size)
     }
 
@@ -151,7 +158,8 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             val chd = Rtti3Model(program, sym.address, options)
             val array = chd.baseClassArray()
             val td = array.first().descriptor
-            RttiClass(td, sym.parentNamespace.takeUnless { it.isGlobal }, chd.rtti0Model.descriptorName, array)
+            val ns = sym.parentNamespace.takeUnless { it.isGlobal } ?: typeDescriptorClass(td)
+            td to RttiClass(ns, chd.rtti0Model.descriptorName, array)
         }.onFailure { warn("msvc-hierarchy-unread", "${sym.name}: ${it.message}", sym.address) }.getOrNull()
     }.toList()
 
@@ -195,17 +203,9 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
      * shorter than an exact size grows to it, but none is made: `RecoverClassesFromRTTIScript` would take
      * it for the layout rather than work one out.
      */
-    private fun sizeClasses(
-        classes: Collection<RttiClass>,
-        allocated: Map<ClassDecl, Long>,
-    ): Map<ClassDecl, LongRange> {
-        val bases: Map<ClassDecl, List<Pair<ClassDecl, Long>>> = classes.associate { cls ->
-            cls to cls.directBases.filterNot { it.isVirtual }.map { classAt(it.descriptor) to it.offset }
-        }
-        val vptrs: Map<ClassDecl, Long> = this.classes.values.mapNotNull { cls ->
-            cls.vftables.mapNotNull { it.vfptrOffset(program) }.maxOrNull()?.let { cls to it }
-        }.toMap()
-        val bounds = sizeBounds(bases, vptrs, allocated, program.defaultPointerSize.toLong())
+    private fun sizeClasses(allocated: Map<ClassDecl, Long>): Map<ClassDecl, LongRange> {
+        val all = classes.values.toList()
+        val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, program.defaultPointerSize.toLong())
         for ((cls, size) in bounds) {
             val exact = size.singleOrNull() ?: continue
             val ns = cls.ns?.toClass() ?: continue
@@ -232,22 +232,9 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     }
 
     /** Writes each class's record over an earlier run's, so a rerun finds `RecoverClassesFromRTTIScript`'s struct. */
-    private fun writeRecords(classes: Map<Address, RttiClass>, sizes: Map<ClassDecl, LongRange>) {
-        val entries = classes.values.mapNotNull { cls ->
-            val ns = cls.ns?.toClass() ?: return@mapNotNull null
-            val bases = cls.directBases.map { b ->
-                val base = classes[b.descriptor]
-                val baseNs = base?.ns?.toClass() ?: typeDescriptorClass(b.descriptor)
-                ClassHierarchyRecords.Base(
-                    baseNs?.id,
-                    if (baseNs == null) base?.name ?: "?" else null,
-                    b.isVirtual,
-                    b.access,
-                    b.offset.takeUnless { b.isVirtual },
-                )
-            }
-            val size = sizes[cls]
-            ns.id to ClassHierarchyRecords.Entry(classStructId(ns), bases, size?.first, size?.singleOrNull() != null)
+    private fun writeRecords(classes: Collection<ClassDecl>, sizes: Map<ClassDecl, LongRange>) {
+        val entries = classes.mapNotNull { cls ->
+            ClassHierarchyRecords.entryOf(cls, cls.ns?.toClass()?.let(::classStructId), sizes[cls])
         }
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
