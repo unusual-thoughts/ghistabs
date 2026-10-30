@@ -95,9 +95,12 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         override val offset: Long? = null,
     ) : BaseDecl
 
-    /** A class's struct by datatype id, and its direct bases in order. */
+    /**
+     * A class's struct by datatype id, its direct bases in order, and the [constructors] a class pass found
+     * for it, by entry point offset: those it named as an analysis's guess, which still say its class.
+     */
     @Serializable
-    data class Entry(val structId: Long?, val bases: List<Base>)
+    data class Entry(val structId: Long?, val bases: List<Base>, val constructors: List<Long> = emptyList())
 
     override fun readState(properties: GProperties) {
         classes = GPropertiesFormat.decode<ClassHierarchyRecords>(properties).classes
@@ -119,16 +122,16 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
             (getOptions(CATEGORY).getCustomOption(CLASSES, null) as? ClassHierarchyRecords)?.classes
 
         /**
-         * [cls]'s entry, by its namespace's id, with its struct's [structId]; null if it has no namespace. A
-         * base with no namespace goes by name.
+         * [cls]'s entry, by its namespace's id, with its struct's [structId] and its [constructors]; null if it
+         * has no namespace. A base with no namespace goes by name.
          */
-        fun entryOf(cls: ClassDecl, structId: Long?): Pair<Long, Entry>? {
+        fun entryOf(cls: ClassDecl, structId: Long?, constructors: List<Long> = emptyList()): Pair<Long, Entry>? {
             val ns = cls.ns?.toClass() ?: return null
             val bases = cls.bases.map { b ->
                 val baseNs = b.cls.ns?.toClass()
                 Base(baseNs?.id, if (baseNs == null) b.cls.name else null, b.isVirtual, b.access, b.offset)
             }
-            return ns.id to Entry(structId, bases)
+            return ns.id to Entry(structId, bases, constructors)
         }
 
         fun Program.areClassesRecorded() = getOptions(CATEGORY).contains(CLASSES)

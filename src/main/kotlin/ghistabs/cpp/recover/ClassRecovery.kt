@@ -63,8 +63,9 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         val structors = StructorFinder(program, read.classes, this).find(read.holders, abi, monitor)
         var moved = 0
         for ((func, owner) in owners) {
-            val name = if (func in structors) null else owner?.let { slotName(func, it, read.holders.getValue(func)) }
-            if (owner != null && attach(func, owner, name)) moved++
+            val holders = read.holders.getValue(func)
+            val name = if (func in structors) null else owner?.let { slotName(func, it, holders) }
+            if (owner != null && attach(func, owner, name, read = holders == setOf(owner))) moved++
         }
         val shared = owners.values.count { it == null }
         if (shared > 0) {
@@ -76,15 +77,17 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         }
         val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
         val sizes = sizeClasses(read.classes, NewSizeReader(program, abi, this).read(ctors, monitor))
-        writeRecords(read.recorded)
+        writeRecords(read.recorded, ctors.entries.groupBy({ it.value }, { it.key.entryPoint.offset }))
         return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size)
     }
 
     /**
      * Marks [func] virtual unless recorded otherwise, and moves it into [cls] where it's global or [guessed],
-     * renaming it [name] in the latter case; whether it moved.
+     * renaming it [name] in the latter case; whether it moved. The name is [SourceType.IMPORTED] where the RTTI
+     * [read] [cls] off, its one class's tables alone holding [func], as Ghidra's RTTI analyzer labels what it
+     * reads, and [SourceType.ANALYSIS] where [virtualOwner] inferred it.
      */
-    private fun attach(func: Function, cls: ClassDecl, name: String?): Boolean {
+    private fun attach(func: Function, cls: ClassDecl, name: String?, read: Boolean): Boolean {
         val entry = func.entryPoint
         if (program.memberAttrs(entry) == null) program.writeMember(entry, MemberAttrs(virt = VirtKind.VIRTUAL))
         val ns = cls.ns?.toClass() ?: return false
@@ -92,7 +95,7 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         val moves = (func.parentNamespace.isGlobal || guessed) && func.parentNamespace.id != ns.id
         return runCatching {
             if (moves) func.parentNamespace = ns
-            if (guessed && name != null) func.setName(name, SourceType.IMPORTED)
+            if (guessed && name != null) func.setName(name, if (read) SourceType.IMPORTED else SourceType.ANALYSIS)
         }.onFailure { warn("class-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
             .isSuccess && moves
     }
@@ -112,9 +115,9 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
     }
 
     /**
-     * Whether [this]'s name and class are a guess this pass may replace with what the RTTI proves, its own
-     * names being [SourceType.IMPORTED]: it has no name, or one an analysis gave it in a class, as
-     * `RecoverClassesFromRTTIScript` names what it places. A name a user or the debug info gave stays, and
+     * Whether [this]'s name and class are a guess this pass may replace with its own, being the later analysis:
+     * it has no name, or one an analysis gave it in a class, as `RecoverClassesFromRTTIScript` names what it
+     * places. A name a user or the debug info gave stays, and
      * one an analysis gave a global function, such as Function ID's.
      */
     private fun Function.guessed() = symbol.source == SourceType.DEFAULT ||
@@ -158,7 +161,7 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
             val moves = (func.parentNamespace.isGlobal || guessed) && func.parentNamespace.id != cls.id
             if (moves) func.parentNamespace = cls
             val renames = guessed && func.parentNamespace.id == cls.id && func.name != name
-            if (renames) func.setName(name, SourceType.IMPORTED)
+            if (renames) func.setName(name, SourceType.ANALYSIS)
             val retyped = func.parentNamespace.id == cls.id && func.fastcallToThiscall()
             moves || renames || retyped
         }.onFailure {
@@ -166,10 +169,13 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         }.getOrDefault(false)
     }
 
-    /** Writes each class's record over an earlier run's, so a rerun finds `RecoverClassesFromRTTIScript`'s struct. */
-    private fun writeRecords(classes: Collection<ClassDecl>) {
+    /**
+     * Writes each class's record, with the [constructors] found for it, over an earlier run's, so a rerun finds
+     * `RecoverClassesFromRTTIScript`'s struct.
+     */
+    private fun writeRecords(classes: Collection<ClassDecl>, constructors: Map<ClassDecl, List<Long>>) {
         val entries = classes.mapNotNull { cls ->
-            ClassHierarchyRecords.entryOf(cls, cls.ns?.toClass()?.let(::classStructId))
+            ClassHierarchyRecords.entryOf(cls, cls.ns?.toClass()?.let(::classStructId), constructors[cls].orEmpty())
         }
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
