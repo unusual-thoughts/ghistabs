@@ -33,6 +33,7 @@ data class ThisClassGuess(val cls: GhidraClass, val sites: Int)
  */
 class ThisClassGuesser(private val bases: Map<GhidraClass, GhidraClass?>) {
     private val byId = bases.keys.associateBy { it.id }
+    fun known(f: Function) = byId[f.parentNamespace.id]
 
     /** [cls], then the base it shares its address with, and so on up. */
     fun addressChain(cls: GhidraClass): List<GhidraClass> = generateSequence(cls) { bases[it] }.take(MAX_DEPTH).toList()
@@ -44,14 +45,13 @@ class ThisClassGuesser(private val bases: Map<GhidraClass, GhidraClass?>) {
      * belongs to the one all the others derive from, through the bases they share their address with, and
      * to none where no one class is.
      */
-    fun guess(calls: Collection<ThisCall>): Map<Function, ThisClassGuess> {
-        fun known(f: Function) = byId[f.parentNamespace.id]
-        return calls.filter { known(it.callee) == null }.groupBy { it.callee }.mapNotNull { (f, sites) ->
-            val classes = sites.mapNotNull { it.built ?: known(it.caller) }
-            val cls = classes.distinct().singleOrNull { c -> classes.all { c in addressChain(it) } }
-            cls?.let { f to ThisClassGuess(it, classes.size) }
-        }.toMap()
-    }
+    fun guess(calls: Collection<ThisCall>): Map<Function, ThisClassGuess> = calls.filter {
+        known(it.callee) == null
+    }.groupBy { it.callee }.mapNotNull { (f, sites) ->
+        val classes = sites.mapNotNull { it.built ?: known(it.caller) }
+        val cls = classes.distinct().singleOrNull { c -> classes.all { c in addressChain(it) } }
+        cls?.let { f to ThisClassGuess(it, classes.size) }
+    }.toMap()
 }
 
 private const val MAX_DEPTH = 64
@@ -68,9 +68,20 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     private val thisStorage = program.thisStorage()
     private val symbols = program.symbolTable
 
+    /** Each recorded class, with its non-virtual base at offset 0, the one it shares its address with. */
+    val bases by lazy {
+        val records = program.readClassRecord().orEmpty()
+        val classes = records.keys.mapNotNull { id ->
+            (symbols.getSymbol(id)?.`object` as? GhidraClass)?.let { id to it }
+        }.toMap()
+        classes.map { (id, cls) ->
+            val base = records.getValue(id).bases.firstOrNull { !it.isVirtual && (it.offset ?: 0L) == 0L }
+            cls to base?.namespaceId?.let(classes::get)
+        }.toMap()
+    }
+
     /** How many it moved. Only the evidence is decompiled: the recorded classes' methods and constructors' callers. */
     fun guess(monitor: TaskMonitor): Int {
-        val bases = bases()
         if (bases.isEmpty() || thisStorage == null) return 0
         val functions = program.functionManager.getFunctions(true).toList()
         val candidates = functions.filterTo(mutableSetOf()) { it.isCandidate() }
@@ -79,27 +90,16 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val methods = functions.mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
         // A constructor goes by its class's name, as every ABI's structor pass and stabs name it.
         val ctors = methods.filter { (f, cls) -> f.name == cls.name }
-        val calls = mutableListOf<ThisCall>()
-        DecompInterface().useWith(program) { decomp ->
-            for (f in methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }) {
-                if (monitor.isCancelled) break
-                val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
-                calls += thisCalls(f, high, ctors).filter { it.callee in candidates }
+        val calls = buildList {
+            DecompInterface().useWith(program) { decomp ->
+                for (f in methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }) {
+                    if (monitor.isCancelled) break
+                    val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
+                    addAll(thisCalls(f, high, ctors).filter { it.callee in candidates })
+                }
             }
         }
         return ThisClassGuesser(bases).guess(calls).count { (f, guess) -> place(f, guess) }
-    }
-
-    /** Each recorded class, with its non-virtual base at offset 0, the one it shares its address with. */
-    private fun bases(): Map<GhidraClass, GhidraClass?> {
-        val records = program.readClassRecord().orEmpty()
-        val classes = records.keys.mapNotNull { id ->
-            (symbols.getSymbol(id)?.`object` as? GhidraClass)?.let { id to it }
-        }.toMap()
-        return classes.map { (id, cls) ->
-            val base = records.getValue(id).bases.firstOrNull { !it.isVirtual && (it.offset ?: 0L) == 0L }
-            cls to base?.namespaceId?.let(classes::get)
-        }.toMap()
     }
 
     /**
@@ -131,12 +131,13 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val self = f.argumentAt(f.thisIndex())
         val ops = high.pcodeOps.asSequence().toList()
         // The objects the function built, by where they point, from their constructor's argument and result.
-        val built = mutableMapOf<Pair<Any, Long>, GhidraClass>()
-        for (op in ops) {
-            val ctor = op.directCallee() ?: continue
-            val cls = ctors[ctor] ?: continue
-            op.thisArgument(ctor)?.let { built[it.pointerInto().key()] = cls }
-            op.output?.let { built[it.pointerInto().key()] = cls }
+        val built = buildMap {
+            for (op in ops) {
+                val ctor = op.directCallee() ?: continue
+                val cls = ctors[ctor] ?: continue
+                op.thisArgument(ctor)?.let { put(it.pointerInto().key(), cls) }
+                op.output?.let { put(it.pointerInto().key(), cls) }
+            }
         }
         return ops.mapNotNull { op ->
             val callee = op.directCallee() ?: return@mapNotNull null
@@ -157,20 +158,18 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return f.getThunkedFunction(true) ?: f
     }
 
-    private fun place(f: Function, guess: ThisClassGuess): Boolean {
-        val cls = guess.cls
-        return runCatching {
-            f.parentNamespace = cls
-            f.fastcallToThiscall()
-            program.bookmarkManager.setBookmark(
-                f.entryPoint,
-                BookmarkType.ANALYSIS,
-                BOOKMARK,
-                "Class guessed from ${guess.sites} call(s) on objects of known class",
-            )
-        }.onFailure { warn("this-class-unplaced", "${f.name} -> ${cls.getName(true)}: $it", f.entryPoint) }
-            .isSuccess
-    }
+    private fun place(f: Function, guess: ThisClassGuess): Boolean = runCatching {
+        f.parentNamespace = guess.cls
+        f.fastcallToThiscall()
+        program.bookmarkManager.setBookmark(
+            f.entryPoint,
+            BookmarkType.ANALYSIS,
+            BOOKMARK,
+            "Class guessed from ${guess.sites} call(s) on objects of known class",
+        )
+    }.onFailure {
+        warn("this-class-unplaced", "${f.name} -> ${guess.cls.getName(true)}: $it", f.entryPoint)
+    }.isSuccess
 
     companion object {
         const val BOOKMARK = "Method class guess"
