@@ -13,8 +13,8 @@ import ghistabs.importer.ImportProbe
 
 /**
  * Guess the class of each unnamed function that takes a `this`, off the objects its callers pass it
- * ([ThisClasses]), once a class pass (MSVC or Itanium RTTI classes) or a stabs import has recorded the classes and put their
- * methods, constructors included, in them.
+ * ([ThisClasses]), once a class pass (MSVC or Itanium RTTI classes) or a stabs import has recorded the
+ * classes and put their methods, constructors included, in them.
  */
 class ThisClassAnalyzer :
     AbstractAnalyzer(
