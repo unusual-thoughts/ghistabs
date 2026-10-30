@@ -14,12 +14,12 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * `features/vbase_msvc.cc` under the MSVC ABI, stripped: `Left` and `Right` derive virtually from `Core`, and
+ * `features/classes_msvc.cc` under the MSVC ABI, stripped: `Left` and `Right` derive virtually from `Core`, and
  * `Both` from them. No RTTI says where a virtual base sits: the vbtable does, which the constructors store
  * into the object next to its vftable, so the class pass finds it there and lays `Core` where it says.
  */
 @Tag("integration")
-class MsvcVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun `a virtual base is laid where the vbtable a constructor stores says`() = withAnalyzed { program ->
         fun vbase(cls: String) = program.classStruct(cls).definedComponents.single { it.dataType.name == "Core" }
@@ -51,6 +51,6 @@ class MsvcVirtualBaseIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
 
     private companion object {
-        const val FIXTURE = "vbase_msvc_clang.exe"
+        const val FIXTURE = "classes_msvc_clang.exe"
     }
 }
