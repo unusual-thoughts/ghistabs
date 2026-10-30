@@ -7,7 +7,12 @@ registerHeadlessTest(
     "Real-binary assertion tests against binary fixtures (@Tag(\"integration\"))",
     tag = "integration",
     narrowGeneratedClasses = true,
-) { finalizedBy(auditTests) }
+) {
+    finalizedBy(auditTests)
+    // Each mode's counters, for WriteBaselinesAuditTest: one an earlier run left would be merged into this run's.
+    val observed = layout.buildDirectory.dir("test-output/observed-counters").get().asFile
+    doFirst { observed.deleteRecursively() }
+}
 
 // Imports a real fixture against exactly what we ship: serializers get reached from class
 // initializers, so a missing `-json` fails in the GUI while every ordinary test passes.
@@ -42,6 +47,8 @@ val auditTests = tasks.register<Test>("auditTests") {
     // Which modes the run it audits covered — an audit over mode-gated assertions can only read a
     // run that exercised them (see ExpectedToFailAuditTest).
     systemProperty("modeFilter", providers.gradleProperty("mode").getOrElse(""))
+    // WriteBaselinesAuditTest rewrites the committed baselines instead of writing shifted ones.
+    systemProperty("regenerateBaselines", providers.gradleProperty("regenerateBaselines").getOrElse(""))
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     outputs.upToDateWhen { false }
