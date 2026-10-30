@@ -448,7 +448,7 @@ class ClassApplier(
             )
         }
 
-        val addressPoint = record.lay(registry, program, vftable, name, ns, virtualBases)
+        val addressPoint = record.lay(layer(), vftable, name, ns, virtualBases = virtualBases)
         debug("vtable-applied", "class=$name abi=$abi", address = addressPoint)
         if (record.header != null) laySecondaryVtables(record, vftable, name, ns)
 
