@@ -102,6 +102,24 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun `a deleting destructor's callee destroys though it stores no vptr, its base's destructor storing it`() {
+        // B's destructor leaves the vptr to A's, which it calls; B's deleting destructor calls B's
+        val storers = mapOf("baseDtor" to stores(a))
+        val calls = mapOf("slot" to setOf("dtor", FREE), "dtor" to setOf("baseDtor"))
+        structors(storers, mapOf("slot" to setOf(b)), calls) mustBe mapOf(
+            "slot" to (b to DELETING_DESTRUCTOR),
+            "dtor" to (b to DESTRUCTOR),
+            "baseDtor" to (a to DESTRUCTOR),
+        )
+    }
+
+    @Test
+    fun `a deleting destructor calling more than its destructor names none`() {
+        val calls = mapOf("slot" to setOf("dtor", "other", FREE))
+        structors(emptyMap(), mapOf("slot" to setOf(b)), calls) mustBe emptyMap()
+    }
+
+    @Test
     fun `a slot calling a constructor, as a clone does, deletes nothing`() {
         val storers = mapOf("ctor" to stores(a, returnsThis = true))
         structors(storers, mapOf("clone" to setOf(a)), mapOf("clone" to setOf("ctor")))["clone"].mustBeNull()

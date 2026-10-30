@@ -64,12 +64,15 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
 
                     own != null -> deleting(held, own)?.let { this[slot] = it to StructorRole.DELETING_DESTRUCTOR }
 
-                    else -> thisCalls[slot].orEmpty().filter(::mayDestroy)
-                        .mapNotNull { f -> owners[f]?.let { cls -> deleting(held, cls)?.let { Triple(f, cls, it) } } }
-                        .singleOrNull()?.let { (dtor, cls, holder) ->
+                    else -> {
+                        val stored = thisCalls[slot].orEmpty().filter(::mayDestroy).mapNotNull { f ->
+                            owners[f]?.let { cls -> deleting(held, cls)?.let { Triple(f, cls, it) } }
+                        }.singleOrNull()
+                        (stored ?: unstoredDestructor(slot, held, owners, convention))?.let { (dtor, cls, holder) ->
                             this[slot] = holder to StructorRole.DELETING_DESTRUCTOR
                             putIfAbsent(dtor, cls to StructorRole.DESTRUCTOR)
                         }
+                    }
                 }
             }
             if (returnsThis) {
@@ -90,6 +93,22 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
                 for (f in destroying) this[f] = owners.getValue(f) to StructorRole.DESTRUCTOR
             }
             for ((f, cls) in owners) putIfAbsent(f, cls to StructorRole.CONSTRUCTOR)
+        }
+
+        /**
+         * The destructor a deleting destructor [slot] calls where that stores no vptr, as one whose vptr
+         * resets the compiler dropped for the bases' destructors' own: the one other function it calls on
+         * `this`, destroying the class that introduced the slot ([virtualOwner]).
+         */
+        private fun unstoredDestructor(
+            slot: Function,
+            held: Set<ClassDecl>,
+            owners: Map<Function, ClassDecl>,
+            convention: StructorConvention,
+        ): Triple<Function, ClassDecl, ClassDecl>? {
+            val dtor = thisCalls[slot].orEmpty().filter { it.name !in convention.operatorDeleteNames }.singleOrNull()
+            if (dtor == null || dtor in owners || dtor == slot) return null
+            return virtualOwner(held)?.let { Triple(dtor, it, it) }
         }
 
         private fun frees(f: Function, convention: StructorConvention) =
