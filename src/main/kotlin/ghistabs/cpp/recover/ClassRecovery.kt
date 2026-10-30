@@ -15,6 +15,7 @@ import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.writeMember
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.StructorRole
+import ghistabs.cpp.abi.VtableRecord
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.toClass
 
@@ -97,16 +98,27 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
 
     /**
      * `vfunctionN`, as `RecoverClassesFromRTTIScript` names a virtual: [func]'s slot, from 1, in [owner]'s
-     * vftables, or where it has none, in those of the classes holding it ([holders]).
+     * vftables, or where it has none, in those of the classes holding it ([holders]). Where that class has
+     * several tables, `vfunctionN_for_Base` after the base the table serves, as the script names it.
      */
     private fun slotName(func: Function, owner: ClassDecl, holders: Set<ClassDecl>): String? {
-        val tables = (listOf(owner) + holders).asSequence().flatMap { it.vftables }
-        val slot = tables.map { record ->
-            record.slots(program).indexOfFirst { at ->
-                program.functionManager.getFunctionAt(at)?.let { it.getThunkedFunction(true) ?: it } == func
+        for (cls in listOf(owner) + holders) {
+            for (record in cls.vftables) {
+                val slot = record.slots(program).indexOfFirst { at ->
+                    program.functionManager.getFunctionAt(at)?.let { it.getThunkedFunction(true) ?: it } == func
+                }
+                if (slot < 0) continue
+                val base = if (cls.vftables.size > 1) servedBase(cls, record) else null
+                return "$VFUNCTION${slot + 1}" + base?.let { "_for_${it.name}" }.orEmpty()
             }
-        }.firstOrNull { it >= 0 } ?: return null
-        return "$VFUNCTION${slot + 1}"
+        }
+        return null
+    }
+
+    /** The direct base of [cls] whose subobject [record]'s vptr sits in: the first at its offset. */
+    private fun servedBase(cls: ClassDecl, record: VtableRecord): ClassDecl? {
+        val at = record.vfptrOffset(program) ?: return null
+        return cls.bases.firstOrNull { !it.isVirtual && (it.offset ?: 0L) == at }?.cls
     }
 
     /**
