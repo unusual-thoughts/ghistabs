@@ -63,11 +63,11 @@ interface VtableLayout {
     fun Structure.addEntryAdjustment(slot: Int) = Unit
 
     /** Where the vptr into this record sits in the complete object, if the record says: Itanium's `-offset_to_top`. */
-    fun VtableRecord.vfptrOffset(program: Program): Long? = null
+    fun vfptrOffsetOf(record: VtableRecord, program: Program): Long? = null
 }
 
 /**
- * A vtable record ([vtableRecord]): where it starts, the [header] in front of its address point, and its [abi].
+ * A vtable record ([CxxAbi.recordAt]): where it starts, the [header] in front of its address point, and its [abi].
  * Only Itanium's has a header ([ghistabs.cpp.abi.itanium.vtableHeaderLayout]). [internal] for a secondary,
  * [construction] for one in a `_ZTC` group, which its labels say as Ghidra's do ([ClassNaming.vftableLabel]).
  */
@@ -83,6 +83,9 @@ data class VtableRecord(
 
     /** What a vptr into this record holds, where its `vftable` label goes. */
     val addressPoint: Address get() = abi.addressPoint(this)
+
+    /** Where the vptr into this record sits in the complete object, if the ABI knows ([VtableLayout.vfptrOffsetOf]). */
+    fun vfptrOffset(program: Program): Long? = abi.vfptrOffsetOf(this, program)
 
     /** Where [header]'s field [name] sits in memory. */
     fun fieldAddress(name: String): Address? = header?.field(name)?.let { address.add(it.offset.toLong()) }
@@ -214,9 +217,6 @@ data class VtableRecord(
 /** gcc's two destructor entries, complete and deleting: the only slots it leaves null. */
 private const val DESTRUCTOR_SLOTS = 2
 
-/** The record whose vtable symbol is at [ztv], as [abi] finds it. */
-fun Program.vtableRecord(ztv: Address, abi: CxxAbi = Itanium): VtableRecord = abi.recordAt(this, ztv)
-
 /** Labels [at], raising an existing label to [SourceType.IMPORTED], which is what [isVtableClaimed] reads. */
 private fun Program.labelVtable(at: Address, label: String, ns: Namespace, source: SourceType) {
     val sym = symbolTable.createLabel(at, label, ns, source)
@@ -292,4 +292,4 @@ fun primaryVtableOf(sym: Symbol): Pair<String, CxxAbi>? = CxxAbi.ofVtableSymbol(
  * vtable another object defines.
  */
 fun Program.definedVtableRecord(at: Address, abi: CxxAbi): VtableRecord? =
-    at.takeIf { memory.getBlock(it)?.isInitialized == true }?.let { abi.recordAt(this, it) }
+    at.takeIf(::isInitialized)?.let { abi.recordAt(this, it) }

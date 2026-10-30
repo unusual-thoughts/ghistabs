@@ -18,7 +18,6 @@ import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.VtableRecord
 import ghistabs.cpp.abi.definedVtableRecord
 import ghistabs.cpp.abi.primaryVtableOf
-import ghistabs.cpp.abi.vtableRecord
 import ghistabs.cpp.recover.VtableSweeper
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
@@ -624,7 +623,7 @@ class ClassApplier(
      * names `__vt_13TiXmlDocument` without defining it — and laying a vftable there stamps a record over
      * a block with no bytes to read.
      */
-    private fun Address.isDefined() = program.memory.getBlock(this)?.isInitialized == true
+    private fun Address.isDefined() = program.isInitialized(this)
 
     /** The class's vtable record: by its candidate symbols, then by the demangled-vtable index. */
     private fun LocatedClass.resolveVtable(): VtableRecord? {

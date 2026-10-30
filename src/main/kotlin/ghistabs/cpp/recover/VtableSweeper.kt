@@ -70,7 +70,7 @@ open class VtableSweeper(
                 val (cls, base) = Gcc2.secondaryVtableClasses(sym.name) ?: continue
                 val abi = CxxAbi.ofVtableSymbol(sym.name) ?: continue
                 getOrPut(cls) { mutableListOf() } +=
-                    base to program.vtableRecord(sym.address, abi).copy(internal = true)
+                    base to abi.recordAt(program, sym.address).copy(internal = true)
             }
         }.mapValues { (_, tables) -> tables.distinctBy { it.second.address }.sortedBy { it.second.address } }
     }
@@ -168,7 +168,7 @@ open class VtableSweeper(
         for (sym in groups) {
             val ns = constructionNamespace(sym.name) ?: continue
             val name = ns.getName(true)
-            val record = program.vtableRecord(sym.address).copy(construction = true)
+            val record = Itanium.recordAt(program, sym.address).copy(construction = true)
             val targets = record.slots(program)
             val path = ClassNaming.vftablePath(ns)
             // A base with no virtuals of its own (`Left`) has a header and no slots: nothing to type.
@@ -197,7 +197,7 @@ open class VtableSweeper(
         val symbols = symtab.symbolIterator.toList()
         val names = symbols.mapNotNull { sym -> typeinfoTypeOf(sym.name)?.let { sym.address to it } }.toMap()
         val dynamic = symbols.filter { Itanium.looksLikeVtable(it.name) || looksLikeZtc(it.name) }
-            .mapNotNullTo(HashSet()) { program.vtableRecord(it.address).rttiOf(program) }
+            .mapNotNullTo(HashSet()) { Itanium.recordAt(program, it.address).rttiOf(program) }
         val reader = VttReader(program, Rtti.Reader(program), names, dynamic)
         for (sym in symbols.filter { looksLikeZtt(it.name) }.distinctBy { it.address }) {
             val vtt = reader.vttAt(sym.address) ?: run {
@@ -252,7 +252,7 @@ open class VtableSweeper(
         val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti, construction)
             .filter { it.targets.isNotEmpty() }
         val offsets = listOfNotNull(primaryVftable?.let { 0L }) +
-            subs.map { with(abi) { it.record.vfptrOffset(program) } }
+            subs.map { it.record.vfptrOffset(program) }
         val bases = if (offsets.size < 2) emptyList() else baseNames(offsets, baseSubobjects(primary, rtti))
         val path = ClassNaming.vftablePath(ns, leaf)
         primaryVftable?.let {

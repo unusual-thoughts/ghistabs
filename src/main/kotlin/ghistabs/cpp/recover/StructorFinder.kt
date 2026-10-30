@@ -28,7 +28,7 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
 
     // Each vtable, by its address point: the class it serves and where in that class's object its vptr sits.
     private val tables = classes.flatMap { cls ->
-        cls.vftables.mapNotNull { r -> with(r.abi) { r.vfptrOffset(program) }?.let { r.addressPoint to (cls to it) } }
+        cls.vftables.mapNotNull { r -> r.vfptrOffset(program)?.let { r.addressPoint to (cls to it) } }
     }.toMap()
 
     /** Each structor's class and role, given [slots]: each vtable slot's function, and the classes holding it. */

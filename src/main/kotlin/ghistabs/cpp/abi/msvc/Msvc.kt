@@ -45,7 +45,8 @@ object Msvc : CxxAbi {
     override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 
     /** The offset of the subobject the record serves, by its complete object locator. */
-    override fun VtableRecord.vfptrOffset(program: Program) = program.msvcSubobjectOffset(address)?.toLong()
+    override fun vfptrOffsetOf(record: VtableRecord, program: Program) =
+        program.msvcSubobjectOffset(record.address)?.toLong()
 
     override val assignmentOperatorName = "operator="
 

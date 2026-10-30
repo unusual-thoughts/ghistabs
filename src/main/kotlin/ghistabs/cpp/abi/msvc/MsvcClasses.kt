@@ -203,7 +203,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             cls to cls.directBases.filterNot { it.isVirtual }.map { classAt(it.descriptor) to it.offset }
         }
         val vptrs: Map<ClassDecl, Long> = this.classes.values.mapNotNull { cls ->
-            cls.vftables.mapNotNull { with(Msvc) { it.vfptrOffset(program) } }.maxOrNull()?.let { cls to it }
+            cls.vftables.mapNotNull { it.vfptrOffset(program) }.maxOrNull()?.let { cls to it }
         }.toMap()
         val bounds = sizeBounds(bases, vptrs, allocated, program.defaultPointerSize.toLong())
         for ((cls, size) in bounds) {

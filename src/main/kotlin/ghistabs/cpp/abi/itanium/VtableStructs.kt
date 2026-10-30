@@ -76,11 +76,11 @@ fun Program.recordStart(top: Address): Address {
 }
 
 /** The record at [start] whose rtti word is at [rttiSlot], or with the bare two-word header if null. */
-private fun Program.recordAt(start: Address, rttiSlot: Address?, abi: CxxAbi): VtableRecord {
+private fun Program.recordAt(start: Address, rttiSlot: Address?): VtableRecord {
     val ptr = defaultPointerSize.toLong()
     val prefixWords = rttiSlot?.let { ((it - start) / ptr - 1).toInt() } ?: 0
     val header = dataTypeManager.vtableHeaderLayout(prefixWords)
-    return VtableRecord(start, header, abi)
+    return VtableRecord(start, header, Itanium)
 }
 
 /**
@@ -88,7 +88,7 @@ private fun Program.recordAt(start: Address, rttiSlot: Address?, abi: CxxAbi): V
  * bases has vbase/vcall offsets before `offset_to_top`. Without one before the first slot, the header is
  * the bare two words, so the search never reaches the next record's.
  */
-internal fun Program.itaniumVtableRecord(ztv: Address, abi: CxxAbi): VtableRecord {
+internal fun Program.itaniumVtableRecord(ztv: Address): VtableRecord {
     val ptr = defaultPointerSize.toLong()
     fun holdsTypeinfo(slot: Address) =
         pointerAt(slot)?.let { pointee -> symbolTable.getSymbols(pointee).any { it.isTypeinfo } } == true
@@ -97,7 +97,7 @@ internal fun Program.itaniumVtableRecord(ztv: Address, abi: CxxAbi): VtableRecor
         .take(MAX_VTABLE_PREFIX_WORDS)
         .takeWhile { holdsTypeinfo(it) || pointerAt(it)?.let(::isCode) != true }
         .firstOrNull(::holdsTypeinfo)
-    return recordAt(ztv, rttiSlot, abi)
+    return recordAt(ztv, rttiSlot)
 }
 
 /** A record in a vtable group, and the functions its slots point at. */
@@ -115,7 +115,7 @@ private fun Program.subVtableAt(start: Address, rtti: Address, construction: Boo
         .takeWhile { pointerAt(it) == rtti || pointerAt(it)?.let(::isCode) != true }
         // The rtti word follows offset_to_top, so it is never the first.
         .firstOrNull { it > start && pointerAt(it) == rtti }
-        ?.let { recordAt(start, it, Itanium).copy(internal = true, construction = construction) }
+        ?.let { recordAt(start, it).copy(internal = true, construction = construction) }
         ?.let { record -> SubVtable(record, record.slots(this)) }
 
 /**

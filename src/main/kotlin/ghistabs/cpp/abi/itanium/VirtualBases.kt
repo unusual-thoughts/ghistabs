@@ -11,7 +11,6 @@ import ghistabs.componentsOverlapping
 import ghistabs.cpp.*
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.abi.VtableRecord
-import ghistabs.cpp.abi.vtableRecord
 import ghistabs.diagnose.DiagnosticSink
 
 /**
@@ -38,7 +37,7 @@ class VirtualBases(private val program: Program, sink: DiagnosticSink) : Diagnos
         .distinctBy { it.address }
         .sumOf { sym ->
             val struct = sym.vtableClass?.let { structFor(it, sym.parentNamespace) } ?: return@sumOf 0
-            val record = runCatching { program.vtableRecord(sym.address) }.getOrNull() ?: return@sumOf 0
+            val record = runCatching { Itanium.recordAt(program, sym.address) }.getOrNull() ?: return@sumOf 0
             val vbases = record.rttiOf(program)?.let(reader::virtualBasesOf).orEmpty()
             val count = struct.definedComponents.count { it.isBaseField() } + vbases.size
             vbases.count { struct.place(it, record, count) }

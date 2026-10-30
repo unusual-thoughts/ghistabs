@@ -107,7 +107,7 @@ object Itanium : CxxAbi {
     override val assignmentOperatorName = "operator="
 
     /** Found by its rtti word ([itaniumVtableRecord]), which says how long its header is. */
-    override fun recordAt(program: Program, at: Address) = program.itaniumVtableRecord(at, this)
+    override fun recordAt(program: Program, at: Address) = program.itaniumVtableRecord(at)
 
     // `size_t` is `unsigned int` (j) on 32-bit targets and `unsigned long` (m) on 64-bit ones.
     override val mangledOperatorNew get() = setOf("_Znwj", "_Znwm")
@@ -130,8 +130,8 @@ object Itanium : CxxAbi {
     fun offsetToTopType(ptrSize: Int): DataType =
         if (ptrSize == 8) LongLongDataType.dataType else IntegerDataType.dataType
 
-    override fun VtableRecord.vfptrOffset(program: Program): Long? =
-        readHeader(program)?.getScalar(OFFSET_TO_TOP)?.signedValue?.let { -it }
+    override fun vfptrOffsetOf(record: VtableRecord, program: Program): Long? =
+        record.readHeader(program)?.getScalar(OFFSET_TO_TOP)?.signedValue?.let { -it }
 
     fun zti(className: String) = "$TYPEINFO_PREFIX${mangleClassName(className)}"
 
