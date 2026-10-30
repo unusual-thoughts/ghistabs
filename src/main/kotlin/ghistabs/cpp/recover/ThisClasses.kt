@@ -3,6 +3,7 @@ package ghistabs.cpp.recover
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
+import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -203,11 +204,26 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     private fun Function.isCandidate() = parentNamespace.isGlobal && symbol.source == SourceType.DEFAULT &&
         !isThunk && !isExternal && firstArgument() == thisStorage
 
-    private fun Function.firstArgument() = (callingConvention ?: program.compilerSpec.defaultCallingConvention)
-        .getArgLocation(0, null, PointerDataType(program.dataTypeManager), program).firstVarnode?.address
+    private fun Function.firstArgument() = argumentAt(0)
+
+    private fun Function.argumentAt(i: Int) = (callingConvention ?: program.compilerSpec.defaultCallingConvention)
+        .getArgLocation(i, null, PointerDataType(program.dataTypeManager), program).firstVarnode?.address
+
+    /**
+     * Which of its arguments is `this`: the second where a `__cdecl` function pops one word, which is gcc's
+     * hidden pointer for a class returned in memory, and the first otherwise.
+     */
+    private fun Function.thisIndex() =
+        if (callingConventionName == CDECL && stackPurgeSize == program.defaultPointerSize) 1 else 0
+
+    /** The argument a call passes [callee] as its `this`. */
+    private fun PcodeOp.thisArgument(callee: Function): Varnode? = callee.thisIndex().let { i ->
+        if (numInputs > i + 1) getInput(i + 1) else null
+    }
 
     /** One decompiled function's [use] of its `this`, and the [calls] it makes on objects of known class. */
     private inner class FunctionReading(f: Function, high: HighFunction, ctors: Map<Function, GhidraClass>) {
+        private val self = f.argumentAt(f.thisIndex())
         val calls = mutableListOf<ThisCall>()
         val use: ThisUse
 
@@ -216,8 +232,9 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             // The objects the function built, by where they point, from their constructor's argument and result.
             val built = mutableMapOf<Pair<Any, Long>, GhidraClass>()
             for (op in ops) {
-                val cls = op.directCallee()?.let(ctors::get) ?: continue
-                built[op.getInput(1).pointerInto().key()] = cls
+                val ctor = op.directCallee() ?: continue
+                val cls = ctors[ctor] ?: continue
+                op.thisArgument(ctor)?.let { built[it.pointerInto().key()] = cls }
                 op.output?.let { built[it.pointerInto().key()] = cls }
             }
             var extent = 0L
@@ -235,8 +252,8 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
 
                     PcodeOp.CALL -> {
                         val callee = op.directCallee() ?: continue
-                        val obj = op.getInput(1).pointerInto()
-                        if (obj.isThis(thisStorage)) {
+                        val obj = op.thisArgument(callee)?.pointerInto() ?: continue
+                        if (obj.isThis(self)) {
                             if (obj.offset == 0L) {
                                 onThis += callee
                                 calls += ThisCall(f, callee)
@@ -252,7 +269,7 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
 
         private fun PointerInto.key(): Pair<Any, Long> = (root.def?.seqnum ?: "${root.address}:${root.size}") to offset
 
-        private fun Varnode.thisOffset() = pointerInto().takeIf { it.isThis(thisStorage) }?.offset
+        private fun Varnode.thisOffset() = pointerInto().takeIf { it.isThis(self) }?.offset
 
         /** The slot a virtual call through `this`'s own vptr reads its target from. */
         private fun Varnode.vcallSlot(): Int? {
@@ -288,6 +305,7 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
 
     companion object {
         const val BOOKMARK = "Method class guess"
+        private const val CDECL = CompilerSpec.CALLING_CONVENTION_cdecl
         private const val DECOMPILE_TIMEOUT_SECONDS = 30
     }
 }
