@@ -8,15 +8,11 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.ClassDecl
-import ghistabs.cpp.ClassHierarchyRecords
+import ghistabs.cpp.*
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
-import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.MemberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.writeMember
-import ghistabs.cpp.VirtKind
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.StructorRole
 import ghistabs.diagnose.DiagnosticSink
@@ -109,14 +105,13 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
             val ns = cls.ns?.toClass() ?: continue
             val length = size.first.toInt()
             runCatching {
-                val struct = classStruct(ns)
-                when {
-                    struct == null -> program.dataTypeManager.addDataType(
+                when (val struct = classStruct(ns)) {
+                    null -> program.dataTypeManager.addDataType(
                         StructureDataType(ClassNaming.vftableCategory(ns), ns.name, length),
                         DataTypeConflictHandler.KEEP_HANDLER,
                     )
 
-                    struct.length < length -> struct.growStructure(length - struct.length)
+                    else if struct.length < length -> struct.growStructure(length - struct.length)
                 }
             }.onFailure { warn("class-struct-unsized", "${ns.getName(true)} -> $length: $it") }
         }
@@ -136,8 +131,7 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
             moves || renames || retyped
         }.onFailure {
             warn("class-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)
-        }
-            .getOrDefault(false)
+        }.getOrDefault(false)
     }
 
     /** Writes each class's record over an earlier run's, so a rerun finds `RecoverClassesFromRTTIScript`'s struct. */
