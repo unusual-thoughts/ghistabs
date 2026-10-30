@@ -6,11 +6,9 @@ import ghidra.program.model.symbol.Namespace
 import ghistabs.at
 
 /**
- * Names Ghidra's own class-recovery machinery round-trips on. None of it is an ABI's decision:
- * `RecoveredClassHelper` and shift-S look for `<Class>_vftable` under `/ClassDataTypes/<ns>/<Class>/`
- * whatever compiler produced the record, and `RTTIGccClassRecoverer` spells a non-primary table
- * `internal_vftable`, a construction one `construction-vftable`, and renames each table of a class with
- * several after the base it serves: label `vftable_for_<Base>`, struct `<Class>_vftable_for_<Base>`.
+ * The names Ghidra's class recovery looks for, the same for every ABI: `<Class>_vftable` under
+ * `/ClassDataTypes/<ns>/<Class>/`, and the `internal_vftable`, `construction-vftable` and
+ * `vftable_for_<Base>` labels `RTTIGccClassRecoverer` gives.
  */
 object ClassNaming {
     val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }
@@ -42,11 +40,7 @@ object ClassNaming {
 
     fun vtableLabel(internal: Boolean, construction: Boolean = false) = prefix(internal, construction) + VTABLE
 
-    /**
-     * A vftable's label: `vftable_for_<base>` when the class has several tables and [base] is the one this
-     * serves, else `vftable` with its `internal_`/`construction-` prefixes. A construction table keeps its
-     * label whatever its base, as Ghidra's do.
-     */
+    /** A vftable's label: `vftable_for_<base>` given a [base], else `vftable` with its prefixes. */
     fun vftableLabel(internal: Boolean, construction: Boolean = false, base: String? = null) = when {
         base != null && !construction -> vftableForLabel(base)
         else -> prefix(internal, construction) + VFTABLE
@@ -69,10 +63,8 @@ object ClassNaming {
     fun isBaseField(name: String) = name.startsWith(BASE_PREFIX) || name.startsWith(VBASE_PREFIX)
 
     /**
-     * Where a class's vftables go: `/ClassDataTypes/` and then its namespace path, the class itself
-     * last, as `ExtendedFlatProgramAPI.createDataTypeCategoryPath` files them. shift-D
-     * (`RecoveredClassHelper.getClassNamespace`) reads the class back by turning that path into
-     * `a::b::Class`, so a table filed under its leaf alone is skipped for any scoped class.
+     * `/ClassDataTypes/` plus the class's full namespace path, where Ghidra files vftables. shift-D reads
+     * the class back from this path, so it must be the whole scope, not just the leaf.
      */
     fun vftableCategory(classPath: List<String>): CategoryPath =
         classPath.fold(classDataTypesRoot) { path, seg -> CategoryPath(path, seg) }
@@ -87,9 +79,8 @@ object ClassNaming {
     fun vftablePath(classPath: List<String>) = DataTypePath(vftableCategory(classPath), vftableName(classPath.last()))
 
     /**
-     * What [primary]'s table [index] (the primary 0, then its secondaries in address order) is called
-     * among [count]: alone, [primary]'s own `<leaf>_vftable`; one of several, `<leaf>_vftable_for_<base>`,
-     * or `<leaf>_vftable<index>` when the base it serves is unknown.
+     * The name of table [index] of [count] (0 the primary, then secondaries by address): `<leaf>_vftable`
+     * when alone, else `<leaf>_vftable_for_<base>`, or `<leaf>_vftable<index>` without a [base].
      */
     fun vftableName(primary: DataTypePath, index: Int, count: Int, base: String?): String = when {
         count < 2 -> primary.dataTypeName

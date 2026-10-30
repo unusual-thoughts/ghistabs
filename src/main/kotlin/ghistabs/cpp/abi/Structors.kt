@@ -1,49 +1,48 @@
 package ghistabs.cpp.abi
 
+import ghidra.app.decompiler.DecompInterface
+import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
+import ghidra.program.model.listing.Program
+import ghidra.program.model.pcode.HighFunction
+import ghidra.program.model.pcode.PcodeOp
+import ghidra.program.model.pcode.Varnode
+import ghidra.util.task.TaskMonitor
+import ghistabs.cpp.abi.itanium.Itanium
 import ghistabs.cpp.abi.itanium.ItaniumStructor
 import ghistabs.cpp.abi.msvc.MsvcStructor
 import ghistabs.cpp.recover.StructorFinder
+import ghistabs.cpp.recover.pointerInto
+import ghistabs.cpp.recover.thisStorage
+import ghistabs.diagnose.DiagnosticSink
+import ghistabs.useWith
 
-/**
- * A constructor or destructor as its ABI tells its variants apart: [ItaniumStructor] by the code in its
- * linkage name, [MsvcStructor] by its special name.
- */
+/** A constructor or destructor variant, as its ABI names them: `ItaniumStructor`, `MsvcStructor`, `Gcc2Structor`. */
 interface Structor {
     val isDestructor: Boolean
 
-    /** A destructor that frees the object too, as the vftable slot for its destructor does. */
+    /** Whether this destructor frees the object too, as the one a vftable slot holds does. */
     val isDeleting: Boolean
 
     /** How the class [className] spells this member in its own body: `Foo`, `~Foo`. */
     fun displayName(className: String): String
 }
 
-/**
- * How an ABI's structors behave, as far as [StructorFinder] and the sizes `operator new` gives
- * ([ghistabs.cpp.recover.NewSizeReader]) need to know.
- */
+/** How an ABI's constructors and destructors behave, for `StructorFinder` and `NewSizeReader`. */
 interface StructorConvention {
-    /**
-     * Whether a constructor hands back the object it built, which is what tells one from a destructor
-     * among the functions that store a vptr. MSVC's do and its destructors return nothing; Itanium's
-     * return nothing either, but on ARM, where both return `this`, so neither tells there.
-     */
+    /** Whether constructors return `this` and destructors don't, as under MSVC, which tells the two apart. */
     val constructorsReturnThis: Boolean get() = false
 
-    /** Which of this ABI's variants [func], playing [role], is; null if that takes more. */
+    /** The variant [func] is, given its [role]; null where that doesn't say. */
     fun structorFor(role: StructorRole, func: Function): Structor? = null
 
-    /**
-     * The names a scalar `operator new(size)` goes by: its mangled ones under this ABI ([mangledOperatorNew])
-     * and the ones Ghidra's demangler gives it. Not `new[]`, whose size is a count's worth and a cookie.
-     */
+    /** The names of a scalar `operator new(size)`, mangled and demangled. Not `new[]`'s, which adds a cookie. */
     val operatorNewNames: Set<String> get() = mangledOperatorNew + DEMANGLED_OPERATOR_NEW
 
-    /** `operator new(size)` as this ABI mangles it, for each pointer size. */
+    /** `operator new(size)` as this ABI mangles it, for each `size_t`. */
     val mangledOperatorNew: Set<String> get() = emptySet()
 
-    /** The names a scalar `operator delete(void *)` goes by: what a deleting destructor frees `this` with. */
+    /** The names of a scalar `operator delete`, which a deleting destructor frees `this` with. */
     val operatorDeleteNames: Set<String> get() = mangledOperatorDelete + DEMANGLED_OPERATOR_DELETE
 
     /** `operator delete(void *)`, and its sized form, as this ABI mangles them. */
@@ -55,8 +54,5 @@ interface StructorConvention {
     }
 }
 
-/**
- * What [StructorFinder] finds a function that stores a vptr does to its class, whatever the ABI. Which of
- * its [Structor] variants that is takes the ABI's own evidence ([CxxAbi.structorFor]).
- */
+/** What a function storing vptrs does to its class, in any ABI; [StructorConvention.structorFor] gives the variant. */
 enum class StructorRole { CONSTRUCTOR, DESTRUCTOR, DELETING_DESTRUCTOR }

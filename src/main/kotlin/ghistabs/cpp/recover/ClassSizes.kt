@@ -11,14 +11,11 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
 /**
- * The sizes each class, by its type descriptor, can be, from the least to the most ([Long.MAX_VALUE]
- * where nothing bounds it), from where its non-virtual direct bases sit in it ([bases], by offset), the
- * furthest vptr in it ([vptrs]), and the sizes it is allocated with ([allocated]).
+ * Each class's possible size range ([Long.MAX_VALUE] when unbounded above), from its non-virtual bases'
+ * offsets ([bases]), its furthest vptr ([vptrs]) and its allocation sizes ([allocated]).
  *
- * A class reaches at least past its last vptr and each base's own least size, and a base reaches at
- * most up to the next base of the class that holds it, or that class's end, which bounds it from above:
- * the bases of a class are laid out one after another, and none overlaps the next. When the two bounds
- * meet, that is its size.
+ * A class is at least as large as its last vptr and each base's minimum. A base is at most as large as
+ * the gap to the next base, or to the end of the class holding it.
  */
 fun sizeBounds(
     bases: Map<Address, List<Pair<Address, Long>>>,
@@ -68,9 +65,8 @@ fun sizeBounds(
 private const val MAX_DEPTH = 64
 
 /**
- * The sizes each class is allocated with: an `operator new(size)` whose result one of the class's
- * constructors ([ctors]) runs on, off each constructor's callers' decompilation, `operator new` going by
- * one of [abi]'s [ghistabs.cpp.abi.StructorConvention.operatorNewNames].
+ * Reads the sizes each class is allocated with: the `operator new(size)` result a constructor runs on,
+ * found in the decompiled callers of [ctors].
  */
 class NewSizeReader(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
     DiagnosticSink by sink {

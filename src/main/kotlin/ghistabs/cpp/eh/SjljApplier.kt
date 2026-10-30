@@ -26,16 +26,11 @@ import ghistabs.withLength
 import kotlin.math.abs
 
 /**
- * Applies gcc's SJLJ exception ABI ([SjljAbi]) to the functions that register with it, everything
- * but laying their LSDAs, which [SjljLsdaApplier] does:
- * - the receiver each stores into `jbuf[1]`, where the unwinder `longjmp`s, disassembled into the
- *   function with its landing pads and labelled [RESUME_LABEL] ([layReceiver]);
- * - the `SjLj_Function_Context` each keeps on its stack, typed as a local [LOCAL] with the
- *   `__builtin_setjmp` buffer gcc's stabs leave out ([typeContexts]);
- * - what each `fc.call_site` store selects in the LSDA, as a comment ([commentCallSites]);
- * - the libgcc and libsupc++ entry points the unwinding goes through, the `_Unwind_SjLj_*` calls, the
- *   personality routines and the `__cxa_*` throw and catch calls, wherever nothing more definite than
- *   analysis has typed them ([typeEntryPoints]).
+ * Applies [SjljAbi] to the functions that register with it ([SjljLsdaApplier] lays the LSDAs):
+ * - disassembles and labels the receiver the unwinder `longjmp`s to ([layReceiver]);
+ * - types the stack context as local [LOCAL] ([typeContexts]);
+ * - comments what each `fc.call_site` store selects ([commentCallSites]);
+ * - types the `_Unwind_SjLj_*`, personality and `__cxa_*` entry points ([typeEntryPoints]).
  */
 class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: DiagnosticSink) :
     DiagnosticSink by sink {
@@ -43,10 +38,7 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
     private val fm = program.functionManager
     private val refs = program.referenceManager
 
-    /**
-     * Apply all of it to the registrations whose store [set] holds, and to the entry points it holds;
-     * returns how many contexts and entry points were typed.
-     */
+    /** Applies everything to the registrations and entry points in [set]; returns contexts and entry points typed. */
     fun applyAll(set: AddressSetView): Pair<Int, Int> {
         val stored = program.sjljLsdas(program.memory, monitor)
         val all = stored.values.flatMap { it.registrations }
@@ -60,9 +52,8 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
     }
 
     /**
-     * Disassemble [reg]'s receiver, with the code it flows to, into its function's body, and label it
-     * [RESUME_LABEL]`_<address>`: the unwinder `longjmp`s to it, so no flow from the entry reaches it,
-     * nor the landing pads it dispatches to.
+     * Disassembles [reg]'s receiver and the landing pads it reaches into its function, labelled
+     * [RESUME_LABEL]`_<address>`. Only the unwinder's `longjmp` reaches them, so no flow does.
      */
     fun layReceiver(reg: Registration) {
         val at = reg.resume ?: return
@@ -104,12 +95,10 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
     }
 
     /**
-     * A flow reference to the receiver [at] from the instruction in [fn] that takes its address, the
-     * nearest to [reg]'s store: the edge the unwinder's `longjmp` takes, which no instruction spells.
-     * Ghidra keeps code a flow reference reaches through a no-return repair, which otherwise clears
-     * the receiver and its landing pads as dead code past a call, and takes it into the body each
-     * time it recomputes one. Not a branch in the instruction's p-code, so the decompiler, which
-     * follows that, still sees the address taken and nothing more.
+     * Adds a flow reference to the receiver [at] from the instruction in [fn] nearest the store that
+     * takes its address, standing in for the `longjmp` edge. It keeps a no-return repair from clearing
+     * the receiver as dead code, and keeps it in the body when Ghidra recomputes one. The p-code is
+     * unchanged, so the decompiler is unaffected.
      */
     private fun Registration.referenceReceiver(fn: Function, at: Address) {
         val (insn, op) = listing.getInstructions(fn.body, true).iterator().asSequence()
@@ -123,15 +112,11 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
     }
 
     /**
-     * What each call site [reg]'s function stores into `fc.call_site` selects in [lsda], as Ghidra's
-     * `GCC Exception Handlers` analyzer comments the try and catch ranges of a DWARF function. SJLJ
-     * has no ranges: before each call that may throw, gcc stores the index of the call-site record
-     * that covers it, so each store gets a pre comment naming its landing pad and what that does:
+     * Pre-comments each `fc.call_site` store with the call-site record it selects in [lsda], and the
+     * receiver with one line per landing pad, the SJLJ counterpart of Ghidra's DWARF try/catch comments:
      * ```
-     * SJLJ call site 2, landing pad 1: catch (CryptoPP::InvalidArgument), cleanup
+     * SJLJ call site 2, landing pad 1: catch (std::bad_alloc), cleanup
      * ```
-     * and the receiver, which dispatches on the landing pad index, one line per pad. The decompiler
-     * shows pre comments, so each lands above the protected call's `fc.call_site = 2;`.
      */
     fun Registration.commentCallSites(lsda: SjljLsda) {
         val fn = fm.getFunctionContaining(store) ?: return
@@ -156,10 +141,7 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
         return getScalar(1)?.signedValue
     }
 
-    /**
-     * What call-site [index] selects, as `__gxx_personality_sj0` reads it: below 0 no handler
-     * (nothing to say), 0 terminate, N the Nth record.
-     */
+    /** What call-site [index] selects: below 0 nothing (null), 0 terminate, N the Nth record. */
     private fun callSiteComment(lsda: SjljLsda, index: Long): String? = when {
         index < 0 -> null
 
@@ -170,7 +152,7 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
         }
     }
 
-    /** One line per landing pad of [lsda] under [receiver]'s own comment, [layReceiver]'s. */
+    /** Appends one line per landing pad of [lsda] to [receiver]'s comment. */
     private fun commentLandingPads(receiver: Address, lsda: SjljLsda) {
         val head = listing.getComment(CommentType.PRE, receiver)?.lineSequence()?.first() ?: return
         val pads = lsda.callSites.groupBy { it.landingPad }.toSortedMap().map { (pad, sites) ->
@@ -180,8 +162,8 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
     }
 
     /**
-     * Commit an [LOCAL] local over each registering function's context, the LSDA slot being
-     * [SjljAbi.LSDA_OFFSET] into it, unless one an import or a user made covers it; returns how many.
+     * Commits local [LOCAL] over each function's context, found from its LSDA slot, unless an import or
+     * a user already typed it; returns how many.
      */
     fun typeContexts(regs: List<Registration>, abi: SjljAbi): Int {
         val dt = abi.functionContext ?: run {
@@ -223,10 +205,9 @@ class SjljApplier(val program: Program, private val monitor: TaskMonitor, sink: 
     private fun Variable.isContext(dt: DataType, offset: Int) = stackOffset == offset && dataType.isEquivalent(dt)
 
     /**
-     * Give each gcc EH entry point its [SjljAbi.signature], by name with or without the PE underscore,
-     * where its signature is no more than analysis' and [covers] holds its entry; returns how many. A
-     * stripped binary names neither its personality routine nor `_Unwind_SjLj_Register`, but [regs]
-     * give both: what they store, and what each calls first after its stores.
+     * Gives each gcc EH entry point in [covers] its [SjljAbi.signature] unless something firmer than
+     * analysis typed it; returns how many. In a stripped binary the personality routine and
+     * `_Unwind_SjLj_Register` are found from [regs] instead of by name.
      */
     fun typeEntryPoints(regs: List<Registration>, abi: SjljAbi, covers: (Address) -> Boolean = { true }): Int {
         val byName = mutableMapOf<Function, String>()

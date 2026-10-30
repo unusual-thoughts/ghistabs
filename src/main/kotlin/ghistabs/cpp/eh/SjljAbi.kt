@@ -3,13 +3,11 @@ package ghistabs.cpp.eh
 import ghidra.program.model.data.*
 
 /**
- * gcc's SJLJ exception ABI on 32-bit x86, as `unwind.h`, `unwind-sjlj.c` and libsupc++ declare it from
- * gcc 3.0 on: the `SjLj_Function_Context` every function with a landing pad registers, the unwinder's
- * other types, and the signatures of the entry points a program calls or links.
+ * gcc's SJLJ exception ABI on 32-bit x86 (gcc 3.0 on): the `SjLj_Function_Context` a function with
+ * landing pads registers, the unwinder's other types, and the signatures of its entry points.
  *
- * Each type is the program's own when it has one by that name, from stabs on libgcc, and is otherwise
- * made under [CATEGORY]. gcc declares the context's `jbuf` as a flexible array (`void *jbuf[]`), which
- * its stabs leave out, so a context struct that ends at `lsda` gets [jbuf] appended.
+ * A type the program already has by name (from libgcc's stabs) is used as is; otherwise it is made
+ * under [CATEGORY].
  */
 class SjljAbi(private val dtm: DataTypeManager) {
     val word: DataType = typedef("_Unwind_Word", UnsignedIntegerDataType.dataType)
@@ -79,10 +77,8 @@ class SjljAbi(private val dtm: DataTypeManager) {
     )
 
     /**
-     * The words of the buffer `__builtin_setjmp` fills, as `expand_builtin_setjmp_setup` lays it on i386:
-     * the frame, the receiver label and the stack pointer. gcc up to 3.3 sizes the context's `jbuf` to
-     * just these (2 + the `SAVE_NONLOCAL` stack save area); from 3.4 it reserves the 5 words
-     * `__builtin_setjmp` documents, the last 2 unused, so these 3 are what every version has.
+     * The `__builtin_setjmp` buffer on i386: frame, receiver label, stack pointer. gcc 3.4 on reserves
+     * 2 more unused words; these 3 are common to every version.
      */
     val jbuf: DataType = existing(JBUF) ?: resolve(
         StructureDataType(CATEGORY, JBUF, 0, dtm).apply {
@@ -108,8 +104,8 @@ class SjljAbi(private val dtm: DataTypeManager) {
     }
 
     /**
-     * The context, the program's own with a [jbuf] appended when its layout ends at `lsda` (`void *jbuf[]`
-     * is a flexible array, which gcc's stabs leave out); null when it has one laid out some other way.
+     * The context struct. stabs leave out its flexible `void *jbuf[]`, so a program's own one that ends
+     * at `lsda` gets [jbuf] appended. Null when the program's one has some other layout.
      */
     val functionContext = when {
         functionContextShell == null -> fc.also(::fillContext)

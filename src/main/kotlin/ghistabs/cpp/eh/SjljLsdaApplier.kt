@@ -22,21 +22,16 @@ import ghistabs.plus
 import java.util.*
 
 /**
- * Lays gcc SJLJ LSDAs as data: the header, call-site, action and type tables [SjljLsda] reads, each
- * field typed and commented, labelled [LABEL] in the namespace of each function that stores it. The
- * header and action records are laid by Ghidra's own [LSDAHeader] and [LSDAActionTable], so they read
- * as the DWARF tables Ghidra lays do; the rest, which those classes can only reach through DWARF
- * call-site records, from [SjljLsda].
+ * Lays gcc SJLJ LSDAs as typed, commented data, labelled [LABEL] in each storing function's namespace.
+ * The header and action table use Ghidra's [LSDAHeader] and [LSDAActionTable] so they match its DWARF
+ * tables; the rest comes from [SjljLsda].
  */
 class SjljLsdaApplier(val program: Program, private val monitor: TaskMonitor, sink: DiagnosticSink) :
     DiagnosticSink by sink {
     private val listing = program.listing
     private val fm = program.functionManager
 
-    /**
-     * Lay every parsed LSDA in [stored], then the unreferenced ones packed after each
-     * ([layUnreferenced]); returns how many in all.
-     */
+    /** Lays every parsed LSDA in [stored], then the unreferenced ones between them; returns how many. */
     fun layAll(stored: Map<Address, StoredLsda>): Int {
         val laid = sortedMapOf<Address, Long>()
         for ((at, found) in stored) {
@@ -54,10 +49,8 @@ class SjljLsdaApplier(val program: Program, private val monitor: TaskMonitor, si
     }
 
     /**
-     * The linker keeps the `.gcc_except_table` of every COMDAT copy it discards, so the LSDAs the kept
-     * functions store are interleaved with ones nothing stores. From the end of each [laid] LSDA up
-     * to the next, lay each that parses, after the up-to-3 zero bytes that align one with a type
-     * table, until a byte that starts none.
+     * Lays the LSDAs nothing stores, left by COMDAT copies the linker discarded: after each [laid] one,
+     * skipping up to 3 bytes of alignment, until the bytes stop parsing.
      */
     private fun layUnreferenced(laid: SortedMap<Address, Long>): Int {
         fun isZero(at: Address) = runCatching { program.memory.getByte(at).toInt() == 0 }.getOrDefault(false)
@@ -87,12 +80,8 @@ class SjljLsdaApplier(val program: Program, private val monitor: TaskMonitor, si
     }
 
     /**
-     * Lay [lsda]'s fields at [at], unless a function's body covers them: then the pair was not a
-     * registration. Ghidra's [LSDAHeader] lays the header, labelled `lsda_exception_table_<address>`,
-     * and its [LSDAActionTable] the action records; the call sites, which are not the DWARF records
-     * its `LSDACallSiteTable` reads, and the type table and exception specs, which its
-     * `LSDATypeTable` can only reach through that call-site parse, are laid from [lsda]. Ghidra's
-     * classes skip a field whose bytes already hold data, so the extent is cleared first.
+     * Lays this LSDA at [at]; false if a function body covers it, so it was no registration. Clears the
+     * extent first, since Ghidra's classes skip bytes that already hold data.
      */
     private fun SjljLsda.lay(at: Address): Boolean {
         val end = at + (size - 1)

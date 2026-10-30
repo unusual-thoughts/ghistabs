@@ -28,10 +28,9 @@ import ghistabs.pointerAt
 import ghistabs.toClass
 
 /**
- * One entry of a class's RTTI Base Class Array: the class [descriptor] that describes it, how many entries after
- * it are that class's own bases ([contained]), how the most derived class holds it, and where in it: [offset],
- * the descriptor's `mdisp`, which for a virtual base is from wherever its vbtable puts it instead. MSVC says
- * only whether a base is public, so one that isn't reads as private.
+ * An entry of a Base Class Array: the class's type [descriptor], how many entries after it are its own bases
+ * ([contained]), and how the most derived class holds it. [offset] is `mdisp`, which for a virtual base counts
+ * from where its vbtable puts it. MSVC only says whether a base is public, so the rest read as private.
  */
 data class BaseEntry(
     val descriptor: Address,
@@ -54,10 +53,8 @@ data class BaseEntry(
 }
 
 /**
- * The direct bases among a Base Class Array, whose first entry is the class itself and the rest its
- * bases in preorder, each followed by the [BaseEntry.contained] entries of its own. Stepping over those
- * leaves the direct bases, plus any virtual base MSVC hoisted out from under the base that inherits it,
- * which is dropped for being one of that base's.
+ * The direct bases in a Base Class Array: the class, then its bases in preorder, each followed by its own
+ * [BaseEntry.contained]. A virtual base MSVC lists apart from the base that inherits it is dropped.
  */
 fun directBases(array: List<BaseEntry>): List<BaseEntry> {
     val tops = generateSequence(1) { it + 1 + array[it].contained }.takeWhile { it < array.size }.toList()
@@ -68,17 +65,10 @@ fun directBases(array: List<BaseEntry>): List<BaseEntry> {
 }
 
 /**
- * The class each virtual function belongs to, given the classes whose vftables hold it ([holders]),
- * every class's bases, direct or not ([ancestors]), and the classes with a vftable at all
- * ([hasVftable]). Null for a function no one class explains.
- *
- * A function is its holders' lowest common ancestor's: one a derived class does not override sits in
- * its table and in every table below, so the class that introduced it is the one all its holders
- * derive from. That ancestor need not hold it itself, when it has no vftable to hold it in: an
- * abstract base's table is often never emitted, its pure slots and all. One that does have a table,
- * and holds something else there, means the holders' copies are separate overrides the linker folded
- * into one body (`/OPT:ICF`), as it does across unrelated classes, which have no common ancestor at
- * all. `RecoverClassesFromRTTIScript` gives those to whichever class it reaches first.
+ * The class each virtual function belongs to: the lowest common ancestor of the classes whose vftables
+ * hold it ([holders]), given every class's [ancestors]. That class may have no vftable ([hasVftable]), as an
+ * abstract base's is often not emitted; one that has one and doesn't hold it means the linker folded
+ * separate overrides into one body (`/OPT:ICF`). Null for those, and where no class is common.
  */
 fun <K, F> virtualOwners(holders: Map<F, Set<K>>, ancestors: (K) -> Set<K>, hasVftable: (K) -> Boolean): Map<F, K?> =
     holders.mapValues { (_, hs) ->
@@ -88,13 +78,10 @@ fun <K, F> virtualOwners(holders: Map<F, Set<K>>, ancestors: (K) -> Set<K>, hasV
     }
 
 /**
- * Class records and members for a binary whose only C++ information is the MSVC RTTI that Ghidra's
- * `Windows x86 PE RTTI Analyzer` has laid and labelled: each class's direct bases off its Class Hierarchy
- * Descriptor, written to [ClassHierarchyRecords], and each virtual function off the vftables, moved into
- * the class it belongs to ([virtualOwners]) and marked virtual for the Class Hierarchy window, and each
- * constructor and destructor, found by the vptrs it stores ([ghistabs.cpp.abi.StructorFinder]), moved there and named.
- *
- * Classes are keyed by their type descriptor's address, which every RTTI record names a class by.
+ * Classes off the MSVC RTTI Ghidra's RTTI analyzer laid: their bases and sizes for [ClassHierarchyRecords],
+ * each virtual function moved into its class ([virtualOwners]) and marked virtual, and each constructor and
+ * destructor ([ghistabs.cpp.recover.StructorFinder]) moved there and named. Classes go by their type
+ * descriptor's address.
  */
 class MsvcClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val options = DataValidationOptions()
@@ -164,8 +151,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
 
     /** Each function a vftable slot holds, and the classes whose tables hold it. */
     private fun readVftables() = buildMap {
-        // By the meta pointer in front of each table, whose label `RecoverClassesFromRTTIScript` keeps when
-        // it renames a class's tables after the bases they serve (`vftable_for_Signable`).
+        // By each table's meta pointer label, which survives `RecoverClassesFromRTTIScript` renaming tables.
         val ptrSize = program.defaultPointerSize.toLong()
         for (sym in labelled(Msvc.VFTABLE_META_PTR)) {
             val at = sym.address.add(ptrSize)
@@ -180,10 +166,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         }
     } as Map<Function, Set<Address>>
 
-    /**
-     * The function a slot points at, through an incremental-link jump stub. Not an imported one, which
-     * no class here owns, nor `_purecall`, which every abstract class's pure slots share.
-     */
+    /** The function a slot points at, past a jump stub; not an import nor the shared `_purecall`. */
     private fun slotFunction(at: Address?, table: Address): Function? {
         val func = at?.let(program.functionManager::getFunctionAt) ?: return null.also {
             debug("msvc-vfunction-missing", "no function at $at", table)
@@ -192,10 +175,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return target?.takeUnless { it.isExternal || "purecall" in it.name }
     }
 
-    /**
-     * Move [func] into [cls]'s namespace if nothing has placed it anywhere yet, and mark it virtual
-     * unless something already recorded what it is. Whether it moved.
-     */
+    /** Marks [func] virtual unless recorded otherwise, and moves it into [cls] if it's global; whether it moved. */
     private fun attach(func: Function, cls: RttiClass): Boolean {
         val entry = func.entryPoint
         if (program.memberAttrs(entry) == null) program.writeMember(entry, MemberAttrs(virt = VirtKind.VIRTUAL))
@@ -206,10 +186,9 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     }
 
     /**
-     * Each class's [LongRange], off the sizes it is allocated with ([allocated]), its bases' offsets and
-     * its vptrs'. A struct shorter than an exact size is grown to it; none is made where there is none, as
-     * `RecoverClassesFromRTTIScript` takes any struct of a class's name for its layout and so would not
-     * compute its own from the decompiled field accesses. The sizes go to the class records instead.
+     * Each class's size range, off what it is [allocated] with and its bases' and vptrs' offsets. A struct
+     * shorter than an exact size grows to it, but none is made: `RecoverClassesFromRTTIScript` would take
+     * it for the layout rather than work one out.
      */
     private fun sizeClasses(classes: Map<Address, RttiClass>, allocated: Map<Address, Long>): Map<Address, LongRange> {
         val bases = classes.mapValues { (_, cls) ->
@@ -242,10 +221,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             .getOrDefault(false)
     }
 
-    /**
-     * Each class's entry, over its own from an earlier run: a one-shot after `RecoverClassesFromRTTIScript`
-     * finds the struct the script filed. Other classes' entries are kept.
-     */
+    /** Writes each class's record over an earlier run's, so a rerun finds `RecoverClassesFromRTTIScript`'s struct. */
     private fun writeRecords(classes: Map<Address, RttiClass>, sizes: Map<Address, LongRange>) {
         val entries = classes.values.mapNotNull { cls ->
             val ns = cls.ns?.toClass() ?: return@mapNotNull null
@@ -266,12 +242,12 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
 
-    /** A base with no hierarchy descriptor of its own still has its type descriptor labelled in its class. */
+    /** The class of the type descriptor at [at], for a base with no hierarchy descriptor. */
     private fun typeDescriptorClass(at: Address) = symbols.getSymbols(at)
         .firstOrNull { it.name == Msvc.TYPE_DESCRIPTOR && !it.parentNamespace.isGlobal }
         ?.parentNamespace?.toClass()
 
-    /** The struct `RecoverClassesFromRTTIScript` or a user filed for the class, where shift-D finds it. */
+    /** The class's struct where `RecoverClassesFromRTTIScript` files it. */
     private fun classStruct(ns: GhidraClass) =
         program.dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
 
@@ -286,10 +262,7 @@ fun Rtti3Model.baseClassArray(): List<BaseEntry> = rtti2Model.let { bca ->
     (0..<rtti1Count).map { BaseEntry(bca.getRtti1Model(it)) }
 }
 
-/**
- * Where in the complete object the subobject an MSVC vftable at [vftable] serves sits, as its complete object
- * locator states it: 0 for the class's primary table. Null for any other table, no `vftable_meta_ptr` before it.
- */
+/** The offset of the subobject the vftable at [vftable] serves, by its complete object locator; null if it has none. */
 fun Program.msvcSubobjectOffset(vftable: Address): Int? {
     val meta = runCatching { vftable.subtract(defaultPointerSize.toLong()) }.getOrNull() ?: return null
     if (symbolTable.getSymbols(meta).none { it.name == Msvc.VFTABLE_META_PTR }) return null
