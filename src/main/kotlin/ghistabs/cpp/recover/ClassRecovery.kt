@@ -60,15 +60,16 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
 
     fun recover(read: AbiClasses, monitor: TaskMonitor): Result {
         val owners = read.holders.mapValues { (_, hs) -> virtualOwner(hs) }
+        val structors = StructorFinder(program, read.classes, this).find(read.holders, abi, monitor)
         var moved = 0
         for ((func, owner) in owners) {
-            if (owner != null && attach(func, owner)) moved++
+            val name = if (func in structors) null else owner?.let { slotName(func, it, read.holders.getValue(func)) }
+            if (owner != null && attach(func, owner, name)) moved++
         }
         val shared = owners.values.count { it == null }
         if (shared > 0) {
             debug("class-vfunction-shared", "$shared held by no one class", count = shared.toLong())
         }
-        val structors = StructorFinder(program, read.classes, this).find(read.holders, abi, monitor)
         val named = structors.count { (func, structor) ->
             val cls = structor.first.ns?.toClass() ?: return@count false
             nameStructor(func, cls, structor.second)
@@ -79,15 +80,45 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size)
     }
 
-    /** Marks [func] virtual unless recorded otherwise, and moves it into [cls] if it's global; whether it moved. */
-    private fun attach(func: Function, cls: ClassDecl): Boolean {
+    /**
+     * Marks [func] virtual unless recorded otherwise, and moves it into [cls] where it's global or [guessed],
+     * renaming it [name] in the latter case; whether it moved.
+     */
+    private fun attach(func: Function, cls: ClassDecl, name: String?): Boolean {
         val entry = func.entryPoint
         if (program.memberAttrs(entry) == null) program.writeMember(entry, MemberAttrs(virt = VirtKind.VIRTUAL))
         val ns = cls.ns?.toClass() ?: return false
-        return func.parentNamespace.isGlobal && runCatching { func.parentNamespace = ns }
-            .onFailure { warn("class-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
-            .isSuccess
+        val guessed = func.guessed()
+        val moves = (func.parentNamespace.isGlobal || guessed) && func.parentNamespace.id != ns.id
+        return runCatching {
+            if (moves) func.parentNamespace = ns
+            if (guessed && name != null) func.setName(name, SourceType.IMPORTED)
+        }.onFailure { warn("class-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
+            .isSuccess && moves
     }
+
+    /**
+     * `vfunctionN`, as `RecoverClassesFromRTTIScript` names a virtual: [func]'s slot, from 1, in [owner]'s
+     * vftables, or where it has none, in those of the classes holding it ([holders]).
+     */
+    private fun slotName(func: Function, owner: ClassDecl, holders: Set<ClassDecl>): String? {
+        val tables = (listOf(owner) + holders).asSequence().flatMap { it.vftables }
+        val slot = tables.map { record ->
+            record.slots(program).indexOfFirst { at ->
+                program.functionManager.getFunctionAt(at)?.let { it.getThunkedFunction(true) ?: it } == func
+            }
+        }.firstOrNull { it >= 0 } ?: return null
+        return "$VFUNCTION${slot + 1}"
+    }
+
+    /**
+     * Whether [this]'s name and class are a guess this pass may replace with what the RTTI proves, its own
+     * names being [SourceType.IMPORTED]: it has no name, or one an analysis gave it in a class, as
+     * `RecoverClassesFromRTTIScript` names what it places. A name a user or the debug info gave stays, and
+     * one an analysis gave a global function, such as Function ID's.
+     */
+    private fun Function.guessed() = symbol.source == SourceType.DEFAULT ||
+        symbol.source == SourceType.ANALYSIS && parentNamespace is GhidraClass
 
     /**
      * Each class's size range, off what it is [allocated] with and its bases' and vptrs' offsets. Each class
@@ -123,11 +154,12 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         val name = abi.structorFor(role, func)?.displayName(cls.name)
             ?: if (role == StructorRole.CONSTRUCTOR) cls.name else "~${cls.name}"
         return runCatching {
-            val moves = func.parentNamespace.isGlobal
+            val guessed = func.guessed()
+            val moves = (func.parentNamespace.isGlobal || guessed) && func.parentNamespace.id != cls.id
             if (moves) func.parentNamespace = cls
-            val renames = func.parentNamespace == cls && func.symbol.source == SourceType.DEFAULT
-            if (renames) func.setName(name, SourceType.ANALYSIS)
-            val retyped = func.parentNamespace == cls && func.fastcallToThiscall()
+            val renames = guessed && func.parentNamespace.id == cls.id && func.name != name
+            if (renames) func.setName(name, SourceType.IMPORTED)
+            val retyped = func.parentNamespace.id == cls.id && func.fastcallToThiscall()
             moves || renames || retyped
         }.onFailure {
             warn("class-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)
@@ -149,5 +181,9 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
     private fun classStructId(ns: GhidraClass): Long? {
         val struct = classStruct(ns) ?: return null
         return program.dataTypeManager.getID(struct).takeIf { it >= 0 }
+    }
+
+    private companion object {
+        const val VFUNCTION = "vfunction"
     }
 }

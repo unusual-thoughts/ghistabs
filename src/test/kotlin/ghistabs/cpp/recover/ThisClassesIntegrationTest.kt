@@ -79,6 +79,14 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun `a method another analysis named is no evidence`() {
+        // As RecoverClassesFromRTTIScript names what it places
+        val placed = fn("placed", d)
+        builder.withTransaction { placed.setName("vfunction1", SourceType.ANALYSIS) }
+        guess(listOf(ThisCall(placed, fn("f"))))["f"].mustBeNull()
+    }
+
+    @Test
     fun `a guess is no evidence for another`() {
         guess(listOf(call("d", "f"), call("f", "g")))["g"].mustBeNull()
     }

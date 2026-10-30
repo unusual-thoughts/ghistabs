@@ -33,22 +33,27 @@ data class ThisClassGuess(val cls: GhidraClass, val sites: Int)
  */
 class ThisClassGuesser(private val bases: Map<GhidraClass, GhidraClass?>) {
     private val byId = bases.keys.associateBy { it.id }
-    fun known(f: Function) = byId[f.parentNamespace.id]
+
+    /** The class [f] is a method of, if one of [bases]. */
+    private fun classOf(f: Function) = byId[f.parentNamespace.id]
+
+    /** [classOf] [f], where that is known ([isProven]), not guessed. */
+    private fun knownClassOf(f: Function) = classOf(f)?.takeIf { f.isProven() }
 
     /** [cls], then the base it shares its address with, and so on up. */
     fun addressChain(cls: GhidraClass): List<GhidraClass> = generateSequence(cls) { bases[it] }.take(MAX_DEPTH).toList()
 
     /**
      * The class of each function [calls] pass an object whose class is known: the caller's own `this`, when
-     * the caller is a method of one of [bases], or an object the caller built with a constructor. A method of
-     * a class is also called on its derived classes' objects, so where those are of several classes it
+     * the caller is known to be a method of one of [bases], or an object the caller built with a constructor.
+     * A method of a class is also called on its derived classes' objects, so where those are of several classes it
      * belongs to the one all the others derive from, through the bases they share their address with, and
      * to none where no one class is.
      */
     fun guess(calls: Collection<ThisCall>): Map<Function, ThisClassGuess> = calls.filter {
-        known(it.callee) == null
+        classOf(it.callee) == null
     }.groupBy { it.callee }.mapNotNull { (f, sites) ->
-        val classes = sites.mapNotNull { it.built ?: known(it.caller) }
+        val classes = sites.mapNotNull { it.built ?: knownClassOf(it.caller) }
         val cls = classes.distinct().singleOrNull { c -> classes.all { c in addressChain(it) } }
         cls?.let { f to ThisClassGuess(it, classes.size) }
     }.toMap()
@@ -57,12 +62,19 @@ class ThisClassGuesser(private val bases: Map<GhidraClass, GhidraClass?>) {
 private const val MAX_DEPTH = 64
 
 /**
+ * Whether [this]'s class is known, not guessed: its name came with the program or its debug info, from the RTTI
+ * through a class pass, or from a user, and not from another analysis such as `RecoverClassesFromRTTIScript`.
+ */
+fun Function.isProven() = symbol.source == SourceType.IMPORTED || symbol.source == SourceType.USER_DEFINED
+
+/**
  * [ThisClassGuesser] over a program, for any ABI: every unnamed function in the global namespace whose
  * convention takes `this` (`__thiscall`, or `__fastcall`, whose first argument comes in the same register),
  * off its callers' decompiled calls, against the classes [ClassHierarchyRecords] holds, their methods and the
- * objects their constructors build. Each guess moves the function into its class, a `__fastcall` that takes
- * nothing in EDX becoming a `__thiscall` ([fastcallToThiscall]), and leaves an Analysis bookmark saying where
- * it came from.
+ * objects their constructors build. Only a method whose class is known counts ([isProven]), so neither another
+ * guess nor `RecoverClassesFromRTTIScript`'s placements are evidence. Each guess moves the function into its
+ * class, a `__fastcall` that takes nothing in EDX becoming a `__thiscall` ([fastcallToThiscall]), and leaves
+ * an Analysis bookmark saying where it came from.
  */
 class ThisClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
@@ -87,7 +99,8 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val candidates = functions.filterTo(mutableSetOf()) { it.isCandidate() }
         if (candidates.isEmpty()) return 0
         val byId = bases.keys.associateBy { it.id }
-        val methods = functions.mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
+        val methods = functions.filter { it.isProven() }
+            .mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
         // A constructor goes by its class's name, as every ABI's structor pass and stabs name it.
         val ctors = methods.filter { (f, cls) -> f.name == cls.name }
         val calls = buildList {
