@@ -16,8 +16,9 @@ import ghistabs.useWith
  * offsets, its furthest vptr ([vptrs]), the end of the furthest store its constructors make ([stored])
  * and its allocation sizes ([allocated]).
  *
- * A class is at least as large as its last vptr and each base's minimum. A base is at most as large as
- * the gap to the next base, or to the end of the class holding it.
+ * A class is at least as large as its last vptr and each base's minimum, its virtual bases' included. A
+ * base is at most as large as the gap to the next base, or to the end of the class holding it; but for a
+ * base with virtual bases, which that gap holds the non-virtual part of alone.
  */
 fun sizeBounds(
     classes: Collection<ClassDecl>,
@@ -37,6 +38,7 @@ fun sizeBounds(
             vptrs[k]?.plus(ptrSize),
             stored[k],
             placed[k].orEmpty().maxOfOrNull { (b, at) -> at + atLeast(b, depth + 1) },
+            k.virtualBases.mapNotNull { v -> v.offset?.plus(atLeast(v.cls, depth + 1)) }.maxOrNull(),
         ).maxOrNull() ?: 0
     }
 
@@ -53,7 +55,7 @@ fun sizeBounds(
     fun atMost(k: ClassDecl, depth: Int = 0): Long? = if (k in most) {
         most[k]
     } else {
-        val bounds = holders[k].orEmpty().mapNotNull { (holder, room) ->
+        val bounds = holders[k].orEmpty().takeIf { k.virtualBases.isEmpty() }.orEmpty().mapNotNull { (holder, room) ->
             room ?: run {
                 val end = allocated[holder] ?: atMost(holder, depth + 1).takeIf { depth < MAX_DEPTH }
                 val at = placed.getValue(holder).first { it.first == k }.second

@@ -65,10 +65,14 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
     }
 
     @Test
-    fun `a class with no vftable of its own at a fixed offset keeps its virtual base unplaced`() =
+    fun `a class whose only vftable is its virtual base's has the base laid off the vbtable`() =
         withAnalyzed { program ->
             // `Right` adds no virtual, so its only vftable is `Core`'s, stored through the vbtable.
-            program.layout("Right").none { (_, field) -> "Core" in field } mustBe true
+            program.layout("Right") mustBe listOf(
+                0 to "vbptr: int *",
+                12 to "vfptr: Right_vftable *",
+                16 to "_vbase_: Core_fields_4_8",
+            )
         }
 
     private fun Program.classStruct(name: String) = dataTypeManager.allStructures.asSequence()
