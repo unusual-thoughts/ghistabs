@@ -75,6 +75,15 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             )
         }
 
+    @Test
+    fun `a function several vftables hold has one definition, for signature updates to reach them all`() =
+        withAnalyzed { program ->
+            // `Left` inherits `Core::f`, its second slot in both tables.
+            (program.secondSlot("Left_vftable_for_Core") === program.secondSlot("Core_vftable")) mustBe true
+        }
+
+    private fun Program.secondSlot(table: String) = (classStruct(table).getComponent(1).dataType as Pointer).dataType
+
     private fun Program.classStruct(name: String) = dataTypeManager.allStructures.asSequence()
         .single {
             it.name == name && it.categoryPath.path.startsWith("/ClassDataTypes/") && "!internal" !in it.pathName
