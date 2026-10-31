@@ -35,14 +35,21 @@ data class BaseEntry(
     val vdisp: Long = 0,
 ) : BaseDecl {
     /** An entry by its Base Class Descriptor's `attributes`. */
-    constructor(descriptor: Address, contained: Int, attributes: Int, pmd: List<Long> = listOf(0, -1, 0)) : this(
+    constructor(
+        descriptor: Address,
+        contained: Int,
+        attributes: Int,
+        mdisp: Long = 0,
+        pdisp: Long = -1,
+        vdisp: Long = 0,
+    ) : this(
         descriptor,
         contained,
         isVirtual = attributes and Msvc.BCD_VBOFCONTOBJ != 0,
         access = if (attributes and Msvc.BCD_NONPUBLIC == 0) Access.PUBLIC else Access.PRIVATE,
-        offset = pmd[0],
-        pdisp = pmd[1],
-        vdisp = pmd[2],
+        offset = mdisp,
+        pdisp = pdisp,
+        vdisp = vdisp,
     )
 
     /** The entry a Base Class Descriptor makes. */
@@ -50,7 +57,9 @@ data class BaseEntry(
         bcd.rtti0Address,
         bcd.numBases,
         bcd.attributes,
-        listOf(bcd.mDisp, bcd.pDisp, bcd.vDisp).map(Int::toLong),
+        bcd.mDisp.toLong(),
+        bcd.pDisp.toLong(),
+        bcd.vDisp.toLong(),
     )
 }
 
