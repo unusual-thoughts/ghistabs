@@ -142,6 +142,33 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
             .children.none { it is MemberNode }.mustBeTrue()
     }
 
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a virtual function goes to the base function it overrides`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        val circle = hierarchy.cls("Circle")
+        val shape = hierarchy.cls("Shape")
+        fun ClassHierarchy.ClassInfo.function(name: String) =
+            members.single { it.name == name && it.kind == MemberKind.FUNCTION }
+
+        hierarchy.overridden(circle, circle.function("name")) mustBe shape.function("name")
+        // Shape's own is the first declaration, and a pure virtual has no function to go to.
+        hierarchy.overridden(shape, shape.function("name")) mustBe null
+        hierarchy.overridden(circle, circle.function("area")) mustBe null
+        // A destructor overrides its base's: the same variant when the base emitted it, else another.
+        val named = hierarchy.cls("Named")
+        val diamond = hierarchy.cls("Diamond")
+        for (dtor in diamond.members.filter { it.name == "~Diamond" && it.kind == MemberKind.FUNCTION }) {
+            val base = hierarchy.overridden(diamond, dtor)
+            base?.name mustBe "~Named"
+            (base in named.members).mustBeTrue("${base?.label} is Named's")
+            val sameVariant = named.members.filter { it.name == "~Named" }
+                .firstOrNull { it.variants.any(dtor.variants::contains) }
+            if (sameVariant != null) base mustBe sameVariant
+        }
+    }
+
     /** `Point` is a plain struct whose implicit members g++ never emitted: hidden until asked for. */
     @ParameterizedTest
     @MethodSource("hellos")

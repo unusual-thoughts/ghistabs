@@ -164,6 +164,33 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
     /** The classes that name [cls] as a direct base, each with that base clause. */
     fun derivedOf(cls: ClassInfo): List<Derived> = derived[cls.id].orEmpty()
 
+    /**
+     * The virtual function [member] of [cls] overrides: the nearest base's (bases in declaration order,
+     * level by level) that is virtual and shares its name, parameters and cv-qualifiers, or for a
+     * destructor that base's destructor. Of a ctor or dtor's variants, the same variant. Null for
+     * anything but a function, and for one that overrides nothing.
+     */
+    fun overridden(cls: ClassInfo, member: Member): Member? {
+        if (member.kind != MemberKind.FUNCTION) return null
+        val isDestructor = member.name == "~${cls.name}"
+        val seen = mutableSetOf(cls.id)
+        var level = cls.bases.mapNotNull(::get).filter { seen.add(it.id) }
+        while (level.isNotEmpty()) {
+            for (base in level) {
+                val name = if (isDestructor) "~${base.name}" else member.name
+                val matches = base.members.filter {
+                    it.kind == MemberKind.FUNCTION && it.name == name && it.attrs?.virt == VirtKind.VIRTUAL &&
+                        it.parameters == member.parameters && it.attrs.isConst == member.attrs?.isConst &&
+                        it.attrs.isVolatile == member.attrs.isVolatile
+                }
+                (matches.firstOrNull { it.variants.any(member.variants::contains) } ?: matches.firstOrNull())
+                    ?.let { return it }
+            }
+            level = level.flatMap { it.bases.mapNotNull(::get) }.filter { seen.add(it.id) }
+        }
+        return null
+    }
+
     /** No base the program has a class for: a root of the inverted tree. */
     fun isBasal(cls: ClassInfo) = cls.bases.none { this[it] != null }
 

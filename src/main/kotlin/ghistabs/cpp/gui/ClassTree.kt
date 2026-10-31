@@ -254,6 +254,17 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
                 popupWhen { selectedClass?.vftableStructId != null }
             },
         )
+        addLocalAction(
+            object : DockingAction("Go to Overridden", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    program?.goTo(selectedOverridden?.address)
+                }
+            }.apply {
+                popupMenuData = MenuData(arrayOf("Go to Overridden"), "0")
+                popupWhen { selectedMember?.kind == ClassHierarchy.MemberKind.FUNCTION }
+                enabledWhen { selectedOverridden != null }
+            },
+        )
         addSymbolActions()
     }
 
@@ -438,6 +449,16 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
     private fun openSelected() = program?.apply { selectedNode?.let(::addressOf)?.let { goTo(it) } }
 
     private val selectedClass get() = (tree.selectionPath?.lastPathComponent as? ClassNode)?.info
+
+    private val selectedMember get() = (tree.selectionPath?.lastPathComponent as? MemberNode)?.member
+
+    /** The base function the selected member overrides, under the class listing it. */
+    private val selectedOverridden: ClassHierarchy.Member? get() {
+        val path = tree.selectionPath ?: return null
+        val member = (path.lastPathComponent as? MemberNode)?.member ?: return null
+        val cls = (path.parentPath?.lastPathComponent as? ClassNode)?.info ?: return null
+        return shown?.overridden(cls, member)
+    }
 
     /**
      * A struct for [cls], which has none, where Ghidra files a class's, as long as its class record says
