@@ -14,7 +14,6 @@ import ghistabs.cpp.*
 import ghistabs.cpp.abi.VtableRecord
 import ghistabs.cpp.recover.AbiClasses
 import ghistabs.cpp.recover.ClassRecovery
-import ghistabs.cpp.recover.VirtualBases
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.pointerAt
 import ghistabs.toClass
@@ -108,7 +107,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val vbtables = mutableMapOf<Long, Address>()
 
         /** Where the Base Class Array's entries for a virtual base say vbptrs sit. */
-        val vbptrs get() = array.drop(1).filter { it.isVirtual }.mapTo(mutableSetOf()) { it.pdisp }
+        override val vbptrs get() = array.drop(1).filter { it.isVirtual }.mapTo(mutableSetOf()) { it.pdisp }
 
         override val virtualBases get() = array.drop(1).filter { it.isVirtual }.groupBy { it.descriptor }
             .map { (descriptor, entries) ->
@@ -136,8 +135,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val holders = readVftables()
         readVbtables(hierarchies.values, monitor)
         val read = AbiClasses(classes.values, hierarchies.values, holders)
-        val result = ClassRecovery(program, Msvc, this).recover(read, monitor)
-        return result.copy(virtualBases = VirtualBases(program, Msvc, this).placeAll(hierarchies.values))
+        return ClassRecovery(program, Msvc, this).recover(read, monitor)
     }
 
     private fun readVbtables(hierarchies: Collection<RttiClass>, monitor: TaskMonitor) {

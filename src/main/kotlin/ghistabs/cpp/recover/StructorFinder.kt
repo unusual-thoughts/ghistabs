@@ -32,12 +32,66 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         cls.vftables.mapNotNull { r -> r.vfptrOffset(program)?.let { r.addressPoint to (cls to it) } }
     }.toMap()
 
-    /** Each structor's class and role, given [slots]: each vtable slot's function, and the classes holding it. */
-    fun find(slots: Map<Function, Set<ClassDecl>>, convention: StructorConvention, monitor: TaskMonitor) =
-        read(slots.keys, monitor).roles(slots, convention)
+    /**
+     * Each base whose constructor [find] gave another class, the two folded into one function, as a linker
+     * folds identical code: it builds this one too.
+     */
+    val foldedBaseConstructors = mutableMapOf<ClassDecl, Function>()
 
-    /** The vptrs each function stores ([stores]), and the functions each calls on `this`. */
-    class Reading(val stores: Map<Function, VptrStores>, val thisCalls: Map<Function, Set<Function>>) {
+    /**
+     * Each structor's class and role, given [slots]: each vtable slot's function, and the classes holding it.
+     * A base with no vtable to store is built by the one function each of its deriving class's constructors
+     * calls on its subobject ([baseConstructors]).
+     */
+    fun find(
+        slots: Map<Function, Set<ClassDecl>>,
+        convention: StructorConvention,
+        monitor: TaskMonitor,
+    ): Map<Function, Pair<ClassDecl, StructorRole>> {
+        val reading = read(slots.keys, monitor)
+        val roles = reading.roles(slots, convention).toMutableMap()
+        val subobjectCalls = reading.subobjectCalls.toMutableMap()
+        var built = roles.filterValues { (_, role) -> role == CONSTRUCTOR }
+        while (built.isNotEmpty() && !monitor.isCancelled) {
+            val found = mutableMapOf<Function, ClassDecl>()
+            for ((cls, ctor) in baseConstructors(built, subobjectCalls)) {
+                val taken = roles[ctor]?.first ?: found[ctor]
+                when {
+                    taken == null -> found[ctor] = cls
+                    taken != cls -> foldedBaseConstructors.putIfAbsent(cls, ctor)
+                }
+            }
+            roles += found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
+            subobjectCalls += readSubobjectCalls(found.keys, monitor)
+            built = found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
+        }
+        return roles
+    }
+
+    /**
+     * The constructor of each base of [ctors]' classes that has no vtable, so stores none: the one function
+     * a constructor calls on that base's subobject, which [subobjectCalls] holds by offset into `this`.
+     */
+    private fun baseConstructors(
+        ctors: Map<Function, Pair<ClassDecl, StructorRole>>,
+        subobjectCalls: Map<Function, Map<Long, Set<Function>>>,
+    ): Map<ClassDecl, Function> = buildMap {
+        for ((ctor, built) in ctors) {
+            val calls = subobjectCalls[ctor].orEmpty()
+            for (base in built.first.bases) {
+                if (base.isVirtual || base.cls.vftables.isNotEmpty()) continue
+                val callee = base.offset?.let(calls::get)?.singleOrNull() ?: continue
+                putIfAbsent(base.cls, callee)
+            }
+        }
+    }
+
+    /** The vptrs each function stores ([stores]), the functions each calls on `this`, and on what offset in it. */
+    class Reading(
+        val stores: Map<Function, VptrStores>,
+        val thisCalls: Map<Function, Set<Function>>,
+        val subobjectCalls: Map<Function, Map<Long, Set<Function>>> = emptyMap(),
+    ) {
         /** The class a slot held by [held] deletes when it destroys a [cls]: [cls], or the one most derived. */
         private fun deleting(held: Set<ClassDecl>, cls: ClassDecl): ClassDecl? {
             val derived = held.filter { it == cls || it.derivesFrom(cls) }
@@ -47,8 +101,9 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         /**
          * A constructor is never virtual, so a slot that stores vptrs, or calls a function that does,
          * destroys: a deleting destructor if it frees `this`, and the function it calls the destructor.
-         * Where constructors return `this`, that sorts the other storers. Where they don't, a storer a
-         * destructor calls on `this` destroys too, a base's destructor, and every storer left builds.
+         * Where constructors return `this`, a storer that does builds. Of the rest, a storer a destructor
+         * calls on `this` destroys too, a base's destructor, and every storer left builds: the decompiler
+         * may not show a constructor's return (clang's at `-O0`, whose callers leave it unread).
          */
         fun roles(
             slots: Map<Function, Set<ClassDecl>>,
@@ -76,15 +131,14 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
                 }
             }
             if (returnsThis) {
-                for ((f, cls) in owners) putIfAbsent(f, cls to if (mayDestroy(f)) DESTRUCTOR else CONSTRUCTOR)
-            } else {
-                sortByCalls(owners)
+                for ((f, cls) in owners) if (!mayDestroy(f)) putIfAbsent(f, cls to CONSTRUCTOR)
             }
+            sortByCalls(owners)
         }
 
         /** Makes each storer a destructor calls on `this` a destructor too, and every other one a constructor. */
         private fun MutableMap<Function, Pair<ClassDecl, StructorRole>>.sortByCalls(owners: Map<Function, ClassDecl>) {
-            var destroying = keys.toList()
+            var destroying = filterValues { (_, role) -> role != CONSTRUCTOR }.keys.toList()
             while (destroying.isNotEmpty()) {
                 destroying = destroying.flatMap { thisCalls[it].orEmpty() }
                     .filter { it !in this && it in owners }.distinct()
@@ -133,25 +187,43 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         if (writes.isEmpty() || thisStorage == null) return Reading(emptyMap(), emptyMap())
         val stores = mutableMapOf<Function, VptrStores>()
         val thisCalls = mutableMapOf<Function, Set<Function>>()
+        val subobjectCalls = mutableMapOf<Function, Map<Long, Set<Function>>>()
         DecompInterface().useWith(program) { decomp ->
             for (func in writes.keys + others) {
-                if (monitor.isCancelled) break
-                val high = decomp.decompileFunction(func, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction
-                if (high == null) {
-                    debug("structor-undecompiled", func.name, func.entryPoint)
-                    continue
-                }
+                val high = decomp.decompiled(func, monitor) ?: continue
                 writes[func]?.let { stores[func] = high.vptrStores(it) }
-                thisCalls[func] = high.thisCalls()
+                subobjectCalls[func] = high.subobjectCalls()
+                thisCalls[func] = subobjectCalls.getValue(func)[0L].orEmpty()
             }
         }
-        return Reading(stores, thisCalls)
+        return Reading(stores, thisCalls, subobjectCalls)
     }
 
-    private fun HighFunction.thisCalls() = pcodeOps.asSequence()
-        .filter { it.opcode == PcodeOp.CALL && it.numInputs > 1 && it.getInput(1).thisOffset() == 0L }
-        .mapNotNull { program.functionManager.getFunctionAt(it.getInput(0).address) }
-        .mapTo(mutableSetOf()) { it.getThunkedFunction(true) ?: it }
+    /** What each of [funcs] calls on a pointer into `this`, decompiled. */
+    private fun readSubobjectCalls(funcs: Collection<Function>, monitor: TaskMonitor) =
+        buildMap<Function, Map<Long, Set<Function>>> {
+            DecompInterface().useWith(program) { decomp ->
+                for (func in funcs) decomp.decompiled(func, monitor)?.let { put(func, it.subobjectCalls()) }
+            }
+        }
+
+    private fun DecompInterface.decompiled(func: Function, monitor: TaskMonitor): HighFunction? {
+        if (monitor.isCancelled) return null
+        return decompileFunction(func, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction
+            ?: null.also { debug("structor-undecompiled", func.name, func.entryPoint) }
+    }
+
+    /** The functions this calls with a pointer into `this` first, by how far into it. */
+    private fun HighFunction.subobjectCalls(): Map<Long, Set<Function>> = pcodeOps.asSequence()
+        .filter { it.opcode == PcodeOp.CALL && it.numInputs > 1 }
+        .mapNotNull { op ->
+            val at = op.getInput(1).thisOffset() ?: return@mapNotNull null
+            program.functionManager.getFunctionAt(op.getInput(0).address)?.let {
+                at to
+                    (it.getThunkedFunction(true) ?: it)
+            }
+        }
+        .groupBy({ it.first }, { it.second }).mapValues { (_, fs) -> fs.toSet() }
 
     private fun HighFunction.vptrStores(at: Map<Address, List<Pair<ClassDecl, Long>>>): VptrStores {
         val classes = mutableSetOf<ClassDecl>()
