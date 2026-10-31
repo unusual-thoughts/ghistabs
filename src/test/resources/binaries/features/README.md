@@ -19,6 +19,7 @@ and exercised by their own integration test.
 | `hello_gcc345.exe`, `hello_gcc421.exe` | MinGW gcc 3.4.5 / 4.2.1, PE32 | `debian/eol:etch` / `lenny`, package `mingw32`, `-static`; 4.2.1 then `objcopy --remove-section='.debug_*'` | — |
 | `hello_gcc323_fullstabs.exe` | MinGW gcc 3.2.3, PE32, SJLJ | the MinGW-3.1.0-1 bundle rebuilt from its own sources in a sarge i386 chroot, every target library with stabs: `build_mingw323.sh`, then `mingw32-g++ -gstabs+ -O0 -static` | — |
 | `classes_msvc_clang.exe` | clang 18, i686-pc-windows-msvc, `-O1`, stripped | `clang --target=i686-pc-windows-msvc -O1 -fno-exceptions -c` of `classes_msvc.cc` and `classes_msvc_rt.cc`, then `lld-link /nodefaultlib /entry:mainCRTStartup /subsystem:console` | `MsvcClassStructsIntegrationTest` |
+| `hello_msvc_clang.exe` | clang 18, i686-pc-windows-msvc, `-O0`, stripped | `clang --target=i686-pc-windows-msvc -std=c++98 -Wno-c++11-narrowing -O0 -Imsvc_stub -c hello.cc`, `clang --target=i686-pc-windows-msvc -O0 -fno-builtin -c hello_msvc_rt.cc`, then `lld-link /nodefaultlib /entry:main /subsystem:console /brepro` | `MsvcClassStructsIntegrationTest` |
 
 The `latetypedef` set from `latetypedef.c` + `latetypedef.h` with `gcc-N -gstabs+ -O0 -fdebug-prefix-map=$PWD=/src
 latetypedef.c`. From gcc 10, `-feliminate-unused-debug-symbols` is on by default: each header struct is defined
@@ -74,3 +75,5 @@ the assembler, which leaves an `SO /tmp/cc….s` with line records. No DWARF; un
 `hello_gcc345.exe` and exits 8.
 
 `classes_msvc_clang.exe` is an MSVC-ABI build with virtual inheritance and no CRT: `classes_msvc_rt.cc` stands in for `operator new`/`delete` and `type_info`'s vftable, which the RTTI type descriptors point at. The constructors are `noinline`, so each stores its class's vftables and vbtables into `this`.
+
+`hello_msvc_clang.exe` is `hello.cc` under the MSVC ABI, with no CRT either: `msvc_stub/stdio.h` declares `printf`, and `hello_msvc_rt.cc` stubs it with the rest of what the build references (`memset`, `_purecall`, `_CxxThrowException`, `__CxxFrameHandler3`, `_fltused`, `operator new`/`delete`, `type_info`'s vftable). It links but does not run.

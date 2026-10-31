@@ -47,8 +47,9 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         /**
          * A constructor is never virtual, so a slot that stores vptrs, or calls a function that does,
          * destroys: a deleting destructor if it frees `this`, and the function it calls the destructor.
-         * Where constructors return `this`, that sorts the other storers. Where they don't, a storer a
-         * destructor calls on `this` destroys too, a base's destructor, and every storer left builds.
+         * Where constructors return `this`, a storer that does builds. Of the rest, a storer a destructor
+         * calls on `this` destroys too, a base's destructor, and every storer left builds: the decompiler
+         * may not show a constructor's return (clang's at `-O0`, whose callers leave it unread).
          */
         fun roles(
             slots: Map<Function, Set<ClassDecl>>,
@@ -76,15 +77,14 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
                 }
             }
             if (returnsThis) {
-                for ((f, cls) in owners) putIfAbsent(f, cls to if (mayDestroy(f)) DESTRUCTOR else CONSTRUCTOR)
-            } else {
-                sortByCalls(owners)
+                for ((f, cls) in owners) if (!mayDestroy(f)) putIfAbsent(f, cls to CONSTRUCTOR)
             }
+            sortByCalls(owners)
         }
 
         /** Makes each storer a destructor calls on `this` a destructor too, and every other one a constructor. */
         private fun MutableMap<Function, Pair<ClassDecl, StructorRole>>.sortByCalls(owners: Map<Function, ClassDecl>) {
-            var destroying = keys.toList()
+            var destroying = filterValues { (_, role) -> role != CONSTRUCTOR }.keys.toList()
             while (destroying.isNotEmpty()) {
                 destroying = destroying.flatMap { thisCalls[it].orEmpty() }
                     .filter { it !in this && it in owners }.distinct()

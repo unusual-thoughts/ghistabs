@@ -82,6 +82,17 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             (program.secondSlot("Left_vftable_for_Core") === program.secondSlot("Core_vftable")) mustBe true
         }
 
+    @Test
+    fun `constructors the decompiler shows no this return for are told from destructors by their calls`() =
+        withAnalyzed(HELLO) { program ->
+            // clang's `-O0` callers leave the constructors' `this` return unread.
+            program.layout("Circle") mustBe listOf(
+                0 to "vfptr: Circle_vftable *",
+                4 to "_base_: Shape_fields_4_16",
+                16 to "Circle_data: Circle_data",
+            )
+        }
+
     private fun Program.secondSlot(table: String) = (classStruct(table).getComponent(1).dataType as Pointer).dataType
 
     private fun Program.classStruct(name: String) = dataTypeManager.allStructures.asSequence()
@@ -93,8 +104,8 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         (dataTypeManager.getDataType("/ClassDataTypes/$cls/$cls") as Structure).definedComponents
             .map { it.offset to "${it.fieldName}: ${it.dataType.name}" }
 
-    private fun withAnalyzed(check: (Program) -> Unit) =
-        withProgram(File(FeatureFixtureTest.FEATURES, FIXTURE), compiler = "windows") { program ->
+    private fun withAnalyzed(fixture: String = FIXTURE, check: (Program) -> Unit) =
+        withProgram(File(FeatureFixtureTest.FEATURES, fixture), compiler = "windows") { program ->
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             mgr.initializeOptions()
             mgr.reAnalyzeAll(null)
@@ -107,5 +118,6 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
     private companion object {
         const val FIXTURE = "classes_msvc_clang.exe"
+        const val HELLO = "hello_msvc_clang.exe"
     }
 }
