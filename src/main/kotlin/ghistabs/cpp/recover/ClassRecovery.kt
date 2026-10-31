@@ -81,7 +81,9 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         val sizes = sizeClasses(read.classes, NewSizeReader(program, abi, this).read(ctors, monitor))
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
             structors.map { (f, structor) -> f to structor.first }
-        writeRecords(read.recorded, placed.groupBy({ it.second }, { it.first }), ctors.keys)
+        for ((func, _) in placed) func.addTag(ClassPassTags.METHOD)
+        for (func in ctors.keys) func.addTag(ClassPassTags.CONSTRUCTOR)
+        writeRecords(read.recorded)
         return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size)
     }
 
@@ -194,23 +196,10 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         }.getOrDefault(false)
     }
 
-    /**
-     * Writes each class's record, with the [methods] this pass placed in it and which are [constructors], over
-     * an earlier run's, so a rerun finds `RecoverClassesFromRTTIScript`'s struct.
-     */
-    private fun writeRecords(
-        classes: Collection<ClassDecl>,
-        methods: Map<ClassDecl, List<Function>>,
-        constructors: Set<Function>,
-    ) {
+    /** Writes each class's record over an earlier run's, so a rerun finds `RecoverClassesFromRTTIScript`'s struct. */
+    private fun writeRecords(classes: Collection<ClassDecl>) {
         val entries = classes.mapNotNull { cls ->
-            val own = methods[cls].orEmpty()
-            ClassHierarchyRecords.entryOf(
-                cls,
-                cls.ns?.toClass()?.let(::classStructId),
-                own.map { it.entryPoint.offset },
-                own.filter { it in constructors }.map { it.entryPoint.offset },
-            )
+            ClassHierarchyRecords.entryOf(cls, cls.ns?.toClass()?.let(::classStructId))
         }
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
@@ -227,4 +216,16 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
     private companion object {
         const val VFUNCTION = "vfunction"
     }
+}
+
+/**
+ * The function tags a class pass puts on what it places: its own conclusions, which their names, ANALYSIS as
+ * `RecoverClassesFromRTTIScript`'s and [ThisClasses]' guesses are, can't tell apart.
+ */
+object ClassPassTags {
+    /** On each virtual function, constructor and destructor a class pass moved into its class. */
+    const val METHOD = "GHISTABS_CLASS_METHOD"
+
+    /** On each constructor among them. */
+    const val CONSTRUCTOR = "GHISTABS_CLASS_CONSTRUCTOR"
 }

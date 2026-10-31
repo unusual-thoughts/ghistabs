@@ -40,7 +40,7 @@ class ThisClassGuesser(
     /** The class [f] is a method of, if one of [bases]. */
     private fun classOf(f: Function) = byId[f.parentNamespace.id]
 
-    /** [classOf] [f], where that is known ([isProven]) or [f] is one of the methods a class pass [recorded]. */
+    /** [classOf] [f], where that is known ([isProven]) or a class pass placed [f] there ([recorded]). */
     private fun knownClassOf(f: Function) = classOf(f)?.takeIf { f.isProven() || f in recorded }
 
     /** [cls], then the base it shares its address with, and so on up. */
@@ -75,7 +75,8 @@ fun Function.isProven() = symbol.source == SourceType.IMPORTED || symbol.source 
  * convention takes `this` (`__thiscall`, or `__fastcall`, whose first argument comes in the same register),
  * off its callers' decompiled calls, against the classes [ClassHierarchyRecords] holds, their methods and the
  * objects their constructors build. Only a method whose class is known counts ([isProven]), or one a class
- * pass recorded, so neither another guess nor `RecoverClassesFromRTTIScript`'s placements are evidence.
+ * pass tagged ([ClassPassTags]), so neither another guess nor `RecoverClassesFromRTTIScript`'s placements
+ * are evidence.
  * Each guess moves the function into its class, a `__fastcall` that takes nothing in EDX becoming a
  * `__thiscall` ([fastcallToThiscall]), and leaves an Analysis bookmark saying where it came from.
  */
@@ -102,7 +103,8 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val candidates = functions.filterTo(mutableSetOf()) { it.isCandidate() }
         if (candidates.isEmpty()) return 0
         val byId = bases.keys.associateBy { it.id }
-        val (recorded, recordedCtors) = recordedMethods()
+        val recorded = functions.filterTo(mutableSetOf()) { it.isTagged(ClassPassTags.METHOD) }
+        val recordedCtors = recorded.filterTo(mutableSetOf()) { it.isTagged(ClassPassTags.CONSTRUCTOR) }
         val methods = functions.filter { it.isProven() || it in recorded }
             .mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
         // A constructor the debug info names goes by its class's name.
@@ -119,19 +121,7 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return ThisClassGuesser(bases, recorded).guess(calls).count { (f, guess) -> place(f, guess) }
     }
 
-    /** The methods the class passes recorded, still in the class they were recorded for, and which build. */
-    private fun recordedMethods(): Pair<Set<Function>, Set<Function>> {
-        val space = program.addressFactory.defaultAddressSpace
-        val methods = mutableSetOf<Function>()
-        val ctors = mutableSetOf<Function>()
-        for ((id, entry) in program.readClassRecord().orEmpty()) {
-            fun at(offset: Long) = program.functionManager.getFunctionAt(space.getAddress(offset))
-                ?.takeIf { it.parentNamespace.id == id }
-            entry.methods.mapNotNullTo(methods, ::at)
-            entry.constructors.mapNotNullTo(ctors, ::at)
-        }
-        return methods to ctors
-    }
+    private fun Function.isTagged(tag: String) = tags.any { it.name == tag }
 
     /**
      * An unnamed global function whose first argument comes in where `this` does: under `__thiscall` or
