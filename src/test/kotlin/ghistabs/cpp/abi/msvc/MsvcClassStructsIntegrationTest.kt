@@ -93,6 +93,19 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             )
         }
 
+    @Test
+    fun `a base with no vftable is built by what its deriving class's constructor calls on it`() =
+        withAnalyzed(HELLO) { program ->
+            // `Left` and `Right` store no vftable; the linker folded their constructors into one.
+            program.layout("Diamond").map { (at, field) -> at to field.substringBefore(':') } mustBe listOf(
+                0 to "_base_Named",
+                12 to "_base_Left",
+                20 to "_base_Right",
+                28 to "Diamond_data",
+            )
+            program.layout("Right") mustBe listOf(0 to "vbptr: int *")
+        }
+
     private fun Program.secondSlot(table: String) = (classStruct(table).getComponent(1).dataType as Pointer).dataType
 
     private fun Program.classStruct(name: String) = dataTypeManager.allStructures.asSequence()
