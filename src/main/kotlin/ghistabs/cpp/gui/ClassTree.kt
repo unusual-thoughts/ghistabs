@@ -396,6 +396,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
                 listOf(
                     ClassHierarchy.Origin.STABS to "from stabs",
                     ClassHierarchy.Origin.MSVC_RTTI to "from MSVC RTTI",
+                    ClassHierarchy.Origin.ITANIUM_RTTI to "from Itanium RTTI",
                     ClassHierarchy.Origin.SWEPT_RTTI to "from typeinfo",
                     ClassHierarchy.Origin.SWEPT to "from vtables",
                     ClassHierarchy.Origin.NAMESPACE to "from namespaces alone",

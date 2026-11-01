@@ -22,6 +22,7 @@ import ghistabs.cpp.abi.msvc.*
 import ghistabs.cpp.nameSegments
 import ghistabs.isInjected
 import ghistabs.paramTypes
+import ghistabs.parse.StabReader
 import ghistabs.pointerAt
 import kotlinx.serialization.Serializable
 
@@ -47,6 +48,9 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
 
         /** Laid by Ghidra's RTTI analyzer, bases off its MSVC Class Hierarchy Descriptor ([MsvcClasses]). */
         MSVC_RTTI,
+
+        /** Recorded off its Itanium typeinfo by the class pass ([ItaniumClasses]), on a binary with no stabs. */
+        ITANIUM_RTTI,
 
         /** Laid by the vtable sweep with no typeinfo to read: bases unknown. */
         SWEPT,
@@ -233,6 +237,9 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                 .associate { it.parentNamespace.getPathList(true).toList() to it.address }
         }
 
+        // Only the class pass records classes on a binary with no stabs.
+        val hasStabs: Boolean by lazy { StabReader.hasStabs(program) }
+
         fun build(): ClassHierarchy {
             // A class the program imports from has its namespace under the library too, by the same path
             // less the library's name: one class, its imports folded into the one the program defines.
@@ -253,6 +260,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                     path = path,
                     origin = when {
                         typeDescriptor != null && ns.id in record -> Origin.MSVC_RTTI
+                        typeinfo != null && ns.id in record && !hasStabs -> Origin.ITANIUM_RTTI
                         ns.id in record -> Origin.STABS
                         typeinfo != null -> Origin.SWEPT_RTTI
                         vftable != null -> Origin.SWEPT

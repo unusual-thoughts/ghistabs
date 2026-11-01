@@ -16,6 +16,7 @@ import ghidra.program.util.ProgramLocation
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
 import ghistabs.cpp.ClassHierarchyRecords.Companion.areClassesRecorded
+import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.msvc.Msvc
 import ghistabs.cpp.gui.ClassTree
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
@@ -39,7 +40,7 @@ import ghistabs.parse.StabReader
 )
 class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
     // Stabs but no record: imported before the record existed, so the stabs classes count as from
-    // typeinfo or vtables until a re-import. MSVC RTTI but no record: analyzed before MsvcClassAnalyzer.
+    // typeinfo or vtables until a re-import. RTTI but no record: analyzed before its class analyzer.
     private val classHierarchy = ClassTree(this) { p ->
         when {
             p.areClassesRecorded() -> null
@@ -48,6 +49,9 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
 
             p.symbolTable.getSymbols(Msvc.CLASS_HIERARCHY_DESCRIPTOR).hasNext() ->
                 "no class record: Analysis > One Shot > ${MsvcClassAnalyzer.NAME} to add it"
+
+            p.symbolTable.getSymbols(ClassNaming.TYPEINFO).hasNext() ->
+                "no class record: Analysis > One Shot > ${ItaniumClassAnalyzer.NAME} to add it"
 
             else -> null
         }

@@ -19,7 +19,7 @@ import javax.swing.JTree
 internal val CLASS_ICON: Icon = GIcon("icon.plugin.symboltree.node.class")
 
 // Not the stabs': greyed, as the classes only the vtables or the RTTI describe.
-private val SWEPT_ORIGINS = setOf(Origin.MSVC_RTTI, Origin.SWEPT_RTTI, Origin.SWEPT)
+private val SWEPT_ORIGINS = setOf(Origin.MSVC_RTTI, Origin.ITANIUM_RTTI, Origin.SWEPT_RTTI, Origin.SWEPT)
 
 private val NAMESPACE_ICON: Icon = GIcon("icon.plugin.symboltree.node.namespace")
 private val ROOT_ICON: Icon = GIcon("icon.plugin.symboltree.node.category.classes.closed")
@@ -182,6 +182,7 @@ class ClassNode private constructor(
         val origin = when (info?.origin) {
             Origin.STABS -> "from the stabs"
             Origin.MSVC_RTTI -> "from its MSVC RTTI"
+            Origin.ITANIUM_RTTI -> "from its Itanium RTTI"
             Origin.SWEPT_RTTI -> "from its typeinfo"
             Origin.SWEPT -> "from its vtable: bases unknown"
             Origin.NAMESPACE -> "from its namespace alone: bases unknown"
