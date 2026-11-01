@@ -7,6 +7,7 @@ import ghistabs.cpp.TestClass
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.VtableRecord
 import ghistabs.cpp.abi.itanium.Itanium
+import ghistabs.cpp.recover.virtualOwner
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.Test
