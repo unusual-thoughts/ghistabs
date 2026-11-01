@@ -50,6 +50,8 @@ object Msvc : CxxAbi {
 
     override val assignmentOperatorName = "operator="
 
+    override val virtualBaseRecord get() = "vbtable"
+
     override val constructorsReturnThis get() = true
 
     override val mangledOperatorNew get() = setOf("??2@YAPAXI@Z", "??2@YAPEAX_K@Z")
