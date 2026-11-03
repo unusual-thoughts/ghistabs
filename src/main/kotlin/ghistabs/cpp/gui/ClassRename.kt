@@ -2,6 +2,7 @@ package ghistabs.cpp.gui
 
 import ghidra.program.model.data.Category
 import ghidra.program.model.data.Structure
+import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
@@ -12,8 +13,9 @@ import ghistabs.cpp.ClassNaming
  *
  * - its namespace, which the class record and member attributes key by id, not name;
  * - its constructors and destructors (`Old`, `~Old`, every variant);
- * - its struct, and each category whose trailing path is the class's (`/ClassDataTypes/…/Old`, a
- *   DWARF or Ghidra `…/Old`), so the vftable structs and nested classes' types follow it;
+ * - its struct and its self-base (`…/Old/!internal/Old`), and each category whose trailing path
+ *   is the class's (`/ClassDataTypes/…/Old`, a DWARF or Ghidra `…/Old`),
+ *   so the vftable structs and nested classes' types follow it;
  * - its vftable structs (`Old_vftable…`), and its derived classes' `vftable_for_Old` labels, their
  *   `…_vftable_for_Old` structs and `_base_Old` / `_vbase_Old` fields.
  *
@@ -42,6 +44,8 @@ internal fun Program.renameClass(
     }
 
     val struct = cls.structId?.let(dataTypeManager::getDataType) as? Structure
+    // Its "self-base", `…/Old/!internal/Old`: the category below follows the rename, its name doesn't.
+    val selfBase = struct?.let { dataTypeManager.getDataType(ClassUtils.getBaseClassDataTypePath(it)) }
     // Deepest first, so a nested class's category is renamed before the one holding it moves.
     val path = cls.path
     for (category in dataTypeManager.rootCategory.descendants().filter {
@@ -50,6 +54,7 @@ internal fun Program.renameClass(
         attempt(category.categoryPathName) { category.name = newName }
     }
     struct?.let { attempt(it.pathName) { it.name = newName } }
+    selfBase?.let { attempt(it.pathName) { it.name = newName } }
 
     // Old_vftable, Old_vftable_for_Base, Old_vftable1: in the (renamed) class's category.
     val vftablePrefix = ClassNaming.vftableName(old)

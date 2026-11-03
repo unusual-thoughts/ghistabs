@@ -177,6 +177,9 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val before = ClassHierarchy.of(program)
         val dtm = program.dataTypeManager
         val shape = before.cls("Shape")
+        val selfBases = dtm.allDataTypes.asSequence().count {
+            it.name == "Shape" && "!internal" in it.categoryPath.path
+        }
         val vftables = dtm.allDataTypes.asSequence().filter { it.name.startsWith("Shape_vftable") }.count()
         val left = before.cls("Left")
         val diamondStruct = { program.dataTypeManager.getDataType(before.cls("Diamond").structId!!) as Structure }
@@ -197,6 +200,9 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         dtm.getDataType(figure.structId!!).name mustBe "Figure"
         dtm.allDataTypes.asSequence().count { it.name.startsWith("Figure_vftable") } mustBe vftables
         dtm.allDataTypes.asSequence().none { it.name.startsWith("Shape_vftable") }.mustBeTrue()
+        dtm.allDataTypes.asSequence().none { it.name == "Shape" && "!internal" in it.categoryPath.path }.mustBeTrue()
+        dtm.allDataTypes.asSequence().count { it.name == "Figure" && "!internal" in it.categoryPath.path } mustBe
+            selfBases
         after.cls("Circle").baseSpelling() mustBe listOf("public Figure")
         // Diamond's base field and vftable label for Left follow it.
         val fields = diamondStruct().definedComponents.map { it.fieldName }
