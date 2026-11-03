@@ -183,8 +183,8 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val leftField = diamondStruct().definedComponents.any { it.fieldName == "_base_Left" }
 
         program.runTransaction("rename") {
-            renameClass(program, before, shape, "Figure") mustBe emptyList()
-            renameClass(program, before, left, "Port") mustBe emptyList()
+            program.renameClass(before, shape, "Figure") mustBe emptyList()
+            program.renameClass(before, left, "Port") mustBe emptyList()
         }
 
         val after = ClassHierarchy.of(program)
