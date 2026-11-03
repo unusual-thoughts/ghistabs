@@ -73,7 +73,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
 
     private val tree = GTree(placeholder("No program")).apply {
         isRootVisible = true
-        setCellRenderer(ClassTreeRenderer())
+        cellRenderer = ClassTreeRenderer()
     }
     private val status = JLabel(" ")
     private val panel = JPanel(BorderLayout()).apply {
@@ -490,7 +490,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
         val dialog = InputDialog("Rename Class", "New name:", cls.name)
         tool.showDialog(dialog, this)
         val name = dialog.value?.trim()?.takeUnless { dialog.isCanceled || it.isEmpty() || it == cls.name } ?: return
-        val skipped = runCatching { p.runTransaction("Rename class ${cls.name}") { renameClass(p, h, cls, name) } }
+        val skipped = runCatching { p.runTransaction("Rename class ${cls.name}") { p.renameClass(h, cls, name) } }
             .getOrElse { return Msg.showError(this, component, "Rename Class", it.message) }
         if (skipped.isNotEmpty()) {
             Msg.showWarn(this, component, "Rename Class", "Kept their old names:\n" + skipped.joinToString("\n"))

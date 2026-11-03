@@ -21,15 +21,12 @@ import ghistabs.cpp.ClassNaming
  * else that can't take its new name (a datatype already so named) keeps the old one, and is listed in
  * what this returns.
  */
-internal fun renameClass(
-    program: Program,
+internal fun Program.renameClass(
     hierarchy: ClassHierarchy,
     cls: ClassHierarchy.ClassInfo,
     newName: String,
 ): List<String> {
-    val symtab = program.symbolTable
-    val dtm = program.dataTypeManager
-    val ns = symtab.getSymbol(cls.id)?.`object` as? GhidraClass ?: return listOf("no class namespace")
+    val ns = symbolTable.getSymbol(cls.id)?.`object` as? GhidraClass ?: return listOf("no class namespace")
     val old = ns.name
     if (newName == old) return emptyList()
     val skipped = mutableListOf<String>()
@@ -38,34 +35,34 @@ internal fun renameClass(
     }
 
     val structors = setOf(old, "~$old")
-    val members = symtab.getSymbols(ns).filter { it.name in structors }
+    val members = symbolTable.getSymbols(ns).filter { it.name in structors }
     ns.symbol.setName(newName, SourceType.USER_DEFINED)
     for (sym in members) {
         attempt(sym.name) { sym.setName(sym.name.replaceFirst(old, newName), SourceType.USER_DEFINED) }
     }
 
-    val struct = cls.structId?.let(dtm::getDataType) as? Structure
+    val struct = cls.structId?.let(dataTypeManager::getDataType) as? Structure
     // Deepest first, so a nested class's category is renamed before the one holding it moves.
     val path = cls.path
-    for (category in dtm.rootCategory.descendants().filter { it.categoryPath.pathElements.toList().endsWith(path) }
-        .sortedByDescending { it.categoryPath.pathElements.size }) {
-        attempt(category.categoryPathName) { category.setName(newName) }
+    for (category in dataTypeManager.rootCategory.descendants().filter {
+        it.categoryPath.pathElements.toList().endsWith(path)
+    }.sortedByDescending { it.categoryPath.pathElements.size }) {
+        attempt(category.categoryPathName) { category.name = newName }
     }
     struct?.let { attempt(it.pathName) { it.name = newName } }
 
     // Old_vftable, Old_vftable_for_Base, Old_vftable1: in the (renamed) class's category.
     val vftablePrefix = ClassNaming.vftableName(old)
-    dtm.getCategory(ClassNaming.vftableCategory(ns))?.dataTypes.orEmpty()
+    dataTypeManager.getCategory(ClassNaming.vftableCategory(ns))?.dataTypes.orEmpty()
         .filter { it.name.startsWith(vftablePrefix) }
         .forEach { dt ->
             attempt(dt.pathName) {
-                dt.name =
-                    ClassNaming.vftableName(newName) + dt.name.removePrefix(vftablePrefix)
+                dt.name = ClassNaming.vftableName(newName) + dt.name.removePrefix(vftablePrefix)
             }
         }
 
     // What derived classes name after it.
-    for (d in hierarchy.derivedOf(cls).map { it.cls }) renameInDerived(program, d, old, newName, ::attempt)
+    for (d in hierarchy.derivedOf(cls).map { it.cls }) renameInDerived(d, old, newName, ::attempt)
     return skipped
 }
 
@@ -73,23 +70,20 @@ internal fun renameClass(
  * In derived class [d], rename what is named after its base [old]: `vftable_for_Old` labels and structs,
  * `_base_Old` and `_vbase_Old` fields.
  */
-private fun renameInDerived(
-    program: Program,
+private fun Program.renameInDerived(
     d: ClassHierarchy.ClassInfo,
     old: String,
     newName: String,
     attempt: (String, () -> Unit) -> Unit,
 ) {
-    val symtab = program.symbolTable
-    val dtm = program.dataTypeManager
-    val dns = symtab.getSymbol(d.id)?.`object` as? GhidraClass ?: return
-    symtab.getSymbols(ClassNaming.vftableForLabel(old), dns).forEach { sym ->
+    val dns = symbolTable.getSymbol(d.id)?.`object` as? GhidraClass ?: return
+    symbolTable.getSymbols(ClassNaming.vftableForLabel(old), dns).forEach { sym ->
         attempt(sym.name) { sym.setName(ClassNaming.vftableForLabel(newName), SourceType.USER_DEFINED) }
     }
-    dtm.getCategory(ClassNaming.vftableCategory(dns))?.dataTypes.orEmpty()
+    dataTypeManager.getCategory(ClassNaming.vftableCategory(dns))?.dataTypes.orEmpty()
         .filter { it.name.endsWith(ClassNaming.FOR_INFIX + old) }
         .forEach { dt -> attempt(dt.pathName) { dt.name = dt.name.removeSuffix(old) + newName } }
-    val dStruct = d.structId?.let(dtm::getDataType) as? Structure ?: return
+    val dStruct = d.structId?.let(dataTypeManager::getDataType) as? Structure ?: return
     for (c in dStruct.definedComponents) {
         val prefix = listOf(ClassNaming.BASE_PREFIX, ClassNaming.VBASE_PREFIX).firstOrNull { c.fieldName == it + old }
             ?: continue
