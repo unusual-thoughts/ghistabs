@@ -181,6 +181,7 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
             it.name == "Shape" && "!internal" in it.categoryPath.path
         }
         val vftables = dtm.allDataTypes.asSequence().filter { it.name.startsWith("Shape_vftable") }.count()
+        val runs = dtm.allDataTypes.asSequence().count { it.name.startsWith("Shape_fields_") }
         val left = before.cls("Left")
         val diamondStruct = { program.dataTypeManager.getDataType(before.cls("Diamond").structId!!) as Structure }
         val leftField = diamondStruct().definedComponents.any { it.fieldName == "_base_Left" }
@@ -200,6 +201,8 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         dtm.getDataType(figure.structId!!).name mustBe "Figure"
         dtm.allDataTypes.asSequence().count { it.name.startsWith("Figure_vftable") } mustBe vftables
         dtm.allDataTypes.asSequence().none { it.name.startsWith("Shape_vftable") }.mustBeTrue()
+        dtm.allDataTypes.asSequence().none { it.name.startsWith("Shape_fields_") }.mustBeTrue()
+        dtm.allDataTypes.asSequence().count { it.name.startsWith("Figure_fields_") } mustBe runs
         dtm.allDataTypes.asSequence().none { it.name == "Shape" && "!internal" in it.categoryPath.path }.mustBeTrue()
         dtm.allDataTypes.asSequence().count { it.name == "Figure" && "!internal" in it.categoryPath.path } mustBe
             selfBases

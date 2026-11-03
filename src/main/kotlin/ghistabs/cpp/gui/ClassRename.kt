@@ -13,8 +13,8 @@ import ghistabs.cpp.ClassNaming
  *
  * - its namespace, which the class record and member attributes key by id, not name;
  * - its constructors and destructors (`Old`, `~Old`, every variant);
- * - its struct and its self-base (`…/Old/!internal/Old`), and each category whose trailing path
- *   is the class's (`/ClassDataTypes/…/Old`, a DWARF or Ghidra `…/Old`),
+ * - its struct, its self-base (`…/Old/!internal/Old`) and their `Old_fields_…` runs, and each
+ *   category whose trailing path is the class's (`/ClassDataTypes/…/Old`, a DWARF or Ghidra `…/Old`),
  *   so the vftable structs and nested classes' types follow it;
  * - its vftable structs (`Old_vftable…`), and its derived classes' `vftable_for_Old` labels, their
  *   `…_vftable_for_Old` structs and `_base_Old` / `_vbase_Old` fields.
@@ -55,6 +55,11 @@ internal fun Program.renameClass(
     }
     struct?.let { attempt(it.pathName) { it.name = newName } }
     selfBase?.let { attempt(it.pathName) { it.name = newName } }
+    // A split base's field runs, `Old_fields_<from>_<until>`, beside the struct and the self-base.
+    val fieldsPrefix = old + ClassNaming.FIELDS + "_"
+    listOfNotNull(struct, selfBase).mapNotNull { dataTypeManager.getCategory(it.categoryPath) }.distinct()
+        .flatMap { it.dataTypes.filter { dt -> dt.name.startsWith(fieldsPrefix) } }
+        .forEach { dt -> attempt(dt.pathName) { dt.name = newName + dt.name.removePrefix(old) } }
 
     // Old_vftable, Old_vftable_for_Base, Old_vftable1: in the (renamed) class's category.
     val vftablePrefix = ClassNaming.vftableName(old)
