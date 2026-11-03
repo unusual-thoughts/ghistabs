@@ -313,7 +313,13 @@
     by name.</P>
 
     <P>Double-click a member (or press Enter) to go to it, and a class to go to its vtable, else its
-    typeinfo. A class's popup menu offers <B>Edit class struct</B> and <B>Edit vtable struct</B>.
+    typeinfo. A class's popup menu offers <B>Rename Class</B>, <B>Edit class struct</B> and
+    <B>Edit vtable struct</B>. <B>Rename Class</B> renames the class's namespace and what is named
+    after it: its constructors and destructors, its struct and data type category, its vftable
+    structs, and in each derived class the <CODE>vftable_for_</CODE> labels and structs and the
+    <CODE>_base_</CODE> and <CODE>_vbase_</CODE> fields; anything that can't take the new name (one
+    already taken) keeps its old one, and a warning lists it. Classes only imported from a library
+    have no rename.
     A function's offers <B>Go to Overridden</B>, which goes to the base class's virtual function it
     overrides (greyed out when it overrides none), and every member's the Symbol Tree's
     <B>Rename</B>, <B>Delete</B>, <B>Show References to</B>,

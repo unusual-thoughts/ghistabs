@@ -5,6 +5,7 @@ import docking.action.DockingAction
 import docking.action.MenuData
 import docking.action.ToggleDockingAction
 import docking.action.ToolBarData
+import docking.widgets.dialogs.InputDialog
 import docking.widgets.tree.GTree
 import docking.widgets.tree.GTreeNode
 import docking.widgets.tree.support.GTreeSelectionEvent.EventOrigin
@@ -245,6 +246,16 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
             },
         )
         addLocalAction(
+            object : DockingAction("Rename Class", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    selectedClass?.let(::renameSelected)
+                }
+            }.apply {
+                popupMenuData = MenuData(arrayOf("Rename Class"), "0")
+                popupWhen { selectedClass?.let { it.origin != ClassHierarchy.Origin.IMPORTED } == true }
+            },
+        )
+        addLocalAction(
             object : DockingAction("Edit vtable struct", plugin.name) {
                 override fun actionPerformed(context: ActionContext?) {
                     selectedClass?.vftableStructId?.let { openStruct(it) }
@@ -469,6 +480,20 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
         return program.runTransaction("Create class struct") {
             val struct = VariableUtilities.findOrCreateClassStruct(ns, dtm)
             dtm.getID(dtm.resolve(struct, DataTypeConflictHandler.DEFAULT_HANDLER))
+        }
+    }
+
+    /** Ask for [cls]'s new name, then [renameClass]: a name Ghidra refuses changes nothing. */
+    private fun renameSelected(cls: ClassHierarchy.ClassInfo) {
+        val p = program ?: return
+        val h = shown ?: return
+        val dialog = InputDialog("Rename Class", "New name:", cls.name)
+        tool.showDialog(dialog, this)
+        val name = dialog.value?.trim()?.takeUnless { dialog.isCanceled || it.isEmpty() || it == cls.name } ?: return
+        val skipped = runCatching { p.runTransaction("Rename class ${cls.name}") { renameClass(p, h, cls, name) } }
+            .getOrElse { return Msg.showError(this, component, "Rename Class", it.message) }
+        if (skipped.isNotEmpty()) {
+            Msg.showWarn(this, component, "Rename Class", "Kept their old names:\n" + skipped.joinToString("\n"))
         }
     }
 

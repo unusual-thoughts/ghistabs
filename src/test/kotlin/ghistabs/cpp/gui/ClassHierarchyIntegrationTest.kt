@@ -2,6 +2,7 @@ package ghistabs.cpp.gui
 
 import docking.widgets.tree.GTreeNode
 import docking.widgets.tree.support.GTreeFilter
+import ghidra.program.model.data.Structure
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.Access
@@ -167,6 +168,41 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
                 .firstOrNull { it.variants.any(dtor.variants::contains) }
             if (sameVariant != null) base mustBe sameVariant
         }
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `renaming a class renames its structors, structs and what derived classes name after it`(fixture: String) {
+        load(fixture)
+        val before = ClassHierarchy.of(program)
+        val dtm = program.dataTypeManager
+        val shape = before.cls("Shape")
+        val vftables = dtm.allDataTypes.asSequence().filter { it.name.startsWith("Shape_vftable") }.count()
+        val left = before.cls("Left")
+        val diamondStruct = { program.dataTypeManager.getDataType(before.cls("Diamond").structId!!) as Structure }
+        val leftField = diamondStruct().definedComponents.any { it.fieldName == "_base_Left" }
+
+        program.runTransaction("rename") {
+            renameClass(program, before, shape, "Figure") mustBe emptyList()
+            renameClass(program, before, left, "Port") mustBe emptyList()
+        }
+
+        val after = ClassHierarchy.of(program)
+        val figure = after.cls("Figure")
+        figure.id mustBe shape.id
+        figure.origin mustBe Origin.STABS
+        figure.members.filter { it.kind == MemberKind.FUNCTION }.map { it.name }.toSet()
+            .containsAll(setOf("Figure", "~Figure")).mustBeTrue("${figure.members.map { it.name }}")
+        figure.members.none { it.name == "Shape" || it.name == "~Shape" }.mustBeTrue()
+        dtm.getDataType(figure.structId!!).name mustBe "Figure"
+        dtm.allDataTypes.asSequence().count { it.name.startsWith("Figure_vftable") } mustBe vftables
+        dtm.allDataTypes.asSequence().none { it.name.startsWith("Shape_vftable") }.mustBeTrue()
+        after.cls("Circle").baseSpelling() mustBe listOf("public Figure")
+        // Diamond's base field and vftable label for Left follow it.
+        val fields = diamondStruct().definedComponents.map { it.fieldName }
+        ("_base_Left" in fields).mustBeFalse()
+        ("_base_Port" in fields) mustBe leftField
+        after.cls("Diamond").members.none { it.name == "vftable_for_Left" }.mustBeTrue()
     }
 
     /** `Point` is a plain struct whose implicit members g++ never emitted: hidden until asked for. */
