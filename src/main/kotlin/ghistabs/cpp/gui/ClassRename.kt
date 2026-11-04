@@ -1,6 +1,5 @@
 package ghistabs.cpp.gui
 
-import ghidra.program.model.data.Category
 import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
@@ -38,21 +37,15 @@ internal fun Program.renameClass(
 
     val structors = setOf(old, "~$old")
     val members = symbolTable.getSymbols(ns).filter { it.name in structors }
-    ns.symbol.setName(newName, SourceType.USER_DEFINED)
+    val struct = cls.structId?.let(dataTypeManager::getDataType) as? Structure
+    // Its "self-base", `…/Old/!internal/Old`: its category follows the rename, its name doesn't.
+    val selfBase = struct?.let { dataTypeManager.getDataType(ClassUtils.getBaseClassDataTypePath(it)) }
+    // The namespace, and the categories filed by its path (`/ClassDataTypes/…/Old`, `…/Old/!internal`).
+    skipped += relocateNamespace(ns, ns.parentNamespace, newName)
     for (sym in members) {
         attempt(sym.name) { sym.setName(sym.name.replaceFirst(old, newName), SourceType.USER_DEFINED) }
     }
 
-    val struct = cls.structId?.let(dataTypeManager::getDataType) as? Structure
-    // Its "self-base", `…/Old/!internal/Old`: the category below follows the rename, its name doesn't.
-    val selfBase = struct?.let { dataTypeManager.getDataType(ClassUtils.getBaseClassDataTypePath(it)) }
-    // Deepest first, so a nested class's category is renamed before the one holding it moves.
-    val path = cls.path
-    for (category in dataTypeManager.rootCategory.descendants().filter {
-        it.categoryPath.pathElements.toList().endsWith(path)
-    }.sortedByDescending { it.categoryPath.pathElements.size }) {
-        attempt(category.categoryPathName) { category.name = newName }
-    }
     struct?.let { attempt(it.pathName) { it.name = newName } }
     selfBase?.let { attempt(it.pathName) { it.name = newName } }
     // A split base's field runs, `Old_fields_<from>_<until>`, beside the struct and the self-base.
@@ -100,8 +93,3 @@ private fun Program.renameInDerived(
         attempt("${dStruct.pathName}.${c.fieldName}") { c.fieldName = prefix + newName }
     }
 }
-
-private fun Category.descendants(): Sequence<Category> =
-    categories.asSequence().flatMap { sequenceOf(it) + it.descendants() }
-
-private fun List<String>.endsWith(tail: List<String>) = size >= tail.size && subList(size - tail.size, size) == tail

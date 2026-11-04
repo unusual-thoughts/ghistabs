@@ -48,7 +48,7 @@ class ClassHierarchyRootNode(
         // A namespace that is a class files what it holds as the class's nested classes.
         fun ensure(path: List<String>) {
             if (path.isEmpty() || path in classNodes || path in folders) return
-            folders[path] = NamespaceNode(path.last())
+            folders[path] = NamespaceNode(path)
             ensure(path.dropLast(1))
             children.getOrPut(path.dropLast(1)) { mutableListOf() } += folders.getValue(path)
         }
@@ -106,9 +106,9 @@ class ClassHierarchyRootNode(
     }
 }
 
-/** A namespace that is not itself a class. */
-class NamespaceNode(private val name: String) : GTreeNode() {
-    override fun getName() = name
+/** A namespace that is not itself a class, at [path] (outermost first). */
+class NamespaceNode(val path: List<String>) : GTreeNode() {
+    override fun getName() = path.last()
     override fun getIcon(expanded: Boolean) = NAMESPACE_ICON
     override fun getToolTip(): String? = null
     override fun isLeaf() = false

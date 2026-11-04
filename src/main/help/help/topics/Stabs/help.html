@@ -338,6 +338,14 @@
     a re-import keeps them; the status line counts those classes as edited by hand. Changing the
     bases the stabs or the RTTI give asks first.</P>
 
+    <P>Drag a namespace, or a class from where it is filed under its namespace, onto another
+    namespace or the root to move it there; a namespace's popup menu offers <B>Rename
+    Namespace</B>. Moving or renaming a namespace (a class's included, by <B>Rename Class</B>)
+    takes along what is filed by its path: its vftables' <CODE>/ClassDataTypes/</CODE> category,
+    DWARF's category, each class's own category beside its struct, and the struct itself where
+    Ghidra looks for it, in a category ending with the parent namespace's path. Moving classes
+    the stabs or the RTTI name asks first.</P>
+
     <P>Drag functions or labels onto a class to move them into its namespace. Moving one the stabs
     describe, or whose mangled name names its class, asks first.</P>
 

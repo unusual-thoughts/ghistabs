@@ -29,6 +29,10 @@ import javax.swing.JTextField
  * class from under the node it was dragged from; copying (Ctrl) leaves it there too, and dropping it
  * on the root or a namespace only takes it away. No drop may make a class its own base.
  *
+ * A namespace dropped on another or on the root moves there, and so does a class dragged from where
+ * it is filed under its namespace, with the data type categories and structs filed by their path
+ * ([relocateNamespace]).
+ *
  * Members dropped on a class move into its namespace.
  *
  * Before changing what the stabs, RTTI or a mangled name state, it asks; before adding a base, how the
@@ -52,7 +56,7 @@ internal class ClassTreeDnD(
     override fun getSupportedDragActions() = DnDConstants.ACTION_COPY_OR_MOVE
 
     override fun isStartDragOk(dragUserData: List<GTreeNode>, dragAction: Int): Boolean {
-        val classOk = dragUserData.singleOrNull().let { it is ClassNode && it.info != null }
+        val classOk = dragUserData.singleOrNull().let { (it is ClassNode && it.info != null) || it is NamespaceNode }
         val membersOk = dragUserData.isNotEmpty() &&
             dragUserData.all { it is MemberNode && it.member.symbolId != null && it.member.library == null }
         dragged = dragUserData.takeIf { classOk || membersOk }.orEmpty()
@@ -68,9 +72,13 @@ internal class ClassTreeDnD(
             return target != null && target.origin != Origin.IMPORTED &&
                 members.any { it.member !in target.members }
         }
-        val node = dragged.singleOrNull() as? ClassNode ?: return false
         var why: String? = null
-        val ok = plan(h, node, dest, dropAction) { why = it }.isNotEmpty()
+        val ok = when (val path = movedPath(dest)) {
+            null -> plan(h, dragged.singleOrNull() as? ClassNode ?: return false, dest, dropAction) { why = it }
+                .isNotEmpty()
+
+            else -> namespaceMoveRefusal(path, pathOf(dest)!!).also { why = it } == null
+        }
         status(why?.let { "Can't drop: $it" } ?: " ")
         return ok
     }
@@ -85,8 +93,48 @@ internal class ClassTreeDnD(
             moveMembers(p, members.map { it.member }, target)
             return
         }
+        movedPath(destUserData)?.let { from ->
+            moveNamespace(p, h, from, pathOf(destUserData)!!)
+            return
+        }
         val node = dragged.singleOrNull() as? ClassNode ?: return
         applyEdits(p, plan(h, node, destUserData, dropAction))
+    }
+
+    // A namespace node's path, or the root's (empty); null for a class.
+    private fun pathOf(node: GTreeNode): List<String>? = when (node) {
+        is ClassHierarchyRootNode -> emptyList()
+        is NamespaceNode -> node.path
+        else -> null
+    }
+
+    // The namespace path a drop on [dest] moves: a namespace's anywhere it is dropped, a class's filed
+    // under its namespace dropped on another namespace or the root. Null when the drop edits bases.
+    private fun movedPath(dest: GTreeNode): List<String>? {
+        if (pathOf(dest) == null) return null
+        return when (val node = dragged.singleOrNull()) {
+            is NamespaceNode -> node.path
+            is ClassNode -> node.info?.path?.takeIf { node.edge == null }
+            else -> null
+        }
+    }
+
+    private fun moveNamespace(p: Program, h: ClassHierarchy, from: List<String>, to: List<String>) {
+        val ns = p.namespaceAt(from) ?: return
+        val parent = p.namespaceAt(to) ?: return
+        val named = h.classes.filter { it.path.size >= from.size && it.path.subList(0, from.size) == from }
+            .mapNotNull { c -> c.solidSource()?.let { "  ${c.qualifiedName}: $it" } }
+        val what = from.joinToString("::")
+        if (named.isNotEmpty() &&
+            !confirm("Move $what", "These classes' names come from:\n${named.joinToString("\n")}\nMove anyway?")
+        ) {
+            return
+        }
+        val skipped = runCatching { p.runTransaction("Move $what") { p.relocateNamespace(ns, parent) } }
+            .onFailure { Msg.showError(this, parent(), "Move $what", it.message, it) }.getOrNull()
+        if (!skipped.isNullOrEmpty()) {
+            Msg.showWarn(this, parent(), "Move $what", "Kept their old place:\n" + skipped.joinToString("\n"))
+        }
     }
 
     private fun plan(

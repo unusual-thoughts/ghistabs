@@ -265,6 +265,16 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
             },
         )
         addLocalAction(
+            object : DockingAction("Rename Namespace", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    (selectedNode as? NamespaceNode)?.let(::renameNamespace)
+                }
+            }.apply {
+                popupMenuData = MenuData(arrayOf("Rename Namespace"), "0")
+                popupWhen { selectedNode is NamespaceNode }
+            },
+        )
+        addLocalAction(
             object : DockingAction("Edit vtable struct", plugin.name) {
                 override fun actionPerformed(context: ActionContext?) {
                     selectedClass?.vftableStructId?.let { openStruct(it) }
@@ -495,6 +505,20 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
     }
 
     /** Ask for [cls]'s new name, then [renameClass]: a name Ghidra refuses changes nothing. */
+    private fun renameNamespace(node: NamespaceNode) {
+        val p = program ?: return
+        val ns = p.namespaceAt(node.path) ?: return
+        val dialog = InputDialog("Rename Namespace", "New name:", ns.name)
+        tool.showDialog(dialog, this)
+        val name = dialog.value?.trim()?.takeUnless { dialog.isCanceled || it.isEmpty() || it == ns.name } ?: return
+        val skipped = runCatching {
+            p.runTransaction("Rename namespace ${ns.name}") { p.relocateNamespace(ns, ns.parentNamespace, name) }
+        }.onFailure { Msg.showError(this, component, "Rename Namespace", it.message, it) }.getOrNull()
+        if (!skipped.isNullOrEmpty()) {
+            Msg.showWarn(this, component, "Rename Namespace", "Kept their old place:\n" + skipped.joinToString("\n"))
+        }
+    }
+
     private fun renameSelected(cls: ClassHierarchy.ClassInfo) {
         val p = program ?: return
         val h = shown ?: return

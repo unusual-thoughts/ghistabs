@@ -3,9 +3,12 @@ package ghistabs.cpp.gui
 import docking.widgets.tree.GTreeNode
 import docking.widgets.tree.support.GTreeFilter
 import ghidra.program.model.data.Structure
+import ghidra.program.model.listing.GhidraClass
+import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.Access
+import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.MemberAttrs
 import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.VirtKind
@@ -290,6 +293,48 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val after = ClassHierarchy.of(program)
         after.cls("Named").members.any { it.name == "area" && it.address == area.address }.mustBeTrue()
         after.cls("Circle").members.none { it.name == "area" }.mustBeTrue()
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a class moved into a namespace takes its vftables, categories and struct along`(fixture: String) {
+        load(fixture)
+        val h = ClassHierarchy.of(program)
+        val circle = h.cls("Circle")
+        val dtm = program.dataTypeManager
+        fun tablesAt(path: List<String>) =
+            dtm.getCategory(ClassNaming.vftableCategory(path))?.dataTypes.orEmpty().map { it.name }.toSet()
+        val vftables = tablesAt(listOf("Circle"))
+        val shapeTables = dtm.getCategory(ClassNaming.vftableCategory(listOf("Shape")))?.dataTypes.orEmpty().size
+        val ns = { program.symbolTable.getSymbol(circle.id).`object` as GhidraClass }
+        fun foundStruct() = VariableUtilities.findExistingClassStruct(ns(), dtm)?.let(dtm::getID)
+
+        namespaceMoveRefusal(listOf("Circle"), emptyList()) mustBe "Circle is already there"
+        namespaceMoveRefusal(listOf("geo"), listOf("geo", "inner")) mustBe "a namespace can't move into itself"
+        namespaceMoveRefusal(listOf("Circle"), listOf("geo")) mustBe null
+
+        val geo = program.runTransaction("namespace") {
+            program.symbolTable.createNameSpace(null, "geo", SourceType.USER_DEFINED)
+        }
+        program.runTransaction("move") { program.relocateNamespace(ns(), geo) } mustBe emptyList()
+        fun check(path: List<String>) {
+            val moved = ClassHierarchy.of(program)[circle.id]!!
+            moved.path mustBe path
+            moved.structId mustBe circle.structId
+            foundStruct() mustBe circle.structId
+            tablesAt(path) mustBe vftables
+            if (vftables.isNotEmpty()) tablesAt(listOf("Circle")) mustBe emptySet()
+            dtm.getCategory(ClassNaming.vftableCategory(listOf("Shape")))?.dataTypes.orEmpty().size mustBe shapeTables
+        }
+        check(listOf("geo", "Circle"))
+
+        program.runTransaction("rename") { program.relocateNamespace(geo, geo.parentNamespace, "shapes") } mustBe
+            emptyList()
+        check(listOf("shapes", "Circle"))
+
+        program.runTransaction("back") { program.relocateNamespace(ns(), program.globalNamespace) } mustBe emptyList()
+        ClassHierarchy.of(program)[circle.id]!!.path mustBe listOf("Circle")
+        foundStruct() mustBe circle.structId
     }
 
     /** `Point` is a plain struct whose implicit members g++ never emitted: hidden until asked for. */
