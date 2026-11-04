@@ -11,10 +11,7 @@ import ghistabs.cpp.ClassHierarchyRecords
 import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassEdit
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
-import ghistabs.cpp.gui.ClassHierarchy.BaseRef
-import ghistabs.cpp.gui.ClassHierarchy.ClassInfo
-import ghistabs.cpp.gui.ClassHierarchy.Member
-import ghistabs.cpp.gui.ClassHierarchy.Origin
+import ghistabs.cpp.gui.ClassHierarchy.*
 
 /**
  * A change to [owner]'s bases that a drag in the Class Hierarchy window asks for: drop [removed] and
@@ -164,10 +161,8 @@ internal fun Program.placeBase(
     if (struct.isPackingEnabled) return "${struct.name} is packed, so its fields have no fixed offsets"
     if (baseCount > 1) {
         struct.definedComponents.filter {
-            it.fieldName == ClassNaming.BASE_PREFIX ||
-                it.fieldName == ClassNaming.VBASE_PREFIX
-        }
-            .forEach { it.fieldName = it.fieldName + it.dataType.name.substringBefore(ClassNaming.FIELDS + "_") }
+            it.fieldName == ClassNaming.BASE_PREFIX || it.fieldName == ClassNaming.VBASE_PREFIX
+        }.forEach { it.fieldName += it.dataType.name.substringBefore(ClassNaming.FIELDS + "_") }
     }
     val end = offset + part.length
     if (end > struct.length) struct.growStructure(end - struct.length)

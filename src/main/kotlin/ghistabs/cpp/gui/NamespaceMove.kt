@@ -14,10 +14,9 @@ import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassEdits
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 
 /** The namespace at [path] (outermost first), the global one for an empty path; null if there is none. */
-internal fun Program.namespaceAt(path: List<String>): Namespace? =
-    path.fold(globalNamespace as Namespace?) { ns, name ->
-        ns?.let { symbolTable.getNamespace(name, it) }
-    }
+internal fun Program.namespaceAt(path: List<String>): Namespace? = path.fold(globalNamespace) { ns, name ->
+    ns?.let { symbolTable.getNamespace(name, it) }
+}
 
 /** Why the namespace at [from] can't move under the one at [to], or null when it can. */
 internal fun namespaceMoveRefusal(from: List<String>, to: List<String>): String? = when {
@@ -46,7 +45,7 @@ internal fun Program.relocateNamespace(ns: Namespace, newParent: Namespace, newN
         .map { it to structOf(it) }.toList()
     val oldPaths = classes.associate { (c, _) -> c.id to c.getPathList(true).toList() }
 
-    if (ns.parentNamespace != newParent) ns.setParentNamespace(newParent)
+    if (ns.parentNamespace != newParent) ns.parentNamespace = newParent
     if (ns.name != newName) ns.symbol.setName(newName, SourceType.USER_DEFINED)
     val newPath = ns.getPathList(true).toList()
     if (newPath == oldPath) return emptyList()
@@ -112,8 +111,7 @@ private fun Program.structOf(cls: GhidraClass): Structure? {
 private fun Namespace.nestedNamespaces(): Sequence<Namespace> {
     val children: Iterator<Symbol> = symbol.program.symbolTable.getChildren(symbol)
     return children.asSequence().mapNotNull { it.`object` as? Namespace }.flatMap {
-        sequenceOf(it) +
-            it.nestedNamespaces()
+        sequenceOf(it) + it.nestedNamespaces()
     }
 }
 

@@ -8,20 +8,13 @@ import ghidra.framework.plugintool.PluginTool
 import ghidra.program.model.listing.Program
 import ghidra.util.Msg
 import ghistabs.cpp.Access
-import ghistabs.cpp.gui.ClassHierarchy.BaseRef
-import ghistabs.cpp.gui.ClassHierarchy.ClassInfo
-import ghistabs.cpp.gui.ClassHierarchy.Origin
+import ghistabs.cpp.gui.ClassHierarchy.*
 import ghistabs.runTransaction
 import java.awt.GridLayout
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
 import java.awt.dnd.DnDConstants
-import javax.swing.JCheckBox
-import javax.swing.JComboBox
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.JTextField
+import javax.swing.*
 
 /**
  * Drag and drop in the Class Hierarchy window. A class dropped on another becomes its child there:
@@ -178,7 +171,7 @@ internal class ClassTreeDnD(
             clause?.offset?.toInt()?.let { offset -> base to offset }
         }
         if (place != null) {
-            val hit = p.overwrittenBy(addition!!.owner, place.first, place.second)
+            val hit = p.overwrittenBy(addition.owner, place.first, place.second)
             val list = hit.joinToString("\n") { "  +0x%x %s".format(it.offset, it.fieldName ?: it.defaultFieldName) }
             if (hit.isNotEmpty() &&
                 !confirm("Place ${place.first.qualifiedName}", "Placing it overwrites:\n$list\nGo on?")
@@ -190,7 +183,7 @@ internal class ClassTreeDnD(
             p.runTransaction("Edit class hierarchy") {
                 for (edit in edits) p.setBases(edit.owner, edit.bases(clause.takeIf { edit.added != null }))
                 place?.let { (base, offset) ->
-                    val count = addition!!.bases(clause).size
+                    val count = addition.bases(clause).size
                     p.placeBase(addition.owner, base, offset, clause!!.isVirtual, count)
                 }
             }
@@ -219,11 +212,10 @@ internal class ClassTreeDnD(
         return dialog.result
     }
 
-    private fun moveMembers(p: Program, members: List<ClassHierarchy.Member>, target: ClassInfo) {
+    private fun moveMembers(p: Program, members: List<Member>, target: ClassInfo) {
         val moving = members.filter { it !in target.members }
         val tied = moving.mapNotNull { m -> p.memberSource(m)?.let { "  ${m.label}: $it" } }
-        if (tied.isNotEmpty() &&
-            !confirm(
+        if (tied.isNotEmpty() && !confirm(
                 "Move to ${target.qualifiedName}",
                 "These say which class they belong to:\n${tied.joinToString("\n")}\nMove them anyway?",
             )
@@ -281,7 +273,7 @@ internal class ClassTreeDnD(
             val text = offsetField.text.trim()
             val parsed = if (text.isEmpty()) null else parseOffset(text)
             if (text.isNotEmpty() && parsed == null) {
-                setStatusText("Not an offset: $text")
+                statusText = "Not an offset: $text"
                 return
             }
             result = BaseRef(

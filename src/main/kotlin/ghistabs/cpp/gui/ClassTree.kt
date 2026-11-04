@@ -108,12 +108,9 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
         helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
         addToToolbar()
         tool.addComponentProvider(this, false)
-        tree.setDragNDropHandler(
-            ClassTreeDnD(tool, { component }, { program }, { shown }, { inverted }) {
-                status.text =
-                    it.ifBlank { counts }
-            },
-        )
+        tree.dragNDropHandler = ClassTreeDnD(tool, { component }, { program }, { shown }, { inverted }) {
+            status.text = it.ifBlank { counts }
+        }
         tree.addGTreeSelectionListener { e ->
             // Not when Navigate on Incoming selected it: that's where the listing already is.
             if (e.eventOrigin == EventOrigin.USER_GENERATED && navigateOutgoing.isSelected) openSelected()

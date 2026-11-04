@@ -36,13 +36,12 @@ internal fun Program.renameClass(
     }
 
     val structors = setOf(old, "~$old")
-    val members = symbolTable.getSymbols(ns).filter { it.name in structors }
     val struct = cls.structId?.let(dataTypeManager::getDataType) as? Structure
     // Its "self-base", `…/Old/!internal/Old`: its category follows the rename, its name doesn't.
     val selfBase = struct?.let { dataTypeManager.getDataType(ClassUtils.getBaseClassDataTypePath(it)) }
     // The namespace, and the categories filed by its path (`/ClassDataTypes/…/Old`, `…/Old/!internal`).
     skipped += relocateNamespace(ns, ns.parentNamespace, newName)
-    for (sym in members) {
+    for (sym in symbolTable.getSymbols(ns).filter { it.name in structors }) {
         attempt(sym.name) { sym.setName(sym.name.replaceFirst(old, newName), SourceType.USER_DEFINED) }
     }
 
