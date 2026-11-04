@@ -36,6 +36,7 @@ import ghidra.util.HTMLUtilities
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
 import ghidra.util.task.SwingUpdateManager
+import ghistabs.namespaceAt
 import ghistabs.runTransaction
 import resources.Icons
 import java.awt.BorderLayout

@@ -15,6 +15,7 @@ import ghistabs.cpp.VirtKind
 import ghistabs.cpp.gui.ClassHierarchy.MemberKind
 import ghistabs.cpp.gui.ClassHierarchy.Origin
 import ghistabs.integration.FeatureFixtureTest
+import ghistabs.path
 import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeFalse
@@ -400,7 +401,7 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
                 (sym.name to sym.address.toString()) mustBe (m.name to m.address)
                 // An import, from the class's namespace under its library.
                 if (m.library == null) sym.parentNamespace.id mustBe cls.id
-                if (m.library != null) sym.parentNamespace.getPathList(true).toList() mustBe cls.path
+                if (m.library != null) sym.parentNamespace.path mustBe cls.path
             }
         }
     }

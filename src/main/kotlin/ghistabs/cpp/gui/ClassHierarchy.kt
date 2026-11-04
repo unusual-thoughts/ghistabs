@@ -24,6 +24,7 @@ import ghistabs.cpp.nameSegments
 import ghistabs.isInjected
 import ghistabs.paramTypes
 import ghistabs.parse.StabReader
+import ghistabs.path
 import ghistabs.pointerAt
 import kotlinx.serialization.Serializable
 
@@ -240,7 +241,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         val typeDescriptorByClass: Map<List<String>, Address> by lazy {
             symtab.getSymbols(Msvc.TYPE_DESCRIPTOR).iterator().asSequence()
                 .filterNot { it.parentNamespace.isGlobal || it.isExternal }
-                .associate { it.parentNamespace.getPathList(true).toList() to it.address }
+                .associate { it.parentNamespace.path to it.address }
         }
 
         // Only the class pass records classes on a binary with no stabs.
@@ -249,14 +250,14 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         fun build(): ClassHierarchy {
             // A class the program imports from has its namespace under the library too, by the same path
             // less the library's name: one class, its imports folded into the one the program defines.
-            val twins = classNamespaces().groupBy { it.getPathList(true).toList() }
+            val twins = classNamespaces().groupBy { it.path }
             val canonical = twins.values.associateBy { group -> group.firstOrNull { !it.isExternal } ?: group.first() }
             val idOf = canonical.flatMap { (ns, group) -> group.map { it.id to ns.id } }.toMap()
-            val byPath = canonical.keys.associateBy { it.getPathList(true).toList() }
+            val byPath = canonical.keys.associateBy { it.path }
             val classes = canonical.map { (ns, group) ->
                 val vftableLabel = primaryVftableLabel(ns)
                 val vftable = vftableLabel?.address
-                val path = ns.getPathList(true).toList()
+                val path = ns.path
                 val typeinfo = typeinfoByClass[path]
                 val typeDescriptor = typeDescriptorByClass[path]
                 val struct = structOf(ns)

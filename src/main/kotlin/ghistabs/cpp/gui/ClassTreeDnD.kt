@@ -2,6 +2,7 @@ package ghistabs.cpp.gui
 
 import docking.DialogComponentProvider
 import docking.widgets.OptionDialog
+import docking.widgets.textfield.IntegerTextField
 import docking.widgets.tree.GTreeNode
 import docking.widgets.tree.support.GTreeDragNDropHandler
 import ghidra.framework.plugintool.PluginTool
@@ -9,11 +10,14 @@ import ghidra.program.model.listing.Program
 import ghidra.util.Msg
 import ghistabs.cpp.Access
 import ghistabs.cpp.gui.ClassHierarchy.*
+import ghistabs.namespaceAt
 import ghistabs.runTransaction
+import ghistabs.startsWith
 import java.awt.GridLayout
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
 import java.awt.dnd.DnDConstants
+import java.math.BigInteger
 import javax.swing.*
 
 /**
@@ -115,7 +119,7 @@ internal class ClassTreeDnD(
     private fun moveNamespace(p: Program, h: ClassHierarchy, from: List<String>, to: List<String>) {
         val ns = p.namespaceAt(from) ?: return
         val parent = p.namespaceAt(to) ?: return
-        val named = h.classes.filter { it.path.size >= from.size && it.path.subList(0, from.size) == from }
+        val named = h.classes.filter { it.path.startsWith(from) }
             .mapNotNull { c -> c.solidSource()?.let { "  ${c.qualifiedName}: $it" } }
         val what = from.joinToString("::")
         if (named.isNotEmpty() &&
@@ -244,12 +248,21 @@ internal class ClassTreeDnD(
         isVirtual: Boolean,
         access: Access,
         offset: Long?,
-        canPlace: Boolean,
+        private val canPlace: Boolean,
     ) : DialogComponentProvider("Add ${base.qualifiedName} as a base of ${owner.qualifiedName}") {
         private val virtual = JCheckBox("Virtual", isVirtual)
         private val accessBox = JComboBox(Access.entries.toTypedArray()).apply { selectedItem = access }
-        private val offsetField = JTextField(offset?.let { "0x" + it.toString(HEX) }.orEmpty(), 10).apply {
-            isEnabled = canPlace
+
+        // Ghidra's own number field, hex to start with, a 0x prefix or its lack switching it; blank allowed.
+        // setHexMode, deprecated in 12.2 for setFormat, is the one every Ghidra this builds for has.
+        @Suppress("DEPRECATION")
+        private val offsetField = IntegerTextField(10).apply {
+            setAllowNegativeValues(false)
+            maxValue = BigInteger.valueOf(Int.MAX_VALUE.toLong())
+            setHexMode()
+            setShowNumberMode(true)
+            offset?.let(::setValue)
+            setEnabled(canPlace)
         }
         var result: BaseRef? = null
             private set
@@ -262,7 +275,7 @@ internal class ClassTreeDnD(
                     add(JLabel("Access:"))
                     add(accessBox)
                     add(JLabel("Offset in the struct (blank: don't place it):"))
-                    add(offsetField)
+                    add(offsetField.component)
                 },
             )
             addOKButton()
@@ -270,26 +283,14 @@ internal class ClassTreeDnD(
         }
 
         override fun okCallback() {
-            val text = offsetField.text.trim()
-            val parsed = if (text.isEmpty()) null else parseOffset(text)
-            if (text.isNotEmpty() && parsed == null) {
-                statusText = "Not an offset: $text"
-                return
-            }
             result = BaseRef(
                 base.qualifiedName,
                 base.id,
                 virtual.isSelected,
                 accessBox.selectedItem as Access,
-                parsed?.takeIf { offsetField.isEnabled },
+                offsetField.value?.toLong()?.takeIf { canPlace },
             )
             close()
         }
-
-        private fun parseOffset(text: String): Long? = if (text.startsWith("0x", ignoreCase = true)) {
-            text.drop(2).toLongOrNull(HEX)
-        } else {
-            text.toLongOrNull()
-        }?.takeIf { it >= 0 }
     }
 }

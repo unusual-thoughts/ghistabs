@@ -1,7 +1,6 @@
 package ghistabs.cpp.gui
 
 import ghidra.program.model.data.Category
-import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -12,16 +11,17 @@ import ghidra.program.model.symbol.Symbol
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassEdits
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
-
-/** The namespace at [path] (outermost first), the global one for an empty path; null if there is none. */
-internal fun Program.namespaceAt(path: List<String>): Namespace? = path.fold(globalNamespace) { ns, name ->
-    ns?.let { symbolTable.getNamespace(name, it) }
-}
+import ghistabs.descendants
+import ghistabs.endsWith
+import ghistabs.namespaceAt
+import ghistabs.path
+import ghistabs.startsWith
+import ghistabs.toCategoryPath
 
 /** Why the namespace at [from] can't move under the one at [to], or null when it can. */
 internal fun namespaceMoveRefusal(from: List<String>, to: List<String>): String? = when {
     to == from.dropLast(1) -> "${from.joinToString("::")} is already there"
-    to.size >= from.size && to.subList(0, from.size) == from -> "a namespace can't move into itself"
+    to.startsWith(from) -> "a namespace can't move into itself"
     else -> null
 }
 
@@ -39,15 +39,15 @@ internal fun namespaceMoveRefusal(from: List<String>, to: List<String>): String?
  * returns.
  */
 internal fun Program.relocateNamespace(ns: Namespace, newParent: Namespace, newName: String = ns.name): List<String> {
-    val oldPath = ns.getPathList(true).toList()
+    val oldPath = ns.path
     // Each class at or under it, with its struct and its path now.
     val classes = (sequenceOf(ns) + ns.nestedNamespaces()).filterIsInstance<GhidraClass>()
         .map { it to structOf(it) }.toList()
-    val oldPaths = classes.associate { (c, _) -> c.id to c.getPathList(true).toList() }
+    val oldPaths = classes.associate { (c, _) -> c.id to c.path }
 
     if (ns.parentNamespace != newParent) ns.parentNamespace = newParent
     if (ns.name != newName) ns.symbol.setName(newName, SourceType.USER_DEFINED)
-    val newPath = ns.getPathList(true).toList()
+    val newPath = ns.path
     if (newPath == oldPath) return emptyList()
 
     val skipped = mutableListOf<String>()
@@ -58,11 +58,11 @@ internal fun Program.relocateNamespace(ns: Namespace, newParent: Namespace, newN
     for ((cls, struct) in classes) {
         struct ?: continue
         val oldParent = oldPaths.getValue(cls.id).dropLast(1)
-        val newParentPath = cls.getPathList(true).toList().dropLast(1)
+        val newParentPath = cls.path.dropLast(1)
         val elements = struct.categoryPath.pathElements.toList()
         if (newParentPath.isEmpty() || elements.endsWith(newParentPath)) continue
         val base = if (elements.endsWith(oldParent)) elements.dropLast(oldParent.size) else elements
-        val target = (base + newParentPath).fold(CategoryPath.ROOT) { p, seg -> CategoryPath(p, seg) }
+        val target = (base + newParentPath).toCategoryPath()
         attempt(struct.pathName) { struct.categoryPath = target }
     }
     return skipped
@@ -94,7 +94,7 @@ private fun Program.isLongerNamespacePath(elements: List<String>, size: Int) =
     (size + 1..elements.size).any { n -> namespaceAt(elements.takeLast(n))?.isGlobal == false }
 
 private fun Program.moveCategory(category: Category, to: List<String>) {
-    val target = to.fold(CategoryPath.ROOT) { p, seg -> CategoryPath(p, seg) }
+    val target = to.toCategoryPath()
     if (target.parent != category.categoryPath.parent) {
         val parent = dataTypeManager.createCategory(target.parent)
         parent.moveCategory(category, TaskMonitor.DUMMY)
@@ -114,8 +114,3 @@ private fun Namespace.nestedNamespaces(): Sequence<Namespace> {
         sequenceOf(it) + it.nestedNamespaces()
     }
 }
-
-internal fun Category.descendants(): Sequence<Category> =
-    categories.asSequence().flatMap { sequenceOf(it) + it.descendants() }
-
-internal fun List<String>.endsWith(tail: List<String>) = size >= tail.size && subList(size - tail.size, size) == tail

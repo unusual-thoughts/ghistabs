@@ -4,6 +4,8 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypePath
 import ghidra.program.model.symbol.Namespace
 import ghistabs.at
+import ghistabs.path
+import ghistabs.toCategoryPath
 
 /**
  * The names Ghidra's class recovery looks for, the same for every ABI: `<Class>_vftable` under
@@ -66,11 +68,10 @@ object ClassNaming {
      * `/ClassDataTypes/` plus the class's full namespace path, where Ghidra files vftables. shift-D reads
      * the class back from this path, so it must be the whole scope, not just the leaf.
      */
-    fun vftableCategory(classPath: List<String>): CategoryPath =
-        classPath.fold(classDataTypesRoot) { path, seg -> CategoryPath(path, seg) }
+    fun vftableCategory(classPath: List<String>): CategoryPath = classPath.toCategoryPath(classDataTypesRoot)
 
     /** [vftableCategory] of the class [ns] is. */
-    fun vftableCategory(ns: Namespace) = vftableCategory(ns.getPathList(true).toList())
+    fun vftableCategory(ns: Namespace) = vftableCategory(ns.path)
 
     fun vftableName(className: String) = "${className}_$VFTABLE"
 
