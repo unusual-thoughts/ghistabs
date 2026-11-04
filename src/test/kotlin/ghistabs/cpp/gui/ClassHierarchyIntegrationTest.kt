@@ -214,6 +214,84 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         after.cls("Diamond").members.none { it.name == "vftable_for_Left" }.mustBeTrue()
     }
 
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a dropped class becomes the child of the class it is dropped on, never its own base`(fixture: String) {
+        load(fixture)
+        val h = ClassHierarchy.of(program)
+        val (shape, circle, named) = listOf("Shape", "Circle", "Named").map { h.cls(it) }
+        val (left, diamond) = listOf("Left", "Diamond").map { h.cls(it) }
+        val shapeClause = circle.bases.single()
+        var why = ""
+
+        // Bases below: Circle dropped on Shape would make Shape derive from what derives from it.
+        h.planDrop(circle, null, null, shape, inverted = false, move = true) { why = it } mustBe emptyList()
+        why mustBe "Circle derives from Shape: drop it on the root or a common base first"
+        h.planDrop(shape, null, null, circle, inverted = false, move = true) { why = it } mustBe emptyList()
+        why mustBe "Circle already derives from Shape"
+        // Left moved from under Diamond to under Circle: Diamond loses it, Circle gains it.
+        val leftClause = diamond.bases.first { it.targetId == left.id }
+        h.planDrop(left, leftClause, diamond, circle, inverted = false, move = true) mustBe listOf(
+            BaseEdit(diamond, leftClause, null),
+            BaseEdit(circle, null, left),
+        )
+
+        // Derived below: Circle moved from under Shape to under Named swaps its base in place; copied, adds one.
+        h.planDrop(circle, shapeClause, shape, named, inverted = true, move = true) mustBe
+            listOf(BaseEdit(circle, shapeClause, named))
+        h.planDrop(circle, shapeClause, shape, named, inverted = true, move = false) mustBe
+            listOf(BaseEdit(circle, null, named))
+        // On the root, it only leaves.
+        h.planDrop(circle, shapeClause, shape, null, inverted = true, move = true) mustBe
+            listOf(BaseEdit(circle, shapeClause, null))
+        h.planDrop(shape, null, null, null, inverted = true, move = true) mustBe emptyList()
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `bases set by hand stand over the stabs', placed in the struct at their offset`(fixture: String) {
+        load(fixture)
+        val h = ClassHierarchy.of(program)
+        val (circle, named) = listOf("Circle", "Named").map { h.cls(it) }
+        val edit = h.planDrop(circle, null, null, named, inverted = true, move = false).single()
+        val clause = ClassHierarchy.BaseRef("Named", named.id, false, Access.PROTECTED, null)
+        val struct = { program.dataTypeManager.getDataType(circle.structId!!) as Structure }
+        val end = struct().length
+
+        program.overwrittenBy(circle, named, 0).isNotEmpty().mustBeTrue("Circle's own fields start at 0")
+        program.overwrittenBy(circle, named, end) mustBe emptyList()
+        program.runTransaction("edit") {
+            program.setBases(circle, edit.bases(clause))
+            program.placeBase(circle, named, end, isVirtual = false, baseCount = 2) mustBe null
+        }
+
+        val after = ClassHierarchy.of(program).cls("Circle")
+        after.origin mustBe Origin.EDITED
+        after.baseSpelling() mustBe listOf("public Shape", "protected Named")
+        val field = struct().getComponentContaining(end)
+        field.offset mustBe end
+        field.fieldName mustBe "_base_Named"
+        field.dataType.isEquivalent(program.embeddingOf(named)).mustBeTrue("${field.dataType}")
+        // The lone base field it had takes its base's name, now there are two.
+        struct().definedComponents.none { it.fieldName == "_base_" }.mustBeTrue()
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a member dropped on a class moves into its namespace`(fixture: String) {
+        load(fixture)
+        val h = ClassHierarchy.of(program)
+        val (circle, named) = listOf("Circle", "Named").map { h.cls(it) }
+        val area = circle.members.single { it.name == "area" && it.kind == MemberKind.FUNCTION }
+
+        program.memberSource(area) mustBe "the stabs"
+        program.runTransaction("move") { program.moveMember(area, named) }
+
+        val after = ClassHierarchy.of(program)
+        after.cls("Named").members.any { it.name == "area" && it.address == area.address }.mustBeTrue()
+        after.cls("Circle").members.none { it.name == "area" }.mustBeTrue()
+    }
+
     /** `Point` is a plain struct whose implicit members g++ never emitted: hidden until asked for. */
     @ParameterizedTest
     @MethodSource("hellos")

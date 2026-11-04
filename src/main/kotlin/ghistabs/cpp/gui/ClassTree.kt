@@ -82,6 +82,9 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
     }
 
     private var program: Program? = null
+
+    // The status line's class counts, shown again once a drag's "can't drop" note is done with.
+    private var counts = " "
     private var shown: ClassHierarchy? = null
     private var showMembers = true
     private var inverted = false
@@ -105,6 +108,12 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
         helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
         addToToolbar()
         tool.addComponentProvider(this, false)
+        tree.setDragNDropHandler(
+            ClassTreeDnD(tool, { component }, { program }, { shown }, { inverted }) {
+                status.text =
+                    it.ifBlank { counts }
+            },
+        )
         tree.addGTreeSelectionListener { e ->
             // Not when Navigate on Incoming selected it: that's where the listing already is.
             if (e.eventOrigin == EventOrigin.USER_GENERATED && navigateOutgoing.isSelected) openSelected()
@@ -399,12 +408,13 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
     private fun show(p: Program, hierarchy: ClassHierarchy) {
         shown = hierarchy
         reshow()
-        val counts = hierarchy.classes.groupingBy { it.origin }.eachCount()
-        status.text = buildString {
+        val byOrigin = hierarchy.classes.groupingBy { it.origin }.eachCount()
+        counts = buildString {
             // By source: the stabs, else what the class's typeinfo, its vtable or, failing both, its
             // namespace alone shows.
             append(
                 listOf(
+                    ClassHierarchy.Origin.EDITED to "edited by hand",
                     ClassHierarchy.Origin.STABS to "from stabs",
                     ClassHierarchy.Origin.MSVC_RTTI to "from MSVC RTTI",
                     ClassHierarchy.Origin.ITANIUM_RTTI to "from Itanium RTTI",
@@ -412,13 +422,14 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
                     ClassHierarchy.Origin.SWEPT to "from vtables",
                     ClassHierarchy.Origin.NAMESPACE to "from namespaces alone",
                     ClassHierarchy.Origin.IMPORTED to "only imported",
-                ).mapNotNull { (origin, from) -> counts[origin]?.let { "$it $from" } }
+                ).mapNotNull { (origin, from) -> byOrigin[origin]?.let { "$it $from" } }
                     .ifEmpty { listOf("no classes") }.joinToString(", "),
             )
             val empty = hierarchy.classes.count(hierarchy::isEmpty)
             if (empty > 0) append(", $empty empty")
             staleNote(p)?.let { append(" ($it)") }
         }
+        status.text = counts
     }
 
     /** The shown hierarchy again, as the toolbar toggles now want it. */

@@ -10,6 +10,7 @@ import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.*
 import ghistabs.Demangler
 import ghistabs.cpp.Access
+import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassEdits
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.MemberAttrs
@@ -31,8 +32,9 @@ import kotlinx.serialization.Serializable
  *
  * Two sources of bases, never mixed for one class: the stabs import's [ghistabs.cpp.ClassHierarchyRecords],
  * exact down to virtuality and access, gcc 2.x included; and, for a class the stabs never described,
- * its Itanium typeinfo, when the program has one. Every other class namespace (the vtable sweep's,
- * the demangler's, DWARF's) is still listed, as a root.
+ * its Itanium typeinfo, when the program has one. Bases set by hand in the window
+ * ([ghistabs.cpp.ClassHierarchyRecords.EDITS]) stand over both. Every other class namespace (the
+ * vtable sweep's, the demangler's, DWARF's) is still listed, as a root.
  *
  * Plain data, so it serializes: classes name each other by namespace id ([get] resolves one), and the
  * program's objects are kept as what finds them again, an address's text and a datatype id.
@@ -40,6 +42,9 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ClassHierarchy(val classes: List<ClassInfo>) {
     enum class Origin {
+        /** Its bases set by hand, in this window: over whatever else describes it. */
+        EDITED,
+
         /** Described by the stabs: the import recorded its bases. */
         STABS,
 
@@ -215,6 +220,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
     private class Builder(val program: Program) {
         val symtab: SymbolTable = program.symbolTable
         val record = program.readClassRecord().orEmpty()
+        val edits = program.readClassEdits()
         val rtti = Rtti.Reader(program)
 
         // `_ZTI` objects by the class they describe, off the mangled label or, once Ghidra's demangler
@@ -259,6 +265,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
                     id = ns.id,
                     path = path,
                     origin = when {
+                        ns.id in edits -> Origin.EDITED
                         typeDescriptor != null && ns.id in record -> Origin.MSVC_RTTI
                         typeinfo != null && ns.id in record && !hasStabs -> Origin.ITANIUM_RTTI
                         ns.id in record -> Origin.STABS
@@ -282,7 +289,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         }
 
         fun basesOf(ns: GhidraClass, typeinfo: Address?, classIds: Map<Long, Long>, idOf: (List<String>) -> Long?) =
-            record[ns.id]?.bases?.map { base ->
+            (edits[ns.id] ?: record[ns.id])?.bases?.map { base ->
                 val target = base.namespaceId?.let(classIds::get)
                 val name = base.namespaceId?.let { (symtab.getSymbol(it)?.`object` as? Namespace)?.getName(true) }
                     ?: base.name ?: "?"
@@ -302,7 +309,7 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
         // By the id the import recorded: typedef shortening may have renamed it, or it sits under a CU's
         // category (crypto_mi's `/dll.cpp/multi/ECP`), and Ghidra's lookup goes by name and scope.
         fun structOf(ns: GhidraClass): Structure? =
-            record[ns.id]?.structId?.let(program.dataTypeManager::getDataType) as? Structure
+            (record[ns.id] ?: edits[ns.id])?.structId?.let(program.dataTypeManager::getDataType) as? Structure
                 ?: VariableUtilities.findExistingClassStruct(ns, program.dataTypeManager)
 
         // Renamed once the class has several, so found off its label rather than by `<Class>_vftable`.

@@ -315,8 +315,8 @@
     <P>Double-click a member (or press Enter) to go to it, and a class to go to its vtable, else its
     typeinfo. A class's popup menu offers <B>Rename Class</B>, <B>Edit class struct</B> and
     <B>Edit vtable struct</B>. <B>Rename Class</B> renames the class's namespace and what is named
-    after it: its constructors and destructors, its struct, self-base struct, split-base field runs and data type category, its vftable
-    structs, and in each derived class the <CODE>vftable_for_</CODE> labels and structs and the
+    after it: its constructors and destructors, its struct, self-base struct, split-base field runs
+    and data type category, its vftable structs, and in each derived class the <CODE>vftable_for_</CODE> labels and structs and the
     <CODE>_base_</CODE> and <CODE>_vbase_</CODE> fields; anything that can't take the new name (one
     already taken) keeps its old one, and a warning lists it. Classes only imported from a library
     have no rename.
@@ -325,6 +325,21 @@
     <B>Rename</B>, <B>Delete</B>, <B>Show References to</B>,
     <B>Set Primary</B> and <B>Set Pinned</B>; the tool's own symbol actions, such as <B>Edit
     Function</B>, act on the selected members and classes too.</P>
+
+    <P>Drag a class onto another to make it that class's child in the tree: with the tree running
+    up to the bases, one of its bases; with <B>Show Derived Classes</B> on, a class derived from it.
+    Dragging moves the class from under the node it was dragged from; hold Ctrl to copy, which
+    leaves it there too. Dropped on the root or a namespace, it only leaves the class it was under.
+    No drop may make a class derive from itself: to move a base under a class that derives from it,
+    drop it on the root or a common base first. Adding a base asks whether it is virtual, its
+    access, and its offset in the class's struct; given an offset, the base is placed there (its
+    self-base when it has one), the struct growing to hold it, after confirming any fields it
+    overwrites. Bases set this way are the program's own, kept apart from the stabs import's, so
+    a re-import keeps them; the status line counts those classes as edited by hand. Changing the
+    bases the stabs or the RTTI give asks first.</P>
+
+    <P>Drag functions or labels onto a class to move them into its namespace. Moving one the stabs
+    describe, or whose mangled name names its class, asks first.</P>
 
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
 
