@@ -187,9 +187,6 @@ val Namespace.path: List<String> get() = getPathList(true).toList()
 fun Program.namespaceAt(path: List<String>): Namespace? =
     NamespaceUtils.getNonFunctionNamespace(this, path.takeIf { it.isNotEmpty() }?.let { SymbolPath(it.toTypedArray()) })
 
-fun <T> List<T>.startsWith(head: List<T>) = size >= head.size && subList(0, head.size) == head
-fun <T> List<T>.endsWith(tail: List<T>) = size >= tail.size && subList(size - tail.size, size) == tail
-
 /** Every category under this one, at any depth. */
 fun Category.descendants(): Sequence<Category> = categories.asSequence().flatMap { sequenceOf(it) + it.descendants() }
 

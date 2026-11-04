@@ -8,6 +8,7 @@ import docking.action.ToolBarData
 import docking.widgets.dialogs.InputDialog
 import docking.widgets.tree.GTree
 import docking.widgets.tree.GTreeNode
+import docking.widgets.tree.support.GTreeDragNDropHandler
 import docking.widgets.tree.support.GTreeSelectionEvent.EventOrigin
 import generic.theme.GIcon
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
@@ -25,7 +26,6 @@ import ghidra.framework.plugintool.ComponentProviderAdapter
 import ghidra.framework.plugintool.Plugin
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.Symbol
@@ -36,10 +36,14 @@ import ghidra.util.HTMLUtilities
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
 import ghidra.util.task.SwingUpdateManager
+import ghistabs.cpp.gui.ClassHierarchy.*
 import ghistabs.namespaceAt
 import ghistabs.runTransaction
 import resources.Icons
 import java.awt.BorderLayout
+import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.Transferable
+import java.awt.dnd.DnDConstants
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
@@ -75,6 +79,103 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
     private val tree = GTree(placeholder("No program")).apply {
         isRootVisible = true
         cellRenderer = ClassTreeRenderer()
+        dragNDropHandler = object : GTreeDragNDropHandler {
+            private val flavor = DataFlavor(
+                DataFlavor.javaJVMLocalObjectMimeType + ";class=java.util.List",
+                "class tree nodes",
+            )
+            private var dragged: List<GTreeNode> = emptyList()
+
+            override fun getSupportedDataFlavors(transferNodes: List<GTreeNode>) = arrayOf(flavor)
+            override fun getTransferData(transferNodes: List<GTreeNode>, flavor: DataFlavor): Any = transferNodes
+            override fun getSupportedDragActions() = DnDConstants.ACTION_COPY_OR_MOVE
+
+            override fun isStartDragOk(dragUserData: List<GTreeNode>, dragAction: Int): Boolean {
+                val classOk = dragUserData.singleOrNull().let {
+                    (it is ClassNode && it.info != null) || it is NamespaceNode
+                }
+                val membersOk = dragUserData.isNotEmpty() &&
+                    dragUserData.all { it is MemberNode && it.member.symbolId != null && it.member.library == null }
+                dragged = dragUserData.takeIf { classOk || membersOk }.orEmpty()
+                return dragged.isNotEmpty()
+            }
+
+            override fun isDropSiteOk(destUserData: GTreeNode?, flavors: Array<DataFlavor>, dropAction: Int): Boolean {
+                val h = shown ?: return false
+                val dest = destUserData ?: return false
+                val members = dragged.filterIsInstance<MemberNode>()
+                if (members.isNotEmpty()) {
+                    val target = (dest as? ClassNode)?.info?.let { h[it.id] }
+                    return target != null && target.origin != Origin.IMPORTED &&
+                        members.any { it.member !in target.members }
+                }
+                var why: String? = null
+                val ok = when (val path = dest.movedPath) {
+                    null -> h.planDrop(dragged.singleOrNull() as? ClassNode ?: return false, dest, dropAction)
+                        .onFailure { why = it.message }.getOrNull().isNullOrEmpty()
+
+                    else -> namespaceMoveRefusal(path, dest.path!!).also { why = it } == null
+                }
+                why?.let { status.text = "Can't drop: $it" }
+                return ok
+            }
+
+            override fun drop(destUserData: GTreeNode, transferable: Transferable, dropAction: Int) {
+                status.text = counts
+                val h = shown ?: return
+                val p = program ?: return
+                val members = dragged.filterIsInstance<MemberNode>()
+                val target = (destUserData as? ClassNode)?.info?.let { h[it.id] }
+                if (members.isNotEmpty() && target != null) {
+                    return p.moveMembers(members.map { it.member }, target, component)
+                }
+                destUserData.movedPath?.let { from ->
+                    return p.moveNamespace(h, from, destUserData.path!!, component)
+                }
+                val node = dragged.singleOrNull() as? ClassNode ?: return
+                p.applyEdits(h.planDrop(node, destUserData, dropAction).getOrNull().orEmpty(), tool, component)
+            }
+
+            // A namespace node's path, or the root's (empty); null for a class.
+            private val GTreeNode.path: List<String>? get() = when (this) {
+                is ClassHierarchyRootNode -> emptyList()
+                is NamespaceNode -> path
+                else -> null
+            }
+
+            // The namespace path a drop on [dest] moves: a namespace's anywhere it is dropped, a class's filed
+            // under its namespace dropped on another namespace or the root. Null when the drop edits bases.
+            private val GTreeNode.movedPath: List<String>? get() {
+                if (path == null) return null
+                return when (val node = dragged.singleOrNull()) {
+                    is NamespaceNode -> node.path
+                    is ClassNode -> node.info?.path?.takeIf { node.edge == null }
+                    else -> null
+                }
+            }
+        }
+        addGTreeSelectionListener { e ->
+            // Not when Navigate on Incoming selected it: that's where the listing already is.
+            if (e.eventOrigin == EventOrigin.USER_GENERATED && navigateOutgoing.isSelected) openSelected()
+            contextChanged()
+        }
+        addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) {
+                if (e.isConsumed || !SwingUtilities.isLeftMouseButton(e)) return
+                if (e.clickCount == 2) {
+                    e.consume()
+                    openSelected()
+                } else if (navigateOutgoing.isSelected && getNodeForLocation(e.x, e.y) === selectedNode) {
+                    // A click on the node already selected changes no selection, and goes there all the same.
+                    openSelected()
+                }
+            }
+        })
+        addKeyListener(object : KeyAdapter() {
+            override fun keyPressed(e: KeyEvent) {
+                if (e.keyCode == KeyEvent.VK_ENTER) openSelected()
+            }
+        })
     }
     private val status = JLabel(" ")
     private val panel = JPanel(BorderLayout()).apply {
@@ -109,31 +210,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
         helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
         addToToolbar()
         tool.addComponentProvider(this, false)
-        tree.dragNDropHandler = ClassTreeDnD(tool, { component }, { program }, { shown }, { inverted }) {
-            status.text = it.ifBlank { counts }
-        }
-        tree.addGTreeSelectionListener { e ->
-            // Not when Navigate on Incoming selected it: that's where the listing already is.
-            if (e.eventOrigin == EventOrigin.USER_GENERATED && navigateOutgoing.isSelected) openSelected()
-            contextChanged()
-        }
-        tree.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) {
-                if (e.isConsumed || !SwingUtilities.isLeftMouseButton(e)) return
-                if (e.clickCount == 2) {
-                    e.consume()
-                    openSelected()
-                } else if (navigateOutgoing.isSelected && tree.getNodeForLocation(e.x, e.y) === selectedNode) {
-                    // A click on the node already selected changes no selection, and goes there all the same.
-                    openSelected()
-                }
-            }
-        })
-        tree.addKeyListener(object : KeyAdapter() {
-            override fun keyPressed(e: KeyEvent) {
-                if (e.keyCode == KeyEvent.VK_ENTER) openSelected()
-            }
-        })
+
         addLocalAction(
             object : DockingAction("Refresh Class Hierarchy", plugin.name) {
                 override fun actionPerformed(context: ActionContext?) = rebuild()
@@ -247,7 +324,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
             }.apply {
                 popupMenuData = MenuData(arrayOf("Edit class struct"), STRUCT_ICON)
                 popupWhen {
-                    selectedClass?.let { it.structId != null || it.origin != ClassHierarchy.Origin.IMPORTED } ==
+                    selectedClass?.let { it.structId != null || it.origin != Origin.IMPORTED } ==
                         true
                 }
             },
@@ -259,7 +336,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
                 }
             }.apply {
                 popupMenuData = MenuData(arrayOf("Rename Class"), "0")
-                popupWhen { selectedClass?.let { it.origin != ClassHierarchy.Origin.IMPORTED } == true }
+                popupWhen { selectedClass?.let { it.origin != Origin.IMPORTED } == true }
             },
         )
         addLocalAction(
@@ -289,7 +366,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
                 }
             }.apply {
                 popupMenuData = MenuData(arrayOf("Go to Overridden"), "0")
-                popupWhen { selectedMember?.kind == ClassHierarchy.MemberKind.FUNCTION }
+                popupWhen { selectedMember?.kind == MemberKind.FUNCTION }
                 enabledWhen { selectedOverridden != null }
             },
         )
@@ -381,6 +458,23 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
 
     override fun getComponent(): JComponent = panel
 
+    private fun ClassHierarchy.planDrop(node: ClassNode, dest: GTreeNode, action: Int): Result<List<BaseEdit>> =
+        runCatching {
+            planDrop(
+                dragged = node.info?.let { this[it.id] } ?: return Result.success(emptyList()),
+                edge = node.edge,
+                parent = (node.parent as? ClassNode)?.info?.let { this[it.id] },
+                // Only a class takes a base; the root and a namespace take one away.
+                dest = when (dest) {
+                    is ClassNode -> dest.info?.let { this[it.id] } ?: return Result.success(emptyList())
+                    is ClassHierarchyRootNode, is NamespaceNode -> null
+                    else -> return Result.success(emptyList())
+                },
+                inverted = inverted,
+                move = action and DnDConstants.ACTION_MOVE != 0,
+            )
+        }
+
     fun setProgram(newProgram: Program?) {
         if (newProgram === program) return
         program?.removeListener(this)
@@ -422,14 +516,14 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
             // namespace alone shows.
             append(
                 listOf(
-                    ClassHierarchy.Origin.EDITED to "edited by hand",
-                    ClassHierarchy.Origin.STABS to "from stabs",
-                    ClassHierarchy.Origin.MSVC_RTTI to "from MSVC RTTI",
-                    ClassHierarchy.Origin.ITANIUM_RTTI to "from Itanium RTTI",
-                    ClassHierarchy.Origin.SWEPT_RTTI to "from typeinfo",
-                    ClassHierarchy.Origin.SWEPT to "from vtables",
-                    ClassHierarchy.Origin.NAMESPACE to "from namespaces alone",
-                    ClassHierarchy.Origin.IMPORTED to "only imported",
+                    Origin.EDITED to "edited by hand",
+                    Origin.STABS to "from stabs",
+                    Origin.MSVC_RTTI to "from MSVC RTTI",
+                    Origin.ITANIUM_RTTI to "from Itanium RTTI",
+                    Origin.SWEPT_RTTI to "from typeinfo",
+                    Origin.SWEPT to "from vtables",
+                    Origin.NAMESPACE to "from namespaces alone",
+                    Origin.IMPORTED to "only imported",
                 ).mapNotNull { (origin, from) -> byOrigin[origin]?.let { "$it $from" } }
                     .ifEmpty { listOf("no classes") }.joinToString(", "),
             )
@@ -468,7 +562,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
     private fun Program.goTo(at: String?) = at?.let(addressFactory::getAddress)
         ?.let { tool.getService(GoToService::class.java)?.goTo(it) }
 
-    private val selectedNode get() = tree.selectionPath?.lastPathComponent as? GTreeNode
+    private val selectedNode: GTreeNode? get() = tree.selectionPath?.lastPathComponent as? GTreeNode
 
     /** Where going to [node] goes. */
     private fun addressOf(node: GTreeNode): String? = when (node) {
@@ -484,7 +578,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
     private val selectedMember get() = (tree.selectionPath?.lastPathComponent as? MemberNode)?.member
 
     /** The base function the selected member overrides, under the class listing it. */
-    private val selectedOverridden: ClassHierarchy.Member? get() {
+    private val selectedOverridden: Member? get() {
         val path = tree.selectionPath ?: return null
         val member = (path.lastPathComponent as? MemberNode)?.member ?: return null
         val cls = (path.parentPath?.lastPathComponent as? ClassNode)?.info ?: return null
@@ -492,9 +586,9 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
     }
 
     /** A struct for [cls], which has none, where Ghidra files a class's; its datatype id. */
-    private fun createStruct(cls: ClassHierarchy.ClassInfo): Long? {
+    private fun createStruct(cls: ClassInfo): Long? {
         val program = program ?: return null
-        val ns = program.symbolTable.getSymbol(cls.id)?.`object` as? GhidraClass ?: return null
+        val ns = program.resolve(cls) ?: return null
         val dtm = program.dataTypeManager
         return program.runTransaction("Create class struct") {
             val struct = VariableUtilities.findOrCreateClassStruct(ns, dtm)
@@ -517,7 +611,7 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
         }
     }
 
-    private fun renameSelected(cls: ClassHierarchy.ClassInfo) {
+    private fun renameSelected(cls: ClassInfo) {
         val p = program ?: return
         val h = shown ?: return
         val dialog = InputDialog("Rename Class", "New name:", cls.name)
