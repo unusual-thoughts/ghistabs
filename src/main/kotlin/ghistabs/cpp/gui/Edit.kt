@@ -26,12 +26,15 @@ import ghistabs.cpp.gui.ClassHierarchy.*
  */
 data class BaseEdit(val owner: ClassInfo, val removed: BaseRef?, val added: ClassInfo?)
 
+/** Why a drop can't be, as [ClassHierarchy.planDrop] throws it. */
+class DropRefused(message: String) : IllegalArgumentException(message)
+
 /**
  * The edits dropping a class's node onto [dest] asks for: the class becomes [dest]'s child, under which
  * it then shows. Normally a node's children are its bases, [inverted] the classes derived from it.
  * [dragged] is the class, [edge] the clause that put its node where it was (none for a class filed under
  * its namespace), [parent] the class above it then, and [dest] null for the tree's root or a namespace.
- * Moving, the old clause goes; copying, it stays. Empty, with [reason] told, when the drop can't be.
+ * Moving, the old clause goes; copying, it stays. Throws [DropRefused] when the drop can't be.
  */
 internal fun ClassHierarchy.planDrop(
     dragged: ClassInfo,
@@ -44,29 +47,30 @@ internal fun ClassHierarchy.planDrop(
     // Normally the clause is the parent's, naming the dragged class; inverted, the dragged class's own.
     val removedFrom = (if (inverted) dragged else parent)?.takeIf { edge != null && move }
     if (dest == null) {
-        removedFrom ?: throw Exception("${dragged.qualifiedName} has no base here to remove")
+        removedFrom ?: throw DropRefused("${dragged.qualifiedName} has no base here to remove")
         return listOf(BaseEdit(removedFrom, edge, null))
     }
     val (owner, base) = if (inverted) dragged to dest else dest to dragged
     val replaced = edge.takeIf { removedFrom?.id == owner.id }
-    return when {
-        owner.origin == Origin.IMPORTED -> throw Exception("${owner.qualifiedName} is only imported")
+    val refusal = when {
+        owner.origin == Origin.IMPORTED -> "${owner.qualifiedName} is only imported"
 
-        owner.id == base.id -> throw Exception("a class can't be its own base")
+        owner.id == base.id -> "a class can't be its own base"
 
-        derivesFrom(base, owner) -> throw Exception(
-            "${base.qualifiedName} derives from ${owner.qualifiedName}: drop it on the root or a common base first",
-        )
+        derivesFrom(base, owner) ->
+            "${base.qualifiedName} derives from ${owner.qualifiedName}: drop it on the root or a common base first"
 
         owner.bases.any { it.targetId == base.id && it != replaced } ->
-            throw Exception("${owner.qualifiedName} already derives from ${base.qualifiedName}")
+            "${owner.qualifiedName} already derives from ${base.qualifiedName}"
 
-        // From one class's bases to another's: two edits, the removal first.
-        else -> listOfNotNull(
-            removedFrom?.takeIf { it.id != owner.id }?.let { BaseEdit(it, edge, null) },
-            BaseEdit(owner, replaced, base),
-        )
+        else -> null
     }
+    refusal?.let { throw DropRefused(it) }
+    // From one class's bases to another's: two edits, the removal first.
+    return listOfNotNull(
+        removedFrom?.takeIf { it.id != owner.id }?.let { BaseEdit(it, edge, null) },
+        BaseEdit(owner, replaced, base),
+    )
 }
 
 /** Whether [cls] is [ancestor] or derives from it, through the bases the program has classes for. */

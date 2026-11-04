@@ -112,11 +112,11 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
                 var why: String? = null
                 val ok = when (val path = dest.movedPath) {
                     null -> h.planDrop(dragged.singleOrNull() as? ClassNode ?: return false, dest, dropAction)
-                        .onFailure { why = it.message }.getOrNull().isNullOrEmpty()
+                        .onFailure { why = it.message }.getOrNull().orEmpty().isNotEmpty()
 
                     else -> namespaceMoveRefusal(path, dest.path!!).also { why = it } == null
                 }
-                why?.let { status.text = "Can't drop: $it" }
+                status.text = why?.let { "Can't drop: $it" } ?: counts
                 return ok
             }
 

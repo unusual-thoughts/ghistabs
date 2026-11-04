@@ -106,8 +106,11 @@ fun Program.applyEdits(edits: List<BaseEdit>, tool: PluginTool, component: Compo
         val list = hit.joinToString("\n") {
             "  +0x%x %s".format(it.offset, it.fieldName ?: it.defaultFieldName)
         }
-        val ok = component.confirm("Place ${place.first.qualifiedName}", "Placing it overwrites:\n$list\nGo on?")
-        if (hit.isNotEmpty() && !ok) return
+        if (hit.isNotEmpty() &&
+            !component.confirm("Place ${place.first.qualifiedName}", "Placing it overwrites:\n$list\nGo on?")
+        ) {
+            return
+        }
     }
     runCatching {
         runTransaction("Edit class hierarchy") {
@@ -130,11 +133,11 @@ fun Program.moveNamespace(h: ClassHierarchy, from: List<String>, to: List<String
     val named = h.classes.filter { it.path.startsWith(from) }
         .mapNotNull { c -> c.solidSource()?.let { "  ${c.qualifiedName}: $it" } }
     val what = from.joinToString("::")
-    val ok = component.confirm(
-        "Move $what",
-        "These classes' names come from:\n${named.joinToString("\n")}\nMove anyway?",
-    )
-    if (named.isNotEmpty() && !ok) return
+    if (named.isNotEmpty() &&
+        !component.confirm("Move $what", "These classes' names come from:\n${named.joinToString("\n")}\nMove anyway?")
+    ) {
+        return
+    }
     runCatching {
         runTransaction("Move $what") { relocateNamespace(ns, parent) }
     }.onFailure {
@@ -147,11 +150,14 @@ fun Program.moveNamespace(h: ClassHierarchy, from: List<String>, to: List<String
 fun Program.moveMembers(members: List<Member>, target: ClassInfo, component: Component) {
     val moving = members.filter { it !in target.members }
     val tied = moving.mapNotNull { m -> memberSource(m)?.let { "  ${m.label}: $it" } }
-    val ok = component.confirm(
-        "Move to ${target.qualifiedName}",
-        "These say which class they belong to:\n${tied.joinToString("\n")}\nMove them anyway?",
-    )
-    if (tied.isNotEmpty() && !ok) return
+    if (tied.isNotEmpty() &&
+        !component.confirm(
+            "Move to ${target.qualifiedName}",
+            "These say which class they belong to:\n${tied.joinToString("\n")}\nMove them anyway?",
+        )
+    ) {
+        return
+    }
     val failed = runTransaction("Move members to ${target.qualifiedName}") {
         moving.mapNotNull { m ->
             runCatching { moveMember(m, target) }.exceptionOrNull()?.let { "${m.label}: ${it.message}" }
