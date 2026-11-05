@@ -464,16 +464,17 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
             val move = action and DnDConstants.ACTION_MOVE != 0
             val parent = (node.parent as? ClassNode)?.info?.let { this[it.id] }
             // Only a class takes a base; the root and a namespace take one away.
-            val dest = when (dest) {
+            val target = when (dest) {
                 is ClassNode -> dest.info?.let { this[it.id] } ?: return Result.success(emptyList())
                 is ClassHierarchyRootNode, is NamespaceNode -> null
                 else -> return Result.success(emptyList())
             }
+            // Normally the clause is the parent's, naming the dragged class; inverted, the dragged class's own.
+            val removedFrom = (if (inverted) dragged else parent)?.takeIf { node.edge != null && move }
             planDrop(
-                // Normally the clause is the parent's, naming the dragged class; inverted, the dragged class's own.
-                removedFrom = (if (inverted) dragged else parent)?.takeIf { node.edge != null && move },
-                owner = if (inverted) dragged else dest,
-                base = if (inverted) dest else dragged,
+                owner = target?.takeUnless { inverted } ?: dragged,
+                base = target?.let { if (inverted) it else dragged },
+                removedFrom = removedFrom,
                 edge = node.edge,
             )
         }

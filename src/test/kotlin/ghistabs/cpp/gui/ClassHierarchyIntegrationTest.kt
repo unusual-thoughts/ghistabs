@@ -229,26 +229,26 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         fun refusal(plan: () -> List<BaseEdit>) = (runCatching(plan).exceptionOrNull() as? DropRefused)?.message
 
         // Bases below: Circle dropped on Shape would make Shape derive from what derives from it.
-        refusal { h.planDrop(circle, null, null, shape, inverted = false, move = true) } mustBe
+        refusal { h.planDrop(owner = shape, base = circle, removedFrom = null, edge = null) } mustBe
             "Circle derives from Shape: drop it on the root or a common base first"
-        refusal { h.planDrop(shape, null, null, circle, inverted = false, move = true) } mustBe
+        refusal { h.planDrop(owner = circle, base = shape, removedFrom = null, edge = null) } mustBe
             "Circle already derives from Shape"
         // Left moved from under Diamond to under Circle: Diamond loses it, Circle gains it.
         val leftClause = diamond.bases.first { it.targetId == left.id }
-        h.planDrop(left, leftClause, diamond, circle, inverted = false, move = true) mustBe listOf(
+        h.planDrop(owner = circle, base = left, removedFrom = diamond, edge = leftClause) mustBe listOf(
             BaseEdit(diamond, leftClause, null),
             BaseEdit(circle, null, left),
         )
 
         // Derived below: Circle moved from under Shape to under Named swaps its base in place; copied, adds one.
-        h.planDrop(circle, shapeClause, shape, named, inverted = true, move = true) mustBe
+        h.planDrop(owner = circle, base = named, removedFrom = circle, edge = shapeClause) mustBe
             listOf(BaseEdit(circle, shapeClause, named))
-        h.planDrop(circle, shapeClause, shape, named, inverted = true, move = false) mustBe
+        h.planDrop(owner = circle, base = named, removedFrom = null, edge = shapeClause) mustBe
             listOf(BaseEdit(circle, null, named))
         // On the root, it only leaves.
-        h.planDrop(circle, shapeClause, shape, null, inverted = true, move = true) mustBe
+        h.planDrop(owner = circle, base = null, removedFrom = circle, edge = shapeClause) mustBe
             listOf(BaseEdit(circle, shapeClause, null))
-        refusal { h.planDrop(shape, null, null, null, inverted = true, move = true) } mustBe
+        refusal { h.planDrop(owner = shape, base = null, removedFrom = null, edge = null) } mustBe
             "Shape has no base here to remove"
     }
 
@@ -258,7 +258,7 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         load(fixture)
         val h = ClassHierarchy.of(program)
         val (circle, named) = listOf("Circle", "Named").map { h.cls(it) }
-        val edit = h.planDrop(circle, null, null, named, inverted = true, move = false).single()
+        val edit = h.planDrop(owner = circle, base = named, removedFrom = null, edge = null).single()
         val clause = ClassHierarchy.BaseRef("Named", named.id, false, Access.PROTECTED, null)
         val struct = { program.dataTypeManager.getDataType(circle.structId!!) as Structure }
         val end = struct().length
