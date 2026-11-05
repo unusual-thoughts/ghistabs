@@ -37,40 +37,32 @@ class DropRefused(message: String) : IllegalArgumentException(message)
  * Moving, the old clause goes; copying, it stays. Throws [DropRefused] when the drop can't be.
  */
 internal fun ClassHierarchy.planDrop(
-    dragged: ClassInfo,
+    owner: ClassInfo,
+    base: ClassInfo?,
+    removedFrom: ClassInfo?,
     edge: BaseRef?,
-    parent: ClassInfo?,
-    dest: ClassInfo?,
-    inverted: Boolean,
-    move: Boolean,
 ): List<BaseEdit> {
-    // Normally the clause is the parent's, naming the dragged class; inverted, the dragged class's own.
-    val removedFrom = (if (inverted) dragged else parent)?.takeIf { edge != null && move }
-    if (dest == null) {
-        removedFrom ?: throw DropRefused("${dragged.qualifiedName} has no base here to remove")
-        return listOf(BaseEdit(removedFrom, edge, null))
-    }
-    val (owner, base) = if (inverted) dragged to dest else dest to dragged
+    val remove = removedFrom?.takeIf { it.id != owner.id }?.let { BaseEdit(it, edge, null) }
     val replaced = edge.takeIf { removedFrom?.id == owner.id }
-    val refusal = when {
-        owner.origin == Origin.IMPORTED -> "${owner.qualifiedName} is only imported"
+    return when {
+        base == null && removedFrom == null -> throw DropRefused("${owner.qualifiedName} has no base here to remove")
 
-        owner.id == base.id -> "a class can't be its own base"
+        base == null -> listOfNotNull(remove)
 
-        derivesFrom(base, owner) ->
-            "${base.qualifiedName} derives from ${owner.qualifiedName}: drop it on the root or a common base first"
+        owner.origin == Origin.IMPORTED -> throw DropRefused("${owner.qualifiedName} is only imported")
+
+        owner.id == base.id -> throw DropRefused("a class can't be its own base")
+
+        derivesFrom(base, owner) -> throw DropRefused(
+            "${base.qualifiedName} derives from ${owner.qualifiedName}: drop it on the root or a common base first",
+        )
 
         owner.bases.any { it.targetId == base.id && it != replaced } ->
-            "${owner.qualifiedName} already derives from ${base.qualifiedName}"
+            throw DropRefused("${owner.qualifiedName} already derives from ${base.qualifiedName}")
 
-        else -> null
+        // From one class's bases to another's: two edits, the removal first.
+        else -> listOfNotNull(remove, BaseEdit(owner, replaced, base))
     }
-    refusal?.let { throw DropRefused(it) }
-    // From one class's bases to another's: two edits, the removal first.
-    return listOfNotNull(
-        removedFrom?.takeIf { it.id != owner.id }?.let { BaseEdit(it, edge, null) },
-        BaseEdit(owner, replaced, base),
-    )
 }
 
 /** Whether [cls] is [ancestor] or derives from it, through the bases the program has classes for. */
