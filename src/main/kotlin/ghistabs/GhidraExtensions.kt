@@ -8,6 +8,7 @@ import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.PseudoData
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
+import ghidra.app.util.bin.format.pe.PortableExecutable
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.opinion.LoaderTier
 import ghidra.program.database.data.DataTypeUtilities
@@ -433,6 +434,16 @@ internal fun File.offersCompilerSpec(compiler: String) = FileByteProvider(this, 
         loader.tier != LoaderTier.UNTARGETED_LOADER &&
             specs.any { it.languageCompilerSpec?.compilerSpecID?.idAsString == compiler }
     }
+}
+
+/**
+ * Whether this is a PE that Microsoft's linker made, by its Rich header: `link` always writes one and
+ * GNU `ld` never does. Ghidra's PE loader offers the `gcc` spec for those too, and under it the MSVC
+ * analyzers (RTTI, exception handling) find nothing.
+ */
+internal fun File.isMsvcLinked() = FileByteProvider(this, null, AccessMode.READ).use { provider ->
+    runCatching { PortableExecutable(provider, PortableExecutable.SectionLayout.FILE, false, false) }
+        .getOrNull()?.richHeader?.records?.isNotEmpty() == true
 }
 
 /** [loadProgram] scoped to [func], released even when it throws. */
