@@ -352,6 +352,16 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
                 enabledWhen { selectedOverridden != null }
             },
         )
+        addLocalAction(
+            object : DockingAction("Set Member Attributes", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    program?.setMemberAttrs(selectedMembers, tool, component)
+                }
+            }.apply {
+                popupMenuData = MenuData(arrayOf("Set Member Attributes..."), "0")
+                popupWhen { selectedMembers.let { it.isNotEmpty() && it.all { (m, _) -> m.takesAttrs } } }
+            },
+        )
         addSymbolActions()
     }
 
@@ -549,6 +559,13 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
 
     private val selectedMember get() = (tree.selectionPath?.lastPathComponent as? MemberNode)?.member
 
+    /** The selected members, each with the class listing it. */
+    private val selectedMembers: List<Pair<Member, ClassInfo>> get() =
+        tree.selectionPaths.orEmpty().mapNotNull { path ->
+            val member = (path.lastPathComponent as? MemberNode)?.member ?: return@mapNotNull null
+            (path.parentPath?.lastPathComponent as? ClassNode)?.info?.let { member to it }
+        }
+
     /** The base function the selected member overrides, under the class listing it. */
     private val selectedOverridden: Member? get() {
         val path = tree.selectionPath ?: return null
@@ -667,7 +684,9 @@ internal fun movedPath(dragged: GTreeNode?, dest: GTreeNode): List<String>? {
 /** Why [dragged], a class's or a namespace's node, can't be dropped on [dest]; null when it can. */
 internal fun ClassHierarchy.dropRefusal(dragged: GTreeNode, dest: GTreeNode, action: Int) =
     when (val from = movedPath(dragged, dest)) {
-        null -> (dragged as? ClassNode)?.let { planDrop(it, dest, action).error } ?: Drop.Illegal().reason
+        null -> (dragged as? ClassNode)?.let { planDrop(it, dest, action).error }
+            ?: "a namespace only drops on another namespace or the root"
+
         else -> checkNamespaceMove(from, dest.namespacePath!!)
     }
 
@@ -675,14 +694,18 @@ internal fun ClassHierarchy.dropRefusal(dragged: GTreeNode, dest: GTreeNode, act
 internal fun ClassHierarchy.planDrop(node: ClassNode, dest: GTreeNode, action: Int): Drop {
     // The tree's own way round: normally a node's children are its bases, inverted its derived classes.
     val inverted = (node.root as? ClassHierarchyRootNode)?.inverted == true
-    val dragged = node.info?.let { this[it.id] } ?: return Drop.Illegal()
+    val dragged = node.info?.let { this[it.id] ?: return Drop.Illegal(STALE) }
+        ?: return Drop.Illegal("the program has no class ${node.name}")
     val move = action and DnDConstants.ACTION_MOVE != 0
     val parent = (node.parent as? ClassNode)?.info?.let { this[it.id] }
     // Only a class takes a base; the root and a namespace take one away.
     val target = when (dest) {
-        is ClassNode -> dest.info?.let { this[it.id] } ?: return Drop.Illegal()
+        is ClassNode -> dest.info?.let { this[it.id] ?: return Drop.Illegal(STALE) }
+            ?: return Drop.Illegal("the program has no class ${dest.name}")
+
         is ClassHierarchyRootNode, is NamespaceNode -> null
-        else -> return Drop.Illegal()
+
+        else -> return Drop.Illegal("a class only drops on another class, a namespace or the root")
     }
     return planDrop(
         owner = target?.takeUnless { inverted } ?: dragged,
@@ -692,3 +715,6 @@ internal fun ClassHierarchy.planDrop(node: ClassNode, dest: GTreeNode, action: I
         edge = node.edge,
     )
 }
+
+// The tree shows classes the program has changed since: the rebuild is on its way.
+private const val STALE = "the tree is out of date, wait for it to refresh"

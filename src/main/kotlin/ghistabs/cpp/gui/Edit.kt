@@ -21,7 +21,7 @@ import ghistabs.cpp.gui.ClassHierarchy.*
 
 sealed interface Drop {
     data class MoveBase(val detach: BaseEdit?, val attach: BaseEdit? = null) : Drop
-    data class Illegal(val reason: String = "can't drop here") : Drop
+    data class Illegal(val reason: String) : Drop
 
     // From one class's bases to another's: two edits, the removal first.
     val edits get() = (this as? MoveBase)?.run { listOfNotNull(detach, attach) }.orEmpty()

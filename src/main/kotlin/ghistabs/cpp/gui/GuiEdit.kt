@@ -173,7 +173,7 @@ private fun askMemberAttrs(
         }
         private val constBox = JCheckBox("const", old.isConst)
         private val volatileBox = JCheckBox("volatile", old.isVolatile)
-        private val forRest = JCheckBox("The same for the other members moved", false)
+        private val forRest = JCheckBox("The same for the other members", false)
         var result: Pair<MemberAttrs, Boolean>? = null
             private set
 
@@ -216,6 +216,42 @@ private fun askMemberAttrs(
     }.apply { tool.showDialog(this, component) }.result
 }
 
+/** Whether [member] takes [MemberAttrs] by hand: a function or a static data member of the program's. */
+val Member.takesAttrs get() = library == null && (kind == MemberKind.FUNCTION || kind == MemberKind.LABEL)
+
+/**
+ * Asks how each of [members], with the class it is declared in, is declared, one dialog per member
+ * unless one answers for the rest of its kind. Null when cancelled.
+ */
+private fun askMemberAttrs(
+    members: List<Pair<Member, ClassInfo>>,
+    tool: PluginTool,
+    component: Component,
+): Map<Member, MemberAttrs>? {
+    val declared = mutableMapOf<Member, MemberAttrs>()
+    val same = mutableMapOf<MemberKind, MemberAttrs>()
+    val asked = members.filter { it.first.takesAttrs }
+    for ((i, pair) in asked.withIndex()) {
+        val (m, cls) = pair
+        declared[m] = same[m.kind] ?: run {
+            val more = asked.drop(i + 1).any { it.first.kind == m.kind }
+            val (attrs, forRest) = askMemberAttrs(m, cls, more, tool, component) ?: return null
+            attrs.also { if (forRest) same[m.kind] = it }
+        }
+    }
+    return declared
+}
+
+private fun Program.writeMemberAttrs(member: Member, attrs: MemberAttrs) {
+    addressFactory.getAddress(member.address)?.let { writeMember(it, attrs) }
+}
+
+/** Sets how each of [members], with the class listing it, is declared, as the user answers. */
+fun Program.setMemberAttrs(members: List<Pair<Member, ClassInfo>>, tool: PluginTool, component: Component) {
+    val declared = askMemberAttrs(members, tool, component)?.takeIf { it.isNotEmpty() } ?: return
+    runTransaction("Set member attributes") { declared.forEach { (m, attrs) -> writeMemberAttrs(m, attrs) } }
+}
+
 fun Program.moveMembers(members: List<Member>, target: ClassInfo, tool: PluginTool, component: Component) {
     val moving = members.filter { it !in target.members }
     val tied = moving.mapNotNull { m -> memberSource(m)?.let { "  ${m.label}: $it" } }
@@ -228,21 +264,12 @@ fun Program.moveMembers(members: List<Member>, target: ClassInfo, tool: PluginTo
         return
     }
     // How each is declared there, asked before anything moves; Cancel moves none.
-    val declared = mutableMapOf<Member, MemberAttrs>()
-    val same = mutableMapOf<MemberKind, MemberAttrs>()
-    val asked = moving.filter { it.kind == MemberKind.FUNCTION || it.kind == MemberKind.LABEL }
-    for ((i, m) in asked.withIndex()) {
-        declared[m] = same[m.kind] ?: run {
-            val more = asked.drop(i + 1).any { it.kind == m.kind }
-            val (attrs, forRest) = askMemberAttrs(m, target, more, tool, component) ?: return
-            attrs.also { if (forRest) same[m.kind] = it }
-        }
-    }
+    val declared = askMemberAttrs(moving.map { it to target }, tool, component) ?: return
     val failed = runTransaction("Move members to ${target.qualifiedName}") {
         moving.mapNotNull { m ->
             runCatching {
                 moveMember(m, target)
-                declared[m]?.let { attrs -> addressFactory.getAddress(m.address)?.let { writeMember(it, attrs) } }
+                declared[m]?.let { writeMemberAttrs(m, it) }
             }.exceptionOrNull()?.let { "${m.label}: ${it.message}" }
         }
     }
