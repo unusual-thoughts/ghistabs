@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.awt.dnd.DnDConstants
 
 /**
  * The Class Hierarchy window's model over `features/hello.cc`, on every compiler that built it:
@@ -230,23 +231,23 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
 
         // Bases below: Circle dropped on Shape would make Shape derive from what derives from it.
         refusal { h.planDrop(owner = shape, base = circle, removedFrom = null, edge = null) } mustBe
-            Drop.Illegal("Circle derives from Shape: drop it on the root or a common base first")
+            "Circle derives from Shape: drop it on the root or a common base first"
         refusal { h.planDrop(owner = circle, base = shape, removedFrom = null, edge = null) } mustBe
-            Drop.Illegal("Circle already derives from Shape")
+            "Circle already derives from Shape"
         // Left moved from under Diamond to under Circle: Diamond loses it, Circle gains it.
         val leftClause = diamond.bases.first { it.targetId == left.id }
-        h.planDrop(owner = circle, base = left, removedFrom = diamond, edge = leftClause) mustBe listOf(
+        h.planDrop(owner = circle, base = left, removedFrom = diamond, edge = leftClause).edits mustBe listOf(
             BaseEdit(diamond, leftClause, null),
             BaseEdit(circle, null, left),
         )
 
         // Derived below: Circle moved from under Shape to under Named swaps its base in place; copied, adds one.
-        h.planDrop(owner = circle, base = named, removedFrom = circle, edge = shapeClause) mustBe
+        h.planDrop(owner = circle, base = named, removedFrom = circle, edge = shapeClause).edits mustBe
             listOf(BaseEdit(circle, shapeClause, named))
-        h.planDrop(owner = circle, base = named, removedFrom = null, edge = shapeClause) mustBe
+        h.planDrop(owner = circle, base = named, removedFrom = null, edge = shapeClause).edits mustBe
             listOf(BaseEdit(circle, null, named))
         // On the root, it only leaves.
-        h.planDrop(owner = circle, base = null, removedFrom = circle, edge = shapeClause) mustBe
+        h.planDrop(owner = circle, base = null, removedFrom = circle, edge = shapeClause).edits mustBe
             listOf(BaseEdit(circle, shapeClause, null))
         refusal { h.planDrop(owner = shape, base = null, removedFrom = null, edge = null) } mustBe
             "Shape has no base here to remove"
@@ -290,6 +291,10 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val area = circle.members.single { it.name == "area" && it.kind == MemberKind.FUNCTION }
 
         program.memberSource(area) mustBe "the stabs"
+        area.isMovable.mustBeTrue()
+        // A vtable's or typeinfo's label names its class, so it doesn't drag.
+        circle.members.filter { it.kind == MemberKind.VTABLE || it.kind == MemberKind.ABI }.none { it.isMovable }
+            .mustBeTrue()
         program.runTransaction("move") { program.moveMember(area, named) }
 
         val after = ClassHierarchy.of(program)
@@ -329,6 +334,18 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
             dtm.getCategory(ClassNaming.vftableCategory(listOf("Shape")))?.dataTypes.orEmpty().size mustBe shapeTables
         }
         check(listOf("geo", "Circle"))
+
+        // In the tree, a class filed under its namespace and the namespace itself drop on the root.
+        val moved = ClassHierarchy.of(program)
+        val root = ClassHierarchyRootNode(program.name, moved)
+        val geoNode = root.children.single { it is NamespaceNode && it.name == "geo" }
+        val circleNode = geoNode.children.single { it is ClassNode && it.name == "Circle" }
+        for (inverted in listOf(false, true)) {
+            moved.dropRefusal(circleNode, root, DnDConstants.ACTION_MOVE, inverted) mustBe null
+            moved.dropRefusal(geoNode, root, DnDConstants.ACTION_MOVE, inverted) mustBe "geo is already there"
+            moved.dropRefusal(circleNode, geoNode, DnDConstants.ACTION_MOVE, inverted) mustBe
+                "geo::Circle is already there"
+        }
 
         program.runTransaction("rename") { program.relocateNamespace(geo, geo.parentNamespace, "shapes") } mustBe
             emptyList()

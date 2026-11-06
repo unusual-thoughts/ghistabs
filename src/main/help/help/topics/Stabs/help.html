@@ -347,7 +347,12 @@
     the stabs or the RTTI name asks first.</P>
 
     <P>Drag functions or labels onto a class to move them into its namespace. Moving one the stabs
-    describe, or whose mangled name names its class, asks first.</P>
+    describe, or whose mangled name names its class, asks first. Each then asks how it is declared
+    in its new class: a function's access, whether it is virtual or static, and its const and
+    volatile qualifiers; a label's access. Vtables, typeinfo and imports don't move: their names
+    say whose they are.</P>
+
+    <P>After a drop, the node dropped on opens to show what landed there.</P>
 
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
 

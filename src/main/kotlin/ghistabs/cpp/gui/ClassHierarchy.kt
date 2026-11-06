@@ -106,6 +106,10 @@ data class ClassHierarchy(val classes: List<ClassInfo>) {
     ) {
         val label: String get() = (if (isOverloaded && parameters != null) name + parameters else name) +
             variants.takeIf { it.isNotEmpty() }?.joinToString(", ", " [", "]") { it.label }.orEmpty()
+
+        /** The program's own function or label: a vtable, typeinfo or import stays where its name files it. */
+        val isMovable: Boolean get() =
+            symbolId != null && library == null && kind != MemberKind.VTABLE && kind != MemberKind.ABI
     }
 
     enum class MemberKind {

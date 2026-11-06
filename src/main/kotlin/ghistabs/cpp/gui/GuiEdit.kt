@@ -6,13 +6,16 @@ import docking.widgets.textfield.IntegerTextField
 import ghidra.framework.plugintool.PluginTool
 import ghidra.program.model.listing.Program
 import ghidra.util.Msg
+import ghidra.util.layout.PairLayout
 import ghistabs.cpp.Access
+import ghistabs.cpp.MemberAttrs
+import ghistabs.cpp.MemberAttrs.Companion.writeMember
+import ghistabs.cpp.VirtKind
 import ghistabs.cpp.gui.ClassHierarchy.*
 import ghistabs.namespaceAt
 import ghistabs.runTransaction
 import ghistabs.startsWith
 import java.awt.Component
-import java.awt.GridLayout
 import java.math.BigInteger
 import javax.swing.JCheckBox
 import javax.swing.JComboBox
@@ -52,7 +55,7 @@ private fun Program.askClause(edit: BaseEdit, tool: PluginTool, component: Compo
 
         init {
             addWorkPanel(
-                JPanel(GridLayout(0, 2, 8, 4)).apply {
+                JPanel(PairLayout(4, 8)).apply {
                     add(JLabel("Inheritance:"))
                     add(virtual)
                     add(JLabel("Access:"))
@@ -147,7 +150,73 @@ fun Program.moveNamespace(h: ClassHierarchy, from: List<String>, to: List<String
     }
 }
 
-fun Program.moveMembers(members: List<Member>, target: ClassInfo, component: Component) {
+/**
+ * Asks how [member] is declared in [target]: access, virtuality, cv for a function; access alone for a
+ * static data member. What it had gives the defaults. With [more] members to go, it can answer for them too.
+ */
+private fun askMemberAttrs(
+    member: Member,
+    target: ClassInfo,
+    more: Boolean,
+    tool: PluginTool,
+    component: Component,
+): Pair<MemberAttrs, Boolean>? {
+    val old = member.attrs ?: MemberAttrs()
+    val function = member.kind == MemberKind.FUNCTION
+    return object : DialogComponentProvider("Declare ${member.label} in ${target.qualifiedName}") {
+        private val unknown = "unknown"
+        private val accessBox = JComboBox<Any>((listOf<Any>(unknown) + Access.entries).toTypedArray()).apply {
+            selectedItem = old.access ?: unknown
+        }
+        private val virtBox = JComboBox(VirtKind.entries.toTypedArray()).apply {
+            selectedItem = old.virt ?: VirtKind.NORMAL
+        }
+        private val constBox = JCheckBox("const", old.isConst)
+        private val volatileBox = JCheckBox("volatile", old.isVolatile)
+        private val forRest = JCheckBox("The same for the other members moved", false)
+        var result: Pair<MemberAttrs, Boolean>? = null
+            private set
+
+        init {
+            addWorkPanel(
+                JPanel(PairLayout(4, 8)).apply {
+                    add(JLabel("Access:"))
+                    add(accessBox)
+                    if (function) {
+                        add(JLabel("Kind:"))
+                        add(virtBox)
+                        add(JLabel("Qualifiers:"))
+                        add(
+                            JPanel().apply {
+                                add(constBox)
+                                add(volatileBox)
+                            },
+                        )
+                    }
+                    if (more) {
+                        add(JLabel())
+                        add(forRest)
+                    }
+                },
+            )
+            addOKButton()
+            addCancelButton()
+        }
+
+        override fun okCallback() {
+            val attrs = MemberAttrs(
+                access = accessBox.selectedItem as? Access,
+                virt = if (function) virtBox.selectedItem as VirtKind else VirtKind.STATIC,
+                isConst = function && constBox.isSelected,
+                isVolatile = function && volatileBox.isSelected,
+            )
+            result = attrs to forRest.isSelected
+            close()
+        }
+    }.apply { tool.showDialog(this, component) }.result
+}
+
+fun Program.moveMembers(members: List<Member>, target: ClassInfo, tool: PluginTool, component: Component) {
     val moving = members.filter { it !in target.members }
     val tied = moving.mapNotNull { m -> memberSource(m)?.let { "  ${m.label}: $it" } }
     if (tied.isNotEmpty() &&
@@ -158,9 +227,23 @@ fun Program.moveMembers(members: List<Member>, target: ClassInfo, component: Com
     ) {
         return
     }
+    // How each is declared there, asked before anything moves; Cancel moves none.
+    val declared = mutableMapOf<Member, MemberAttrs>()
+    val same = mutableMapOf<MemberKind, MemberAttrs>()
+    val asked = moving.filter { it.kind == MemberKind.FUNCTION || it.kind == MemberKind.LABEL }
+    for ((i, m) in asked.withIndex()) {
+        declared[m] = same[m.kind] ?: run {
+            val more = asked.drop(i + 1).any { it.kind == m.kind }
+            val (attrs, forRest) = askMemberAttrs(m, target, more, tool, component) ?: return
+            attrs.also { if (forRest) same[m.kind] = it }
+        }
+    }
     val failed = runTransaction("Move members to ${target.qualifiedName}") {
         moving.mapNotNull { m ->
-            runCatching { moveMember(m, target) }.exceptionOrNull()?.let { "${m.label}: ${it.message}" }
+            runCatching {
+                moveMember(m, target)
+                declared[m]?.let { attrs -> addressFactory.getAddress(m.address)?.let { writeMember(it, attrs) } }
+            }.exceptionOrNull()?.let { "${m.label}: ${it.message}" }
         }
     }
     if (failed.isNotEmpty()) {
