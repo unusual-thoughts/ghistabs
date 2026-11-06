@@ -9,8 +9,8 @@ and exercised by their own integration test.
 | `ptrmem_elf64_gcc12` | gcc 12.2.0, x86-64 | `docker run debian:bookworm` + `apt-get install g++` | `MemberPointerIntegrationTest` |
 | `reloc_elf_gcc295.o` | gcc 2.95.2, i386 | Debian potato (`~/machines/potato`, systemd-nspawn) | `RelocatableObjectIntegrationTest` |
 | `reloc_elf64_gcc12.o` | gcc 12.2.0, x86-64 | `docker run debian:bookworm` + `apt-get install g++` | `RelocatableObjectIntegrationTest` |
-| `hello_elf_gcc272` | gcc 2.7.2.3, i386, static | natively, `~/machines/old-gcc` (see `elfbuild/build.sh`), `-fhandle-exceptions` | — |
-| `hello_elf_gcc295` | gcc 2.95.2, i386 | Debian potato (`~/machines/potato`, systemd-nspawn) | — |
+| `hello_elf_gcc272` | gcc 2.7.2.3, i386, static | `debian/eol:slink`, its `g++272`, `libg++272-dev` and `libc6-dev` debs unpacked with `dpkg-deb -x` (slink's dpkg fails in a container), `-static -fhandle-exceptions` | — |
+| `hello_elf_gcc295` | gcc 2.95.2, i386 | `debian/eol:potato` (`g++`) | — |
 | `hello_elf_gcc32` | gcc 3.2.3, i386 | chroot of sarge's `libc6`, `libc6-dev`, `binutils` and `dash` plus Debian's `gcc-3.2`/`g++-3.2` 3.2.3-9 debs (snapshot.debian.org; sarge dropped 3.2), `g++-3.2` run from `/out` | — |
 | `hello_elf_gcc33`, `_gcc34` | gcc 3.3.5 / 3.4.4, i386 | `docker run --platform linux/386 debian/eol:sarge` (`g++`, `g++-3.4`) | — |
 | `hello_elf_gcc41` … `_gcc8` | gcc 4.1.2 / 4.3.2 / 4.4.5 / 4.7.2 / 4.9.2 / 6.3.0 / 8.3.0, i386 | `debian/eol:` etch / lenny / squeeze / wheezy / jessie / stretch / buster | — |
@@ -18,6 +18,7 @@ and exercised by their own integration test.
 | `latetypedef_elf64_gcc9`, `_gcc10`, `_gcc12` | gcc 9.5.0 / 10.5.0 / 12.4.0, x86-64 PIE | Ubuntu 24.04 `apt-get install gcc-9 gcc-10 gcc-12` | `LateTypedefIntegrationTest` |
 | `hello_gcc345.exe`, `hello_gcc421.exe` | MinGW gcc 3.4.5 / 4.2.1, PE32 | `debian/eol:etch` / `lenny`, package `mingw32`, `-static`; 4.2.1 then `objcopy --remove-section='.debug_*'` | — |
 | `hello_gcc323_fullstabs.exe` | MinGW gcc 3.2.3, PE32, SJLJ | the MinGW-3.1.0-1 bundle rebuilt from its own sources in a sarge i386 chroot, every target library with stabs: `build_mingw323.sh`, then `mingw32-g++ -gstabs+ -O0 -static` | — |
+| `hello_msvc_clang.exe` | clang 18, i686-pc-windows-msvc, `-O0`, `/MD`, stripped | `clang-cl --target=i686-pc-windows-msvc /c /Od /MD /EHsc /GR -Wno-c++11-narrowing -Wno-deprecated-register` with `-imsvc` the CRT and SDK headers `xwin splat --arch x86` fetched, then `lld-link /subsystem:console /brepro` against its libraries | — |
 
 The `latetypedef` set from `latetypedef.c` + `latetypedef.h` with `gcc-N -gstabs+ -O0 -fdebug-prefix-map=$PWD=/src
 latetypedef.c`. From gcc 10, `-feliminate-unused-debug-symbols` is on by default: each header struct is defined
@@ -42,8 +43,17 @@ gcc generation that still emits stabs, all i386 so only the compiler varies. It 
 screen: typedefs, enums, bitfields, unions, multi-dim arrays, function/data/method pointers, access specifiers,
 static/const/virtual/pure members, single + multiple + virtual inheritance, templates with nested types, a
 union class (constructor, const methods, a private member),
-by-value struct return, varargs, register/static locals, nested scopes and a throw/catch. Every build prints
-the same line and exits 8. The try/catch lives in its own function because gcc 2.7.2.3 ICEs
+by-value struct return, varargs, register/static locals, nested scopes and a throw/catch. `Quals` adds
+const, volatile and const volatile fields, pointers and method overloads, a reference and a `mutable`
+member, static members and methods, default arguments, overloads, conversion, subscript and assignment
+operators, a friend, a nested struct and typedef, an anonymous union holding an anonymous struct, an enum
+bitfield and an empty base; `Secret` has private and protected bases, `Builtins` every builtin type, and
+`extras` a local class, a function returning a function pointer and an `extern "C"` function, next to a global
+constructor. Namespaces, a member template, an explicit specialisation and `mutable`/`explicit` sit behind
+`MODERN`, off for gcc 2.7, which has none of them. `Rect`, `Label` and `Core`/`Up`/`Down`/`Both` are the
+MSVC ABI's layouts: `Label`'s second vptr splits its bases, `Down` overrides its virtual base's `f` and so
+gets a vtordisp, and adds no virtual of its own, so its only vftable is `Core`'s. Every build prints the same
+line and exits 9. The try/catch lives in its own function because gcc 2.7.2.3 ICEs
 (`unrecognizable insn`) on EH inside `main` next to a `register` local.
 
 gcc 3.1 to 3.3 open every CU with an N_BINCL of the main file, spelled as given on the command line (`hello.cc`): `c-lex.c` calls the `start_source_file` debug hook for the primary file before parsing. gcc 3.4 dropped that call, so `hello_elf_gcc32` and `_gcc33` have it and no other build does.
@@ -70,4 +80,6 @@ Getting there took three things the bundle's scripts don't say:
 Header paths in the stabs read `/mingw/include/c++/3.2.3/...` where a native install's read `c:/mingw/include/c++/3.2.3/...`.
 msvcrt.dll itself is imported, so the C library proper has no source to describe. `_chkstk` comes from `cygwin.asm` run through
 the assembler, which leaves an `SO /tmp/cc….s` with line records. No DWARF; under wine it prints the same line as
-`hello_gcc345.exe` and exits 8.
+`hello_gcc345.exe` and exits 9.
+
+`hello_msvc_clang.exe` is `hello.cc` under the MSVC ABI, linked against the real CRT (`vcruntime140.dll` and the UCRT, imported). The headers need C++11, which `clang-cl` defaults to.

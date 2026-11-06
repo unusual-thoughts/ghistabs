@@ -128,7 +128,7 @@ class VtableRecordIntegrationTest : FeatureFixtureTest() {
     companion object {
         @JvmStatic
         fun itaniumHellos() = FEATURES.list().orEmpty()
-            .filter { it.startsWith("hello_") && "gcc2" !in it }
+            .filter { it.startsWith("hello_") && "gcc2" !in it && "_msvc" !in it }
             .sorted()
 
         @JvmStatic
