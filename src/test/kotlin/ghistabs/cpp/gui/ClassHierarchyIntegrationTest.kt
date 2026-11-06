@@ -343,6 +343,11 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         moved.dropRefusal(circleNode, root, DnDConstants.ACTION_MOVE) mustBe null
         moved.dropRefusal(geoNode, root, DnDConstants.ACTION_MOVE) mustBe "geo is already there"
         moved.dropRefusal(circleNode, geoNode, DnDConstants.ACTION_MOVE) mustBe "geo::Circle is already there"
+        // Onto another class, it becomes its base; a namespace can't go there.
+        val namedNode = root.children.single { it is ClassNode && it.name == "Named" }
+        moved.dropRefusal(circleNode, namedNode, DnDConstants.ACTION_MOVE) mustBe null
+        moved.dropRefusal(geoNode, namedNode, DnDConstants.ACTION_MOVE) mustBe
+            "a namespace only drops on another namespace or the root"
 
         program.runTransaction("rename") { program.relocateNamespace(geo, geo.parentNamespace, "shapes") } mustBe
             emptyList()

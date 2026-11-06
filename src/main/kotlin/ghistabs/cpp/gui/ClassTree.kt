@@ -684,8 +684,10 @@ internal fun movedPath(dragged: GTreeNode?, dest: GTreeNode): List<String>? {
 /** Why [dragged], a class's or a namespace's node, can't be dropped on [dest]; null when it can. */
 internal fun ClassHierarchy.dropRefusal(dragged: GTreeNode, dest: GTreeNode, action: Int) =
     when (val from = movedPath(dragged, dest)) {
-        null -> (dragged as? ClassNode)?.let { planDrop(it, dest, action).error }
-            ?: "a namespace only drops on another namespace or the root"
+        null -> when (dragged) {
+            is ClassNode -> planDrop(dragged, dest, action).error
+            else -> "a namespace only drops on another namespace or the root"
+        }
 
         else -> checkNamespaceMove(from, dest.namespacePath!!)
     }
