@@ -340,12 +340,9 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val root = ClassHierarchyRootNode(program.name, moved)
         val geoNode = root.children.single { it is NamespaceNode && it.name == "geo" }
         val circleNode = geoNode.children.single { it is ClassNode && it.name == "Circle" }
-        for (inverted in listOf(false, true)) {
-            moved.dropRefusal(circleNode, root, DnDConstants.ACTION_MOVE, inverted) mustBe null
-            moved.dropRefusal(geoNode, root, DnDConstants.ACTION_MOVE, inverted) mustBe "geo is already there"
-            moved.dropRefusal(circleNode, geoNode, DnDConstants.ACTION_MOVE, inverted) mustBe
-                "geo::Circle is already there"
-        }
+        moved.dropRefusal(circleNode, root, DnDConstants.ACTION_MOVE) mustBe null
+        moved.dropRefusal(geoNode, root, DnDConstants.ACTION_MOVE) mustBe "geo is already there"
+        moved.dropRefusal(circleNode, geoNode, DnDConstants.ACTION_MOVE) mustBe "geo::Circle is already there"
 
         program.runTransaction("rename") { program.relocateNamespace(geo, geo.parentNamespace, "shapes") } mustBe
             emptyList()

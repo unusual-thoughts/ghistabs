@@ -617,33 +617,6 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
         override fun getToolTip(): String? = null
         override fun isLeaf() = true
     }
-
-    /** Why [dragged], a class's or a namespace's node, can't be dropped on [dest]; null when it can. */
-    internal fun ClassHierarchy.dropRefusal(dragged: GTreeNode, dest: GTreeNode, action: Int) =
-        when (val from = movedPath(dragged, dest)) {
-            null -> (dragged as? ClassNode)?.let { planDrop(it, dest, action).error } ?: Drop.Illegal().reason
-            else -> checkNamespaceMove(from, dest.namespacePath!!)
-        }
-
-    /** What dropping [node] on [dest] does to the bases, [inverted] the tree shows derived classes below. */
-    internal fun ClassHierarchy.planDrop(node: ClassNode, dest: GTreeNode, action: Int): Drop {
-        val dragged = node.info?.let { this[it.id] } ?: return Drop.Illegal()
-        val move = action and DnDConstants.ACTION_MOVE != 0
-        val parent = (node.parent as? ClassNode)?.info?.let { this[it.id] }
-        // Only a class takes a base; the root and a namespace take one away.
-        val target = when (dest) {
-            is ClassNode -> dest.info?.let { this[it.id] } ?: return Drop.Illegal()
-            is ClassHierarchyRootNode, is NamespaceNode -> null
-            else -> return Drop.Illegal()
-        }
-        return planDrop(
-            owner = target?.takeUnless { inverted } ?: dragged,
-            base = target?.let { if (inverted) it else dragged },
-            // Normally the clause is the parent's, naming the dragged class; inverted, the dragged class's own.
-            removedFrom = (if (inverted) dragged else parent)?.takeIf { node.edge != null && move },
-            edge = node.edge,
-        )
-    }
 }
 
 /**
@@ -689,4 +662,33 @@ internal fun movedPath(dragged: GTreeNode?, dest: GTreeNode): List<String>? {
         is ClassNode -> dragged.info?.path?.takeIf { dragged.edge == null }
         else -> null
     }
+}
+
+/** Why [dragged], a class's or a namespace's node, can't be dropped on [dest]; null when it can. */
+internal fun ClassHierarchy.dropRefusal(dragged: GTreeNode, dest: GTreeNode, action: Int) =
+    when (val from = movedPath(dragged, dest)) {
+        null -> (dragged as? ClassNode)?.let { planDrop(it, dest, action).error } ?: Drop.Illegal().reason
+        else -> checkNamespaceMove(from, dest.namespacePath!!)
+    }
+
+/** What dropping [node] on [dest] does to the bases, the way round [node]'s tree runs. */
+internal fun ClassHierarchy.planDrop(node: ClassNode, dest: GTreeNode, action: Int): Drop {
+    // The tree's own way round: normally a node's children are its bases, inverted its derived classes.
+    val inverted = (node.root as? ClassHierarchyRootNode)?.inverted == true
+    val dragged = node.info?.let { this[it.id] } ?: return Drop.Illegal()
+    val move = action and DnDConstants.ACTION_MOVE != 0
+    val parent = (node.parent as? ClassNode)?.info?.let { this[it.id] }
+    // Only a class takes a base; the root and a namespace take one away.
+    val target = when (dest) {
+        is ClassNode -> dest.info?.let { this[it.id] } ?: return Drop.Illegal()
+        is ClassHierarchyRootNode, is NamespaceNode -> null
+        else -> return Drop.Illegal()
+    }
+    return planDrop(
+        owner = target?.takeUnless { inverted } ?: dragged,
+        base = target?.let { if (inverted) it else dragged },
+        // Normally the clause is the parent's, naming the dragged class; inverted, the dragged class's own.
+        removedFrom = (if (inverted) dragged else parent)?.takeIf { node.edge != null && move },
+        edge = node.edge,
+    )
 }
