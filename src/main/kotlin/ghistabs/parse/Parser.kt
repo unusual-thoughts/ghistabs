@@ -738,6 +738,8 @@ class Parser(src: String) {
         if (sizeBits == null) skip("type attribute `@$attr;`")
         consume(';')
         val inner = parseType()
+        // dbxout closes a bool's builtin slot with its own `;` (`@s8;-16;`), which a field's `,` follows.
+        if (inner is TypeDecl.Builtin) consumeIf(";")
         return sizeBits?.let { sized(inner, it) } ?: inner
     }
 
