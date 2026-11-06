@@ -1,0 +1,32 @@
+/* Pages Ghidra's own API javadoc leaves out (unofficial.js marks them), in either theme. */
+:root {
+    --unofficial-color: #a0522d;
+    --unofficial-banner-background: #fbeee0;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --unofficial-color: #e3a35b;
+        --unofficial-banner-background: #2a1f14;
+    }
+}
+
+/* Over the navigation bars' own link colours too. */
+a.unofficial {
+    color: var(--unofficial-color) !important;
+    text-decoration: underline dotted;
+}
+
+/* A search box result, which is no link. */
+.ui-autocomplete li.unofficial .search-result-label {
+    color: var(--unofficial-color) !important;
+    text-decoration: underline dotted;
+}
+
+.unofficial-banner {
+    margin: 0 0 1em;
+    padding: 6px 10px;
+    border-left: 4px solid var(--unofficial-color);
+    background: var(--unofficial-banner-background);
+    color: var(--body-text-color);
+}
