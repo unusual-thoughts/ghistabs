@@ -46,7 +46,7 @@ class CompilerGeneratedIntegrationTest : FeatureFixtureTest() {
     fun `an implicit member gcc 3 dated inside its first user is listed, parameters and all`(fixture: String) {
         val (written, generated) = decomp(fixture)
         generated.must("Circle's copy constructor not listed") {
-            lines().any { "Circle::Circle(Circle *" in it && "// L 87 (implicit member)" in it }
+            lines().any { "Circle::Circle(Circle *" in it && "// L 211 (implicit member)" in it }
         }
         written.mustNot("its parameter left behind") { "_ctor_arg;" in this }
     }

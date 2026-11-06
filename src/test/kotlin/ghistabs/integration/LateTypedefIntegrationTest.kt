@@ -43,7 +43,7 @@ class LateTypedefIntegrationTest : FeatureFixtureTest() {
 
     /**
      * gcc 8 opens no N_BINCL for `hello.cc`'s headers, so `sys/types.h`'s typedefs sit at CU scope with
-     * their own lines: `__u_short` L31 would land in `Circle`'s copy constructor. A file-scope typedef
+     * their own lines: `__u_long` L33 would land in `Shape`'s destructor. A file-scope typedef
      * can't be declared inside one of its CU's functions, so it goes to the appendix.
      */
     @ParameterizedTest
@@ -52,7 +52,7 @@ class LateTypedefIntegrationTest : FeatureFixtureTest() {
         val (laidOut, appendix) = skeleton(fixture, "hello.cc").split("displaced declarations").also {
             it.size mustBe 2
         }
-        laidOut.lines().filter { "typedef short unsigned int __u_short;" in it }.mustBeEmpty("__u_short laid out")
-        appendix.must("__u_short not in the appendix") { "typedef short unsigned int __u_short;" in this }
+        laidOut.lines().filter { "typedef long unsigned int __u_long;" in it }.mustBeEmpty("__u_long laid out")
+        appendix.must("__u_long not in the appendix") { "typedef long unsigned int __u_long;" in this }
     }
 }

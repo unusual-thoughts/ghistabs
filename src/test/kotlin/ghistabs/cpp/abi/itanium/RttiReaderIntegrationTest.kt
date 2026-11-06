@@ -69,7 +69,7 @@ class RttiReaderIntegrationTest : FeatureFixtureTest() {
 
         @JvmStatic
         fun hellos(): List<File> = FEATURES.listFiles().orEmpty()
-            .filter { it.name.startsWith("hello_") }
+            .filter { it.name.startsWith("hello_") && "_msvc" !in it.name }
             .sorted()
     }
 }
