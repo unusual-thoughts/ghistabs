@@ -2,6 +2,7 @@ package ghistabs.parse
 
 import ghistabs.test.longRange
 import ghistabs.test.mustBe
+import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.Test
 import java.math.BigInteger
 
@@ -24,6 +25,15 @@ class ParserPrimitiveTest {
             type = TypeDecl.Builtin(-16, sizeAttr = 8),
         )
         Parser(input).parseSymbol() mustBe ParseResult.Ok(expected)
+    }
+
+    /** gcc 12's `bool` member, `@s8;-16;` then the field's offset: the `;` closes the builtin slot. */
+    @Test
+    fun `a bool member's builtin slot closes before its offset`() {
+        val parsed = Parser("Flag:Tt(0,2)=s4b:(0,3)=@s8;-16;,0,8;i:(0,1),8,24;;").parseSymbol() as ParseResult.Ok
+        parsed.trailing.mustBeNull()
+        val type = (parsed.inner as SymbolDecl.NamedType).type as TypeDecl.Aggregate
+        type.fields.map { it.name to it.offsetBits } mustBe listOf("b" to 0L, "i" to 8L)
     }
 
     @Test
