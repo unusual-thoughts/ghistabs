@@ -23,14 +23,14 @@ import javax.swing.JPanel
 private fun Program.askClause(edit: BaseEdit, tool: PluginTool, component: Component): BaseRef? {
     val base = edit.added ?: return null
     val old = edit.removed
-    val struct = structOf(edit.owner)
+    val struct = structOf(edit.of)
     val part = embeddingOf(base)
     // Where the struct already holds it, else first for a first non-virtual base.
     val found = struct?.definedComponents?.firstOrNull { part != null && it.dataType.isEquivalent(part) }?.offset
-    val offset = old?.offset ?: found?.toLong() ?: 0L.takeIf { edit.owner.bases.isEmpty() }
+    val offset = old?.offset ?: found?.toLong() ?: 0L.takeIf { edit.of.bases.isEmpty() }
 
     // Virtual or not, access, and the offset to place the base at (blank: don't place it).
-    return object : DialogComponentProvider("Add ${base.qualifiedName} as a base of ${edit.owner.qualifiedName}") {
+    return object : DialogComponentProvider("Add ${base.qualifiedName} as a base of ${edit.of.qualifiedName}") {
         private val virtual = JCheckBox("Virtual", old?.isVirtual ?: false)
         private val accessBox = JComboBox(Access.entries.toTypedArray()).apply {
             selectedItem = old?.access ?: Access.PUBLIC
@@ -102,7 +102,7 @@ fun Program.applyEdits(edits: List<BaseEdit>, tool: PluginTool, component: Compo
         clause?.offset?.toInt()?.let { offset -> base to offset }
     }
     if (place != null) {
-        val hit = overwrittenBy(addition.owner, place.first, place.second)
+        val hit = overwrittenBy(addition.of, place.first, place.second)
         val list = hit.joinToString("\n") {
             "  +0x%x %s".format(it.offset, it.fieldName ?: it.defaultFieldName)
         }
@@ -114,10 +114,10 @@ fun Program.applyEdits(edits: List<BaseEdit>, tool: PluginTool, component: Compo
     }
     runCatching {
         runTransaction("Edit class hierarchy") {
-            for (edit in edits) setBases(edit.owner, edit.bases(clause.takeIf { edit.added != null }))
+            for (edit in edits) setBases(edit.of, edit.bases(clause.takeIf { edit.added != null }))
             place?.let { (base, offset) ->
                 val count = addition.bases(clause).size
-                placeBase(addition.owner, base, offset, clause!!.isVirtual, count)
+                placeBase(addition.of, base, offset, clause!!.isVirtual, count)
             }
         }
     }.onFailure {

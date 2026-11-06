@@ -19,53 +19,64 @@ import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.MemberAttrs.Companion.memberAttrs
 import ghistabs.cpp.gui.ClassHierarchy.*
 
+sealed interface Drop {
+    data class MoveBase(val detach: BaseEdit?, val attach: BaseEdit? = null) : Drop
+    data class Illegal(val reason: String = "can't drop here") : Drop
+
+    // From one class's bases to another's: two edits, the removal first.
+    val edits get() = (this as? MoveBase)?.run { listOfNotNull(detach, attach) }.orEmpty()
+    val error get() = (this as? Illegal)?.reason
+}
+
+/** Why the namespace at [from] can't move under the one at [to], or null when it can. */
+internal fun checkNamespaceMove(from: List<String>, to: List<String>): String? = when {
+    to == from.dropLast(1) -> "${from.joinToString("::")} is already there"
+    to.startsWith(from) -> "a namespace can't move into itself"
+    else -> null
+}
+
 /**
- * A change to [owner]'s bases that a drag in the Class Hierarchy window asks for: drop [removed] and
+ * A change to [of]'s bases that a drag in the Class Hierarchy window asks for: drop [removed] and
  * add [added], either one alone. Both at once is a move within one class: the new clause takes the old
  * one's place in the base list.
  */
-data class BaseEdit(val owner: ClassInfo, val removed: BaseRef?, val added: ClassInfo?)
-
-/** Why a drop can't be, as [ClassHierarchy.planDrop] throws it. */
-class DropRefused(message: String) : IllegalArgumentException(message)
+data class BaseEdit(val of: ClassInfo, val removed: BaseRef?, val added: ClassInfo? = null)
 
 /**
  * The edits a drop in the Class Hierarchy window asks for: [owner] gains [base], and [removedFrom] loses
  * [edge], the clause that put the dropped node where it was. [removedFrom] is null when copying or when
  * the node was filed under its namespace; it is [owner] itself when the clause moves within one class,
  * where the new base takes the old one's place. [base] null (a drop on the root or a namespace) only
- * removes, and [owner] then just names the dragged class. Throws [DropRefused] when the drop can't be.
+ * removes, and [owner] then just names the dragged class.
  */
 internal fun ClassHierarchy.planDrop(
     owner: ClassInfo,
     base: ClassInfo?,
     removedFrom: ClassInfo?,
     edge: BaseRef?,
-): List<BaseEdit> {
-    if (base == null) {
-        removedFrom ?: throw DropRefused("${owner.qualifiedName} has no base here to remove")
-        return listOf(BaseEdit(removedFrom, edge, null))
-    }
+): Drop {
     val replaced = edge.takeIf { removedFrom?.id == owner.id }
-    val refusal = when {
-        owner.origin == Origin.IMPORTED -> "${owner.qualifiedName} is only imported"
+    return when {
+        base == null && removedFrom != null -> Drop.MoveBase(BaseEdit(removedFrom, edge))
 
-        owner.id == base.id -> "a class can't be its own base"
+        base == null -> Drop.Illegal("${owner.qualifiedName} has no base here to remove")
 
-        derivesFrom(base, owner) ->
-            "${base.qualifiedName} derives from ${owner.qualifiedName}: drop it on the root or a common base first"
+        owner.origin == Origin.IMPORTED -> Drop.Illegal("${owner.qualifiedName} is only imported")
+
+        owner.id == base.id -> Drop.Illegal("a class can't be its own base")
+
+        derivesFrom(base, owner) -> Drop.Illegal(
+            "${base.qualifiedName} derives from ${owner.qualifiedName}: drop it on the root or a common base first",
+        )
 
         owner.bases.any { it.targetId == base.id && it != replaced } ->
-            "${owner.qualifiedName} already derives from ${base.qualifiedName}"
+            Drop.Illegal("${owner.qualifiedName} already derives from ${base.qualifiedName}")
 
-        else -> null
+        else -> Drop.MoveBase(
+            removedFrom?.takeIf { it.id != owner.id }?.let { BaseEdit(it, edge) },
+            BaseEdit(owner, replaced, base),
+        )
     }
-    refusal?.let { throw DropRefused(it) }
-    // From one class's bases to another's: two edits, the removal first.
-    return listOfNotNull(
-        removedFrom?.takeIf { it.id != owner.id }?.let { BaseEdit(it, edge, null) },
-        BaseEdit(owner, replaced, base),
-    )
 }
 
 /** Whether [cls] is [ancestor] or derives from it, through the bases the program has classes for. */
@@ -120,7 +131,7 @@ internal fun Program.setBases(owner: ClassInfo, bases: List<BaseRef>) {
 
 /** [edit] applied to its owner's bases, [added] spelled as [clause] gives it. */
 internal fun BaseEdit.bases(clause: BaseRef?): List<BaseRef> {
-    val kept = owner.bases.toMutableList()
+    val kept = of.bases.toMutableList()
     val at = removed?.let(kept::indexOf)?.takeIf { it >= 0 }
     at?.let(kept::removeAt)
     if (clause != null) kept.add(at ?: kept.size, clause)
@@ -179,13 +190,12 @@ internal fun Program.placeBase(
 
 /** Moves [member]'s symbol into [target]'s namespace. Throws what Ghidra does (a name taken there). */
 internal fun Program.moveMember(member: Member, target: ClassInfo) {
-    val ns = resolveNs(target) ?: error("no namespace for ${target.qualifiedName}")
+    val ns = resolve(target) ?: error("no namespace for ${target.qualifiedName}")
     val sym = member.symbolId?.let(symbolTable::getSymbol) ?: error("no symbol for ${member.name}")
     sym.setNameAndNamespace(sym.name, ns, sym.source.takeUnless { it == SourceType.DEFAULT } ?: SourceType.USER_DEFINED)
 }
 
 fun Program.resolve(cls: ClassInfo) = symbolTable.getSymbol(cls.id)?.`object` as? GhidraClass
-fun Program.resolveNs(cls: ClassInfo) = symbolTable.getSymbol(cls.id)?.`object` as? Namespace
 
 /**
  * Rename [cls] to [newName] in [program], and everything spelled after it:
@@ -267,13 +277,6 @@ private fun Program.renameInDerived(
             ?: continue
         attempt("${dStruct.pathName}.${c.fieldName}") { c.fieldName = prefix + newName }
     }
-}
-
-/** Why the namespace at [from] can't move under the one at [to], or null when it can. */
-internal fun namespaceMoveRefusal(from: List<String>, to: List<String>): String? = when {
-    to == from.dropLast(1) -> "${from.joinToString("::")} is already there"
-    to.startsWith(from) -> "a namespace can't move into itself"
-    else -> null
 }
 
 /**

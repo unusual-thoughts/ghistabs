@@ -226,13 +226,13 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val (shape, circle, named) = listOf("Shape", "Circle", "Named").map { h.cls(it) }
         val (left, diamond) = listOf("Left", "Diamond").map { h.cls(it) }
         val shapeClause = circle.bases.single()
-        fun refusal(plan: () -> List<BaseEdit>) = (runCatching(plan).exceptionOrNull() as? DropRefused)?.message
+        fun refusal(plan: () -> Drop) = plan().error
 
         // Bases below: Circle dropped on Shape would make Shape derive from what derives from it.
         refusal { h.planDrop(owner = shape, base = circle, removedFrom = null, edge = null) } mustBe
-            "Circle derives from Shape: drop it on the root or a common base first"
+            Drop.Illegal("Circle derives from Shape: drop it on the root or a common base first")
         refusal { h.planDrop(owner = circle, base = shape, removedFrom = null, edge = null) } mustBe
-            "Circle already derives from Shape"
+            Drop.Illegal("Circle already derives from Shape")
         // Left moved from under Diamond to under Circle: Diamond loses it, Circle gains it.
         val leftClause = diamond.bases.first { it.targetId == left.id }
         h.planDrop(owner = circle, base = left, removedFrom = diamond, edge = leftClause) mustBe listOf(
@@ -258,7 +258,7 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         load(fixture)
         val h = ClassHierarchy.of(program)
         val (circle, named) = listOf("Circle", "Named").map { h.cls(it) }
-        val edit = h.planDrop(owner = circle, base = named, removedFrom = null, edge = null).single()
+        val edit = h.planDrop(owner = circle, base = named, removedFrom = null, edge = null).edits.single()
         val clause = ClassHierarchy.BaseRef("Named", named.id, false, Access.PROTECTED, null)
         val struct = { program.dataTypeManager.getDataType(circle.structId!!) as Structure }
         val end = struct().length
@@ -311,9 +311,9 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val ns = { program.symbolTable.getSymbol(circle.id).`object` as GhidraClass }
         fun foundStruct() = VariableUtilities.findExistingClassStruct(ns(), dtm)?.let(dtm::getID)
 
-        namespaceMoveRefusal(listOf("Circle"), emptyList()) mustBe "Circle is already there"
-        namespaceMoveRefusal(listOf("geo"), listOf("geo", "inner")) mustBe "a namespace can't move into itself"
-        namespaceMoveRefusal(listOf("Circle"), listOf("geo")) mustBe null
+        checkNamespaceMove(listOf("Circle"), emptyList()) mustBe "Circle is already there"
+        checkNamespaceMove(listOf("geo"), listOf("geo", "inner")) mustBe "a namespace can't move into itself"
+        checkNamespaceMove(listOf("Circle"), listOf("geo")) mustBe null
 
         val geo = program.runTransaction("namespace") {
             program.symbolTable.createNameSpace(null, "geo", SourceType.USER_DEFINED)

@@ -109,15 +109,11 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
                     return target != null && target.origin != Origin.IMPORTED &&
                         members.any { it.member !in target.members }
                 }
-                var why: String? = null
-                val ok = when (val path = dest.movedPath) {
-                    null -> h.planDrop(dragged.singleOrNull() as? ClassNode ?: return false, dest, dropAction)
-                        .onFailure { why = it.message }.getOrNull().orEmpty().isNotEmpty()
+                val err = dest.movedPath?.let { path -> checkNamespaceMove(path, dest.path!!) }
+                    ?: h.planDrop(dragged.singleOrNull() as? ClassNode ?: return false, dest, dropAction).error
 
-                    else -> namespaceMoveRefusal(path, dest.path!!).also { why = it } == null
-                }
-                status.text = why?.let { "Can't drop: $it" } ?: counts
-                return ok
+                status.text = err?.let { "Can't drop: $it" } ?: counts
+                return err == null
             }
 
             override fun drop(destUserData: GTreeNode, transferable: Transferable, dropAction: Int) {
@@ -125,15 +121,14 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
                 val h = shown ?: return
                 val p = program ?: return
                 val members = dragged.filterIsInstance<MemberNode>()
-                val target = (destUserData as? ClassNode)?.info?.let { h[it.id] }
-                if (members.isNotEmpty() && target != null) {
-                    return p.moveMembers(members.map { it.member }, target, component)
+                val target = (destUserData as? ClassNode)?.takeIf { members.isNotEmpty() }?.info?.let { h[it.id] }
+                val ns = destUserData.movedPath
+                val node = dragged.singleOrNull() as? ClassNode
+                when {
+                    target != null -> p.moveMembers(members.map { it.member }, target, component)
+                    ns != null -> p.moveNamespace(h, ns, destUserData.path!!, component)
+                    node != null -> p.applyEdits(h.planDrop(node, destUserData, dropAction).edits, tool, component)
                 }
-                destUserData.movedPath?.let { from ->
-                    return p.moveNamespace(h, from, destUserData.path!!, component)
-                }
-                val node = dragged.singleOrNull() as? ClassNode ?: return
-                p.applyEdits(h.planDrop(node, destUserData, dropAction).getOrNull().orEmpty(), tool, component)
             }
 
             // A namespace node's path, or the root's (empty); null for a class.
@@ -458,26 +453,24 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
 
     override fun getComponent(): JComponent = panel
 
-    private fun ClassHierarchy.planDrop(node: ClassNode, dest: GTreeNode, action: Int): Result<List<BaseEdit>> =
-        runCatching {
-            val dragged = node.info?.let { this[it.id] } ?: return Result.success(emptyList())
-            val move = action and DnDConstants.ACTION_MOVE != 0
-            val parent = (node.parent as? ClassNode)?.info?.let { this[it.id] }
-            // Only a class takes a base; the root and a namespace take one away.
-            val target = when (dest) {
-                is ClassNode -> dest.info?.let { this[it.id] } ?: return Result.success(emptyList())
-                is ClassHierarchyRootNode, is NamespaceNode -> null
-                else -> return Result.success(emptyList())
-            }
-            // Normally the clause is the parent's, naming the dragged class; inverted, the dragged class's own.
-            val removedFrom = (if (inverted) dragged else parent)?.takeIf { node.edge != null && move }
-            planDrop(
-                owner = target?.takeUnless { inverted } ?: dragged,
-                base = target?.let { if (inverted) it else dragged },
-                removedFrom = removedFrom,
-                edge = node.edge,
-            )
+    private fun ClassHierarchy.planDrop(node: ClassNode, dest: GTreeNode, action: Int): Drop {
+        val dragged = node.info?.let { this[it.id] } ?: return Drop.Illegal()
+        val move = action and DnDConstants.ACTION_MOVE != 0
+        val parent = (node.parent as? ClassNode)?.info?.let { this[it.id] }
+        // Only a class takes a base; the root and a namespace take one away.
+        val target = when (dest) {
+            is ClassNode -> dest.info?.let { this[it.id] } ?: return Drop.Illegal()
+            is ClassHierarchyRootNode, is NamespaceNode -> null
+            else -> return Drop.Illegal()
         }
+        return planDrop(
+            owner = target?.takeUnless { inverted } ?: dragged,
+            base = target?.let { if (inverted) it else dragged },
+            // Normally the clause is the parent's, naming the dragged class; inverted, the dragged class's own.
+            removedFrom = (if (inverted) dragged else parent)?.takeIf { node.edge != null && move },
+            edge = node.edge,
+        )
+    }
 
     fun setProgram(newProgram: Program?) {
         if (newProgram === program) return
