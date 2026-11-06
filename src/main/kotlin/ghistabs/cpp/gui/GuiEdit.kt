@@ -145,7 +145,7 @@ fun Program.moveNamespace(h: ClassHierarchy, from: List<String>, to: List<String
         runTransaction("Move $what") { relocateNamespace(ns, parent) }
     }.onFailure {
         Msg.showError(this, component, "Move $what", it.message, it)
-    }.getOrNull()?.let {
+    }.getOrNull()?.ifEmpty { null }?.let {
         Msg.showWarn(this, component, "Move $what", "Kept their old place:\n" + it.joinToString("\n"))
     }
 }

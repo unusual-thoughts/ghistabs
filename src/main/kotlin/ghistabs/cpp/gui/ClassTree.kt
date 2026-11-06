@@ -86,57 +86,50 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
             )
             private var dragged: List<GTreeNode> = emptyList()
 
-            override fun getSupportedDataFlavors(transferNodes: List<GTreeNode>) = arrayOf(flavor)
-            override fun getTransferData(transferNodes: List<GTreeNode>, flavor: DataFlavor): Any = transferNodes
+            override fun getSupportedDataFlavors(nodes: List<GTreeNode>) = arrayOf(flavor)
+            override fun getTransferData(nodes: List<GTreeNode>, flavor: DataFlavor): Any = nodes
             override fun getSupportedDragActions() = DnDConstants.ACTION_COPY_OR_MOVE
 
-            override fun isStartDragOk(dragUserData: List<GTreeNode>, dragAction: Int): Boolean {
-                val classOk = dragUserData.singleOrNull().let {
+            override fun isStartDragOk(nodes: List<GTreeNode>, action: Int): Boolean {
+                val classOk = nodes.singleOrNull().let {
                     (it is ClassNode && it.info != null) || it is NamespaceNode
                 }
                 // A vtable's or typeinfo's label names its class: moving it would only make it lie.
-                val membersOk = dragUserData.isNotEmpty() &&
-                    dragUserData.all { it is MemberNode && it.member.isMovable }
-                dragged = dragUserData.takeIf { classOk || membersOk }.orEmpty()
+                val membersOk = nodes.isNotEmpty() &&
+                    nodes.all { it is MemberNode && it.member.isMovable }
+                dragged = nodes.takeIf { classOk || membersOk }.orEmpty()
                 return dragged.isNotEmpty()
             }
 
-            override fun isDropSiteOk(destUserData: GTreeNode?, flavors: Array<DataFlavor>, dropAction: Int): Boolean {
+            override fun isDropSiteOk(dest: GTreeNode, flavors: Array<DataFlavor>, action: Int): Boolean {
                 val h = shown ?: return false
-                val dest = destUserData ?: return false
                 val members = dragged.filterIsInstance<MemberNode>()
                 if (members.isNotEmpty()) {
                     val target = (dest as? ClassNode)?.info?.let { h[it.id] }
                     return target != null && target.origin != Origin.IMPORTED &&
                         members.any { it.member !in target.members }
                 }
-                val err = h.dropRefusal(dragged.singleOrNull() ?: return false, dest, dropAction, inverted)
+                val err = h.dropRefusal(dragged.singleOrNull() ?: return false, dest, action)
                 status.text = err?.let { "Can't drop: $it" } ?: counts
                 return err == null
             }
 
-            override fun drop(destUserData: GTreeNode, transferable: Transferable, dropAction: Int) {
+            override fun drop(dest: GTreeNode, transferable: Transferable, action: Int) {
                 status.text = counts
                 val h = shown ?: return
                 val p = program ?: return
                 val members = dragged.filterIsInstance<MemberNode>()
-                val target = (destUserData as? ClassNode)?.takeIf { members.isNotEmpty() }?.info?.let { h[it.id] }
-                val ns = movedPath(dragged.singleOrNull(), destUserData)
+                val target = (dest as? ClassNode)?.takeIf { members.isNotEmpty() }?.info?.let { h[it.id] }
+                val ns = movedPath(dragged.singleOrNull(), dest)
                 val node = dragged.singleOrNull() as? ClassNode
                 val before = p.modificationNumber
                 when {
                     target != null -> p.moveMembers(members.map { it.member }, target, tool, component)
-
-                    ns != null -> p.moveNamespace(h, ns, destUserData.namespacePath!!, component)
-
-                    node != null -> p.applyEdits(
-                        h.planDrop(node, destUserData, dropAction, inverted).edits,
-                        tool,
-                        component,
-                    )
+                    ns != null -> p.moveNamespace(h, ns, dest.namespacePath!!, component)
+                    node != null -> p.applyEdits(h.planDrop(node, dest, action).edits, tool, component)
                 }
                 // Once the rebuild shows it, open the node dropped on, to show what landed there.
-                if (p.modificationNumber != before) reveal = Reveal(steps(destUserData), dragged.map { it.name })
+                if (p.modificationNumber != before) reveal = Reveal(steps(dest), dragged.map { it.name })
             }
         }
         addGTreeSelectionListener { e ->
@@ -624,6 +617,33 @@ class ClassTree(private val plugin: Plugin, private val staleNote: (Program) -> 
         override fun getToolTip(): String? = null
         override fun isLeaf() = true
     }
+
+    /** Why [dragged], a class's or a namespace's node, can't be dropped on [dest]; null when it can. */
+    internal fun ClassHierarchy.dropRefusal(dragged: GTreeNode, dest: GTreeNode, action: Int) =
+        when (val from = movedPath(dragged, dest)) {
+            null -> (dragged as? ClassNode)?.let { planDrop(it, dest, action).error } ?: Drop.Illegal().reason
+            else -> checkNamespaceMove(from, dest.namespacePath!!)
+        }
+
+    /** What dropping [node] on [dest] does to the bases, [inverted] the tree shows derived classes below. */
+    internal fun ClassHierarchy.planDrop(node: ClassNode, dest: GTreeNode, action: Int): Drop {
+        val dragged = node.info?.let { this[it.id] } ?: return Drop.Illegal()
+        val move = action and DnDConstants.ACTION_MOVE != 0
+        val parent = (node.parent as? ClassNode)?.info?.let { this[it.id] }
+        // Only a class takes a base; the root and a namespace take one away.
+        val target = when (dest) {
+            is ClassNode -> dest.info?.let { this[it.id] } ?: return Drop.Illegal()
+            is ClassHierarchyRootNode, is NamespaceNode -> null
+            else -> return Drop.Illegal()
+        }
+        return planDrop(
+            owner = target?.takeUnless { inverted } ?: dragged,
+            base = target?.let { if (inverted) it else dragged },
+            // Normally the clause is the parent's, naming the dragged class; inverted, the dragged class's own.
+            removedFrom = (if (inverted) dragged else parent)?.takeIf { node.edge != null && move },
+            edge = node.edge,
+        )
+    }
 }
 
 /**
@@ -669,31 +689,4 @@ internal fun movedPath(dragged: GTreeNode?, dest: GTreeNode): List<String>? {
         is ClassNode -> dragged.info?.path?.takeIf { dragged.edge == null }
         else -> null
     }
-}
-
-/** Why [dragged], a class's or a namespace's node, can't be dropped on [dest]; null when it can. */
-internal fun ClassHierarchy.dropRefusal(dragged: GTreeNode, dest: GTreeNode, action: Int, inverted: Boolean) =
-    when (val from = movedPath(dragged, dest)) {
-        null -> (dragged as? ClassNode)?.let { planDrop(it, dest, action, inverted).error } ?: Drop.Illegal().reason
-        else -> checkNamespaceMove(from, dest.namespacePath!!)
-    }
-
-/** What dropping [node] on [dest] does to the bases, [inverted] the tree shows derived classes below. */
-internal fun ClassHierarchy.planDrop(node: ClassNode, dest: GTreeNode, action: Int, inverted: Boolean): Drop {
-    val dragged = node.info?.let { this[it.id] } ?: return Drop.Illegal()
-    val move = action and DnDConstants.ACTION_MOVE != 0
-    val parent = (node.parent as? ClassNode)?.info?.let { this[it.id] }
-    // Only a class takes a base; the root and a namespace take one away.
-    val target = when (dest) {
-        is ClassNode -> dest.info?.let { this[it.id] } ?: return Drop.Illegal()
-        is ClassHierarchyRootNode, is NamespaceNode -> null
-        else -> return Drop.Illegal()
-    }
-    return planDrop(
-        owner = target?.takeUnless { inverted } ?: dragged,
-        base = target?.let { if (inverted) it else dragged },
-        // Normally the clause is the parent's, naming the dragged class; inverted, the dragged class's own.
-        removedFrom = (if (inverted) dragged else parent)?.takeIf { node.edge != null && move },
-        edge = node.edge,
-    )
 }
