@@ -22,7 +22,8 @@ import kotlin.ranges.rangeTo
  * Puts back the `_ZTS`, `_ZTI`, `_ZTV`, `_ZTT` and `_ZTC` labels a stripped binary lost, which the rest of
  * the analysis finds vtables by, off the RTTI it kept:
  *
- * - a typeinfo is a pointer, then a pointer to a class's mangled name;
+ * - a typeinfo is a pointer to its kind's vtable, in the binary or imported from libstdc++, then a pointer
+ *   to a class's mangled name;
  * - its primary vtable is a 0, a pointer to that typeinfo, then a function pointer.
  *
  * A construction vtable has the same shape, so where several match, the VTTs say which those are, and the
@@ -66,14 +67,17 @@ class RttiSymbols(
     /** A class typeinfo at [address], whose `__type_name` is the [name] at [nameAddress]. */
     private data class TypeInfoRecord(val address: Address, val nameAddress: Address, val name: String)
 
-    private fun Address.pointsToData() = program.pointerAt(this)?.let(program::isData) == true
+    /** Whether this word points at data, or at an import, as a dynamically linked typeinfo's vtable is. */
+    private fun Address.pointsToDataOrImport() = program.pointerAt(this)?.let { target ->
+        program.isData(target) || memory.getBlock(target)?.isExternalBlock == true
+    } == true
 
     /** Labels every class typeinfo, its name, and its vtable that lack one; returns how many vtables. */
     fun restore(): Int {
         val names = HashMap<Address, String?>()
         val typeinfos = sitesByTarget.flatMap { (target, sites) ->
             val name = names.getOrPut(target) { className(target) } ?: return@flatMap emptyList()
-            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { it.pointsToData() } }
+            sites.mapNotNull { site -> site.plusWords(-1)?.takeIf { it.pointsToDataOrImport() } }
                 .map { typeinfo -> TypeInfoRecord(typeinfo, target, name) }
         }.filter { Demangler.of(Itanium.TYPEINFO_PREFIX + it.name) != null }
 
@@ -114,10 +118,16 @@ class RttiSymbols(
         // in data, and later entries can point there too.
         fun vttOf(top: Address) = top.plusWords(2)?.let(sitesByTarget::get)?.min()?.let(reader::vttAt)
 
-        val settled = candidates.mapNotNull { (ti, found) -> found.singleOrNull()?.let { ti to it } }.toMap()
+        fun constructionIn(vtts: Collection<Vtt>) = vtts.flatMap { vtt -> vtt.constructionVtables.map { it.second } }
+
+        // A class only ever built as a base, as `Up` in `Both` is, may have no vtable of its own: its one
+        // match is then a construction vtable, which a settled class's VTT names.
+        val single = candidates.mapNotNull { (ti, found) -> found.singleOrNull()?.let { ti to it } }.toMap()
+        val named = constructionIn(single.values.mapNotNull(::vttOf)).toSet()
+        val settled = single.filterValues { it !in named }
         var kept = labelVtables(settled, rtti)
         val vtts = settled.mapNotNull { (ti, top) -> vttOf(top)?.let { ti to it } }.toMap(HashMap())
-        val construction = vtts.values.flatMap { vtt -> vtt.constructionVtables.map { it.second } }.toSet()
+        val construction = constructionIn(vtts.values).toSet()
         val among = settled.values.minOrNull()?.let { lo -> lo..settled.values.max() }
         val rest = candidates.filterKeys { it !in settled }.mapNotNull { (ti, found) ->
             val left = found - construction
