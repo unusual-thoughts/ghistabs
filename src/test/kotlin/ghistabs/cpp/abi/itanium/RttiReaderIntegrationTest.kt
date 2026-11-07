@@ -68,8 +68,6 @@ class RttiReaderIntegrationTest : FeatureFixtureTest() {
         val CLASSES = setOf("Base", "Named", "Shape", "Circle", "Left", "Right", "Diamond")
 
         @JvmStatic
-        fun hellos(): List<File> = FEATURES.listFiles().orEmpty()
-            .filter { it.name.startsWith("hello_") && "_msvc" !in it.name }
-            .sorted()
+        fun hellos() = stabsHellos().map { File(FEATURES, it) }
     }
 }
