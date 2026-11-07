@@ -15,7 +15,7 @@ import ghistabs.cpp.ClassNaming
  * structs the stabs leave undefined. They stay out of the DTM, so [Reader] writes nothing; to lay one, go
  * through [resolveLayout], as resolving one afresh each time forks a `.conflict`.
  */
-class Rtti(private val dtm: DataTypeManager) {
+class Typeinfo(private val dtm: DataTypeManager) {
     private val pointerSize = dtm.dataOrganization.pointerSize
     private val bigEndian = dtm.dataOrganization.isBigEndian
     private val componentOffset = Itanium.vtablePrefixBytes(pointerSize)
@@ -125,9 +125,29 @@ class Rtti(private val dtm: DataTypeManager) {
         const val MAX_BASE_DEPTH = 16
     }
 
+    /** The `__cxxabiv1` class a class's typeinfo object is an instance of. */
+    enum class Kind(private val abiClass: String) {
+        /** `__class_type_info`: no bases. */
+        CLASS(Itanium.CLASS_TYPE_INFO),
+
+        /** `__si_class_type_info`: one public, non-virtual base at offset 0. */
+        SI(Itanium.SI_CLASS_TYPE_INFO),
+
+        /** `__vmi_class_type_info`: anything else, each base with its own offset and flags. */
+        VMI(Itanium.VMI_CLASS_TYPE_INFO),
+        ;
+
+        companion object {
+            /** The kind whose vtable is [vtableClass]'s, or null for any other class's. */
+            fun ofVtableClass(vtableClass: String) = entries.firstOrNull {
+                "${Itanium.ABI_NAMESPACE}::${it.abiClass}" == vtableClass
+            }
+        }
+    }
+
     /**
      * Reads a class's bases off its typeinfo object (ABI §2.9.5), typed or not. Its vptr says which of the
-     * three class layouts it has ([TypeinfoKind]); a vptr or base into a shared library is named by Ghidra's
+     * three class layouts it has ([Kind]); a vptr or base into a shared library is named by Ghidra's
      * external reference. gcc 2.x fills its typeinfo in at run time, so has nothing to read.
      */
     class Reader(private val program: Program) {
@@ -146,18 +166,18 @@ class Rtti(private val dtm: DataTypeManager) {
         private val ptr = program.defaultPointerSize
         private val symtab = program.symbolTable
 
-        private val layouts = Rtti(program.dataTypeManager)
+        private val layouts = Typeinfo(program.dataTypeManager)
 
         /** [zti]'s direct bases; null if it isn't a class typeinfo this can read. */
         fun basesOf(zti: Address): List<Base>? = runCatching {
             when (kindOf(zti)) {
-                TypeinfoKind.CLASS -> emptyList()
+                Kind.CLASS -> emptyList()
 
-                TypeinfoKind.SI -> program.dataAt(zti, layouts.siClassTi)?.get(BASE_TYPE)
+                Kind.SI -> program.dataAt(zti, layouts.siClassTi)?.get(BASE_TYPE)
                     ?.let { classAt(it.address) }
                     ?.let { (name, at) -> listOf(Base(name, at, isVirtual = false, access = Access.PUBLIC)) }
 
-                TypeinfoKind.VMI -> vmiBases(zti)
+                Kind.VMI -> vmiBases(zti)
 
                 null -> null
             }
@@ -174,9 +194,9 @@ class Rtti(private val dtm: DataTypeManager) {
             }.distinctBy { it.className }
 
         fun structFor(zti: Address) = when (kindOf(zti)) {
-            TypeinfoKind.CLASS -> layouts.classTi
-            TypeinfoKind.SI -> layouts.siClassTi
-            TypeinfoKind.VMI -> vmiCount(zti)?.takeIf { it in 1..MAX_BASES }?.let { layouts.vmiClassTypeInfo(it) }
+            Kind.CLASS -> layouts.classTi
+            Kind.SI -> layouts.siClassTi
+            Kind.VMI -> vmiCount(zti)?.takeIf { it in 1..MAX_BASES }?.let { layouts.vmiClassTypeInfo(it) }
             null -> null
         }
 
@@ -200,7 +220,7 @@ class Rtti(private val dtm: DataTypeManager) {
 
         // The vptr points two words past its vtable's `_ZTV` label.
         internal fun kindOf(zti: Address) =
-            pointee(zti, Itanium.vtablePrefixBytes(ptr)) { it.vtableClass?.let(TypeinfoKind::ofVtableClass) }
+            pointee(zti, Itanium.vtablePrefixBytes(ptr)) { it.vtableClass?.let(Kind::ofVtableClass) }
 
         /** The class whose typeinfo the pointer at [at] points at, and where that typeinfo's symbol is. */
         private fun classAt(at: Address) = pointee(at, 0) { sym -> sym.typeinfoClass?.let { it to sym.address } }

@@ -13,7 +13,7 @@ import ghidra.program.model.symbol.Symbol
 import ghistabs.*
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.itanium.Itanium
-import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.Typeinfo
 import ghistabs.cpp.abi.itanium.startsVtableGroup
 import ghistabs.cpp.abi.itanium.vtableOffsetField
 import ghistabs.cpp.abi.msvc.msvcSubobjectOffset
@@ -99,7 +99,7 @@ data class VtableRecord(
      * The vbase offset this record keeps for virtual [base], at the header word [base]'s typeinfo offset
      * names, which is commented with [base]'s name. Null if that word is not in the header.
      */
-    fun vbaseOffset(program: Program, base: Rtti.Reader.Base) = vtableOffsetField(
+    fun vbaseOffset(program: Program, base: Typeinfo.Reader.Base) = vtableOffsetField(
         ((addressPoint + base.offset - address) / program.defaultPointerSize).toInt(),
     ).let { field ->
         fieldAddress(field)?.let { program.listing.setComment(it, CommentType.EOL, "${base.className} vbase offset") }

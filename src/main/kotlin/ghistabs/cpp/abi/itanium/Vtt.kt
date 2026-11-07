@@ -36,7 +36,7 @@ internal data class Vtt(val address: Address, val words: List<VttWord>) {
  */
 internal class VttReader(
     private val program: Program,
-    private val rtti: Rtti.Reader,
+    private val rtti: Typeinfo.Reader,
     /** Each class typeinfo's mangled name (`N8CryptoPP9PublicKeyE`), by its address. */
     private val names: Map<Address, String>,
     /** The typeinfos a primary vtable points at, its own or a construction one. */
@@ -71,7 +71,7 @@ internal class VttReader(
         val virtuals = HashMap<Address, Subobject>()
         fun build(at: Address, isVirtual: Boolean, parent: Subobject?, delta: Long, depth: Int): Subobject? {
             val sub = Subobject(at, isVirtual, parent, delta)
-            if (sub.name == null || depth > Rtti.MAX_BASE_DEPTH) return null
+            if (sub.name == null || depth > Typeinfo.MAX_BASE_DEPTH) return null
             for (base in rtti.basesOf(at) ?: return null) {
                 sub.bases += when {
                     !base.isVirtual -> build(base.typeinfo, false, sub, sub.delta + base.offset, depth + 1)

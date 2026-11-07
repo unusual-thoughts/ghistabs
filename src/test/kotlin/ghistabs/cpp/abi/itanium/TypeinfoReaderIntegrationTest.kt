@@ -17,7 +17,7 @@ import java.io.File
 @ParameterizedClass
 @MethodSource("hellos")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class RttiReaderIntegrationTest : FeatureFixtureTest() {
+class TypeinfoReaderIntegrationTest : FeatureFixtureTest() {
     @field:Parameter(0)
     lateinit var fixture: File
 
@@ -38,23 +38,23 @@ class RttiReaderIntegrationTest : FeatureFixtureTest() {
     @Test
     fun `classes get their correct typeinfo kinds`() {
         assumeTrue { ztis.keys.containsAll(CLASSES) }
-        val reader = Rtti.Reader(program)
+        val reader = Typeinfo.Reader(program)
         val kinds = ztis.filter { it.key in CLASSES }.mapValues { reader.kindOf(it.value) }
         kinds mustBe mapOf(
-            "Base" to TypeinfoKind.CLASS, // no base
-            "Named" to TypeinfoKind.CLASS, // no base, virtual destructor
-            "Shape" to TypeinfoKind.CLASS, // no base, virtual methods
-            "Circle" to TypeinfoKind.SI, // : public Shape
-            "Left" to TypeinfoKind.VMI, // : virtual Base
-            "Right" to TypeinfoKind.VMI, // : virtual Base
-            "Diamond" to TypeinfoKind.VMI, // : Left, Right, Named
+            "Base" to Typeinfo.Kind.CLASS, // no base
+            "Named" to Typeinfo.Kind.CLASS, // no base, virtual destructor
+            "Shape" to Typeinfo.Kind.CLASS, // no base, virtual methods
+            "Circle" to Typeinfo.Kind.SI, // : public Shape
+            "Left" to Typeinfo.Kind.VMI, // : virtual Base
+            "Right" to Typeinfo.Kind.VMI, // : virtual Base
+            "Diamond" to Typeinfo.Kind.VMI, // : Left, Right, Named
         )
     }
 
     @Test
     fun `the abi reads a class's bases off the typeinfo in its namespace`() {
         assumeTrue { ztis.keys.containsAll(CLASSES) }
-        val reader = Rtti.Reader(program)
+        val reader = Typeinfo.Reader(program)
         for (zti in ztis.filterKeys { it in CLASSES }.values) {
             val ns = program.symbolTable.getSymbols(zti).first { it.name == ClassNaming.TYPEINFO }.parentNamespace
             Itanium.basesOf(program, ns) mustBe reader.basesOf(zti)
