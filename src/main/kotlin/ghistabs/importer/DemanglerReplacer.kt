@@ -17,7 +17,7 @@ import ghistabs.*
 import ghistabs.cpp.*
 import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.cpp.abi.itanium.Itanium
-import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.Typeinfo
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.materialize.DataTypeRegistry
@@ -450,7 +450,7 @@ class DemanglerReplacer(
         if (dropped > 0) debug("demangler-dropped-empty-conflict-fork", count = dropped.toLong())
     }
 
-    private val rtti by lazy { Rtti(dtm) }
+    private val rtti by lazy { Typeinfo(dtm) }
 
     /**
      * Every datatype the registry materialized, by name (checked first, so exact names never go

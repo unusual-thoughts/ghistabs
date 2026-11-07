@@ -23,7 +23,7 @@ import ghistabs.diagnose.DiagnosticSink
  */
 class VirtualBases(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val dtm = program.dataTypeManager
-    private val reader = Rtti.Reader(program)
+    private val reader = Typeinfo.Reader(program)
     private val record = program.readClassRecord().orEmpty()
 
     /** [record] by qualified class name, for a label the demangler left outside its class's namespace. */
@@ -43,7 +43,7 @@ class VirtualBases(private val program: Program, sink: DiagnosticSink) : Diagnos
             vbases.count { struct.place(it, record, count) }
         }
 
-    private fun Structure.place(vbase: Rtti.Reader.Base, record: VtableRecord, count: Int): Boolean {
+    private fun Structure.place(vbase: Typeinfo.Reader.Base, record: VtableRecord, count: Int): Boolean {
         val at = pathName.member(vbase.className)
         val vbaseAt = record.vbaseOffset(program, vbase)?.toInt()
             .takeIf { isInside(it, vbase, at) } ?: return false
@@ -84,7 +84,7 @@ class VirtualBases(private val program: Program, sink: DiagnosticSink) : Diagnos
      * A struct for [vbase], which nothing defines: its vptr, then the [part] something defines [within]
      * bytes in, sized to the [room] the class leaves it. It fills an empty placeholder where one stands.
      */
-    private fun synthesized(vbase: Rtti.Reader.Base, part: DataType, within: Int, room: Int, at: String): Structure? {
+    private fun synthesized(vbase: Typeinfo.Reader.Base, part: DataType, within: Int, room: Int, at: String): Structure? {
         val ptr = program.defaultPointerSize
         val ns = namespaceOfTypeinfo(vbase.typeinfo)?.takeUnless { it.isGlobal }
         if (ns == null || within < ptr || within + part.length > room) return null
@@ -106,7 +106,7 @@ class VirtualBases(private val program: Program, sink: DiagnosticSink) : Diagnos
     }
 
     /** Whether [vbaseAt] puts [vbase] inside [this], logging why not where it doesn't. */
-    private fun Structure.isInside(vbaseAt: Int?, vbase: Rtti.Reader.Base, at: String): Boolean = when (vbaseAt) {
+    private fun Structure.isInside(vbaseAt: Int?, vbase: Typeinfo.Reader.Base, at: String): Boolean = when (vbaseAt) {
         // A nearly-empty virtual base can be the primary one, sharing the class's vptr: nothing to place.
         0 -> false.also { debug("vbase-primary-from-vtable") }
 
@@ -158,9 +158,9 @@ class VirtualBases(private val program: Program, sink: DiagnosticSink) : Diagnos
         .firstOrNull { it.name == ClassNaming.TYPEINFO && it.typeinfoClass != null }?.parentNamespace
 
     /** [base]'s struct, else the first defined one down its first non-virtual bases, with its offset in [base]. */
-    private fun definedPart(base: Rtti.Reader.Base, depth: Int = 0): Pair<DataType, Int>? =
+    private fun definedPart(base: Typeinfo.Reader.Base, depth: Int = 0): Pair<DataType, Int>? =
         structFor(base.className, namespaceOfTypeinfo(base.typeinfo))?.let { it to 0 }
-            ?: base.typeinfo.takeIf { depth < Rtti.MAX_BASE_DEPTH }?.let(reader::basesOf)
+            ?: base.typeinfo.takeIf { depth < Typeinfo.MAX_BASE_DEPTH }?.let(reader::basesOf)
                 ?.filterNot { it.isVirtual }?.minByOrNull { it.offset }
                 ?.let { next -> definedPart(next, depth + 1)?.let { (dt, at) -> dt to at + next.offset.toInt() } }
 }

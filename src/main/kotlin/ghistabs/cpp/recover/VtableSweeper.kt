@@ -139,10 +139,10 @@ open class VtableSweeper(
 
     /**
      * Replaces the empty structs Ghidra made for the `this` of the `__cxxabiv1` typeinfo classes' methods
-     * with their layouts ([Rtti.typeInfoLayout]).
+     * with their layouts ([Typeinfo.typeInfoLayout]).
      */
     private fun layTypeinfoClassStubs() {
-        val rtti = Rtti(dtm)
+        val rtti = Typeinfo(dtm)
         val stubs = dtm.allStructures.asSequence()
             .filter { it.isZeroLength || it.numComponents == 0 }
             .mapNotNull { stub -> rtti.typeInfoLayout(stub.name)?.let { stub to it } }
@@ -197,7 +197,7 @@ open class VtableSweeper(
         val names = symbols.mapNotNull { sym -> typeinfoTypeOf(sym.name)?.let { sym.address to it } }.toMap()
         val dynamic = symbols.filter { Itanium.looksLikeVtable(it.name) || looksLikeZtc(it.name) }
             .mapNotNullTo(HashSet()) { Itanium.recordAt(program, it.address).rttiOf(program) }
-        val reader = VttReader(program, Rtti.Reader(program), names, dynamic)
+        val reader = VttReader(program, Typeinfo.Reader(program), names, dynamic)
         for (sym in symbols.filter { looksLikeZtt(it.name) }.distinctBy { it.address }) {
             val vtt = reader.vttAt(sym.address) ?: run {
                 debug("vtt-unread", sym.name, sym.address)
@@ -341,7 +341,7 @@ open class VtableSweeper(
         }
 
     /** The bases of [primary]'s class by subobject offset, direct and virtual, as its typeinfo [rtti] says. */
-    private fun baseSubobjects(primary: VtableRecord, rtti: Address): Map<Long, String> = Rtti.Reader(program).run {
+    private fun baseSubobjects(primary: VtableRecord, rtti: Address): Map<Long, String> = Typeinfo.Reader(program).run {
         basesOf(rtti).orEmpty() + virtualBasesOf(rtti)
     }.mapNotNull { base ->
         // A virtual base's typeinfo offset locates its vbase offset in the vtable.

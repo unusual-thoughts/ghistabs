@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test
  * the DTM-resident type, the one already at the layout's path when there is one.
  */
 @Tag("integration")
-class RttiStructsDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+class TypeinfoStructsDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun reapplyingTypeinfoLayoutDoesNotForkConflicts() {
         val builder = ProgramBuilder("test", ProgramBuilder._X86)
@@ -34,7 +34,7 @@ class RttiStructsDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
                     .withIndex()) {
                     repeat(5) { i ->
                         val layout = (if (i % 2 == 0) registry else DtmRegistry(dtm))
-                            .resolveLayout(Rtti(dtm).typeInfoLayout(name)!!)
+                            .resolveLayout(Typeinfo(dtm).typeInfoLayout(name)!!)
                         val addr = program.addressFactory.defaultAddressSpace
                             .getAddress(0x401000L + slot * 0x100 + i * 0x20)
                         DataUtilities.createData(

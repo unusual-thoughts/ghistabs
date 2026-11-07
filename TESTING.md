@@ -108,7 +108,7 @@ classes and tags inherited from a base class; the price is that it needs the tes
   Most fixture-specific assertions live here.
 - **Synthetic behavioural** (fast, build a tiny `ProgramBuilder` program, no fixture): the
   `*IntegrationTest` classes under `ghistabs.importer` / `ghistabs.materialize` / `ghistabs` +
-  `RttiStructsDedupIntegrationTest` (`materialize.itanium`).
+  `TypeinfoStructsDedupIntegrationTest` (`materialize.itanium`).
 - **Probes** (`@Tag("probe")`, generators only, run via `probeDump`): `DegradationDumpProbe` (`ghistabs`),
   `SourceSkeletonProbe` (`render`), `StringTypeProbe` / `TypedefShorteningProbe` (`materialize`).
 

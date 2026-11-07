@@ -66,7 +66,7 @@ object Itanium : CxxAbi {
     // Every special name (`_ZT*`: the above) and `_ZG*` (guard variables, reference temporaries).
     private val SPECIAL_PREFIXES = listOf("_ZT", "_ZG")
 
-    // The `__cxxabiv1` typeinfo classes, whose layouts [Rtti] builds.
+    // The `__cxxabiv1` typeinfo classes, whose layouts [Typeinfo] builds.
     const val ABI_NAMESPACE = "__cxxabiv1"
     const val TYPE_INFO = "type_info" // std::type_info — root of the __cxxabiv1 hierarchy
     const val CLASS_TYPE_INFO = "__class_type_info"
@@ -157,7 +157,7 @@ object Itanium : CxxAbi {
     /** Off the class's typeinfo object, labelled `typeinfo` in its namespace. */
     override fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? {
         val zti = program.symbolTable.getSymbols(cls).firstOrNull { it.name == ClassNaming.TYPEINFO } ?: return null
-        return Rtti.Reader(program).basesOf(zti.address)
+        return Typeinfo.Reader(program).basesOf(zti.address)
     }
 
     /** A vtable, typeinfo object or typeinfo name: data gcc generated, with no source line of its own. */
@@ -288,26 +288,6 @@ enum class SpecialName {
 
     /** Any other: a `_ZG` guard variable or reference temporary. */
     OTHER,
-}
-
-/** The `__cxxabiv1` class a class's typeinfo object is an instance of. */
-enum class TypeinfoKind(private val abiClass: String) {
-    /** `__class_type_info`: no bases. */
-    CLASS(Itanium.CLASS_TYPE_INFO),
-
-    /** `__si_class_type_info`: one public, non-virtual base at offset 0. */
-    SI(Itanium.SI_CLASS_TYPE_INFO),
-
-    /** `__vmi_class_type_info`: anything else, each base with its own offset and flags. */
-    VMI(Itanium.VMI_CLASS_TYPE_INFO),
-    ;
-
-    companion object {
-        /** The kind whose vtable is [vtableClass]'s, or null for any other class's. */
-        fun ofVtableClass(vtableClass: String) = entries.firstOrNull {
-            "${Itanium.ABI_NAMESPACE}::${it.abiClass}" == vtableClass
-        }
-    }
 }
 
 /** A typeinfo object's label: its `_ZTI` linkage name, or the demangler's `typeinfo` for it. */

@@ -3,7 +3,7 @@ package ghistabs.cpp.abi
 import ghidra.program.model.address.Address
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.itanium.Itanium
-import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.Typeinfo
 import ghistabs.cpp.abi.itanium.vtableOffsetField
 import ghistabs.get
 import ghistabs.getScalar
@@ -118,8 +118,8 @@ class VtableRecordIntegrationTest : FeatureFixtureTest() {
         val vmi = program.listing.getDataAt(zti!!)
         assumeTrue(vmi?.dataType?.name?.startsWith("VmiClassTypeInfoStructure") == true, "typeinfo not laid")
 
-        val bases = vmi!![Rtti.BASES]
-        val offsets = (0 until (bases?.numComponents ?: 0)).mapNotNull { bases?.get(it)?.get(Rtti.BASE_OFFSET) }
+        val bases = vmi!![Typeinfo.BASES]
+        val offsets = (0 until (bases?.numComponents ?: 0)).mapNotNull { bases?.get(it)?.get(Typeinfo.BASE_OFFSET) }
         offsets.isNotEmpty().mustBeTrue("expected base entries in $vmi")
         offsets.map { it.defaultValueRepresentation }.filter { it.endsWith("h") }
             .mustBe(emptyList(), "base offsets should render in decimal")

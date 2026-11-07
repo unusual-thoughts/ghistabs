@@ -7,7 +7,7 @@ import ghidra.program.model.data.Structure
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.DtmRegistry
-import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.Typeinfo
 import ghistabs.demanglerPath
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
@@ -86,7 +86,7 @@ class DataTypeRegistry(
      */
     internal val degradedBy: Map<DataType, String> by lazy { computeDegraded() }
 
-    internal val rttiStructs by lazy { Rtti(dtm) }
+    internal val rttiStructs by lazy { Typeinfo(dtm) }
 
     // ── By id: stabs types, keyed by their GlobalTypeId in [byId], which only the functions below write.
     // [cache] sets the authoritative resolution for an id; [cacheIfAbsent] is the alias/member fan-out
@@ -157,7 +157,7 @@ class DataTypeRegistry(
 
     /**
      * Authoritative, fully-resolved type for an ast gcc references but never defines: a primitive via
-     * [resolveBuiltin], or a `__*_type_info_pseudo` RTTI record via [Rtti]. These are final types,
+     * [resolveBuiltin], or a `__*_type_info_pseudo` RTTI record via [Typeinfo]. These are final types,
      * not cycle-break stubs — callers cache them in [byId] and must never file them under [xrefStubs].
      */
     internal fun Type.substitute(): DataType? = resolveBuiltin(body)

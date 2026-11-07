@@ -106,7 +106,7 @@ class RttiSymbols(
             ?.filter { program.primaryRecordAt(it, header) != null }.orEmpty()
 
         val candidates = typeinfos.associateWith { it.primaryVtables() }
-        val rtti = Rtti.Reader(program)
+        val rtti = Typeinfo.Reader(program)
         val reader = VttReader(
             program,
             rtti,
@@ -144,7 +144,7 @@ class RttiSymbols(
     }
 
     /** Labels [vtt], the VTT of the class [name] mangles, and the construction vtables it starts sub-VTTs with. */
-    private fun labelVtt(name: String, vtt: Vtt, rtti: Rtti.Reader) {
+    private fun labelVtt(name: String, vtt: Vtt, rtti: Typeinfo.Reader) {
         if (label(vtt.address, Itanium.VTABLE_TABLE_PREFIX + name)) debug("vtt-from-rtti", name, vtt.address)
         for ((ztc, top) in vtt.constructionVtables) {
             val base = program.pointerAt(top.add(ptr.toLong())) ?: continue
@@ -157,7 +157,7 @@ class RttiSymbols(
      * Labels each class's vtable in [tops] where its record starts, moved back over zero vbase offsets once
      * the typeinfo says where they are; returns how many.
      */
-    private fun labelVtables(tops: Map<TypeInfoRecord, Address>, rtti: Rtti.Reader): Int =
+    private fun labelVtables(tops: Map<TypeInfoRecord, Address>, rtti: Typeinfo.Reader): Int =
         tops.map { (ti, top) -> Triple(ti, top, program.recordStart(top)) }
             .filter { (ti, _, start) -> label(start, Itanium.VTABLE_PREFIX + ti.name) }
             .count { (ti, top, start) ->
@@ -173,7 +173,7 @@ class RttiSymbols(
             }
 
     /** Where the record whose `offset_to_top` is at [top] starts, given the [typeinfo] its rtti word holds. */
-    private fun recordStart(top: Address, typeinfo: Address, rtti: Rtti.Reader): Address {
+    private fun recordStart(top: Address, typeinfo: Address, rtti: Typeinfo.Reader): Address {
         val start = program.recordStart(top)
         val lowest = rtti.virtualBasesOf(typeinfo).minOfOrNull { it.offset }
         return lowest?.let { top.plusWords(2)?.plusOrNull(it) }?.takeIf { it < start } ?: start

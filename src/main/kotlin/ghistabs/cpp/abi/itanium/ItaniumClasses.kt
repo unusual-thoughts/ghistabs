@@ -18,13 +18,13 @@ import ghistabs.toClass
 
 /**
  * Classes off the Itanium RTTI, for [ClassRecovery]: every class namespace holding a `typeinfo` label, its
- * bases off that typeinfo ([Rtti.Reader.basesOf]), and its vtables off its `vtable` and `internal_vtable`
+ * bases off that typeinfo ([Typeinfo.Reader.basesOf]), and its vtables off its `vtable` and `internal_vtable`
  * labels, as [GccVftableAnalyzer][ghistabs.entrypoints.GccVftableAnalyzer] lays them. Classes go by their
  * typeinfo's address.
  */
 class ItaniumClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val symbols = program.symbolTable
-    private val reader = Rtti.Reader(program)
+    private val reader = Typeinfo.Reader(program)
 
     // Every class seen, by typeinfo: those labelled in a class namespace, and any base whose typeinfo isn't,
     // as one from a shared library, which is known by nothing more than its name.

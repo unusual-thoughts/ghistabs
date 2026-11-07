@@ -11,7 +11,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.util.CodeUnitInsertionException
 import ghidra.util.task.TaskMonitor
 import ghistabs.DtmRegistry
-import ghistabs.cpp.abi.itanium.Rtti
+import ghistabs.cpp.abi.itanium.Typeinfo
 import ghistabs.cpp.abi.itanium.isTypeinfo
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
@@ -45,7 +45,7 @@ class RttiLayoutAnalyzer :
 
         /** Lay a struct at every typeinfo symbol not already typed as one, into [registry]; returns how many. */
         fun layTypeinfos(program: Program, registry: DtmRegistry, sink: DiagnosticSink): Int {
-            val reader = Rtti.Reader(program)
+            val reader = Typeinfo.Reader(program)
             var laid = 0
             for (sym in program.symbolTable.symbolIterator.iterator().asSequence()
                 .filter { it.isTypeinfo }
