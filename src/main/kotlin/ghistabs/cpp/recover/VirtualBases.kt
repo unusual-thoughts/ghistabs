@@ -1,4 +1,4 @@
-package ghistabs.cpp.abi.itanium
+package ghistabs.cpp.recover
 
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
@@ -11,6 +11,7 @@ import ghistabs.componentsOverlapping
 import ghistabs.cpp.*
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.itanium.*
 import ghistabs.diagnose.DiagnosticSink
 
 /**

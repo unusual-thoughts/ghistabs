@@ -7,7 +7,7 @@ import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.applyDemangling
-import ghistabs.cpp.abi.itanium.VirtualBases
+import ghistabs.cpp.recover.VirtualBases
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
