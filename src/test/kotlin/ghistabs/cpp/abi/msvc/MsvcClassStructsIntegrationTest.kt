@@ -17,10 +17,17 @@ import java.io.File
 /**
  * `features/hello.cc` under the MSVC ABI, stripped, through the whole analysis: the class pass lays each class
  * struct off the RTTI and the constructors. `Label` derives from `Rect`, itself a `Shape`, and from `Named`;
- * `Up` and `Down` derive virtually from `Core`, and `Both` from them.
+ * `Up` and `Down` derive virtually from `Core`, and `Both` from them. Built twice, by cl and by clang-cl, which lay
+ * the classes alike and place the functions differently.
  */
 @Tag("integration")
-class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+abstract class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+    /** The fixture under `features/`. */
+    abstract val fixture: String
+
+    /** `Rect`'s deleting destructor, the first slot of its vftable. */
+    abstract val rectDeletingDestructor: String
+
     @Test
     fun `each vptr is the class's own, typed to the table it points at, its bases split around it`() =
         withAnalyzed { program ->
@@ -32,7 +39,7 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
                 36 to "Label_data: Label_data",
             )
             program.classStruct("Rect_vftable").definedComponents.map { it.fieldName } mustBe
-                listOf("FUN_00401fc0", "vfunction2", "vfunction3", "vfunction4")
+                listOf(rectDeletingDestructor, "vfunction2", "vfunction3", "vfunction4")
         }
 
     @Test
@@ -85,7 +92,7 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
     @Test
     fun `constructors the decompiler shows no this return for are told from destructors by their calls`() =
         withAnalyzed { program ->
-            // clang's `-O0` callers leave the constructors' `this` return unread.
+            // The unoptimised callers leave the constructors' `this` return unread.
             program.layout("Circle") mustBe listOf(
                 0 to "vfptr: Circle_vftable *",
                 4 to "_base_: Shape_fields_4_16",
@@ -128,7 +135,7 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             .map { it.offset to "${it.fieldName}: ${it.dataType.name}" }
 
     private fun withAnalyzed(check: (Program) -> Unit) =
-        withProgram(File(FeatureFixtureTest.FEATURES, "hello_msvc_clang.exe"), compiler = "windows") { program ->
+        withProgram(File(FeatureFixtureTest.FEATURES, fixture), compiler = "windows") { program ->
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             mgr.initializeOptions()
             mgr.reAnalyzeAll(null)
@@ -138,4 +145,14 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             }
             check(program)
         }
+}
+
+class ClMsvcClassStructsIntegrationTest : MsvcClassStructsIntegrationTest() {
+    override val fixture = "hello_msvc.exe"
+    override val rectDeletingDestructor = "FUN_00402150"
+}
+
+class ClangClMsvcClassStructsIntegrationTest : MsvcClassStructsIntegrationTest() {
+    override val fixture = "hello_msvc_clang.exe"
+    override val rectDeletingDestructor = "FUN_00401fc0"
 }
