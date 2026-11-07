@@ -258,21 +258,26 @@ fun Program.isPrimaryVftable(label: Symbol): Boolean =
     }
 
 /**
- * The struct of the table [label] marks: the one laid there, or for gcc 2.x, which lays none, the one named
- * after the label: `<leaf>_vftable_for_<Base>`, or `<leaf>_vftable` or `<leaf>_vftable0` for `vftable`.
+ * The struct of the table [label] marks: the one laid there, or for gcc 2.x, which lays none, the one
+ * [ClassNaming.vftableName] names for a primary among as many tables as its class has labels:
+ * `<leaf>_vftable_for_<Base>` for `vftable_for_<Base>`, and for `vftable`, `<leaf>_vftable` when it is the
+ * class's only table, else Ghidra's numbered fallback.
  */
 fun Program.vftableStructAt(label: Symbol): Structure? {
     (listing.getDataAt(label.address)?.dataType as? Structure)?.takeIf { "_${ClassNaming.VFTABLE}" in it.name }
         ?.let { return it }
-    val suffixes = when {
-        label.name.startsWith(ClassNaming.vftableForLabel("")) -> listOf("_${label.name}")
-        label.name == ClassNaming.VFTABLE -> listOf("_${ClassNaming.VFTABLE}", "_${ClassNaming.VFTABLE}0")
+    val base = when {
+        label.name.startsWith(ClassNaming.VFTABLE_FOR) -> label.name.removePrefix(ClassNaming.VFTABLE_FOR)
+        label.name == ClassNaming.VFTABLE -> null
         else -> return null
     }
-    val types = dataTypeManager.getCategory(ClassNaming.vftableCategory(label.parentNamespace))?.dataTypes.orEmpty()
-    return suffixes.firstNotNullOfOrNull { suffix ->
-        types.filterIsInstance<Structure>().firstOrNull { it.name.endsWith(suffix) }
-    }
+    val ns = label.parentNamespace
+    val count = symbolTable.getSymbols(ns).iterator().asSequence().count { ClassNaming.isClassVftableLabel(it.name) }
+    val category = ClassNaming.vftableCategory(ns)
+    // The leaf may spell the class otherwise than the namespace does, so the name is matched as a suffix.
+    val suffix = ClassNaming.vftableName(category.at("_${ClassNaming.VFTABLE}"), 0, count, base)
+    return dataTypeManager.getCategory(category)?.dataTypes.orEmpty().filterIsInstance<Structure>()
+        .firstOrNull { it.name.endsWith(suffix) }
 }
 
 /**
