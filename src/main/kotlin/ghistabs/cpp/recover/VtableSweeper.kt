@@ -274,7 +274,9 @@ open class VtableSweeper(
     /**
      * Lays [className]'s gcc 2.x secondaries, each a record with its own symbol (`_vt$9TeeStream$3ios`),
      * named as [laySecondaryVtables] names an Itanium group, and tagged with its base's vptr offset in
-     * [classStruct] where there is one. Records already laid are skipped.
+     * [classStruct] where there is one. Records already laid are skipped, but still count towards the
+     * names: a re-import lays the primary afresh, and naming it again, as [laySecondaryVtables] does an
+     * Itanium group's, puts it in place of the table the earlier import laid.
      */
     internal fun layGcc2SecondaryVtables(
         className: String,
@@ -283,7 +285,7 @@ open class VtableSweeper(
         classStruct: Structure?,
         source: SourceType = SourceType.IMPORTED,
     ) {
-        val records = unlaidGcc2Secondaries(className)
+        val records = gcc2Secondaries(className)
         if (records.isEmpty()) return
         val path = ClassNaming.vftablePath(ns, leaf)
         val primaryAt = symtab.getSymbols(ClassNaming.VFTABLE, ns).firstOrNull()?.address
@@ -309,6 +311,7 @@ open class VtableSweeper(
         val first = count - records.size
         records.forEachIndexed { i, (key, targets) ->
             val (base, record) = key
+            if (targets == null) return@forEachIndexed
             val index = first + i
             val name = names.getOrNull(index)
             val at = path.categoryPath.at(ClassNaming.vftableName(path, index, count, name))
@@ -324,10 +327,13 @@ open class VtableSweeper(
         }
     }
 
-    /** [className]'s gcc 2.x secondaries no class laid, with their slots, less any without. */
-    private fun unlaidGcc2Secondaries(className: String) =
+    /**
+     * [className]'s gcc 2.x secondaries, less any without slots, each with the slots to lay, or none when
+     * a class already laid it.
+     */
+    private fun gcc2Secondaries(className: String) =
         gcc2SecondaryVtables[className].orEmpty().mapNotNull { (base, record) ->
-            if (program.isVtableClaimed(record)) return@mapNotNull null
+            if (program.isVtableClaimed(record)) return@mapNotNull (base to record) to null
             record.slots(program).ifEmpty {
                 degradation("vtable-secondary-empty", className, "no slots read for base $base", record.address)
                 null

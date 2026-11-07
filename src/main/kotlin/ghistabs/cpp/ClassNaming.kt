@@ -30,6 +30,7 @@ object ClassNaming {
 
     // RTTIGccClassRecoverer#updateMultiVftableLabels and RecoveredClassHelper#createEmptyVfTableStructs.
     const val FOR_INFIX = "_for_"
+    const val VFTABLE_FOR = "$VFTABLE$FOR_INFIX"
 
     // ghistabs' own base-subobject field naming, applied uniformly regardless of the class's ABI.
     const val BASE_PREFIX = "_base_"
@@ -50,7 +51,7 @@ object ClassNaming {
         INTERNAL_PREFIX.takeIf { internal }.orEmpty() + CONSTRUCTION_PREFIX.takeIf { construction }.orEmpty()
 
     /** The label of a class's table serving [base], once the class has more than one: `vftable_for_<base>`. */
-    fun vftableForLabel(base: String) = "$VFTABLE$FOR_INFIX$base"
+    fun vftableForLabel(base: String) = VFTABLE_FOR + base
 
     /** Whether [name] labels one of a class's own vftables: `vftable`, `internal_vftable`, `vftable_for_<Base>`. */
     fun isClassVftableLabel(name: String) =
