@@ -29,6 +29,34 @@ data class VptrStores(
 fun storedClass(classes: Set<ClassDecl>): ClassDecl? =
     classes.singleOrNull { c -> classes.all { it == c || c.derivesFrom(it) } }
 
+/**
+ * What [StructorFinder.find] found: each structor's class and role ([roles]), each constructor a linker folded
+ * into another class's that builds [folded] classes too, and the bytes each function read stores through
+ * `this`.
+ */
+class Structors(
+    val roles: Map<Function, Pair<ClassDecl, StructorRole>>,
+    val folded: Map<Function, Set<ClassDecl>>,
+    private val thisStores: Map<Function, Map<Int, Int>>,
+) {
+    /** Each constructor, by the class it builds. */
+    val constructors = roles.filterValues { it.second == CONSTRUCTOR }.mapValues { it.value.first }
+
+    /**
+     * The bytes each class's constructors, its own and those folded into another's, store through `this`, by
+     * offset into it: its own fields where nothing else is laid, and how large it is at least.
+     */
+    val constructorStores: Map<ClassDecl, Map<Int, Int>> by lazy {
+        val built = constructors.map { (f, cls) -> f to cls } + folded.flatMap { (f, cs) -> cs.map { f to it } }
+        buildMap<ClassDecl, MutableMap<Int, Int>> {
+            for ((f, cls) in built) {
+                val into = getOrPut(cls) { mutableMapOf() }
+                thisStores[f].orEmpty().forEach { (at, size) -> into.merge(at, size, ::maxOf) }
+            }
+        }
+    }
+}
+
 /** Finds constructors and destructors among [classes]' by the vtables they store into `this`, decompiled. */
 class StructorFinder(private val program: Program, classes: Collection<ClassDecl>, sink: DiagnosticSink) :
     DiagnosticSink by sink {
@@ -37,24 +65,16 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
     private val tables = classes.vptrTables(program)
 
     /**
-     * Each base whose constructor [find] gave another class, the two folded into one function, as a linker
-     * folds identical code: it builds this one too.
-     */
-    val foldedBaseConstructors = mutableMapOf<ClassDecl, Function>()
-
-    /**
      * Each structor's class and role, given [slots]: each vtable slot's function, and the classes holding it.
      * A base with no vtable to store is built by the one function each of its deriving class's constructors
      * calls on its subobject ([baseConstructors]).
      */
-    fun find(
-        slots: Map<Function, Set<ClassDecl>>,
-        convention: StructorConvention,
-        monitor: TaskMonitor,
-    ): Map<Function, Pair<ClassDecl, StructorRole>> {
+    fun find(slots: Map<Function, Set<ClassDecl>>, convention: StructorConvention, monitor: TaskMonitor): Structors {
         val reading = read(slots.keys, monitor)
         val roles = reading.roles(slots, convention).toMutableMap()
         val subobjectCalls = reading.subobjectCalls.toMutableMap()
+        val thisStores = reading.thisStores.toMutableMap()
+        val folded = mutableMapOf<Function, MutableSet<ClassDecl>>()
         var built = roles.filterValues { (_, role) -> role == CONSTRUCTOR }
         while (built.isNotEmpty() && !monitor.isCancelled) {
             val found = mutableMapOf<Function, ClassDecl>()
@@ -62,14 +82,16 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
                 val taken = roles[ctor]?.first ?: found[ctor]
                 when {
                     taken == null -> found[ctor] = cls
-                    taken != cls -> foldedBaseConstructors.putIfAbsent(cls, ctor)
+                    taken != cls -> folded.getOrPut(ctor) { mutableSetOf() } += cls
                 }
             }
             roles += found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
-            subobjectCalls += decompile(found.keys, emptyMap(), monitor).subobjectCalls
+            val more = decompile(found.keys, emptyMap(), monitor)
+            subobjectCalls += more.subobjectCalls
+            thisStores += more.thisStores
             built = found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
         }
-        return roles
+        return Structors(roles, folded, thisStores)
     }
 
     /**
@@ -91,10 +113,14 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
     }
 
     /**
-     * The vptrs each function stores ([stores]), and the functions each calls on `this` or a subobject of it, by
-     * offset into it ([subobjectCalls]).
+     * The vptrs each function stores ([stores]), the functions each calls on `this` or a subobject of it, by
+     * offset into it ([subobjectCalls]), and the bytes each stores through `this`, by offset ([thisStores]).
      */
-    class Reading(val stores: Map<Function, VptrStores>, val subobjectCalls: Map<Function, Map<Long, Set<Function>>>) {
+    class Reading(
+        val stores: Map<Function, VptrStores>,
+        val subobjectCalls: Map<Function, Map<Long, Set<Function>>>,
+        val thisStores: Map<Function, Map<Int, Int>> = emptyMap(),
+    ) {
         /** The functions each calls on `this` itself. */
         private val thisCalls = subobjectCalls.mapValues { (_, calls) -> calls[0L].orEmpty() }
 
@@ -222,7 +248,7 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         return decompile(writes.keys + others, writes, monitor)
     }
 
-    /** What [funcs] call on `this`, decompiled, and which of [writes]' vptrs each stores. */
+    /** What [funcs] store and call through `this`, decompiled, and which of [writes]' vptrs each stores. */
     private fun decompile(
         funcs: Collection<Function>,
         writes: Map<Function, Map<Address, List<Pair<ClassDecl, Long>>>>,
@@ -230,22 +256,33 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
     ): Reading {
         val stores = mutableMapOf<Function, VptrStores>()
         val subobjectCalls = mutableMapOf<Function, Map<Long, Set<Function>>>()
+        val thisStores = mutableMapOf<Function, Map<Int, Int>>()
         if (thisStorage != null) {
             DecompInterface().useWith(program) { decomp ->
                 for (func in funcs) {
                     val high = decomp.decompiled(func, monitor) ?: continue
                     writes[func]?.let { stores[func] = high.vptrStores(it) }
                     subobjectCalls[func] = high.subobjectCalls()
+                    thisStores[func] = high.thisStores()
                 }
             }
         }
-        return Reading(stores, subobjectCalls)
+        return Reading(stores, subobjectCalls, thisStores)
     }
 
     private fun DecompInterface.decompiled(func: Function, monitor: TaskMonitor): HighFunction? {
         if (monitor.isCancelled) return null
         return decompileFunction(func, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction
             ?: null.also { debug("structor-undecompiled", func.name, func.entryPoint) }
+    }
+
+    /** The bytes this stores through `this`, by offset into it: the larger store where two meet. */
+    private fun HighFunction.thisStores(): Map<Int, Int> = buildMap {
+        for (op in pcodeOps) {
+            if (op.opcode != PcodeOp.STORE) continue
+            val at = op.getInput(1).thisOffset() ?: continue
+            merge(at.toInt(), op.getInput(2).size, ::maxOf)
+        }
     }
 
     /** The functions this calls with a pointer into `this` first, by how far into it. */

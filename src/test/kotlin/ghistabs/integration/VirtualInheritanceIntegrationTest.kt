@@ -132,6 +132,6 @@ class VirtualInheritanceIntegrationTest : FeatureFixtureTest() {
 
     companion object {
         @JvmStatic
-        fun hellos() = FEATURES.list().orEmpty().filter { it.startsWith("hello_") && "_msvc" !in it }.sorted()
+        fun hellos() = stabsHellos()
     }
 }
