@@ -58,6 +58,15 @@ interface ClassDecl {
     /** Its own vtables; empty when none was emitted, as for an abstract base. */
     val vftables: List<VtableRecord>
 
+    /**
+     * The virtual bases of its complete object, direct or not, each at its offset in it where the ABI's
+     * records say: Itanium's vtable, MSVC's vbtable. Null where they don't.
+     */
+    val virtualBases: List<ClassBase> get() = emptyList()
+
+    /** Where its vbptrs sit, MSVC's, which point at its vbtables; Itanium keeps vbase offsets in the vtable. */
+    val vbptrs: Set<Long> get() = emptySet()
+
     /** Whether this class derives from [other], directly or not. */
     fun derivesFrom(other: ClassDecl) = other in ancestors
 }

@@ -57,11 +57,15 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         val shared: Int,
         val structors: Int,
         val sized: Int,
+        val laid: Int,
     )
 
     fun recover(read: AbiClasses, monitor: TaskMonitor): Result {
+        stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> virtualOwner(hs) }
-        val structors = StructorFinder(program, read.classes, this).find(read.holders, abi, monitor)
+        val finder = StructorFinder(program, read.classes, this)
+        val found = finder.find(read.holders, abi, monitor)
+        val structors = found.roles
         var moved = 0
         for ((func, owner) in owners) {
             val holders = read.holders.getValue(func)
@@ -76,14 +80,22 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
             val cls = structor.first.ns?.toClass() ?: return@count false
             nameStructor(func, cls, structor.second)
         }
-        val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
-        val sizes = sizeClasses(read.classes, NewSizeReader(program, abi, this).read(ctors, monitor))
+        val ctors = found.constructors
+        val stores = found.constructorStores
+        // A class with a vptr is aligned at least as a pointer, which a trailing `bool` leaves it short of.
+        val reached = stores.mapValues { (cls, at) ->
+            val end = at.maxOf { (offset, size) -> offset + size }.toLong()
+            val align = if (cls.vftables.isEmpty()) 1L else program.defaultPointerSize.toLong()
+            (end + align - 1) / align * align
+        }
+        val sizes = sizeClasses(read.classes, NewSizeReader(program, abi, this).read(ctors, monitor), reached)
+        val laid = ClassLayouts(program, abi, this).layAll(read.recorded, stores)
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
             structors.map { (f, structor) -> f to structor.first }
         for ((func, _) in placed) func.addTag(ClassPassTags.METHOD)
         for (func in ctors.keys) func.addTag(ClassPassTags.CONSTRUCTOR)
         writeRecords(read.recorded)
-        return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size)
+        return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size, laid)
     }
 
     /**
@@ -110,17 +122,11 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
                     program.functionManager.getFunctionAt(at)?.let { it.getThunkedFunction(true) ?: it } == func
                 }
                 if (slot < 0) continue
-                val base = if (cls.vftables.size > 1) servedBase(cls, record) else null
+                val base = if (cls.vftables.size > 1) cls.servedBase(record, program) else null
                 return "$VFUNCTION${slot + 1}" + base?.let { "_for_${it.name}" }.orEmpty()
             }
         }
         return null
-    }
-
-    /** The direct base of [cls] whose subobject [record]'s vptr sits in: the first at its offset. */
-    private fun servedBase(cls: ClassDecl, record: VtableRecord): ClassDecl? {
-        val at = record.vfptrOffset(program) ?: return null
-        return cls.bases.firstOrNull { !it.isVirtual && (it.offset ?: 0L) == at }?.cls
     }
 
     /**
@@ -154,26 +160,47 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         (symbol.source == SourceType.ANALYSIS && parentNamespace is GhidraClass)
 
     /**
-     * Each class's size range, off what it is [allocated] with and its bases' and vptrs' offsets. Each class
+     * An empty struct for each class with none, where `RecoverClassesFromRTTIScript` files one, before any
+     * function moves in: a `__thiscall` function landing in a class with no struct makes Ghidra add a
+     * placeholder in the class's parent category, `/<Class>` for a global one, which its lookup then prefers.
+     */
+    private fun stubStructs(classes: Collection<ClassDecl>) {
+        for (ns in classes.mapNotNull { it.ns?.toClass() }) {
+            if (program.classStruct(ns) != null) continue
+            runCatching {
+                program.dataTypeManager.addDataType(
+                    StructureDataType(ClassNaming.vftableCategory(ns), ns.name, 0),
+                    DataTypeConflictHandler.KEEP_HANDLER,
+                )
+            }.onFailure { warn("class-struct-unstubbed", "${ns.getName(true)}: $it") }
+        }
+    }
+
+    /**
+     * Each class's size range, off what it is [allocated] with, its bases' and vptrs' offsets and how far its
+     * constructors store ([reached]). Each class
      * gets a struct of its exact size, or else its least, where `RecoverClassesFromRTTIScript` files one: a
      * stub of undefined bytes when it has none, and its own grown when shorter.
      */
     private fun sizeClasses(
         classes: Collection<ClassDecl>,
         allocated: Map<ClassDecl, Long>,
+        reached: Map<ClassDecl, Long>,
     ): Map<ClassDecl, LongRange> {
         val all = classes.toList()
-        val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, program.defaultPointerSize.toLong())
+        val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, program.defaultPointerSize.toLong(), reached)
         val sized = bounds.filterValues { it.first > 0 }
         for ((cls, size) in sized) {
             val ns = cls.ns?.toClass() ?: continue
             val length = size.first.toInt()
             runCatching {
-                when (val struct = classStruct(ns)) {
+                when (val struct = program.classStruct(ns)) {
                     null -> program.dataTypeManager.addDataType(
                         StructureDataType(ClassNaming.vftableCategory(ns), ns.name, length),
                         DataTypeConflictHandler.KEEP_HANDLER,
                     )
+
+                    else if struct.isZeroLength -> struct.growStructure(length)
 
                     else if struct.length < length -> struct.growStructure(length - struct.length)
                 }
@@ -203,12 +230,8 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
 
-    /** The class's struct where `RecoverClassesFromRTTIScript` files it. */
-    private fun classStruct(ns: GhidraClass) =
-        program.dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
-
     private fun classStructId(ns: GhidraClass): Long? {
-        val struct = classStruct(ns) ?: return null
+        val struct = program.classStruct(ns) ?: return null
         return program.dataTypeManager.getID(struct).takeIf { it >= 0 }
     }
 
@@ -227,4 +250,18 @@ object ClassPassTags {
 
     /** On each constructor among them. */
     const val CONSTRUCTOR = "GHISTABS_CLASS_CONSTRUCTOR"
+}
+
+/** The class's struct where `RecoverClassesFromRTTIScript` files it. */
+fun Program.classStruct(ns: GhidraClass) =
+    dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
+
+/**
+ * The base of this class whose subobject [record]'s vptr sits in: the first direct non-virtual base at its
+ * offset, else the virtual base there.
+ */
+fun ClassDecl.servedBase(record: VtableRecord, program: Program): ClassDecl? {
+    val at = record.vfptrOffset(program) ?: return null
+    return bases.firstOrNull { !it.isVirtual && (it.offset ?: 0L) == at }?.cls
+        ?: virtualBases.firstOrNull { it.offset == at }?.cls
 }

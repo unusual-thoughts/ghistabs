@@ -195,6 +195,5 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
     companion object {
         const val BOOKMARK = "Method class guess"
         private const val CDECL = CompilerSpec.CALLING_CONVENTION_cdecl
-        private const val DECOMPILE_TIMEOUT_SECONDS = 30
     }
 }
