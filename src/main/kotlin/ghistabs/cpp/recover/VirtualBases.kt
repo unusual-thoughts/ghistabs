@@ -125,7 +125,10 @@ class VirtualBases(private val program: Program, private val abi: CxxAbi, sink: 
     /** [cls]'s non-empty struct, by [lookup]. */
     private fun structFor(cls: ClassDecl) = lookup(cls).firstNotNullOfOrNull { it.takeAcceptable() }
 
-    /** What may be [cls]'s struct, empty or not: by its namespace, then as [recorded]. */
+    /**
+     * What may be [cls]'s struct, empty or not: by its namespace, then where a class pass files it
+     * ([classStruct]), then as [recorded].
+     */
     private fun lookup(cls: ClassDecl) = listOfNotNull(
         when (val namespace = cls.ns) {
             is GhidraClass -> DataTypeUtilities.findExistingClassStruct(dtm, namespace)
@@ -139,6 +142,7 @@ class VirtualBases(private val program: Program, private val abi: CxxAbi, sink: 
 
             else -> null
         },
+        (cls.ns as? GhidraClass)?.let(program::classStruct),
         recorded(cls),
     )
 
