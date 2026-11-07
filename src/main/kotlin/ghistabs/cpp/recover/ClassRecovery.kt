@@ -57,6 +57,7 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         val shared: Int,
         val structors: Int,
         val sized: Int,
+        val virtualBases: Int = 0,
     )
 
     fun recover(read: AbiClasses, monitor: TaskMonitor): Result {
