@@ -59,6 +59,7 @@ operator fun AddressSetView.plus(addrs: AddressSetView): AddressSet = union(addr
 operator fun AddressSetView.plus(range: AddressRange): AddressSet = union(AddressSet(range))
 operator fun AddressSetView.plus(addr: Address): AddressSet = union(AddressSet(addr))
 
+val Data.components get() = (0 until numComponents).mapNotNull { i -> getComponent(i) }
 operator fun Data.get(i: Int): Data? = getComponent(i)
 operator fun Data.get(name: String): Data? =
     (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(::get)

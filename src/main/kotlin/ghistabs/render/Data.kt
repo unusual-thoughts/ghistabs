@@ -5,6 +5,7 @@ import ghidra.program.model.data.LongDoubleDataType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
+import ghistabs.components
 import ghistabs.importer.resolvePointee
 
 fun Address.hexLiteral() = "0x" + offset.toString(16).padStart(8, '0')
@@ -52,9 +53,7 @@ fun Data.render(program: Program, depth: Int = 0): String? {
     }
     // array / struct — recurse each component into a brace-list.
     if (numComponents > 0) {
-        val parts = (0 until numComponents).mapNotNull { i ->
-            getComponent(i)?.render(program, depth + 1)
-        }
+        val parts = components.mapNotNull { it.render(program, depth + 1) }
         if (parts.isNotEmpty()) return "{ ${parts.joinToString(", ")} }"
     }
     return repr()?.let { if (baseDataType is LongDoubleDataType) longDoubleLiteral(it) else it }
@@ -95,9 +94,7 @@ fun Program.initializerAt(addr: Address): List<String>? {
     // A real aggregate (struct / non-char array) spreads one element per component; a
     // pointer, scalar, or string-like value is a single element.
     if (data.value !is String && data.value !is Address && data.numComponents > 0) {
-        val parts = (0 until data.numComponents).mapNotNull { i ->
-            data.getComponent(i)?.render(this)
-        }
+        val parts = data.components.mapNotNull { it.render(this) }
         return parts.takeIf { it.isNotEmpty() }
     }
     return data.render(this)?.let { listOf(it) }

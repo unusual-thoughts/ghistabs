@@ -5,6 +5,7 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
 import ghistabs.cStringAt
+import ghistabs.components
 import ghistabs.forceCreateData
 
 /** Longest string a pointee is chased into, terminator included. */
@@ -78,7 +79,5 @@ fun Program.sweepPointees(data: Data, depth: Int = 0): Int {
         if (before != null && resolved.dataType.isEquivalent(before)) return 0
         return 1 + sweepPointees(resolved, depth + 1)
     }
-    return (0 until data.numComponents).sumOf { i ->
-        data.getComponent(i)?.let { sweepPointees(it, depth + 1) } ?: 0
-    }
+    return data.components.sumOf { sweepPointees(it, depth + 1) }
 }
