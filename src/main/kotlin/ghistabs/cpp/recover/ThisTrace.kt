@@ -8,6 +8,15 @@ import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
+import ghistabs.cpp.ClassDecl
+
+/** How long a class pass waits on the decompiler for one function. */
+const val DECOMPILE_TIMEOUT_SECONDS = 30
+
+/** Each of these classes' vtables, by its address point: the class it serves and where its vptr sits in it. */
+fun Collection<ClassDecl>.vptrTables(program: Program): Map<Address, Pair<ClassDecl, Long>> = flatMap { cls ->
+    cls.vftables.mapNotNull { r -> r.vfptrOffset(program)?.let { r.addressPoint to (cls to it) } }
+}.toMap()
 
 /** Where `this` comes in: ECX under x86 `__thiscall`, the first argument register elsewhere. */
 fun Program.thisStorage(): Address? {

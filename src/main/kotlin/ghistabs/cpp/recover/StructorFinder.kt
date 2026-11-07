@@ -27,10 +27,7 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
     DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
 
-    /** Each vtable, by its address point: the class it serves and where in that class's object its vptr sits. */
-    private val tables = classes.flatMap { cls ->
-        cls.vftables.mapNotNull { r -> r.vfptrOffset(program)?.let { r.addressPoint to (cls to it) } }
-    }.toMap()
+    private val tables = classes.vptrTables(program)
 
     /** Each structor's class and role, given [slots]: each vtable slot's function, and the classes holding it. */
     fun find(slots: Map<Function, Set<ClassDecl>>, convention: StructorConvention, monitor: TaskMonitor) =
@@ -172,8 +169,4 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
 
     /** How far past `this` [this] points; null if it points into something else. */
     private fun Varnode.thisOffset() = pointerInto().takeIf { it.isThis(thisStorage) }?.offset
-
-    private companion object {
-        const val DECOMPILE_TIMEOUT_SECONDS = 30
-    }
 }
