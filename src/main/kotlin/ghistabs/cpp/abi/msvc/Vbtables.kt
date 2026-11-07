@@ -8,9 +8,11 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.ClassDecl
+import ghistabs.cpp.recover.DECOMPILE_TIMEOUT_SECONDS
 import ghistabs.cpp.recover.PointerInto
 import ghistabs.cpp.recover.pointerInto
 import ghistabs.cpp.recover.storedClass
+import ghistabs.cpp.recover.vptrTables
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
@@ -21,10 +23,7 @@ import ghistabs.useWith
  */
 class Vbtables(private val program: Program, classes: Collection<ClassDecl>, sink: DiagnosticSink) :
     DiagnosticSink by sink {
-    /** Each vftable, by its address point: the class it serves and where in that class's object its vptr sits. */
-    private val tables = classes.flatMap { cls ->
-        cls.vftables.mapNotNull { r -> r.vfptrOffset(program)?.let { r.addressPoint to (cls to it) } }
-    }.toMap()
+    private val tables = classes.vptrTables(program)
 
     /** Each of [vbptrs]' classes' vbtables, by where its vbptr sits in the class, where a function stores one. */
     fun read(vbptrs: Map<ClassDecl, Set<Long>>, monitor: TaskMonitor): Map<ClassDecl, Map<Long, Address>> {
@@ -121,8 +120,4 @@ class Vbtables(private val program: Program, classes: Collection<ClassDecl>, sin
 
     /** Whether [at] may be a vbtable: its first entry, from the vbptr back to its subobject, is not positive. */
     private fun mayBeVbtable(at: Address) = runCatching { program.memory.getInt(at) <= 0 }.getOrDefault(false)
-
-    private companion object {
-        const val DECOMPILE_TIMEOUT_SECONDS = 30
-    }
 }

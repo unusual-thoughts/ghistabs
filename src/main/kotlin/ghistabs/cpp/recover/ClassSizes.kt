@@ -111,8 +111,4 @@ class NewSizeReader(private val program: Program, private val abi: CxxAbi, sink:
     }
 
     private fun Function.isOperatorNew() = name in abi.operatorNewNames
-
-    private companion object {
-        const val DECOMPILE_TIMEOUT_SECONDS = 30
-    }
 }

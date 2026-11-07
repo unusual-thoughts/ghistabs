@@ -48,7 +48,7 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
 
     /**
      * Lays [classes]' empty structs, a base before the classes deriving from it, each with the fields its
-     * constructors [stores] ([constructorStores]); returns how many it laid.
+     * constructors [stores] ([Structors.constructorStores]); returns how many it laid.
      */
     fun layAll(classes: Collection<ClassDecl>, stores: Map<ClassDecl, Map<Int, Int>>): Int =
         classes.sortedBy { it.ancestors.size }.count { lay(it, stores[it].orEmpty()) }
@@ -227,26 +227,3 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
         const val DATA = "data"
     }
 }
-
-/**
- * The bytes each of [ctors]' classes' constructors store through `this`, by offset into it, decompiled:
- * its own fields where nothing else is laid, and how large it is at least.
- */
-fun Program.constructorStores(ctors: Map<Function, ClassDecl>, monitor: TaskMonitor): Map<ClassDecl, Map<Int, Int>> {
-    val thisStorage = thisStorage() ?: return emptyMap()
-    val stores = mutableMapOf<ClassDecl, MutableMap<Int, Int>>()
-    DecompInterface().useWith(this) { decomp ->
-        for ((func, cls) in ctors) {
-            if (monitor.isCancelled) break
-            val high = decomp.decompileFunction(func, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
-            for (op in high.pcodeOps) {
-                if (op.opcode != PcodeOp.STORE) continue
-                val into = op.getInput(1).pointerInto().takeIf { it.isThis(thisStorage) } ?: continue
-                stores.getOrPut(cls) { mutableMapOf() }.merge(into.offset.toInt(), op.getInput(2).size, ::maxOf)
-            }
-        }
-    }
-    return stores
-}
-
-private const val DECOMPILE_TIMEOUT_SECONDS = 30

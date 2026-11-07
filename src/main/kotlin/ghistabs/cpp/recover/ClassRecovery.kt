@@ -64,7 +64,8 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> virtualOwner(hs) }
         val finder = StructorFinder(program, read.classes, this)
-        val structors = finder.find(read.holders, abi, monitor)
+        val found = finder.find(read.holders, abi, monitor)
+        val structors = found.roles
         var moved = 0
         for ((func, owner) in owners) {
             val holders = read.holders.getValue(func)
@@ -79,9 +80,8 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
             val cls = structor.first.ns?.toClass() ?: return@count false
             nameStructor(func, cls, structor.second)
         }
-        val ctors = structors.filterValues { it.second == StructorRole.CONSTRUCTOR }.mapValues { it.value.first }
-        val folded = finder.foldedBaseConstructors.entries.associate { (cls, ctor) -> ctor to cls }
-        val stores = program.constructorStores(ctors, monitor) + program.constructorStores(folded, monitor)
+        val ctors = found.constructors
+        val stores = found.constructorStores
         // A class with a vptr is aligned at least as a pointer, which a trailing `bool` leaves it short of.
         val reached = stores.mapValues { (cls, at) ->
             val end = at.maxOf { (offset, size) -> offset + size }.toLong()
