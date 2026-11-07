@@ -4,6 +4,7 @@ import ghistabs.cpp.Access
 import ghistabs.cpp.ClassBase
 import ghistabs.cpp.TestClass
 import ghistabs.cpp.at
+import ghistabs.cpp.virtualAt
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
@@ -61,5 +62,28 @@ class ClassSizesTest {
         val d = TestClass("D", listOf(s at 0, ClassBase(a, true, Access.PUBLIC, null)))
         val bounds = sizeBounds(listOf(d, a, s), mapOf(a to 0L), emptyMap(), ptrSize = 4)
         bounds.getValue(a) mustBe 4L..Long.MAX_VALUE
+    }
+
+    @Test
+    fun `a class reaches as far as its constructors store`() {
+        val bounds = sizeBounds(listOf(a), mapOf(a to 0L), emptyMap(), ptrSize = 4, stored = mapOf(a to 0x10L))
+        bounds.getValue(a) mustBe 0x10L..Long.MAX_VALUE
+    }
+
+    @Test
+    fun `a class reaches past its virtual bases`() {
+        // class V : virtual A, with A after V's vbptr and an int
+        val v = TestClass("V", listOf(ClassBase(a, true, Access.PUBLIC, null)), virtualBases = listOf(a virtualAt 8))
+        val bounds = sizeBounds(listOf(v, a), mapOf(a to 0L), emptyMap(), ptrSize = 4)
+        bounds.getValue(v) mustBe 12L..Long.MAX_VALUE
+    }
+
+    @Test
+    fun `a base with virtual bases is not bounded by the gap its non-virtual part fills`() {
+        // class D : V, S with S right after V's vbptr; V's own virtual base A lies past the gap
+        val v = TestClass("V", listOf(ClassBase(a, true, Access.PUBLIC, null)), virtualBases = listOf(a virtualAt 8))
+        val d = TestClass("D", listOf(v at 0, s at 4))
+        val bounds = sizeBounds(listOf(d, v, a, s), mapOf(a to 0L), emptyMap(), ptrSize = 4)
+        bounds.getValue(v) mustBe 12L..Long.MAX_VALUE
     }
 }
