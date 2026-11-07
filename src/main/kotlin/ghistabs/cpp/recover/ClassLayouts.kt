@@ -145,7 +145,7 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
         runs.forEachIndexed { i, run ->
             val start = run.first().first
             val end = run.last().let { (at, size) -> at + size }
-            val name = "${ns.name}_$DATA" + "_$i".takeIf { i > 0 }.orEmpty()
+            val name = "${ns.name}${ClassNaming.DATA}" + "_$i".takeIf { i > 0 }.orEmpty()
             val data = registry.getOrRegister<Structure>(ClassNaming.vftableCategory(ns).at(name)) {
                 StructureDataType(ClassNaming.vftableCategory(ns), name, end - start, dtm).apply {
                     description = "${ns.name}'s own fields, where its constructors store them"
@@ -224,10 +224,5 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
             .onSuccess(defined::addLaid)
             .onFailure { degradation("vftable-unlaid", "${ns.getName(true)}::$name", it.message, record.addressPoint) }
         return vftable
-    }
-
-    private companion object {
-        /** The suffix of the struct gathering a class's own fields, as `RecoverClassesFromRTTIScript` names it. */
-        const val DATA = "data"
     }
 }

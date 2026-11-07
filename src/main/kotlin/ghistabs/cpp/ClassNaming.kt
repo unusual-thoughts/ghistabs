@@ -39,6 +39,9 @@ object ClassNaming {
     // A split base's own fields, embedded in it as the `<Base>_fields_<from>_<until>` its deriving classes hold.
     const val FIELDS = "_fields"
 
+    // RecoveredClassHelper.CLASS_DATA_STRUCT_NAME: the struct gathering a class's own fields, `<Class>_data`.
+    const val DATA = "_data"
+
     fun vtableLabel(internal: Boolean, construction: Boolean = false) = prefix(internal, construction) + VTABLE
 
     /** A vftable's label: `vftable_for_<base>` given a [base], else `vftable` with its prefixes. */
