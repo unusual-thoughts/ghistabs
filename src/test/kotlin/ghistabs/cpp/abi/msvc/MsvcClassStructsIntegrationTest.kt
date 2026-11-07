@@ -76,6 +76,13 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         }
 
     @Test
+    fun `a function several vftables hold has one definition, for signature updates to reach them all`() =
+        withAnalyzed { program ->
+            // `Up` inherits `Core::f`, its second slot in both tables.
+            (program.secondSlot("Up_vftable_for_Core") === program.secondSlot("Core_vftable")) mustBe true
+        }
+
+    @Test
     fun `constructors the decompiler shows no this return for are told from destructors by their calls`() =
         withAnalyzed { program ->
             // clang's `-O0` callers leave the constructors' `this` return unread.
@@ -108,6 +115,8 @@ class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         }
         (method.getParameter(0).dataType as Pointer).dataType.pathName mustBe "/ClassDataTypes/Label/Label"
     }
+
+    private fun Program.secondSlot(table: String) = (classStruct(table).getComponent(1).dataType as Pointer).dataType
 
     private fun Program.classStruct(name: String) = dataTypeManager.allStructures.asSequence()
         .single {

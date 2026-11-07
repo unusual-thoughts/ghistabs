@@ -1,6 +1,7 @@
 package ghistabs.cpp.recover
 
 import ghidra.app.decompiler.DecompInterface
+import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Function
@@ -37,6 +38,13 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
     private val vfptrs = VfptrPlacement(registry, VfptrModel.SPLIT_BASE, sink)
     private val slots = VtableSweeper(registry, program, TaskMonitor.DUMMY, sink)
     private val virtualBases = VirtualBases(program, abi, sink)
+
+    /**
+     * Each slot target's definition, by the first table defining it: a base's, the bases going first, as
+     * `RecoverClassesFromRTTIScript` files an inherited slot's in the ancestor's folder, so that its
+     * `ApplyClassFunctionSignatureUpdatesScript` edits the one definition every table points at.
+     */
+    private val defined = mutableMapOf<Address, DataType>()
 
     /**
      * Lays [classes]' empty structs, a base before the classes deriving from it, each with the fields its
@@ -206,7 +214,7 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
         }
         if (vftable.numComponents == 0) {
             val used = mutableSetOf<String>()
-            record.slots(program).forEach { slots.addSweptSlot(vftable, category, it, used, abi) }
+            record.slots(program).forEach { slots.addSweptSlot(vftable, category, it, used, abi, defined) }
         }
         vftable.describeVxTable(ns.name, label?.name ?: ClassNaming.VFTABLE, record.vfptrOffset(program))
         runCatching { program.forceCreateData(record.addressPoint, vftable) }
