@@ -40,11 +40,11 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
     private val virtualBases = VirtualBases(program, abi, sink)
 
     /**
-     * Each slot target's definition, by the first table defining it: a base's, the bases going first, as
+     * The slot definitions of the tables laid, a base's first, the bases going first, as
      * `RecoverClassesFromRTTIScript` files an inherited slot's in the ancestor's folder, so that its
      * `ApplyClassFunctionSignatureUpdatesScript` edits the one definition every table points at.
      */
-    private val defined = mutableMapOf<Address, DataType>()
+    private val defined = SlotDefinitions()
 
     /**
      * Lays [classes]' empty structs, a base before the classes deriving from it, each with the fields its
@@ -195,8 +195,11 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
      * address point, else one made off its slots and laid there, named for the base it serves.
      */
     private fun vftableOf(cls: ClassDecl, ns: GhidraClass, record: VtableRecord, index: Int, count: Int): Structure? {
-        (program.listing.getDataAt(record.addressPoint)?.dataType as? Structure)
-            ?.takeIf { "_${ClassNaming.VFTABLE}" in it.name }?.let { return it }
+        val laid = program.listing.getDataAt(record.addressPoint)
+        (laid?.dataType as? Structure)?.takeIf { "_${ClassNaming.VFTABLE}" in it.name }?.let {
+            defined.addLaid(laid)
+            return it
+        }
         val label = program.symbolTable.getSymbols(record.addressPoint)
             .firstOrNull { it.parentNamespace == ns && ClassNaming.isClassVftableLabel(it.name) }
 
@@ -218,6 +221,7 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
         }
         vftable.describeVxTable(ns.name, label?.name ?: ClassNaming.VFTABLE, record.vfptrOffset(program))
         runCatching { program.forceCreateData(record.addressPoint, vftable) }
+            .onSuccess(defined::addLaid)
             .onFailure { degradation("vftable-unlaid", "${ns.getName(true)}::$name", it.message, record.addressPoint) }
         return vftable
     }

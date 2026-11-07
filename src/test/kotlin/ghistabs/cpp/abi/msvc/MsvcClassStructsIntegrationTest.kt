@@ -87,6 +87,8 @@ abstract class MsvcClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrati
         withAnalyzed { program ->
             // `Up` inherits `Core::f`, its second slot in both tables.
             (program.secondSlot("Up_vftable_for_Core") === program.secondSlot("Core_vftable")) mustBe true
+            program.classStruct("Up_vftable_for_Core").getComponent(1).fieldName mustBe
+                program.secondSlot("Core_vftable").name
         }
 
     @Test
