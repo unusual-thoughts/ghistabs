@@ -42,27 +42,18 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         builder.createEmptyFunction(name, at, 1, DataType.DEFAULT)
     }
 
-    private fun stores(vararg classes: ClassDecl, returnsThis: Boolean = false) =
-        VptrStores(classes.toSet(), returnsThis)
+    /** A function storing [classes]' vptrs, calling the functions named [before] and [after] around the stores. */
+    private fun stores(vararg classes: ClassDecl, before: Set<String> = emptySet(), after: Set<String> = emptySet()) =
+        VptrStores(classes.toSet(), before.mapTo(mutableSetOf(), ::fn), after.mapTo(mutableSetOf(), ::fn))
 
     private fun structors(
         storers: Map<String, VptrStores>,
         holders: Map<String, Set<ClassDecl>>,
         calls: Map<String, Set<String>> = emptyMap(),
-        constructorsReturnThis: Boolean = true,
     ) = StructorFinder.Reading(
         storers.mapKeys { fn(it.key) },
-        calls.entries.associate { (f, called) -> fn(f) to called.mapTo(mutableSetOf(), ::fn) },
-    ).roles(
-        holders.mapKeys {
-            fn(it.key)
-        },
-        convention(constructorsReturnThis),
-    ).mapKeys { it.key.name }
-
-    private fun convention(returnsThis: Boolean) = object : StructorConvention {
-        override val constructorsReturnThis = returnsThis
-    }
+        calls.entries.associate { (f, called) -> fn(f) to mapOf(0L to called.mapTo(mutableSetOf(), ::fn)) },
+    ).roles(holders.mapKeys { fn(it.key) }, object : StructorConvention {}).mapKeys { it.key.name }
 
     @Test
     fun `a function storing a base's vptr and then its own builds the derived class`() {
@@ -71,8 +62,8 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
-    fun `constructors return this, destructors don't, and the slot that calls one deletes`() {
-        val storers = mapOf("ctor" to stores(a, returnsThis = true), "dtor" to stores(a))
+    fun `the slot that calls a destructor and frees deletes, and a storer nothing sorts builds`() {
+        val storers = mapOf("ctor" to stores(a), "dtor" to stores(a))
         val found = structors(storers, mapOf("slot" to setOf(a, b)), mapOf("slot" to setOf("dtor", "free", FREE)))
         found mustBe mapOf(
             "ctor" to (a to CONSTRUCTOR),
@@ -84,8 +75,8 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun `a slot storing the vptr itself has the destructor inlined`() {
         val storers = mapOf(
-            "slot" to stores(a, b, returnsThis = true),
-            "ctor" to stores(a, b, returnsThis = true),
+            "slot" to stores(a, b),
+            "ctor" to stores(a, b),
         )
         structors(storers, mapOf("slot" to setOf(b)), mapOf("slot" to setOf(FREE))) mustBe mapOf(
             "slot" to (b to DELETING_DESTRUCTOR),
@@ -121,16 +112,16 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun `a slot calling a constructor, as a clone does, deletes nothing`() {
-        val storers = mapOf("ctor" to stores(a, returnsThis = true))
+        val storers = mapOf("ctor" to stores(a))
         structors(storers, mapOf("clone" to setOf(a)), mapOf("clone" to setOf("ctor")))["clone"].mustBeNull()
     }
 
     @Test
-    fun `without constructors returning this, what destructors call destroys and every other storer builds`() {
+    fun `what destructors call destroys and every other storer builds`() {
         // `dtor` calls the base's destructor; `ctor` the base's constructor
         val storers = mapOf("ctor" to stores(b), "dtor" to stores(b), "baseCtor" to stores(a), "baseDtor" to stores(a))
         val calls = mapOf("slot" to setOf("dtor", FREE), "dtor" to setOf("baseDtor"), "ctor" to setOf("baseCtor"))
-        structors(storers, mapOf("slot" to setOf(b)), calls, false) mustBe mapOf(
+        structors(storers, mapOf("slot" to setOf(b)), calls) mustBe mapOf(
             "slot" to (b to DELETING_DESTRUCTOR),
             "dtor" to (b to DESTRUCTOR),
             "baseDtor" to (a to DESTRUCTOR),
@@ -144,8 +135,50 @@ class StructorsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // `D1` stores the vptr and frees nothing; `D0` calls it and frees
         val storers = mapOf("d1" to stores(a), "ctor" to stores(a))
         val found =
-            structors(storers, mapOf("d1" to setOf(a), "d0" to setOf(a)), mapOf("d0" to setOf("d1", FREE)), false)
+            structors(storers, mapOf("d1" to setOf(a), "d0" to setOf(a)), mapOf("d0" to setOf("d1", FREE)))
         found mustBe mapOf("d1" to (a to DESTRUCTOR), "d0" to (a to DELETING_DESTRUCTOR), "ctor" to (a to CONSTRUCTOR))
+    }
+
+    @Test
+    fun `a storer calling its base's before its stores builds, and one calling it after destroys`() {
+        // No slot calls either: B's destructor isn't virtual
+        val storers = mapOf(
+            "ctor" to stores(b, before = setOf("baseCtor")),
+            "dtor" to stores(b, after = setOf("baseDtor")),
+            "baseCtor" to stores(a),
+            "baseDtor" to stores(a),
+        )
+        structors(storers, emptyMap()) mustBe mapOf(
+            "ctor" to (b to CONSTRUCTOR),
+            "baseCtor" to (a to CONSTRUCTOR),
+            "dtor" to (b to DESTRUCTOR),
+            "baseDtor" to (a to DESTRUCTOR),
+        )
+    }
+
+    @Test
+    fun `a constructor that destroys its built bases where one throws still builds`() {
+        // Itanium's landing pads, after the stores, destroy the bases built before them
+        val storers = mapOf(
+            "ctor" to stores(b, before = setOf("baseCtor"), after = setOf("baseDtor")),
+            "baseCtor" to stores(a),
+            "baseDtor" to stores(a),
+        )
+        structors(storers, mapOf("slot" to setOf(a)), mapOf("slot" to setOf("baseDtor", FREE)))["ctor"] mustBe
+            (b to CONSTRUCTOR)
+    }
+
+    @Test
+    fun `a storer calling only known destructors destroys`() {
+        // X's destructor destroys a B member, whose destructor B's deleting destructor calls
+        val storers = mapOf("dtor" to stores(b), "xDtor" to stores(x), "xCtor" to stores(x))
+        val calls = mapOf("slot" to setOf("dtor", FREE), "xDtor" to setOf("dtor"))
+        structors(storers, mapOf("slot" to setOf(b)), calls) mustBe mapOf(
+            "slot" to (b to DELETING_DESTRUCTOR),
+            "dtor" to (b to DESTRUCTOR),
+            "xDtor" to (x to DESTRUCTOR),
+            "xCtor" to (x to CONSTRUCTOR),
+        )
     }
 
     private companion object {
