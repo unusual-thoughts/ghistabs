@@ -14,14 +14,18 @@ import ghistabs.cpp.*
 import ghistabs.cpp.abi.VtableRecord
 import ghistabs.cpp.recover.AbiClasses
 import ghistabs.cpp.recover.ClassRecovery
+import ghistabs.cpp.recover.VirtualBases
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.pointerAt
 import ghistabs.toClass
 
+/** Where a virtual base's offset is read: in the vbtable the vbptr at [pdisp] points at, at byte [vdisp]. */
+data class VbtableSlot(val pdisp: Long, val vdisp: Long)
+
 /**
  * An entry of a Base Class Array: the class's type [descriptor], how many entries after it are its own bases
  * ([contained]), and how the most derived class holds it. [offset] is `mdisp`, which for a virtual base counts
- * from where its vbtable puts it. MSVC only says whether a base is public, so the rest read as private.
+ * from where its [vbtableSlot] puts it. MSVC only says whether a base is public, so the rest read as private.
  */
 data class BaseEntry(
     val descriptor: Address,
@@ -29,18 +33,32 @@ data class BaseEntry(
     override val isVirtual: Boolean,
     override val access: Access,
     override val offset: Long = 0,
+    val vbtableSlot: VbtableSlot? = null,
 ) : BaseDecl {
-    /** An entry by its Base Class Descriptor's `attributes`. */
-    constructor(descriptor: Address, contained: Int, attributes: Int, offset: Long = 0) : this(
+    /** An entry by its Base Class Descriptor's `attributes`; [slot] counts for a virtual base alone. */
+    constructor(
+        descriptor: Address,
+        contained: Int,
+        attributes: Int,
+        mdisp: Long = 0,
+        slot: VbtableSlot? = null,
+    ) : this(
         descriptor,
         contained,
         isVirtual = attributes and Msvc.BCD_VBOFCONTOBJ != 0,
         access = if (attributes and Msvc.BCD_NONPUBLIC == 0) Access.PUBLIC else Access.PRIVATE,
-        offset = offset,
+        offset = mdisp,
+        vbtableSlot = slot.takeIf { attributes and Msvc.BCD_VBOFCONTOBJ != 0 },
     )
 
     /** The entry a Base Class Descriptor makes. */
-    constructor(bcd: Rtti1Model) : this(bcd.rtti0Address, bcd.numBases, bcd.attributes, bcd.mDisp.toLong())
+    constructor(bcd: Rtti1Model) : this(
+        bcd.rtti0Address,
+        bcd.numBases,
+        bcd.attributes,
+        bcd.mDisp.toLong(),
+        VbtableSlot(bcd.pDisp.toLong(), bcd.vDisp.toLong()),
+    )
 }
 
 /**
@@ -83,6 +101,26 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
 
         // Filled by [readVftables].
         override val vftables = mutableListOf<VtableRecord>()
+
+        /** Each vbtable, by where its vbptr sits in the class; filled by [readVbtables]. */
+        val vbtables = mutableMapOf<Long, Address>()
+
+        /** Where the Base Class Array's entries for a virtual base say vbptrs sit. */
+        val vbptrs get() = array.drop(1).filter {
+            it.isVirtual
+        }.mapNotNullTo(mutableSetOf()) { it.vbtableSlot?.pdisp }
+
+        override val virtualBases get() = array.drop(1).filter { it.isVirtual }.groupBy { it.descriptor }
+            .map { (descriptor, entries) ->
+                val at = entries.firstNotNullOfOrNull { e -> e.vbtableSlot?.let { vbaseOffset(it, e.offset) } }
+                ClassBase(classAt(descriptor), isVirtual = true, entries.first().access, at)
+            }
+    }
+
+    /** Where a virtual base [mdisp] past what [slot] reads sits in the class, once its vbtable is known. */
+    private fun RttiClass.vbaseOffset(slot: VbtableSlot, mdisp: Long): Long? {
+        val vbtable = vbtables[slot.pdisp] ?: return null
+        return runCatching { slot.pdisp + program.memory.getInt(vbtable.add(slot.vdisp)) + mdisp }.getOrNull()
     }
 
     // `mdisp` is no offset in the class for a virtual base.
@@ -98,8 +136,18 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val hierarchies = readHierarchies().toMap()
         classes += hierarchies
         val holders = readVftables()
+        readVbtables(hierarchies.values, monitor)
         val read = AbiClasses(classes.values, hierarchies.values, holders)
-        return ClassRecovery(program, Msvc, this).recover(read, monitor)
+        val result = ClassRecovery(program, Msvc, this).recover(read, monitor)
+        return result.copy(virtualBases = VirtualBases(program, Msvc, this).placeAll(hierarchies.values))
+    }
+
+    private fun readVbtables(hierarchies: Collection<RttiClass>, monitor: TaskMonitor) {
+        val vbptrs: Map<ClassDecl, Set<Long>> = hierarchies.associateWith { it.vbptrs }.filterValues { it.isNotEmpty() }
+        if (vbptrs.isEmpty()) return
+        for ((cls, vbtables) in Vbtables(program, classes.values, this).read(vbptrs, monitor)) {
+            (cls as RttiClass).vbtables += vbtables
+        }
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }
