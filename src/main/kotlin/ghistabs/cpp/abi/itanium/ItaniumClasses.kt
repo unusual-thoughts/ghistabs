@@ -14,6 +14,7 @@ import ghistabs.cpp.abi.VtableRecord
 import ghistabs.cpp.recover.AbiClasses
 import ghistabs.cpp.recover.ClassRecovery
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.toClass
 
 /**
  * Classes off the Itanium RTTI, for [ClassRecovery]: every class namespace holding a `typeinfo` label, its
@@ -62,11 +63,15 @@ class ItaniumClasses(private val program: Program, sink: DiagnosticSink) : Diagn
         return ClassRecovery(program, Itanium, this).recover(read, monitor)
     }
 
+    /**
+     * Each class typeinfo's class, its namespace made a class one: with no method named, a class only built
+     * as a base, as `Up` in `Both` is, has nothing else to make it one.
+     */
     private fun readTypeinfos() = symbols.getSymbols(ClassNaming.TYPEINFO).symbols()
+        .filter { sym -> !sym.parentNamespace.isGlobal && reader.basesOf(sym.address) != null }
         .mapNotNull { sym ->
-            (sym.parentNamespace as? GhidraClass)?.let { sym.address to TypeinfoClass(it, it.name, sym.address) }
+            sym.parentNamespace.toClass()?.let { sym.address to TypeinfoClass(it, it.name, sym.address) }
         }
-        .filter { (at, _) -> reader.basesOf(at) != null }
         .toMap()
 
     /** Each function a vtable slot holds, and the classes whose tables hold it. */
