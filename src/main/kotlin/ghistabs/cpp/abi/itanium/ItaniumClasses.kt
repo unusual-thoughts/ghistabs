@@ -2,8 +2,8 @@ package ghistabs.cpp.abi.itanium
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolIterator
 import ghidra.util.task.TaskMonitor
@@ -17,65 +17,101 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.toClass
 
 /**
- * Classes off the Itanium RTTI, for [ClassRecovery]: every class namespace holding a `typeinfo` label, its
- * bases off that typeinfo ([Typeinfo.Reader.basesOf]), and its vtables off its `vtable` and `internal_vtable`
- * labels, as [GccVftableAnalyzer][ghistabs.entrypoints.GccVftableAnalyzer] lays them. Classes go by their
- * typeinfo's address.
+ * A class the Itanium RTTI describes: its [bases] off its typeinfo, its [vftables] off the `vtable` and
+ * `internal_vtable` labels in its namespace, and its [virtualBases] where its primary vtable's vbase offsets put
+ * them.
  */
-class ItaniumClasses(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
+class ItaniumClass(
+    override val ns: Namespace?,
+    override val name: String,
+    override val vftables: List<VtableRecord>,
+    override val bases: List<ClassBase>,
+    override val virtualBases: List<ClassBase>,
+) : ClassDecl {
+    override val ancestors by lazy { super.ancestors }
+}
+
+/**
+ * The classes off the Itanium RTTI, each by its typeinfo's address, with its vtables as
+ * [GccVftableAnalyzer][ghistabs.entrypoints.GccVftableAnalyzer] labels them. A base whose typeinfo has no label
+ * in a namespace, as a shared library's, is known by its name alone.
+ */
+class ItaniumClasses(private val program: Program, private val sink: DiagnosticSink) {
     private val symbols = program.symbolTable
     private val reader = Typeinfo.Reader(program)
+    private val classes = mutableMapOf<Address, ItaniumClass>()
 
-    // Every class seen, by typeinfo: those labelled in a class namespace, and any base whose typeinfo isn't,
-    // as one from a shared library, which is known by nothing more than its name.
-    private val classes = mutableMapOf<Address, TypeinfoClass>()
-
-    /** A class the RTTI describes: its namespace, if it has one, and its typeinfo object at [typeinfo]. */
-    private inner class TypeinfoClass(
-        override val ns: GhidraClass?,
-        override val name: String,
-        private val typeinfo: Address?,
-    ) : ClassDecl {
-        override val bases by lazy {
-            typeinfo?.let(reader::basesOf).orEmpty().map { b ->
-                // A virtual base's offset is into the vtable, not the class.
-                ClassBase(classAt(b.typeinfo, b.className), b.isVirtual, b.access, b.offset.takeUnless { b.isVirtual })
-            }
-        }
-        override val ancestors by lazy { super.ancestors }
-
-        override val vftables: List<VtableRecord> by lazy {
-            ns?.let(symbols::getSymbols)?.symbols().orEmpty().filter { it.name in VTABLE_LABELS }
-                .map { Itanium.recordAt(program, it.address) }.toList()
-        }
-    }
-
-    private fun classAt(typeinfo: Address, name: String) = classes.getOrPut(typeinfo) {
-        TypeinfoClass(null, name, null)
-    }
-
+    /** The class pass over [labelled]. */
     fun recover(monitor: TaskMonitor = TaskMonitor.DUMMY): ClassRecovery.Result {
-        val labelled = readTypeinfos()
-        classes += labelled
-        // Reading the bases adds the classes known only by name, before anything walks [classes].
-        labelled.values.forEach { it.bases }
-        val read = AbiClasses(classes.values, labelled.values, readVtables(labelled.values))
-        return ClassRecovery(program, Itanium, this).recover(read, monitor)
+        val labelled = labelled()
+        val read = AbiClasses(classes.values.toList(), labelled, readVtables(labelled))
+        return ClassRecovery(program, Itanium, sink).recover(read, monitor)
     }
 
     /**
-     * Each class typeinfo's class, its namespace made a class one: with no method named, a class only built
-     * as a base, as `Up` in `Both` is, has nothing else to make it one.
+     * The class of each class typeinfo labelled in a namespace, made a class one: with no method named, a
+     * class only built as a base, as `Up` in `Both` is, has nothing else to make it one.
      */
-    private fun readTypeinfos() = symbols.getSymbols(ClassNaming.TYPEINFO).symbols()
-        .filter { sym -> !sym.parentNamespace.isGlobal && reader.basesOf(sym.address) != null }
-        .mapNotNull { sym ->
-            sym.parentNamespace.toClass()?.let { sym.address to TypeinfoClass(it, it.name, sym.address) }
-        }
-        .toMap()
+    fun labelled(): List<ItaniumClass> {
+        val namespaces = typeinfoLabels()
+            .filter { sym -> !sym.parentNamespace.isGlobal && reader.basesOf(sym.address) != null }
+            .mapNotNull { sym -> sym.parentNamespace.toClass()?.let { sym.address to it } }
+            .toMap()
+        return namespaces.map { (typeinfo, ns) -> classAt(typeinfo, ns.name, ns, namespaces) }
+    }
+
+    /**
+     * The class of each primary `vtable` label whose vtable names its typeinfo, in the namespace the label is
+     * in: unlike [labelled], one the demangler left outside a class namespace too, as the stabs import's are.
+     */
+    fun withVtables(): List<ItaniumClass> {
+        val labels = typeinfoLabels().mapNotNull { sym -> sym.typeinfoClass?.let { sym to it } }.toList()
+        val namespaces = labels.associate { (sym, _) -> sym.address to sym.parentNamespace }
+        val names = labels.associate { (sym, name) -> sym.address to name }
+        return symbols.getSymbols(ClassNaming.VTABLE).symbols()
+            .distinctBy { it.address }
+            .mapNotNull { sym ->
+                val name = sym.vtableClass ?: return@mapNotNull null
+                val record = runCatching { Itanium.recordAt(program, sym.address) }.getOrNull()
+                // A vtable whose rtti word names another class's typeinfo is no vtable of this one.
+                val typeinfo = record?.rttiOf(program)?.takeIf { (names[it] ?: name) == name }
+                typeinfo?.let { classAt(it, name, sym.parentNamespace, namespaces) }
+            }
+            .toList()
+    }
+
+    private fun typeinfoLabels() = symbols.getSymbols(ClassNaming.TYPEINFO).symbols()
+
+    /** The class [typeinfo] describes, [name] in [ns], each of its bases in its typeinfo's [namespaces]. */
+    private fun classAt(
+        typeinfo: Address,
+        name: String,
+        ns: Namespace?,
+        namespaces: Map<Address, Namespace>,
+    ): ItaniumClass = classes.getOrPut(typeinfo) {
+        fun classOf(b: Typeinfo.Reader.Base) = classAt(b.typeinfo, b.className, namespaces[b.typeinfo], namespaces)
+        val primary = ns?.let { vtableLabels(it, setOf(ClassNaming.VTABLE)).firstOrNull() }
+        ItaniumClass(
+            ns,
+            name,
+            vftables = ns?.let { vtableLabels(it, VTABLE_LABELS).toList() }.orEmpty(),
+            // A virtual base's offset is into the vtable, not the class.
+            bases = reader.basesOf(typeinfo).orEmpty().map { b ->
+                ClassBase(classOf(b), b.isVirtual, b.access, b.offset.takeUnless { b.isVirtual })
+            },
+            virtualBases = primary?.let { record ->
+                reader.virtualBasesOf(typeinfo).map { b ->
+                    ClassBase(classOf(b), isVirtual = true, b.access, record.vbaseOffset(program, b))
+                }
+            }.orEmpty(),
+        )
+    }
+
+    private fun vtableLabels(ns: Namespace, names: Set<String>) = symbols.getSymbols(ns).symbols()
+        .filter { it.name in names }.map { Itanium.recordAt(program, it.address) }
 
     /** Each function a vtable slot holds, and the classes whose tables hold it. */
-    private fun readVtables(classes: Collection<TypeinfoClass>) = buildMap {
+    private fun readVtables(classes: Collection<ItaniumClass>) = buildMap {
         for (cls in classes) {
             for (record in cls.vftables) {
                 for (slot in record.slots(program)) {

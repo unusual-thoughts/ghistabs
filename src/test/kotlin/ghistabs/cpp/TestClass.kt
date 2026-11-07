@@ -8,6 +8,7 @@ class TestClass(
     override val name: String,
     override val bases: List<ClassBase>,
     override val vftables: List<VtableRecord> = emptyList(),
+    override val virtualBases: List<ClassBase> = emptyList(),
 ) : ClassDecl {
     /** A class deriving publicly from [bases], at offsets not known. */
     constructor(name: String, vararg bases: TestClass, vftables: List<VtableRecord> = emptyList()) :
@@ -20,3 +21,6 @@ class TestClass(
 
 /** A public non-virtual base at [offset]. */
 infix fun TestClass.at(offset: Long) = ClassBase(this, false, Access.PUBLIC, offset)
+
+/** A public virtual base at [offset] in the complete object. */
+infix fun TestClass.virtualAt(offset: Long) = ClassBase(this, true, Access.PUBLIC, offset)
