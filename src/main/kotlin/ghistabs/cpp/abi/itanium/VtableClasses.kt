@@ -3,7 +3,6 @@ package ghistabs.cpp.abi.itanium
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
-import ghistabs.cpp.ClassBase
 import ghistabs.cpp.ClassDecl
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.VtableRecord
@@ -19,34 +18,24 @@ class VtableClasses(private val program: Program) {
     private val reader = Rtti.Reader(program)
 
     // Each base seen, by typeinfo.
-    private val bases = mutableMapOf<Address, TypeinfoClass>()
+    private val bases = mutableMapOf<Address, VtableClass>()
 
-    /** A class by its [typeinfo], with the [vtable] its labels name where it has one. */
-    private inner class TypeinfoClass(
+    /** A class by its typeinfo, with the [vtable] its labels name where it has one. */
+    private inner class VtableClass(
         override val ns: Namespace?,
         override val name: String,
-        private val typeinfo: Address,
+        typeinfo: Address,
         private val vtable: VtableRecord? = null,
-    ) : ClassDecl {
-        override val bases by lazy {
-            reader.basesOf(typeinfo).orEmpty().map { b ->
-                // A virtual base's offset is into the vtable, not the class.
-                ClassBase(classAt(b), b.isVirtual, b.access, b.offset.takeUnless { b.isVirtual })
-            }
-        }
+    ) : TypeinfoClass(program, reader, typeinfo) {
         override val vftables get() = listOfNotNull(vtable)
 
-        override val virtualBases by lazy {
-            vtable?.let { record ->
-                reader.virtualBasesOf(typeinfo).map { b ->
-                    ClassBase(classAt(b), isVirtual = true, b.access, record.vbaseOffset(program, b))
-                }
-            }.orEmpty()
-        }
+        override val primary get() = vtable
+
+        override fun classOf(base: Rtti.Reader.Base) = classAt(base)
     }
 
     private fun classAt(base: Rtti.Reader.Base) = bases.getOrPut(base.typeinfo) {
-        TypeinfoClass(namespaceOfTypeinfo(base.typeinfo), base.className, base.typeinfo)
+        VtableClass(namespaceOfTypeinfo(base.typeinfo), base.className, base.typeinfo)
     }
 
     /** Every class a primary `vtable` label is in, whose vtable names its typeinfo. */
@@ -55,7 +44,7 @@ class VtableClasses(private val program: Program) {
         .mapNotNull { sym ->
             val name = sym.vtableClass ?: return@mapNotNull null
             val record = runCatching { Itanium.recordAt(program, sym.address) }.getOrNull() ?: return@mapNotNull null
-            record.rttiOf(program)?.let { TypeinfoClass(sym.parentNamespace, name, it, record) }
+            record.rttiOf(program)?.let { VtableClass(sym.parentNamespace, name, it, record) }
         }
         .toList()
 

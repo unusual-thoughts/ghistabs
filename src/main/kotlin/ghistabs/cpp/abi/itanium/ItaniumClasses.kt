@@ -7,7 +7,6 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolIterator
 import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.ClassBase
 import ghistabs.cpp.ClassDecl
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.VtableRecord
@@ -27,30 +26,25 @@ class ItaniumClasses(private val program: Program, sink: DiagnosticSink) : Diagn
 
     // Every class seen, by typeinfo: those labelled in a class namespace, and any base whose typeinfo isn't,
     // as one from a shared library, which is known by nothing more than its name.
-    private val classes = mutableMapOf<Address, TypeinfoClass>()
+    private val classes = mutableMapOf<Address, LabelledClass>()
 
     /** A class the RTTI describes: its namespace, if it has one, and its typeinfo object at [typeinfo]. */
-    private inner class TypeinfoClass(
-        override val ns: GhidraClass?,
-        override val name: String,
-        private val typeinfo: Address?,
-    ) : ClassDecl {
-        override val bases by lazy {
-            typeinfo?.let(reader::basesOf).orEmpty().map { b ->
-                // A virtual base's offset is into the vtable, not the class.
-                ClassBase(classAt(b.typeinfo, b.className), b.isVirtual, b.access, b.offset.takeUnless { b.isVirtual })
-            }
-        }
+    private inner class LabelledClass(override val ns: GhidraClass?, override val name: String, typeinfo: Address?) :
+        TypeinfoClass(program, reader, typeinfo) {
         override val ancestors by lazy { super.ancestors }
 
-        override val vftables: List<VtableRecord> by lazy {
-            ns?.let(symbols::getSymbols)?.symbols().orEmpty().filter { it.name in VTABLE_LABELS }
-                .map { Itanium.recordAt(program, it.address) }.toList()
-        }
+        override val vftables: List<VtableRecord> by lazy { vtableLabels(VTABLE_LABELS).toList() }
+
+        override val primary by lazy { vtableLabels(setOf(ClassNaming.VTABLE)).firstOrNull() }
+
+        override fun classOf(base: Rtti.Reader.Base) = classAt(base.typeinfo, base.className)
+
+        private fun vtableLabels(names: Set<String>) = ns?.let(symbols::getSymbols)?.symbols().orEmpty()
+            .filter { it.name in names }.map { Itanium.recordAt(program, it.address) }
     }
 
     private fun classAt(typeinfo: Address, name: String) = classes.getOrPut(typeinfo) {
-        TypeinfoClass(null, name, null)
+        LabelledClass(null, name, null)
     }
 
     fun recover(monitor: TaskMonitor = TaskMonitor.DUMMY): ClassRecovery.Result {
@@ -64,13 +58,13 @@ class ItaniumClasses(private val program: Program, sink: DiagnosticSink) : Diagn
 
     private fun readTypeinfos() = symbols.getSymbols(ClassNaming.TYPEINFO).symbols()
         .mapNotNull { sym ->
-            (sym.parentNamespace as? GhidraClass)?.let { sym.address to TypeinfoClass(it, it.name, sym.address) }
+            (sym.parentNamespace as? GhidraClass)?.let { sym.address to LabelledClass(it, it.name, sym.address) }
         }
         .filter { (at, _) -> reader.basesOf(at) != null }
         .toMap()
 
     /** Each function a vtable slot holds, and the classes whose tables hold it. */
-    private fun readVtables(classes: Collection<TypeinfoClass>) = buildMap {
+    private fun readVtables(classes: Collection<LabelledClass>) = buildMap {
         for (cls in classes) {
             for (record in cls.vftables) {
                 for (slot in record.slots(program)) {
