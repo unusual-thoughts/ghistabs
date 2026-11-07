@@ -132,6 +132,17 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         }
 
         fun Program.areClassesRecorded() = getOptions(CATEGORY).contains(CLASSES)
+
+        /** Bases set by hand in the Class Hierarchy window, kept apart so a re-import doesn't drop them. */
+        const val EDITS = "Edited classes"
+
+        /** Each class whose bases were set by hand, by namespace id; empty when none was. */
+        fun Program.readClassEdits(): Map<Long, Entry> =
+            (getOptions(CATEGORY).getCustomOption(EDITS, null) as? ClassHierarchyRecords)?.classes.orEmpty()
+
+        /** Sets class [id]'s bases by hand, over what the record or its typeinfo says. */
+        fun Program.writeClassEdit(id: Long, entry: Entry) =
+            getOptions(CATEGORY).setCustomOption(EDITS, ClassHierarchyRecords(readClassEdits() + (id to entry)))
     }
 }
 

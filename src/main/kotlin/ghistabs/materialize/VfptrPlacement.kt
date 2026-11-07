@@ -237,7 +237,7 @@ internal class VfptrPlacement(private val registry: DtmRegistry, private val mod
      */
     private fun IntRange.baseFieldsRun(baseDt: Structure): Structure? {
         if (isEmpty()) return null
-        val name = "${baseDt.name}_fields_${first}_${last + 1}"
+        val name = "${baseDt.name}${ClassNaming.FIELDS}_${first}_${last + 1}"
         return registry.getOrRegister<Structure>(baseDt.categoryPath.at(name)) {
             StructureDataType(baseDt.categoryPath, name, length, dtm).apply {
                 description = "${baseDt.name} as a base subobject (+$first..${last + 1}): its fields " +

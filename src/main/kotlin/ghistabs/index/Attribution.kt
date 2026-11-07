@@ -8,6 +8,7 @@ import ghistabs.harvest.*
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
+import ghistabs.toCategoryPath
 
 /**
  * Stdlib path marker. Requires `/usr|lib|include/` (plus one optional segment) before a stdlib
@@ -153,8 +154,7 @@ fun Type.demangledClassPath(): List<String>? {
 fun Type.enclosingScope(): List<String>? = demangledClassPath()?.dropLast(1)
 
 /** A root-first scope path (from [enclosingScope]) as a DTM category; the empty scope is ROOT. */
-fun scopeCategory(scope: List<String>): CategoryPath =
-    scope.fold(CategoryPath.ROOT) { acc, seg -> CategoryPath(acc, seg) }
+fun scopeCategory(scope: List<String>): CategoryPath = scope.toCategoryPath()
 
 /**
  * Longest common path prefix across CUSource filenames in [sources]. Used to strip project

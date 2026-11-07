@@ -239,7 +239,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         val dtm = ctx.program.dataTypeManager
         for ((key, members) in enums) {
             val (ns, size) = key
-            val category = ns.fold(CategoryPath("/stabs/constants")) { path, seg -> CategoryPath(path, seg) }
+            val category = ns.toCategoryPath(CategoryPath("/stabs/constants"))
             val enum = EnumDataType(category, "size_${size}b", size, dtm)
             members.forEach { (n, v) -> enum.add(n, v) }
             dtm.addDataType(enum, DataTypeConflictHandler.REPLACE_HANDLER)

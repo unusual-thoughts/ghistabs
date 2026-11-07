@@ -210,6 +210,151 @@
       both modes, with the same render options exposed as flags. See the project README.</P>
     </BLOCKQUOTE>
 
+    <H2><A name="Stabs_Class_Hierarchy"></A>Window &rarr; Class Hierarchy</H2>
+
+    <P>A read-only tree of the program's C++ classes, after the <I>ClassTypeInfo Tree</I> of
+    astrelsky's Ghidra-Cpp-Class-Analyzer.</P>
+
+    <CENTER>
+      <IMG src="images/ClassHierarchy.png" border="0" alt="Class Hierarchy window">
+    </CENTER>
+
+    <H3>What it shows</H3>
+
+    <P>The root is the program. Under it each class sits in its namespace, and expands into, in
+    order:</P>
+
+    <UL>
+      <LI>its direct bases, spelled as the base clause would (<CODE>virtual Base</CODE>,
+      <CODE>private Impl</CODE>), each expanding into its own bases;</LI>
+
+      <LI>its vtables (a table icon): the <CODE>vtable</CODE> record, its <CODE>vftable</CODE>,
+      the <CODE>internal_vtable</CODE>/<CODE>internal_vftable</CODE> of each secondary, the
+      <CODE>VTT</CODE>. A class with more than one vftable has each named for the base it serves,
+      <CODE>vftable_for_Left</CODE>, as Ghidra's RTTI scripts name them;</LI>
+
+      <LI>its other ABI objects (an information icon): <CODE>typeinfo</CODE> and
+      <CODE>typeinfo-name</CODE>;</LI>
+
+      <LI>its functions and labels, by name. An overloaded function is spelled with its parameter
+      types (<CODE>Circle(double)</CODE>). A constructor or destructor gcc emitted once per variant
+      is listed per variant, the variant in brackets (<CODE>~Circle() [deleting]</CODE>,
+      <CODE>[complete]</CODE>, <CODE>[base]</CODE>), several when gcc aliased them to one body. A
+      thunk has the thunk icon;</LI>
+
+      <LI>its nested classes.</LI>
+    </UL>
+
+    <P>A class's members are listed where the class is filed in its namespace, not again under
+    every class that derives from it.</P>
+
+    <P>The icon's colour gives a class's kind, as upstream: red for an abstract class, blue for a
+    virtual base, purple for both, yellow for a nested class, and grey for a class known only from its
+    typeinfo or vtable (when it is none of the others). A member's icon and text are coloured by what is
+    known of it: magenta for a plain member, blue for a virtual one, green for a static one,
+    darker when private and paler when protected, with a <CODE>c</CODE> or <CODE>v</CODE> badge for
+    a <CODE>const</CODE> or <CODE>volatile</CODE> member function. Grey means nothing records its
+    virtuality. Tooltips spell it out: for a class, its full name, where it came from, its
+    kind and its vftable or typeinfo address, and its struct's shorter name when typedef shortening
+    renamed it; for a member, its signature, attributes and address.</P>
+
+    <P>Inverted, the tree runs the other way: the basal classes (no base the program has a class
+    for) sit at the root, each expanding into the classes derived from it, and every class lists
+    its members. A class with several bases shows under each of them, and carries its clause's
+    virtuality and access after its name (<CODE>Left (virtual)</CODE>).</P>
+
+    <P>A class with nothing to show (no member, vtable, typeinfo, base or derived class) is hidden
+    by default: g++ makes a class of every struct a C++ file sees, C headers' included, and of the
+    SGI STL's tag types (<CODE>tm</CODE>, <CODE>__type_traits&lt;bool&gt;</CODE>), and emits none of
+    their implicit members. The status line counts the classes by source (stabs, typeinfo,
+    vtables) and the hidden empty ones.</P>
+
+    <H3>Where it comes from</H3>
+
+    <UL>
+      <LI><B>Classes and bases from the stabs.</B> Exactly as gcc stated them, virtuality and
+      access included, gcc 2.x too. The import records them in the program, with each class's
+      struct, as the <CODE>Classes</CODE> option of the program's <CODE>Stabs</CODE> options. A program imported before
+      this window existed shows its stabs classes only after
+      <A href="#Stabs_Reimport">Re-import</A>; the status line says so.</LI>
+
+      <LI><B>Classes from typeinfo and vtables.</B> A class with a vtable or typeinfo and no stabs
+      (libstdc++ and libsupc++ classes, or a binary with no stabs at all) takes its bases from its
+      Itanium typeinfo where the binary has one, and is a root otherwise. A base the program built
+      no class for, such as a plain struct, is a leaf.</LI>
+
+      <LI><B>Other class namespaces.</B> A class namespace with no stabs record, vtable or
+      typeinfo (one the demangler or Ghidra's DWARF import made) is listed too, as a root, with its
+      symbols as members. Most have nothing else to show, and hide with the empty classes.</LI>
+
+      <LI><B>Members</B> are the class namespace's symbols. Their access, virtuality, static-ness
+      and cv-qualifiers come from the stabs' method lists (recorded in the
+      <CODE>Stabs Member Attributes</CODE> property map); with no stabs, virtuality is read off the
+      vtable's slots and <CODE>const</CODE>/<CODE>volatile</CODE> off the mangled name. Constructor
+      and destructor variants come from the Itanium mangled names (<CODE>C1</CODE>,
+      <CODE>C2</CODE>, <CODE>D0</CODE>&hellip;).</LI>
+
+      <LI><B>Abstract</B> means one of the class's vtable slots holds
+      <CODE>__cxa_pure_virtual</CODE> (gcc 2.x: <CODE>__pure_virtual</CODE>).</LI>
+    </UL>
+
+    <H3>Using it</H3>
+
+    <P>The toolbar buttons, left to right: <B>Refresh</B> rebuilds the tree from the program (it
+    also rebuilds itself as the program changes); <B>Show Class Members</B> (the function icon)
+    toggles the members, leaving only the classes; <B>Show Empty Classes</B> (the class icon)
+    shows the hidden empty classes; <B>Expand All Classes</B> expands every node and keeps the tree
+    expanded through rebuilds until it is turned off; <B>Show Derived Classes</B> inverts the tree,
+    its arrow pointing up while each class expands into its bases and down once inverted;
+    <B>Navigate on Incoming</B>, as in the Symbol Tree, selects the node for each location the tool
+    moves to: the member there or the function the location is in, under the class that lists it,
+    else the class whose vtable or typeinfo is there; <B>Navigate on Outgoing</B>, on by default as
+    in the Symbol Tree, goes to each node selected. The filter field below the tree narrows it
+    by name.</P>
+
+    <P>Double-click a member (or press Enter) to go to it, and a class to go to its vtable, else its
+    typeinfo. A class's popup menu offers <B>Rename Class</B>, <B>Edit class struct</B> and
+    <B>Edit vtable struct</B>. <B>Rename Class</B> renames the class's namespace and what is named
+    after it: its constructors and destructors, its struct, self-base struct, split-base field runs
+    and data type category, its vftable structs, and in each derived class the <CODE>vftable_for_</CODE> labels and structs and the
+    <CODE>_base_</CODE> and <CODE>_vbase_</CODE> fields; anything that can't take the new name (one
+    already taken) keeps its old one, and a warning lists it. Classes only imported from a library
+    have no rename.
+    A function's offers <B>Go to Overridden</B>, which goes to the base class's virtual function it
+    overrides (greyed out when it overrides none), and every member's the Symbol Tree's
+    <B>Rename</B>, <B>Delete</B>, <B>Show References to</B>,
+    <B>Set Primary</B> and <B>Set Pinned</B>; the tool's own symbol actions, such as <B>Edit
+    Function</B>, act on the selected members and classes too.</P>
+
+    <P>Drag a class onto another to make it that class's child in the tree: with the tree running
+    up to the bases, one of its bases; with <B>Show Derived Classes</B> on, a class derived from it.
+    Dragging moves the class from under the node it was dragged from; hold Ctrl to copy, which
+    leaves it there too. Dropped on the root or a namespace, it only leaves the class it was under.
+    No drop may make a class derive from itself: to move a base under a class that derives from it,
+    drop it on the root or a common base first. Adding a base asks whether it is virtual, its
+    access, and its offset in the class's struct; given an offset, the base is placed there (its
+    self-base when it has one), the struct growing to hold it, after confirming any fields it
+    overwrites. Bases set this way are the program's own, kept apart from the stabs import's, so
+    a re-import keeps them; the status line counts those classes as edited by hand. Changing the
+    bases the stabs or the RTTI give asks first.</P>
+
+    <P>Drag a namespace, or a class from where it is filed under its namespace, onto another
+    namespace or the root to move it there; a namespace's popup menu offers <B>Rename
+    Namespace</B>. Moving or renaming a namespace (a class's included, by <B>Rename Class</B>)
+    takes along what is filed by its path: its vftables' <CODE>/ClassDataTypes/</CODE> category,
+    DWARF's category, each class's own category beside its struct, and the struct itself where
+    Ghidra looks for it, in a category ending with the parent namespace's path. Moving classes
+    the stabs or the RTTI name asks first.</P>
+
+    <P>Drag functions or labels onto a class to move them into its namespace. Moving one the stabs
+    describe, or whose mangled name names its class, asks first. Each then asks how it is declared
+    in its new class: a function's access, whether it is virtual or static, and its const and
+    volatile qualifiers; a label's access. Vtables, typeinfo and imports don't move: their names
+    say whose they are. <B>Set Member Attributes</B>, on the popup menu of functions and labels,
+    asks the same of members that stay where they are.</P>
+
+    <P>After a drop, the node dropped on opens to show what landed there.</P>
+
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
 
     <P>Ten analyzers ship with the extension that do not read stabs at all. They are enabled

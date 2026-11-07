@@ -6,6 +6,7 @@ import ghidra.app.cmd.function.CallDepthChangeInfo
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.PseudoData
+import ghidra.app.util.SymbolPath
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
@@ -174,6 +175,20 @@ val DataType.nameWithoutConflict: String get() = DataTypeUtilities.getNameWithou
 fun DataType.isConflict() = nameWithoutConflict != name
 fun DataTypeManager.conflictBase(dt: DataType): DataType? = getDataType(dt.categoryPath, dt.nameWithoutConflict)
 fun CategoryPath.at(name: String) = DataTypePath(this, name)
+
+/** These segments, outermost first, as a category under [root]; [root] itself when there are none. */
+fun List<String>.toCategoryPath(root: CategoryPath = CategoryPath.ROOT): CategoryPath =
+    fold(root) { path, seg -> CategoryPath(path, seg) }
+
+/** Its path, outermost first, its library left out: empty for the global namespace. */
+val Namespace.path: List<String> get() = getPathList(true).toList()
+
+/** The namespace at [path] (outermost first), the global one for an empty path; null if there is none. */
+fun Program.namespaceAt(path: List<String>): Namespace? =
+    NamespaceUtils.getNonFunctionNamespace(this, path.takeIf { it.isNotEmpty() }?.let { SymbolPath(it.toTypedArray()) })
+
+/** Every category under this one, at any depth. */
+fun Category.descendants(): Sequence<Category> = categories.asSequence().flatMap { sequenceOf(it) + it.descendants() }
 
 /** The defined components sharing a byte with the [length] bytes at [offset]. */
 internal fun Structure.componentsOverlapping(offset: Int, length: Int) =
