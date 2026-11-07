@@ -1,27 +1,17 @@
 package ghistabs.cpp.abi.itanium
 
-import ghidra.app.plugin.core.analysis.AutoAnalysisManager
-import ghidra.program.model.data.Structure
-import ghidra.program.model.listing.Program
-import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidra.util.task.TaskMonitor
-import ghistabs.integration.FeatureFixtureTest
-import ghistabs.runTransaction
+import ghistabs.cpp.ClassStructsFixtureTest
 import ghistabs.test.*
-import ghistabs.withProgram
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import java.io.File
 
 /**
  * `features/hello.cc` under gcc 12 with its stabs removed, through the whole analysis: the class pass lays each
  * class struct off the Itanium RTTI and vtables. `Up` and `Down` derive virtually from `Core`, and `Both` from
  * them.
  */
-@Tag("integration")
-class ItaniumClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gcc12_nostabs", compiler = "gcc") {
     @Test
-    fun `a virtual base is laid where its vtable's vbase offset says`() = withAnalyzed { program ->
+    fun `a virtual base is laid where its vtable's vbase offset says`() {
         program.layout("Down") mustBe listOf(
             0 to "vfptr: Down_vftable0 *",
             4 to "_fields: Down_fields_4_8",
@@ -39,20 +29,4 @@ class ItaniumClassStructsIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             24 to "_vbase_Core: Core_fields_4_8",
         )
     }
-
-    private fun Program.layout(cls: String) =
-        (dataTypeManager.getDataType("/ClassDataTypes/$cls/$cls") as Structure).definedComponents
-            .map { it.offset to "${it.fieldName}: ${it.dataType.name}" }
-
-    private fun withAnalyzed(check: (Program) -> Unit) =
-        withProgram(File(FeatureFixtureTest.FEATURES, "hello_elf_gcc12_nostabs")) { program ->
-            val mgr = AutoAnalysisManager.getAnalysisManager(program)
-            mgr.initializeOptions()
-            mgr.reAnalyzeAll(null)
-            program.runTransaction("auto-analyze") {
-                mgr.startAnalysis(TaskMonitor.DUMMY)
-                mgr.waitForAnalysis(null, TaskMonitor.DUMMY)
-            }
-            check(program)
-        }
 }
