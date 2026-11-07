@@ -1,25 +1,19 @@
 package ghistabs.cpp.recover
 
-import ghidra.app.decompiler.DecompInterface
+import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
-import ghidra.program.model.listing.Function
+import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
-import ghidra.program.model.pcode.PcodeOp
 import ghidra.util.task.TaskMonitor
-import ghistabs.DtmRegistry
-import ghistabs.at
-import ghistabs.componentsOverlapping
+import ghistabs.*
 import ghistabs.cpp.*
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.VtableRecord
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.forceCreateData
 import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.VfptrPlacement
-import ghistabs.toClass
-import ghistabs.useWith
 
 /**
  * Lays each class struct a class pass sized but left empty, off what the pass knows of the class: each
@@ -37,6 +31,13 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
     private val vfptrs = VfptrPlacement(registry, VfptrModel.SPLIT_BASE, sink)
     private val slots = VtableSweeper(registry, program, TaskMonitor.DUMMY, sink)
     private val vbases = VirtualBases(program, abi, sink)
+
+    /**
+     * The slot definitions of the tables laid, a base's first, the bases going first, as
+     * `RecoverClassesFromRTTIScript` files an inherited slot's in the ancestor's folder, so that its
+     * `ApplyClassFunctionSignatureUpdatesScript` edits the one definition every table points at.
+     */
+    private val defined = SlotDefinitions()
 
     /**
      * Lays [classes]' empty structs, a base before the classes deriving from it, each with the fields its
@@ -59,7 +60,7 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
             r.vfptrOffset(program)?.let { r to it.toInt() }
         }.sortedBy { it.second }
         records.forEachIndexed { i, (record, at) ->
-            val vftable = vftableStruct(ns, record, i, records.size) ?: return@forEachIndexed
+            val vftable = vftableStruct(ns, record, i, records.size)
             struct.placeVfptr(at, PointerDataType(vftable, dtm), ns)
         }
         struct.placeData(store, ns)
@@ -180,9 +181,12 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
      * The struct of [this]'s vftable [record], table [index] of [count] by vptr offset: the one laid at its
      * address point, else one made off its slots and laid there, named for the base it serves.
      */
-    private fun ClassDecl.vftableStruct(ns: GhidraClass, record: VtableRecord, index: Int, count: Int): Structure? {
-        (program.listing.getDataAt(record.addressPoint)?.dataType as? Structure)
-            ?.takeIf { "_${ClassNaming.VFTABLE}" in it.name }?.let { return it }
+    private fun ClassDecl.vftableStruct(ns: GhidraClass, record: VtableRecord, index: Int, count: Int): Structure {
+        val laid = program.listing.getDataAt(record.addressPoint)
+        (laid?.dataType as? Structure)?.takeIf { "_${ClassNaming.VFTABLE}" in it.name }?.let {
+            defined.addLaid(laid)
+            return it
+        }
         val label = program.symbolTable.getSymbols(record.addressPoint)
             .firstOrNull { it.parentNamespace == ns && ClassNaming.isClassVftableLabel(it.name) }
 
@@ -199,12 +203,34 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
             StructureDataType(primary.categoryPath, name, 0, dtm)
         }
         if (vftable.numComponents == 0) {
-            val used = mutableSetOf<String>()
-            record.slots(program).forEach { slots.addSweptSlot(vftable, category, it, used, abi) }
+            record.slots(program).forEach { slots.addSweptSlot(vftable, category, it, abi, defined = defined) }
         }
         vftable.describeVxTable(ns.name, label?.name ?: ClassNaming.VFTABLE, record.vfptrOffset(program))
         runCatching { program.forceCreateData(record.addressPoint, vftable) }
+            .onSuccess(defined::addLaid)
             .onFailure { degradation("vftable-unlaid", "${ns.getName(true)}::$name", it.message, record.addressPoint) }
         return vftable
+    }
+
+    /**
+     * Each slot target's definition, by the first vftable defining it, so every table pointing at a function
+     * shares the one definition, as `RecoverClassesFromRTTIScript` shares an inherited slot's.
+     */
+    internal class SlotDefinitions(private val byTarget: MutableMap<Address, DataType> = mutableMapOf()) :
+        Map<Address, DataType> by byTarget {
+
+        /** Keeps [definition] for [target] unless one came first. */
+        fun add(target: Address, definition: DataType) {
+            byTarget.putIfAbsent(target, definition)
+        }
+
+        /** Keeps the definitions of a vftable laid as [table], by the function each slot points at. */
+        fun addLaid(table: Data) {
+            for (slot in table.components) {
+                val target = slot.value as? Address ?: continue
+                val definition = (slot.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
+                add(target, definition)
+            }
+        }
     }
 }

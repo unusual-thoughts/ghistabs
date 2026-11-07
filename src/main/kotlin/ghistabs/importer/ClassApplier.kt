@@ -503,7 +503,7 @@ class ClassApplier(
                 m != null -> slotName(m, used, virtuals.values)
                     .let { vftable.add(buildVirtualSlotType(m, it), it, "virtual ${m.name}") }
 
-                slot < targets.size -> addSweptSlot(vftable, vftableCategory, targets[slot], used, abi)
+                slot < targets.size -> addSweptSlot(vftable, vftableCategory, targets[slot], abi, used)
 
                 // Inherited from a base that links without stabs, with no record to read it off
                 // either. Still a pointer to a definition named for its own field: a bare `void*`

@@ -68,6 +68,14 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
     }
 
     @Test
+    fun `a function several vftables hold has one definition, for signature updates to reach them all`() {
+        // `Up` inherits `Core::f`, its second slot in both tables.
+        (program.secondSlot("Up_vftable_for_Core") === program.secondSlot("Core_vftable")) mustBe true
+        program.classStruct("Up_vftable_for_Core").getComponent(1).fieldName mustBe
+            program.secondSlot("Core_vftable").name
+    }
+
+    @Test
     fun `constructors the decompiler shows no this return for are told from destructors by their calls`() {
         // The unoptimised callers leave the constructors' `this` return unread.
         program.layout("Circle") mustBe listOf(
@@ -98,6 +106,8 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
         }
         (method.getParameter(0).dataType as Pointer).dataType.pathName mustBe "/ClassDataTypes/Label/Label"
     }
+
+    private fun Program.secondSlot(table: String) = (classStruct(table).getComponent(1).dataType as Pointer).dataType
 
     private fun Program.classStruct(name: String) = dataTypeManager.allStructures.asSequence()
         .single {
