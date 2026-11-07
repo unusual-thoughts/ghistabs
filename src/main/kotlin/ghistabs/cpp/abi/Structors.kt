@@ -30,9 +30,6 @@ interface Structor {
 
 /** How an ABI's constructors and destructors behave, for `StructorFinder` and `NewSizeReader`. */
 interface StructorConvention {
-    /** Whether constructors return `this` and destructors don't, as under MSVC, which tells the two apart. */
-    val constructorsReturnThis: Boolean get() = false
-
     /** The variant [func] is, given its [role]; null where that doesn't say. */
     fun structorFor(role: StructorRole, func: Function): Structor? = null
 
