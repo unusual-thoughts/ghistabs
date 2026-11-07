@@ -32,7 +32,7 @@ class InlineeThisIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
     @CsvSource(
         "xmltest_gcc345.exe, 0042f120, true",
-        "features/hello_gcc323_fullstabs.exe, 004027d0, false",
+        "features/hello_gcc323_fullstabs.exe, 00402ef0, false",
     )
     fun `an inlined member's this is a local of its own`(fixture: String, entry: String, onStack: Boolean) {
         assumeTrue(Fixtures.accepts(File(fixture).name), "excluded by -Pfixture")
