@@ -62,8 +62,7 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
      * names it, and the slot is typed off it.
      */
     @Test
-    fun `
-  `() {
+    fun `a slot target no analysis made a function of becomes one`() {
         val name = program.addressFactory.defaultAddressSpace.getAddress(0x11be8)
         (program.functionManager.getFunctionAt(name) != null).mustBeTrue("no function at $name")
     }
