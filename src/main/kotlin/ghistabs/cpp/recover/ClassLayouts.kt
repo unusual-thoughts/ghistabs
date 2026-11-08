@@ -164,7 +164,7 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
     private fun Structure.placeVfptr(at: Int, vfptr: DataType, ns: GhidraClass) {
         val holder = getComponentContaining(at)?.takeIf { it.isBaseField() }
         if (holder != null) {
-            if (!vfptrs.splitBase(this, ns.getPathList(true).toList(), at, holder, vfptr)) {
+            if (!vfptrs.splitBase(this, ns.path, at, holder, vfptr)) {
                 debug("vfptr-inherited-from-base", ns.getName(true))
             }
             return

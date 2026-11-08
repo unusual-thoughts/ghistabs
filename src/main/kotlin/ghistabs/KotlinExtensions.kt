@@ -8,6 +8,9 @@ fun String.removePrefixOrNull(prefix: String): String? = when {
     else -> null
 }
 
+fun <T> List<T>.startsWith(head: List<T>) = size >= head.size && subList(0, head.size) == head
+fun <T> List<T>.endsWith(tail: List<T>) = size >= tail.size && subList(size - tail.size, size) == tail
+
 inline fun <T> List<T>.chunkNotNull(f: (List<T>?, T) -> Boolean?) = fold(mutableListOf<MutableList<T>>()) { acc, item ->
     acc.apply {
         val prev = lastOrNull()
