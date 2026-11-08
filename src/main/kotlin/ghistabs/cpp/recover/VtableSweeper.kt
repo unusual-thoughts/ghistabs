@@ -406,6 +406,7 @@ open class VtableSweeper(
      * `__cxa_pure_virtual`. The field and the definition share a name, as Ghidra's class recovery expects,
      * so an overload gets a `_1` suffix; [used] holds the names this table spent. A target [defined]
      * already, in another table, keeps its definition and its name, so an edit to it reaches every table.
+     * Code at [target] with no function becomes one ([functionAtOrCreate]).
      */
     internal fun addSweptSlot(
         vftable: Structure,
@@ -415,16 +416,18 @@ open class VtableSweeper(
         used: MutableSet<String> = mutableSetOf(),
         defined: ClassLayouts.SlotDefinitions? = null,
     ) {
+        val reused = defined?.get(target)
+        // Code nothing reached but this pointer becomes a function first, so the slot is typed and named off it.
+        val func = if (reused == null) program.functionAtOrCreate(target) else null
         val linkage = symtab.getSymbols(target).map { it.name }.firstOrNull(abi::isProbablyMangled)
             ?: symtab.getPrimarySymbol(target)?.name
             ?: "slot"
-        val reused = defined?.get(target)
         val leaf = reused?.name ?: Demangler.of(linkage)?.name ?: linkage
         val name = generateSequence(0) { it + 1 }
             .map { if (it == 0) leaf else "${leaf}_$it" }
             .first(used::add)
 
-        val funcDef = reused ?: program.functionManager.getFunctionAt(target)
+        val funcDef = reused ?: func
             ?.let { FunctionDefinitionDataType(category, name, it.signature, dtm) }
             .let { it ?: demangledDefinition(category, name, linkage) }
             .let(registry::registerAgain)

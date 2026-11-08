@@ -219,6 +219,16 @@ internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function
 }
 
 /**
+ * The program's own function the slot pointing at [at] holds, past a jump stub, and made where code has
+ * none ([functionAtOrCreate]); not an import nor [abi]'s pure virtual stub ([CxxAbi.isPureVirtualStub]).
+ */
+fun Program.slotFunction(at: Address, abi: CxxAbi): Function? {
+    val func = functionAtOrCreate(at) ?: return null
+    val target = if (func.isThunk) func.getThunkedFunction(true) else func
+    return target?.takeUnless { it.isExternal || abi.isPureVirtualStub(it.name) }
+}
+
+/**
  * The imported function whose thunk is at [target], if [pfn] is relocated against it. Data imports share
  * the EXTERNAL block, so the thunk alone doesn't say: a typeinfo's vptr can land on one.
  */
