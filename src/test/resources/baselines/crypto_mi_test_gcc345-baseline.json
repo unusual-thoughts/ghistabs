@@ -801,37 +801,28 @@
             "max": 28
         },
         "reglocal-add-success": {
-            "min": 2693,
-            "max": 2695
+            "min": 2696,
+            "max": 2698
         },
         "reglocal-param-home": {
-            "min": 593,
-            "max": 593
+            "min": 595,
+            "max": 595
         },
         "reglocal-placed-at-def": {
-            "min": 1895,
-            "max": 1906
+            "min": 1897,
+            "max": 1908
         },
         "reglocal-renamed-scope": {
             "min": 1333,
             "max": 1335
         },
         "reglocal-skipped-dup-local": {
-            "min": 1503,
-            "max": 1505
+            "min": 1504,
+            "max": 1506
         },
         "reglocal-skipped-dup-param": {
             "min": 656,
             "max": 656
-        },
-        "reglocal-unmapped-regnum": {
-            "min": 4,
-            "max": 4,
-            "degrades": [
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE6do_putES3_RSt8ios_basece.__v",
-                "_ZNKSt9money_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE6do_putES3_bRSt8ios_basece.__units",
-                "_ZSt14__convert_to_vIfEvPKcRT_RSt12_Ios_IostateRKPi.__d"
-            ]
         },
         "replaced-demangler": {
             "min": 800,

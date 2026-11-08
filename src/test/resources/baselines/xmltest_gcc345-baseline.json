@@ -374,37 +374,28 @@
             "max": 30
         },
         "reglocal-add-success": {
-            "min": 2578,
-            "max": 2580
+            "min": 2581,
+            "max": 2583
         },
         "reglocal-param-home": {
-            "min": 480,
-            "max": 480
+            "min": 482,
+            "max": 482
         },
         "reglocal-placed-at-def": {
-            "min": 1855,
-            "max": 1895
+            "min": 1857,
+            "max": 1897
         },
         "reglocal-renamed-scope": {
             "min": 1333,
             "max": 1335
         },
         "reglocal-skipped-dup-local": {
-            "min": 1501,
-            "max": 1503
+            "min": 1502,
+            "max": 1504
         },
         "reglocal-skipped-dup-param": {
             "min": 628,
             "max": 628
-        },
-        "reglocal-unmapped-regnum": {
-            "min": 4,
-            "max": 4,
-            "degrades": [
-                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE6do_putES3_RSt8ios_basece.__v",
-                "_ZNKSt9money_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE6do_putES3_bRSt8ios_basece.__units",
-                "_ZSt14__convert_to_vIfEvPKcRT_RSt12_Ios_IostateRKPi.__d"
-            ]
         },
         "replaced-demangler": {
             "min": 96,
