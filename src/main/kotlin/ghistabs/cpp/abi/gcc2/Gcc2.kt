@@ -206,6 +206,9 @@ sealed interface Gcc2Abi : CxxAbi {
 
     override val primaryVptrOffset get() = null
 
+    /** libgcc's `__pure_virtual`, with a.out's extra underscore too. */
+    override fun isPureVirtualStub(name: String) = name.trimStart('_') == "pure_virtual"
+
     /** A record with no header of its own: the reserved entry is part of the `_vftable` struct. */
     override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 

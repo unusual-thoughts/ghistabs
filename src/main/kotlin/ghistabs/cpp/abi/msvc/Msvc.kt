@@ -20,6 +20,9 @@ import ghistabs.namespaces
  * RTTI, which [ghistabs.cpp.abi.msvc.MsvcClasses] reads. No compiler that emits stabs uses it.
  */
 object Msvc : CxxAbi {
+    /** `_purecall`, from the CRT. */
+    override fun isPureVirtualStub(name: String) = name.trimStart('_') == "purecall"
+
     /** A class's vftable: `??_7Foo@ns@@6B@` is `const ns::Foo::vftable`. */
     const val VFTABLE_PREFIX = "??_7"
 

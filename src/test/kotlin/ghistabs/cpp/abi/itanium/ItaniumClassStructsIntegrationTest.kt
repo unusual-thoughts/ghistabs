@@ -1,5 +1,6 @@
 package ghistabs.cpp.abi.itanium
 
+import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.ClassStructsFixtureTest
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
@@ -28,5 +29,16 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
             20 to "vfptr: Both_vftable_for_Core *",
             24 to "_vbase_Core: Core_fields_4_8",
         )
+    }
+
+    /**
+     * `Shape` is abstract: gcc 12 leaves its destructor slots 0 and points `area` at the imported
+     * `__cxa_pure_virtual`, so its vtable has no slot 0 into code, and is still found.
+     */
+    @Test
+    fun `an abstract class's vtable is found though its destructor slots are 0`() {
+        val shape = program.symbolTable.getNamespace("Shape", program.globalNamespace)
+        val labels = program.symbolTable.getSymbols(shape).map { it.name }
+        (ClassNaming.VFTABLE in labels).mustBeTrue("no vftable among $labels")
     }
 }

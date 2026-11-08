@@ -182,7 +182,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             debug("msvc-vfunction-missing", "no function at $at", table)
         }
         val target = if (func.isThunk) func.getThunkedFunction(true) else func
-        return target?.takeUnless { it.isExternal || "purecall" in it.name }
+        return target?.takeUnless { it.isExternal || Msvc.isPureVirtualStub(it.name) }
     }
 
     /** The class of the type descriptor at [at], for a base with no hierarchy descriptor. */
