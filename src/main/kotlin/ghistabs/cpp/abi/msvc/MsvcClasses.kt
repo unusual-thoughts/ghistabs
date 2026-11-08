@@ -12,6 +12,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.*
 import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.slotFunction
 import ghistabs.cpp.recover.AbiClasses
 import ghistabs.cpp.recover.ClassRecovery
 import ghistabs.diagnose.DiagnosticSink
@@ -170,20 +171,16 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             val cls = runCatching { table.rtti0Model.address }.getOrNull()?.let(::classAt) ?: continue
             cls.vftables += Msvc.recordAt(program, at)
             for (i in 0 until table.elementCount) {
-                val func = slotFunction(table.getVirtualFunctionPointer(i), at) ?: continue
+                val pfn = table.getVirtualFunctionPointer(i)
+                val func = pfn?.let { program.slotFunction(it, Msvc) }
+                if (pfn == null || program.functionManager.getFunctionAt(pfn) == null) {
+                    debug("msvc-vfunction-missing", "no function at $pfn", at)
+                }
+                func ?: continue
                 getOrPut(func) { mutableSetOf() } += cls
             }
         }
     } as Map<Function, Set<RttiClass>>
-
-    /** The function a slot points at, past a jump stub; not an import nor the shared `_purecall`. */
-    private fun slotFunction(at: Address?, table: Address): Function? {
-        val func = at?.let(program.functionManager::getFunctionAt) ?: return null.also {
-            debug("msvc-vfunction-missing", "no function at $at", table)
-        }
-        val target = if (func.isThunk) func.getThunkedFunction(true) else func
-        return target?.takeUnless { it.isExternal || Msvc.isPureVirtualStub(it.name) }
-    }
 
     /** The class of the type descriptor at [at], for a base with no hierarchy descriptor. */
     private fun typeDescriptorClass(at: Address) = symbols.getSymbols(at)

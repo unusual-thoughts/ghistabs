@@ -2,7 +2,9 @@
 
 package ghistabs
 
+import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.cmd.function.CallDepthChangeInfo
+import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.PseudoData
@@ -325,6 +327,19 @@ fun Program.isCode(addr: Address) = memory.getBlock(addr)?.isExecute == true
 
 /** Whether [addr] is in a block that holds bytes, which an EXTERNAL placeholder doesn't. */
 fun Program.isInitialized(addr: Address) = memory.getBlock(addr)?.isInitialized == true
+
+/**
+ * The function at [addr], made there if code with none sits there: disassembled first, as nothing may have
+ * reached code only a pointer leads to (a function called only through its vtable). Null outside initialized
+ * code, inside another function's body, or where Ghidra can't make one.
+ */
+fun Program.functionAtOrCreate(addr: Address): Function? {
+    functionManager.getFunctionAt(addr)?.let { return it }
+    if (!isCode(addr) || !isInitialized(addr) || functionManager.getFunctionContaining(addr) != null) return null
+    if (listing.getInstructionAt(addr) == null && !DisassembleCommand(addr, null, true).applyTo(this)) return null
+    if (!CreateFunctionCmd(null, addr, null, SourceType.ANALYSIS).applyTo(this)) return null
+    return functionManager.getFunctionAt(addr)
+}
 
 /** Whether [addr] is in an initialized block that isn't executable. */
 fun Program.isData(addr: Address) = memory.getBlock(addr)?.let { it.isInitialized && !it.isExecute } == true

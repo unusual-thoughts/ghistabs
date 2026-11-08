@@ -57,6 +57,17 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
         (ClassNaming.VFTABLE in labels).mustBeTrue("no vftable among $labels")
     }
 
+    /**
+     * `Shape::name` is only ever called through the vtable, so nothing made a function at it. Its slot
+     * names it, and the slot is typed off it.
+     */
+    @Test
+    fun `
+  `() {
+        val name = program.addressFactory.defaultAddressSpace.getAddress(0x11be8)
+        (program.functionManager.getFunctionAt(name) != null).mustBeTrue("no function at $name")
+    }
+
     @Test
     fun `running the class pass again types a field off a constructor the reverser typed since`() {
         val ctors = program.functionManager.getFunctions(true).filter { it.getName(true) == "Circle::Circle" }
