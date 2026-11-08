@@ -159,7 +159,7 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
         if (componentsOverlapping(at, vbptr.length).isNotEmpty() || at + vbptr.length > length) {
             return degradation("vbptr-collision", ns.getName(true), "cannot place {vbptr} at +$at")
         }
-        replaceAtOffset(at, vbptr, vbptr.length, VBPTR, "vbtable pointer: its virtual bases' offsets")
+        replaceAtOffset(at, vbptr, vbptr.length, ClassNaming.VBPTR, "vbtable pointer: its virtual bases' offsets")
     }
 
     /** A `{vfptr}` of type [vfptr] at [at], in place of the one a base subobject there has. */
@@ -234,6 +234,3 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
         }
     }
 }
-
-/** Ghidra's name for a vbtable pointer field: `ClassUtils.VBPTR`, which Ghidra 10.4 lacks. */
-private const val VBPTR = "vbptr"
