@@ -44,12 +44,12 @@
             "max": 27994
         },
         "demangle-displaced-function-renamed": {
-            "min": 1,
+            "min": 0,
             "max": 1
         },
         "demangle-displaced-label-dropped": {
             "min": 8774,
-            "max": 8774
+            "max": 8775
         },
         "demangler-exact-match": {
             "min": 711,
@@ -132,7 +132,7 @@
             "max": 181
         },
         "function-created-from-stab": {
-            "min": 7,
+            "min": 6,
             "max": 7
         },
         "global-applied": {

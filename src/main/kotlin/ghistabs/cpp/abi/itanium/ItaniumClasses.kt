@@ -11,6 +11,7 @@ import ghistabs.cpp.ClassBase
 import ghistabs.cpp.ClassDecl
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.slotFunction
 import ghistabs.cpp.recover.AbiClasses
 import ghistabs.cpp.recover.ClassRecovery
 import ghistabs.diagnose.DiagnosticSink
@@ -115,19 +116,12 @@ class ItaniumClasses(private val program: Program, private val sink: DiagnosticS
         for (cls in classes) {
             for (record in cls.vftables) {
                 for (slot in record.slots(program)) {
-                    val func = slotFunction(slot) ?: continue
+                    val func = program.slotFunction(slot, Itanium) ?: continue
                     getOrPut(func) { mutableSetOf() } += cls
                 }
             }
         }
     } as Map<Function, Set<ClassDecl>>
-
-    /** The function a slot points at, past a jump stub; not an import nor the shared `__cxa_pure_virtual`. */
-    private fun slotFunction(at: Address): Function? {
-        val func = program.functionManager.getFunctionAt(at) ?: return null
-        val target = if (func.isThunk) func.getThunkedFunction(true) else func
-        return target?.takeUnless { it.isExternal || Itanium.isPureVirtualStub(it.name) }
-    }
 
     // A SymbolIterator is an Iterator and an Iterable, and `asSequence` is on both.
     private fun SymbolIterator.symbols(): Sequence<Symbol> = (this as Iterator<Symbol>).asSequence()
