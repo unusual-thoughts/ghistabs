@@ -4,13 +4,16 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.DoubleDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.lang.CompilerSpec
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS
+import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.ClassStructsFixtureTest
+import ghistabs.cpp.recover.updateFieldTypes
 import ghistabs.entrypoints.ItaniumClassAnalyzer
 import ghistabs.runTransaction
 import ghistabs.test.mustBe
@@ -67,6 +70,28 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
         }
         program.data("Circle") mustBe listOf(0 to "field_0x10: double")
     }
+
+    @Test
+    fun `updating field types from a method types the fields it reads`() {
+        // `Label::area` returns `color`, which `Label::Label` stores a constant in.
+        val area = program.methods("Label").single { it.name == "vfunction3_for_Rect" }
+        program.runTransaction { program.updateFieldTypes(area.classNs, listOf(area), TaskMonitor.DUMMY) }
+        program.data("Label") mustBe listOf(0 to "field_0x24: int")
+    }
+
+    @Test
+    fun `updating field types from a class types the fields its methods use`() {
+        // `Diamond::operator+=` adds to `d`, which `Diamond::Diamond` stores a constant in.
+        val methods = program.methods("Diamond")
+        program.runTransaction { program.updateFieldTypes(methods[0].classNs, methods, TaskMonitor.DUMMY) }
+        program.data("Diamond") mustBe listOf(0 to "field_0x1c: int")
+    }
+
+    private fun Program.methods(cls: String) = functionManager.getFunctions(true).filter {
+        it.parentNamespace.name == cls
+    }
+
+    private val Function.classNs get() = parentNamespace as GhidraClass
 
     /** [cls]'s `<Class>_data` struct, a field per line: its offset, then its name and its type's. */
     private fun Program.data(cls: String) =
