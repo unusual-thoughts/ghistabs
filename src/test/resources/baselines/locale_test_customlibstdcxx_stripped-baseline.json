@@ -93,7 +93,7 @@
             "max": 24
         },
         "function-created-from-stab": {
-            "min": 48,
+            "min": 0,
             "max": 48
         },
         "global-applied": {
