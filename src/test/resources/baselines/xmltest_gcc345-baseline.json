@@ -45,16 +45,20 @@
             "max": 100
         },
         "demangler-skip-no-replacement": {
-            "min": 22,
-            "max": 22
+            "min": 8,
+            "max": 8
         },
         "demangler-sole-instantiation-declined": {
             "min": 13,
             "max": 13
         },
+        "demangler-sole-instantiation-match": {
+            "min": 14,
+            "max": 14
+        },
         "demangler-unbound-stub": {
-            "min": 22,
-            "max": 22
+            "min": 8,
+            "max": 8
         },
         "drop-record-opt": {
             "min": 60,
@@ -398,8 +402,8 @@
             "max": 628
         },
         "replaced-demangler": {
-            "min": 96,
-            "max": 100
+            "min": 110,
+            "max": 114
         },
         "resolve-ambiguous": {
             "min": 983,

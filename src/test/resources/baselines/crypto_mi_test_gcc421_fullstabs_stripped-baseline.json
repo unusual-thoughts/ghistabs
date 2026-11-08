@@ -49,32 +49,36 @@
             "max": 0
         },
         "demangler-retarget-bound": {
-            "min": 25,
-            "max": 25
+            "min": 24,
+            "max": 24
         },
         "demangler-retargeted-stub-site": {
-            "min": 25,
-            "max": 25
+            "min": 24,
+            "max": 24
         },
         "demangler-reverse-demangle-match": {
             "min": 61,
             "max": 61
         },
         "demangler-shortened-name-match": {
-            "min": 17,
-            "max": 17
+            "min": 16,
+            "max": 16
         },
         "demangler-skip-no-replacement": {
-            "min": 14,
-            "max": 14
+            "min": 13,
+            "max": 13
         },
         "demangler-sole-instantiation-declined": {
             "min": 24,
             "max": 24
         },
+        "demangler-sole-instantiation-match": {
+            "min": 1,
+            "max": 1
+        },
         "demangler-unbound-stub": {
-            "min": 14,
-            "max": 14
+            "min": 13,
+            "max": 13
         },
         "drop-record-bnsym": {
             "min": 2841,
@@ -888,8 +892,8 @@
             "max": 1
         },
         "replaced-demangler": {
-            "min": 61,
-            "max": 61
+            "min": 62,
+            "max": 62
         },
         "rtti-pseudo-substituted": {
             "min": 37,

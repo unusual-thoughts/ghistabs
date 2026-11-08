@@ -43,6 +43,9 @@ private val String.argsStart get() = takeUnless { it.startsWith("operator") }?.i
 /** Template arguments on any segment: `vector<int>`, `A<int>::Inner`, but not `operator<`. */
 val String.isTemplated get() = nameSegments.any { it.argsStart != null }
 
+/** A leaf that is an instantiation, `vector<int>`, not `operator>` nor a decorated `A<int>_vftable`. */
+val String.isInstantiation get() = isTemplated && endsWith('>')
+
 /** Every segment's arguments dropped: `A<int>::Inner` → `A::Inner`. The template an instantiation spells. */
 val String.templateName get() =
     nameSegments.map { seg -> seg.argsStart?.let { seg.take(it).trim() } ?: seg }.qualifiedName
