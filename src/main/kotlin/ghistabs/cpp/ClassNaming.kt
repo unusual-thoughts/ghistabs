@@ -16,6 +16,9 @@ object ClassNaming {
     // Spelled out rather than taken from ClassUtils.VFTABLE, which only arrives in 12.1.
     const val VFTABLE = "vftable"
 
+    // Spelled out rather than taken from ClassUtils.VBPTR, which 10.4 lacks.
+    const val VBPTR = "vbptr"
+
     // What GnuDemangler names a `_ZTV…` symbol (no f) and a `_ZTI…` one, in the class's namespace: both
     // take GnuDemanglerParser's AddressTableHandler, whose name is the prefix before " for ".
     const val VTABLE = "vtable"

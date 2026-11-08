@@ -159,7 +159,7 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
         if (componentsOverlapping(at, vbptr.length).isNotEmpty() || at + vbptr.length > length) {
             return degradation("vbptr-collision", ns.getName(true), "cannot place {vbptr} at +$at")
         }
-        replaceAtOffset(at, vbptr, vbptr.length, ClassUtils.VBPTR, "vbtable pointer: its virtual bases' offsets")
+        replaceAtOffset(at, vbptr, vbptr.length, ClassNaming.VBPTR, "vbtable pointer: its virtual bases' offsets")
     }
 
     /** A `{vfptr}` of type [vfptr] at [at], in place of the one a base subobject there has. */
