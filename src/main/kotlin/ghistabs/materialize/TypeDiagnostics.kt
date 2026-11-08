@@ -195,7 +195,7 @@ internal fun Structure.isTailPadding(gap: GapRecord): Boolean {
     val sizeAlignment = minOf(this.length.takeLowestOneBit(), BIGGEST_ALIGNMENT)
     return start > 0 && start + length == this.length &&
         definedComponents.any { it.offset < start } &&
-        (length < widestScalar() || length < sizeAlignment && length < start)
+        (length < widestScalar() || (length < sizeAlignment && length < start))
 }
 
 /** gcc's `BIGGEST_ALIGNMENT` on i386 and x86-64, in bytes: what a bare `__attribute__((aligned))` means. */
