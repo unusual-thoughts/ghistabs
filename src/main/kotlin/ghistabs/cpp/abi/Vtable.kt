@@ -137,8 +137,7 @@ data class VtableRecord(
             .any { at -> program.symbolTable.getSymbols(at).any { startsVtableGroup(it.name) } }
 
     /** The functions the slots point at, in order ([functionSlots]). */
-    fun slots(program: Program): List<Address> =
-        program.functionSlots(abi.slotOffsets(program.defaultPointerSize).map(addressPoint::add)).toList()
+    fun slots(program: Program): List<Address> = program.functionSlots(addressPoint, abi).toList()
 
     /**
      * The rtti word's comment: the typeinfo symbol actually there, its linkage name over Ghidra's `typeinfo`
@@ -196,13 +195,14 @@ data class VtableRecord(
 private const val DESTRUCTOR_SLOTS = 2
 
 /**
- * The functions the slots at [pfns] point at, in order. Nothing records how many there are, so they end at
- * the first entry that isn't code or an imported function [imported] takes. Up to two nulls count when a
- * function follows: gcc 12 leaves an abstract class's destructor slots 0.
+ * The functions the slots of the [abi]'s vtable whose address point is [at] point at, in order. Nothing
+ * records how many there are, so they end at the first entry that isn't code or an imported function
+ * [imported] takes. Up to two nulls count when a function follows: gcc 12 leaves an abstract class's
+ * destructor slots 0.
  */
-internal fun Program.functionSlots(pfns: Sequence<Address>, imported: (Function) -> Boolean = { true }) = sequence {
+internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function) -> Boolean = { true }) = sequence {
     val nulls = mutableListOf<Address>()
-    for (pfn in pfns) {
+    for (pfn in abi.slotOffsets(defaultPointerSize).map(at::add)) {
         val target = pointerAt(pfn) ?: break
         when {
             target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target

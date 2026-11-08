@@ -61,10 +61,8 @@ fun Program.isPrimaryRecordAt(addr: Address, header: Structure): Boolean {
  * `__cxa_pure_virtual` an abstract class's pure virtuals point at ([Itanium.isPureVirtualStub]). No other
  * import: `.data`'s `DW.ref` words, `{…, &typeinfo, &__gxx_personality_v0}`, would pass for a vtable.
  */
-private fun Program.startsSlots(slot0: Address): Boolean {
-    val pfns = generateSequence(slot0) { runCatching { it.addNoWrap(defaultPointerSize.toLong()) }.getOrNull() }
-    return functionSlots(pfns) { Itanium.isPureVirtualStub(it.name) }.any()
-}
+private fun Program.startsSlots(slot0: Address): Boolean =
+    functionSlots(slot0, Itanium) { Itanium.isPureVirtualStub(it.name) }.any()
 
 /**
  * Where the record whose `offset_to_top` is at [top] starts: back past each word in front that reads as a
