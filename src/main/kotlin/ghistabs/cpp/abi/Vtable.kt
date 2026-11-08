@@ -65,6 +65,9 @@ interface VtableLayout {
 
     /** Where the vptr into this record sits in the complete object, if the record says: Itanium's `-offset_to_top`. */
     fun vfptrOffsetOf(record: VtableRecord, program: Program): Long? = null
+
+    /** Whether [name] is the runtime function this ABI points a pure virtual's slot at. */
+    fun isPureVirtualStub(name: String): Boolean
 }
 
 /**

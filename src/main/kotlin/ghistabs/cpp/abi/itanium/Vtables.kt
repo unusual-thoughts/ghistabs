@@ -58,16 +58,13 @@ fun Program.isPrimaryRecordAt(addr: Address, header: Structure): Boolean {
 
 /**
  * Whether the slots at [slot0] start with a function ([functionSlots]): in code, or the imported
- * `__cxa_pure_virtual` an abstract class's pure virtuals point at. No other import: `.data`'s `DW.ref`
- * words, `{…, &typeinfo, &__gxx_personality_v0}`, would pass for a vtable.
+ * `__cxa_pure_virtual` an abstract class's pure virtuals point at ([Itanium.isPureVirtualStub]). No other
+ * import: `.data`'s `DW.ref` words, `{…, &typeinfo, &__gxx_personality_v0}`, would pass for a vtable.
  */
 private fun Program.startsSlots(slot0: Address): Boolean {
     val pfns = generateSequence(slot0) { runCatching { it.addNoWrap(defaultPointerSize.toLong()) }.getOrNull() }
-    return functionSlots(pfns) { it.name in PURE_VIRTUAL_IMPORTS }.any()
+    return functionSlots(pfns) { Itanium.isPureVirtualStub(it.name) }.any()
 }
-
-/** What a pure (§3.2.5) or deleted (§3.2.6) virtual's slot points at, imported from the C++ runtime. */
-private val PURE_VIRTUAL_IMPORTS = setOf("__cxa_pure_virtual", "__cxa_deleted_virtual")
 
 /**
  * Where the record whose `offset_to_top` is at [top] starts: back past each word in front that reads as a
