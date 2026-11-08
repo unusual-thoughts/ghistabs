@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.cpp
 
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
