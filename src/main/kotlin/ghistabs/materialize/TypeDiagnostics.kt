@@ -179,17 +179,28 @@ internal val Structure.dataSize get() = definedComponents.maxOfOrNull { it.offse
 
 /**
  * Whether [gap] is the padding that rounds [this] up to its alignment: it ends the struct, follows a
- * defined component, and is shorter than its widest scalar. `_TAPE_SET_POSITION`'s 7 bytes after its
+ * defined component, and is shorter than that alignment. `_TAPE_SET_POSITION`'s 7 bytes after its
  * one-byte `Immediate`, which a `LARGE_INTEGER` aligns at 8. A struct with nothing defined has no
  * padding, only a hole.
+ *
+ * The alignment is at least the widest scalar, and can be more: an `aligned` attribute, which the stab
+ * doesn't carry, rounds `_Unwind_Exception`'s 20 bytes to 32. The size still bounds it — a struct's size
+ * is a multiple of its alignment — so a tail under the largest power of two dividing the size, up to
+ * [BIGGEST_ALIGNMENT], is padding too, as long as it is shorter than the data it follows and that data
+ * ends in a typed field: a body that lost its later members, or a field whose type never resolved and
+ * stands in at a guessed width (x86-64's `__va_list_tag`), would otherwise pass as padded.
  */
 internal fun Structure.isTailPadding(gap: GapRecord): Boolean {
     val start = (gap.offsetBits / 8).toInt()
     val length = (gap.lengthBits / 8).toInt()
-    return start > 0 && start + length == this.length &&
-        definedComponents.any { it.offset < start } &&
-        length < widestScalar()
+    val sizeAlignment = minOf(this.length.takeLowestOneBit(), BIGGEST_ALIGNMENT)
+    val last = definedComponents.lastOrNull { it.offset < start } ?: return false
+    val impliedPadding = length < sizeAlignment && length < start && !last.dataType.isUndefined
+    return start > 0 && start + length == this.length && (length < widestScalar() || impliedPadding)
 }
+
+/** gcc's `BIGGEST_ALIGNMENT` on i386 and x86-64, in bytes: what a bare `__attribute__((aligned))` means. */
+private const val BIGGEST_ALIGNMENT = 16
 
 /**
  * Report runs of unnamed Undefined1 ≥ [minRunBytes] in a struct's component list.
