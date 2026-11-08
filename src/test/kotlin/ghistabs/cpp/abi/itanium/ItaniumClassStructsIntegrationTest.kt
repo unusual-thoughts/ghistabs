@@ -1,8 +1,20 @@
 package ghistabs.cpp.abi.itanium
 
+import ghidra.app.util.importer.MessageLog
+import ghidra.program.model.data.DoubleDataType
+import ghidra.program.model.data.Structure
+import ghidra.program.model.lang.CompilerSpec
+import ghidra.program.model.listing.Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS
+import ghidra.program.model.listing.ParameterImpl
+import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.SourceType
+import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.ClassStructsFixtureTest
-import ghistabs.test.*
+import ghistabs.entrypoints.ItaniumClassAnalyzer
+import ghistabs.runTransaction
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -41,4 +53,23 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
         val labels = program.symbolTable.getSymbols(shape).map { it.name }
         (ClassNaming.VFTABLE in labels).mustBeTrue("no vftable among $labels")
     }
+
+    @Test
+    fun `running the class pass again types a field off a constructor the reverser typed since`() {
+        val ctors = program.functionManager.getFunctions(true).filter { it.getName(true) == "Circle::Circle" }
+        program.runTransaction {
+            for (ctor in ctors) {
+                val r = ParameterImpl("r", DoubleDataType.dataType, program)
+                ctor.setCallingConvention(CompilerSpec.CALLING_CONVENTION_thiscall)
+                ctor.replaceParameters(DYNAMIC_STORAGE_FORMAL_PARAMS, true, SourceType.USER_DEFINED, r)
+            }
+            ItaniumClassAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog())
+        }
+        program.data("Circle") mustBe listOf(0 to "field_0x10: double")
+    }
+
+    /** [cls]'s `<Class>_data` struct, a field per line: its offset, then its name and its type's. */
+    private fun Program.data(cls: String) =
+        (dataTypeManager.getDataType("/ClassDataTypes/$cls/${cls}_data") as Structure).definedComponents
+            .map { it.offset to "${it.fieldName}: ${it.dataType.name}" }
 }

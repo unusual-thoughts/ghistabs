@@ -41,15 +41,19 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
      * Lays [classes]' empty structs, a base before the classes deriving from it, each with the fields its
      * constructors [stores] ([Structors.constructorStores]); returns how many it laid.
      */
-    fun layAll(classes: Collection<ClassDecl>, stores: Map<ClassDecl, Map<Int, Int>>): Int =
+    fun layAll(classes: Collection<ClassDecl>, stores: Map<ClassDecl, Map<Int, DataType>>): Int =
         classes.sortedBy { it.ancestors.size }.count { it.lay(stores[it].orEmpty()) }
 
-    /** Lays [this]'s struct, with the bytes its constructors [store] at each offset as its own fields. */
-    private fun ClassDecl.lay(store: Map<Int, Int>): Boolean {
+    /**
+     * Lays [this]'s struct, with the fields its constructors [store] at each offset as its own. A struct laid
+     * already only has its `<Class>_data` fields refilled, so that running the pass again once the reverser has
+     * typed more of the constructors types more of the fields.
+     */
+    private fun ClassDecl.lay(store: Map<Int, DataType>): Boolean {
         val ns = ns?.toClass() ?: return false
-        // Any struct with fields is another's: the stabs import's, the script's, a PDB's.
-        val struct = program.classStruct(ns)?.takeIf { it.numDefinedComponents == 0 && !it.isZeroLength }
-            ?: return false
+        val struct = program.classStruct(ns) ?: return false
+        // Any struct with fields is another's, the stabs import's, the script's, a PDB's, or an earlier pass's.
+        if (struct.numDefinedComponents > 0 || struct.isZeroLength) return false.also { struct.fillData(store, ns) }
         val bases = bases.filterNot { it.isVirtual }
         for (base in bases) struct.placeBase(base, bases.size, ns)
         for (at in vbptrs) struct.placeVbptr(at.toInt(), ns)
@@ -62,6 +66,7 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
             struct.placeVfptr(at, PointerDataType(vftable, dtm), ns)
         }
         struct.placeData(store, ns)
+        struct.fillData(store, ns)
         return true
     }
 
@@ -110,43 +115,48 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
 
     /**
      * The fields [store] puts where nothing is laid yet, the class's own, gathered in a `<Class>_data` struct
-     * per run of them between what is, as `RecoverClassesFromRTTIScript` gathers them.
+     * per gap between what is, as `RecoverClassesFromRTTIScript` gathers them: the fields a gap holds are those
+     * the same laid field, or none, comes after.
      */
-    private fun Structure.placeData(store: Map<Int, Int>, ns: GhidraClass) {
-        buildList<MutableList<Pair<Int, Int>>> {
-            val own = store.filter { (at, size) ->
-                at >= 0 && at + size <= length && componentsOverlapping(at, size).isEmpty()
+    private fun Structure.placeData(store: Map<Int, DataType>, ns: GhidraClass) {
+        val own = store.filter { (at, dt) -> at >= 0 && componentsOverlapping(at, dt.length).isEmpty() }
+        own.toSortedMap().entries.groupBy { (at, _) -> getDefinedComponentAtOrAfterOffset(at)?.offset }
+            .values.forEachIndexed { i, run -> placeDataRun(run.associate { it.toPair() }, ns, i) }
+    }
+
+    /** A `<Class>_data` struct, the [index]th of [ns]'s, of the [fields] in one gap, by offset into the class. */
+    private fun Structure.placeDataRun(fields: Map<Int, DataType>, ns: GhidraClass, index: Int) {
+        val start = fields.keys.first()
+        val end = fields.maxOf { (at, dt) -> at + dt.length }
+        if (end > length) return
+        val name = "${ns.name}${ClassNaming.DATA}" + "_$index".takeIf { index > 0 }.orEmpty()
+        val data = registry.getOrRegister<Structure>(ClassNaming.vftableCategory(ns).at(name)) {
+            StructureDataType(ClassNaming.vftableCategory(ns), name, end - start, dtm).apply {
+                description = "${ns.name}'s own fields, where its constructors store them"
             }
-            for ((at, size) in own.toSortedMap()) {
-                val run = lastOrNull()?.takeIf { r ->
-                    componentsOverlapping(r.first().first..at + size).isEmpty()
-                }
-                if (run != null && run.last().let { (a, s) -> a + s <= at }) {
-                    run += at to size
-                } else {
-                    this += mutableListOf(at to size)
-                }
+        }
+        runCatching { replaceAtOffset(start, data, data.length, name, "own fields") }
+            .onFailure { degradation("class-data-unlaid", "${ns.getName(true)}::$name", it.message) }
+    }
+
+    /**
+     * Fills each `<Class>_data` struct laid in this with the fields of [store] it holds, as Auto Fill in Structure
+     * fills one: where a field is laid already, [NoisyStructureBuilder] keeps the more specific type,
+     * and the field keeps its name
+     */
+    private fun Structure.fillData(store: Map<Int, DataType>, ns: GhidraClass) {
+        for (laid in definedComponents) {
+            val data = laid.dataType as? Structure ?: continue
+            if (data.categoryPath != categoryPath || !data.name.startsWith(ns.name + ClassNaming.DATA)) continue
+            val inside = store.filter { (at, dt) -> at >= laid.offset && at + dt.length <= laid.endOffset + 1 }
+            val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
+            for ((at, dt) in inside) merged.addDataType(at.toLong() - laid.offset, dt)
+            for ((at, dt) in merged.iterator()) {
+                val old = data.getComponentAt(at.toInt())
+                if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
+                val name = old?.fieldName ?: "field_0x${(laid.offset + at).toString(16)}"
+                data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
             }
-        }.forEachIndexed { i, run ->
-            val start = run.first().first
-            val end = run.last().let { (at, size) -> at + size }
-            val name = "${ns.name}${ClassNaming.DATA}" + "_$i".takeIf { i > 0 }.orEmpty()
-            val data = registry.getOrRegister<Structure>(ClassNaming.vftableCategory(ns).at(name)) {
-                StructureDataType(ClassNaming.vftableCategory(ns), name, end - start, dtm).apply {
-                    description = "${ns.name}'s own fields, where its constructors store them"
-                    for ((at, size) in run) {
-                        replaceAtOffset(
-                            at - start,
-                            Undefined.getUndefinedDataType(size),
-                            size,
-                            "field_0x${at.toString(16)}",
-                            null,
-                        )
-                    }
-                }
-            }
-            runCatching { replaceAtOffset(start, data, data.length, name, "own fields") }
-                .onFailure { degradation("class-data-unlaid", "${ns.getName(true)}::$name", it.message) }
         }
     }
 
