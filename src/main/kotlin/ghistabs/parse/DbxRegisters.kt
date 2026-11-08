@@ -7,7 +7,9 @@ import ghidra.program.model.listing.Program
 // dbx_register_map vs svr4_dbx_register_map; gdb as i386_dbx_reg_to_regnum vs
 // i386_svr4_dwarf_reg_to_regnum, and installs the former for non-ELF i386 — our Cygwin PE corpus).
 // Ghidra ships the DWARF spelling in x86/data/languages/x86.dwarf; do not copy it here.
-private val X86_DBX_TO_REGISTER = listOf("EAX", "ECX", "EDX", "EBX", "EBP", "ESP", "ESI", "EDI")
+// 12..19 are the x87 stack, st(0)..st(7) (gcc's fp regs 8..15); 8..11 name nothing.
+private val X86_DBX_TO_REGISTER = listOf("EAX", "ECX", "EDX", "EBX", "EBP", "ESP", "ESI", "EDI") +
+    List(4) { null } + List(8) { "ST$it" }
 private val X86_64_DBX_TO_REGISTER = listOf(
     "RAX", "RDX", "RCX", "RBX", "RSI", "RDI", "RBP", "RSP",
     "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
@@ -36,14 +38,17 @@ val Program.dbxArch: DbxArch? get() = when (language.processor.toString()) {
 
 /**
  * Map a dbx register number to its architecture register name (gcc/config/<arch>/<arch>.h
- * `DBX_REGISTER_NUMBER`). i386: 0..7 = eax,ecx,edx,ebx,ebp,esp,esi,edi. x86_64 (SysV+Win64 agree):
- * 0..7 = rax,rdx,rcx,rbx,rsi,rdi,rbp,rsp; 8..15 = r8..r15. SPARC: identity over %g/%o/%l/%i.
+ * `DBX_REGISTER_NUMBER`). i386: 0..7 = eax,ecx,edx,ebx,ebp,esp,esi,edi; 12..19 = st(0)..st(7). x86_64
+ * (SysV+Win64 agree): 0..7 = rax,rdx,rcx,rbx,rsi,rdi,rbp,rsp; 8..15 = r8..r15. SPARC: identity over
+ * %g/%o/%l/%i.
  *
- * Deliberately not covered: i386 12..19 are the x87 stack (`st(0)`..`st(7)`) and 21..28 the SSE
- * registers; SPARC 32..63 are %f0..%f31. They arrive on `long double` locals in libstdc++'s float
- * conversions and are reported as `reglocal-unmapped-regnum` rather than mapped, because Ghidra's
- * ST0 is 80-bit and a SPARC `double` spans two `fs` registers — binding a local across either needs
- * sizing work this doesn't do. (The SunOS corpus only allocates 24..29, the argument window.)
+ * The x87 registers are 10 bytes in Ghidra and hold a `float`, `double` or 12-byte `long double` alike:
+ * Ghidra lets a float type sit in storage of any size, so no sizing is needed. Both numberings count from
+ * the top of the stack.
+ *
+ * Not covered, and reported as `reglocal-unmapped-regnum`: i386 21..28 (SSE) and SPARC 32..63
+ * (%f0..%f31) — a SPARC `double` spans two `fs` registers, which needs a register pair this doesn't build.
+ * No fixture keeps a local in either. (The SunOS corpus only allocates 24..29, the argument window.)
  *
  * ELF/i386 would need `svr4_dbx_register_map` instead (ebp/esp back the DWARF way round); no such
  * fixture exists — the ELF ones are x86-64, which uses one map for both formats.
