@@ -4,6 +4,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Data
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
@@ -12,6 +13,7 @@ import ghistabs.cpp.*
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.VtableRecord
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.DummySink
 
 /**
  * Lays each class struct a class pass sized but left empty, off what the pass knows of the class: each
@@ -139,27 +141,6 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
             .onFailure { degradation("class-data-unlaid", "${ns.getName(true)}::$name", it.message) }
     }
 
-    /**
-     * Fills each `<Class>_data` struct laid in this with the fields of [store] it holds, as Auto Fill in Structure
-     * fills one: where a field is laid already, [NoisyStructureBuilder] keeps the more specific type,
-     * and the field keeps its name
-     */
-    private fun Structure.fillData(store: Map<Int, DataType>, ns: GhidraClass) {
-        for (laid in definedComponents) {
-            val data = laid.dataType as? Structure ?: continue
-            if (data.categoryPath != categoryPath || !data.name.startsWith(ns.name + ClassNaming.DATA)) continue
-            val inside = store.filter { (at, dt) -> at >= laid.offset && at + dt.length <= laid.endOffset + 1 }
-            val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
-            for ((at, dt) in inside) merged.addDataType(at.toLong() - laid.offset, dt)
-            for ((at, dt) in merged.iterator()) {
-                val old = data.getComponentAt(at.toInt())
-                if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
-                val name = old?.fieldName ?: "field_0x${(laid.offset + at).toString(16)}"
-                data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
-            }
-        }
-    }
-
     /** A `{vbptr}` at [at], where no base subobject holds it already. */
     private fun Structure.placeVbptr(at: Int, ns: GhidraClass) {
         val vbptr = PointerDataType(IntegerDataType.dataType, dtm)
@@ -241,4 +222,34 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
             }
         }
     }
+}
+
+/**
+ * Fills each `<Class>_data` struct laid in this with the fields of [store] it holds, as Auto Fill in Structure
+ * fills one: where a field is laid already, [NoisyStructureBuilder] keeps the more specific type,
+ * and the field keeps its name
+ */
+private fun Structure.fillData(store: Map<Int, DataType>, ns: GhidraClass) {
+    for (laid in definedComponents) {
+        val data = laid.dataType as? Structure ?: continue
+        if (data.categoryPath != categoryPath || !data.name.startsWith(ns.name + ClassNaming.DATA)) continue
+        val inside = store.filter { (at, dt) -> at >= laid.offset && at + dt.length <= laid.endOffset + 1 }
+        val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
+        for ((at, dt) in inside) merged.addDataType(at.toLong() - laid.offset, dt)
+        for ((at, dt) in merged.iterator()) {
+            val old = data.getComponentAt(at.toInt())
+            if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
+            val name = old?.fieldName ?: "field_0x${(laid.offset + at).toString(16)}"
+            data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
+        }
+    }
+}
+
+/**
+ * Retypes [ns]'s own fields off what [methods] load and store through `this`, decompiled again, as the class pass
+ * fills them: the `<Class>_data` structs its struct lays take the more specific type, and keep names and comments.
+ */
+fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor) {
+    val struct = classStruct(ns) ?: return
+    struct.fillData(merged(StructorFinder(this, emptyList(), DummySink).thisFields(methods, monitor).values), ns)
 }
