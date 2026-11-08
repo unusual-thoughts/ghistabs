@@ -84,7 +84,7 @@ class ClassRecovery(private val program: Program, private val abi: CxxAbi, sink:
         val stores = found.constructorStores
         // A class with a vptr is aligned at least as a pointer, which a trailing `bool` leaves it short of.
         val reached = stores.mapValues { (cls, at) ->
-            val end = at.maxOf { (offset, size) -> offset + size }.toLong()
+            val end = at.maxOfOrNull { (offset, dt) -> offset + dt.length }?.toLong() ?: 0L
             val align = if (cls.vftables.isEmpty()) 1L else program.defaultPointerSize.toLong()
             (end + align - 1) / align * align
         }

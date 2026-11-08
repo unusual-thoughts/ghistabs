@@ -1,10 +1,14 @@
 package ghistabs.cpp.recover
 
 import ghidra.app.decompiler.DecompInterface
+import ghidra.app.decompiler.util.FillOutStructureHelper
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.DataType
+import ghidra.program.model.data.NoisyStructureBuilder
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighFunction
+import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.util.task.TaskMonitor
@@ -31,30 +35,33 @@ fun storedClass(classes: Set<ClassDecl>): ClassDecl? =
 
 /**
  * What [StructorFinder.find] found: each structor's class and role ([roles]), each constructor a linker folded
- * into another class's that builds [folded] classes too, and the bytes each function read stores through
+ * into another class's that builds [folded] classes too, and the fields each function read stores through
  * `this`.
  */
 class Structors(
     val roles: Map<Function, Pair<ClassDecl, StructorRole>>,
     val folded: Map<Function, Set<ClassDecl>>,
-    private val thisStores: Map<Function, Map<Int, Int>>,
+    private val thisStores: Map<Function, Map<Int, DataType>>,
 ) {
     /** Each constructor, by the class it builds. */
     val constructors = roles.filterValues { it.second == CONSTRUCTOR }.mapValues { it.value.first }
 
     /**
-     * The bytes each class's constructors, its own and those folded into another's, store through `this`, by
-     * offset into it: its own fields where nothing else is laid, and how large it is at least.
+     * The fields each class's constructors, its own and those folded into another's, store through `this`, by
+     * offset into it: its own fields where nothing else is laid, and how large it is at least. Where two
+     * constructors disagree, [NoisyStructureBuilder] keeps the more specific type, as it does for one.
      */
-    val constructorStores: Map<ClassDecl, Map<Int, Int>> by lazy {
+    val constructorStores: Map<ClassDecl, Map<Int, DataType>> by lazy {
         val built = constructors.map { (f, cls) -> f to cls } + folded.flatMap { (f, cs) -> cs.map { f to it } }
-        buildMap<ClassDecl, MutableMap<Int, Int>> {
-            for ((f, cls) in built) {
-                val into = getOrPut(cls) { mutableMapOf() }
-                thisStores[f].orEmpty().forEach { (at, size) -> into.merge(at, size, ::maxOf) }
-            }
-        }
+        built.groupBy({ it.second }, { it.first }).mapValues { (_, fs) -> merged(fs.map { thisStores[it].orEmpty() }) }
     }
+}
+
+/** [stores] by offset, merged in a [NoisyStructureBuilder], which keeps the more specific type where two disagree. */
+internal fun merged(stores: Iterable<Map<Int, DataType>>): Map<Int, DataType> {
+    val fields = NoisyStructureBuilder()
+    for (store in stores) store.forEach { (at, dt) -> fields.addDataType(at.toLong(), dt) }
+    return fields.iterator().asSequence().associate { (at, dt) -> at.toInt() to dt }
 }
 
 /** Finds constructors and destructors among [classes]' by the vtables they store into `this`, decompiled. */
@@ -94,6 +101,10 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         return Structors(roles, folded, thisStores)
     }
 
+    /** The fields each of [funcs] loads or stores through `this`, decompiled, by offset into it, typed off how. */
+    fun thisFields(funcs: Collection<Function>, monitor: TaskMonitor) =
+        decompile(funcs, emptyMap(), monitor, storedOnly = false).thisStores
+
     /**
      * The constructor of each base of [ctors]' classes that has no vtable, so stores none: the one function
      * a constructor calls on that base's subobject, which [subobjectCalls] holds by offset into `this`.
@@ -114,12 +125,12 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
 
     /**
      * The vptrs each function stores ([stores]), the functions each calls on `this` or a subobject of it, by
-     * offset into it ([subobjectCalls]), and the bytes each stores through `this`, by offset ([thisStores]).
+     * offset into it ([subobjectCalls]), and the fields each stores through `this`, by offset ([thisStores]).
      */
     class Reading(
         val stores: Map<Function, VptrStores>,
         val subobjectCalls: Map<Function, Map<Long, Set<Function>>>,
-        val thisStores: Map<Function, Map<Int, Int>> = emptyMap(),
+        val thisStores: Map<Function, Map<Int, DataType>> = emptyMap(),
     ) {
         /** The functions each calls on `this` itself. */
         private val thisCalls = subobjectCalls.mapValues { (_, calls) -> calls[0L].orEmpty() }
@@ -253,17 +264,22 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         funcs: Collection<Function>,
         writes: Map<Function, Map<Address, List<Pair<ClassDecl, Long>>>>,
         monitor: TaskMonitor,
+        storedOnly: Boolean = true,
     ): Reading {
         val stores = mutableMapOf<Function, VptrStores>()
         val subobjectCalls = mutableMapOf<Function, Map<Long, Set<Function>>>()
-        val thisStores = mutableMapOf<Function, Map<Int, Int>>()
+        val thisStores = mutableMapOf<Function, Map<Int, DataType>>()
         if (thisStorage != null) {
+            val fill = FillOutStructureHelper(program, monitor)
             DecompInterface().useWith(program) { decomp ->
                 for (func in funcs) {
                     val high = decomp.decompiled(func, monitor) ?: continue
-                    writes[func]?.let { stores[func] = high.vptrStores(it) }
-                    subobjectCalls[func] = high.subobjectCalls()
-                    thisStores[func] = high.thisStores()
+                    val calls = high.subobjectCalls()
+                    val filled = fill.fillThis(high)
+                    writes[func]?.let { stores[func] = filled.vptrStores(it, calls) }
+                    subobjectCalls[func] =
+                        calls.groupBy({ it.offset }, { it.callee }).mapValues { (_, fs) -> fs.toSet() }
+                    thisStores[func] = filled.thisStores(storedOnly)
                 }
             }
         }
@@ -276,52 +292,67 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
             ?: null.also { debug("structor-undecompiled", func.name, func.entryPoint) }
     }
 
-    /** The bytes this stores through `this`, by offset into it: the larger store where two meet. */
-    private fun HighFunction.thisStores(): Map<Int, Int> = buildMap {
-        for (op in pcodeOps) {
-            if (op.opcode != PcodeOp.STORE) continue
-            val at = op.getInput(1).thisOffset() ?: continue
-            merge(at.toInt(), op.getInput(2).size, ::maxOf)
-        }
+    /**
+     * Follows `this` through [high] as Ghidra's Auto Fill in Structure does, through copies, casts and offsets,
+     * for [thisStores] and [vptrStores] to read; null where `this` goes unread.
+     */
+    private fun FillOutStructureHelper.fillThis(high: HighFunction): FillOutStructureHelper? {
+        val thisVar = high.thisVariable() ?: return null
+        processStructure(thisVar, high.function, true, false, null)
+        return this
     }
 
-    /** The functions this calls with a pointer into `this` first, by how far into it. */
-    private fun HighFunction.subobjectCalls(): Map<Long, Set<Function>> = pcodeOps.asSequence()
-        .mapNotNull { subobjectCall(it) }
-        .groupBy({ it.first }, { it.second }).mapValues { (_, fs) -> fs.toSet() }
-
-    /** The function [op] calls with a pointer into `this` first, and how far into it; null if it's no such call. */
-    private fun subobjectCall(op: PcodeOp): Pair<Long, Function>? {
-        if (op.opcode != PcodeOp.CALL || op.numInputs < 2) return null
-        val at = op.getInput(1).thisOffset() ?: return null
-        val callee = program.functionManager.getFunctionAt(op.getInput(0).address) ?: return null
-        return at to (callee.getThunkedFunction(true) ?: callee)
+    /**
+     * The fields the function filled stores through `this`, or [storedOnly] false loads too, by offset into it,
+     * typed off what it stores or loads.
+     */
+    private fun FillOutStructureHelper?.thisStores(storedOnly: Boolean): Map<Int, DataType> {
+        if (this == null) return emptyMap()
+        val stored = storePcodeOps.mapTo(mutableSetOf()) { it.offset }
+        return componentMap.iterator().asSequence()
+            .filter { (at, dt) -> (!storedOnly || at in stored) && dt.length > 0 }
+            .associate { (at, dt) -> at.toInt() to dt }
     }
 
-    /** Which of the vptrs [at] holds this stores, and what it calls on `this` before and after, by address. */
-    private fun HighFunction.vptrStores(at: Map<Address, List<Pair<ClassDecl, Long>>>): VptrStores {
-        val classes = mutableSetOf<ClassDecl>()
-        val storedAt = mutableListOf<Address>()
-        val calls = mutableListOf<Pair<Address, Function>>()
-        for (op in pcodeOps) {
-            subobjectCall(op)?.let { calls += op.seqnum.target to it.second }
-            if (op.opcode != PcodeOp.STORE) continue
-            val served = at[op.seqnum.target] ?: continue
-            val offset = op.getInput(1).thisOffset() ?: continue
-            val hit = served.filter { it.second == offset }.map { it.first }
-            if (hit.isEmpty()) continue
-            classes += hit
-            storedAt += op.seqnum.target
+    /** The variable `this` comes in as, at [thisStorage]; null where nothing reads it. */
+    private fun HighFunction.thisVariable(): HighVariable? = pcodeOps.asSequence()
+        .flatMap { it.inputs.asSequence() }
+        .firstOrNull { it.isInput && it.address == thisStorage }?.high
+
+    /** A call at [at] of [callee] with a pointer [offset] bytes into `this` first. */
+    private class SubobjectCall(val at: Address, val offset: Long, val callee: Function)
+
+    /** The calls this makes with a pointer into `this` first. */
+    private fun HighFunction.subobjectCalls(): List<SubobjectCall> = pcodeOps.asSequence().mapNotNull { op ->
+        if (op.opcode != PcodeOp.CALL || op.numInputs < 2) return@mapNotNull null
+        val offset = op.getInput(1).thisOffset() ?: return@mapNotNull null
+        val callee = program.functionManager.getFunctionAt(op.getInput(0).address) ?: return@mapNotNull null
+        SubobjectCall(op.seqnum.target, offset, callee.getThunkedFunction(true) ?: callee)
+    }.toList()
+
+    /**
+     * Which of the vptrs [at] holds the function filled stores through `this`, at the offset each belongs at,
+     * and which of its [calls] come before the first of those stores and after the last, by address.
+     */
+    private fun FillOutStructureHelper?.vptrStores(
+        at: Map<Address, List<Pair<ClassDecl, Long>>>,
+        calls: List<SubobjectCall>,
+    ): VptrStores {
+        val hits = this?.storePcodeOps.orEmpty().mapNotNull { store ->
+            val where = store.pcodeOp.seqnum.target
+            val hit = at[where].orEmpty().filter { it.second == store.offset }.map { it.first }
+            hit.takeIf { it.isNotEmpty() }?.let { where to it }
         }
-        val first = storedAt.minOrNull() ?: return VptrStores(classes)
-        val last = storedAt.max()
+        val classes = hits.flatMapTo(mutableSetOf()) { it.second }
+        val first = hits.minOfOrNull { it.first } ?: return VptrStores(classes)
+        val last = hits.maxOf { it.first }
         return VptrStores(
             classes,
-            before = calls.filter { it.first < first }.mapTo(mutableSetOf()) { it.second },
-            after = calls.filter { it.first > last }.mapTo(mutableSetOf()) { it.second },
+            before = calls.filter { it.at < first }.mapTo(mutableSetOf()) { it.callee },
+            after = calls.filter { it.at > last }.mapTo(mutableSetOf()) { it.callee },
         )
     }
 
     /** How far past `this` [this] points; null if it points into something else. */
-    private fun Varnode.thisOffset() = pointerInto().takeIf { it.isThis(thisStorage) }?.offset
+    private fun Varnode.thisOffset() = pointerInto()?.takeIf { it.isThis(thisStorage) }?.offset
 }

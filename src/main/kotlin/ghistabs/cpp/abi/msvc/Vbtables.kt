@@ -4,6 +4,7 @@ import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighFunction
+import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.util.task.TaskMonitor
@@ -52,7 +53,7 @@ class Vbtables(private val program: Program, classes: Collection<ClassDecl>, sin
         for (op in pcodeOps) {
             if (op.opcode != PcodeOp.STORE) continue
             val value = op.getInput(2).constant()?.let(::asAddress) ?: continue
-            val (root, offset) = op.getInput(1).pointerInto()
+            val (root, offset) = op.getInput(1).pointerInto() ?: continue
             getOrPut(root) { mutableMapOf() }[offset] = value
         }
         // A virtual base's vptr goes where the vbtable stored beside it puts the base: into that object.
@@ -72,13 +73,16 @@ class Vbtables(private val program: Program, classes: Collection<ClassDecl>, sin
      * Where [this] points as a constructor reaches a virtual base, into the object [stores] puts a vbtable
      * in: `vbptr + vbtable[vdisp]`, the vbtable the one stored at the vbptr. Null for any other pointer.
      */
-    private fun Varnode.throughVbtable(stores: Map<Varnode, Map<Long, Address>>): PointerInto? {
-        val sum = def?.takeIf { it.opcode == PcodeOp.INT_ADD || it.opcode == PcodeOp.PTRADD } ?: return null
+    private fun HighVariable.throughVbtable(stores: Map<HighVariable, Map<Long, Address>>): PointerInto? {
+        val sum = instances.firstNotNullOfOrNull { v ->
+            v.def?.takeIf { it.opcode == PcodeOp.INT_ADD || it.opcode == PcodeOp.PTRADD }
+        } ?: return null
         if (sum.opcode == PcodeOp.PTRADD && sum.getInput(2).let { !it.isConstant || it.offset != 1L }) return null
         return listOf(0, 1).firstNotNullOfOrNull { i ->
-            val vbptr = sum.getInput(i).pointerInto()
+            val vbptr = sum.getInput(i).pointerInto() ?: return@firstNotNullOfOrNull null
             val (vbtableAt, vdisp) = sum.getInput(1 - i).loaded()?.pointerInto() ?: return@firstNotNullOfOrNull null
-            val (root, pdisp) = vbtableAt.loaded()?.pointerInto() ?: return@firstNotNullOfOrNull null
+            val (root, pdisp) = vbtableAt.instances.firstNotNullOfOrNull { it.loaded() }?.pointerInto()
+                ?: return@firstNotNullOfOrNull null
             val vbtable = stores[root]?.get(pdisp)?.takeIf { root == vbptr.root && pdisp == vbptr.offset }
                 ?.takeIf(::mayBeVbtable)
             vbtable?.let { runCatching { program.memory.getInt(it.add(vdisp)) }.getOrNull() }
@@ -86,9 +90,9 @@ class Vbtables(private val program: Program, classes: Collection<ClassDecl>, sin
         }
     }
 
-    /** The pointer [this] is loaded through, past copies and casts. */
+    /** The pointer [this] is loaded through, past casts. */
     private fun Varnode.loaded(): Varnode? = when (def?.opcode) {
-        PcodeOp.COPY, PcodeOp.CAST -> def.getInput(0).loaded()
+        PcodeOp.CAST -> def.getInput(0).loaded()
         PcodeOp.LOAD -> def.getInput(1)
         else -> null
     }
