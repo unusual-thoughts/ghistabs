@@ -716,7 +716,7 @@ internal fun Program.rehomeOntoShortenedClasses(shortener: TemplateNameShortener
     }
     for (long in symbolTable.classNamespaces.asSequence().toList()) {
         val short = shortener.shortenedNestedOrNull(long.name) ?: continue
-        val longPath = long.getPathList(true).toList()
+        val longPath = long.path
         val target = symbolTable.getNamespace(short, long.parentNamespace) as? GhidraClass
         if (target == null) {
             if (renameUnplacedClass(long, short)) {
