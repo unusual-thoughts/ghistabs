@@ -92,8 +92,9 @@ class NewSizeReader(private val program: Program, private val abi: CxxAbi, sink:
                 val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
                 for (op in high.pcodeOps.asSequence()) {
                     val cls = op.callee()?.let(ctors::get) ?: continue
-                    val alloc = op.getInput(1).pointerInto().takeIf { it.offset == 0L }?.root?.def ?: continue
-                    val size = alloc.getInput(1)?.takeIf { alloc.callee()?.isOperatorNew() == true && it.isConstant }
+                    val obj = op.getInput(1).pointerInto()?.takeIf { it.offset == 0L } ?: continue
+                    val alloc = obj.root.instances.mapNotNull { it.def }.firstOrNull { it.isOperatorNew() }
+                    val size = alloc?.getInput(1)?.takeIf { it.isConstant }
                     size?.let { sizes.getOrPut(cls) { mutableSetOf() } += it.offset }
                 }
             }
@@ -110,5 +111,5 @@ class NewSizeReader(private val program: Program, private val abi: CxxAbi, sink:
         return f.getThunkedFunction(true) ?: f
     }
 
-    private fun Function.isOperatorNew() = name in abi.operatorNewNames
+    private fun PcodeOp.isOperatorNew() = callee()?.name in abi.operatorNewNames
 }

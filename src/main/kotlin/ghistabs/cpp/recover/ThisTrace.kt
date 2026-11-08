@@ -6,6 +6,7 @@ import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
+import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghistabs.cpp.ClassDecl
@@ -51,20 +52,20 @@ fun Function.fastcallToThiscall(): Boolean {
 private const val FASTCALL = CompilerSpec.CALLING_CONVENTION_fastcall
 private const val THISCALL = CompilerSpec.CALLING_CONVENTION_thiscall
 
-/** A pointer as the value it points into ([root]) and how far past it ([offset]). */
-data class PointerInto(val root: Varnode, val offset: Long) {
+/**
+ * A pointer as the variable it points into ([root]) and how far past it ([offset]). The decompiler merges a
+ * variable's copies and phis into one [HighVariable], so [root] is the same however the pointer got there.
+ */
+data class PointerInto(val root: HighVariable, val offset: Long) {
     /** Whether [root] is the function's incoming `this`, which comes in at [thisStorage]. */
-    fun isThis(thisStorage: Address?) = root.isInput && root.address == thisStorage
+    fun isThis(thisStorage: Address?) = root.instances.any { it.isInput && it.address == thisStorage }
 }
 
-/**
- * Traces a decompiled pointer back through copies, casts and constant adds, and through a phi whose
- * other inputs are null (a `new` result checked before its constructor runs).
- */
-fun Varnode.pointerInto(offset: Long = 0, depth: Int = 0): PointerInto = when (
+/** Traces a decompiled pointer back through casts and constant adds to the variable it points into. */
+fun Varnode.pointerInto(offset: Long = 0, depth: Int = 0): PointerInto? = when (
     (def?.opcode)?.takeIf { depth < MAX_TRACE }
 ) {
-    PcodeOp.COPY, PcodeOp.CAST -> def.getInput(0).pointerInto(offset, depth + 1)
+    PcodeOp.CAST -> def.getInput(0).pointerInto(offset, depth + 1)
 
     PcodeOp.INT_ADD, PcodeOp.PTRSUB -> def.getInput(1).takeIf { it.isConstant }?.let { by ->
         def.getInput(0).pointerInto(offset + by.offset, depth + 1)
@@ -78,10 +79,7 @@ fun Varnode.pointerInto(offset: Long = 0, depth: Int = 0): PointerInto = when (
         }
     }
 
-    PcodeOp.MULTIEQUAL -> def.inputs.filterNot { it.isConstant && it.offset == 0L }.singleOrNull()
-        ?.pointerInto(offset, depth + 1)
-
     else -> null
-} ?: PointerInto(this, offset)
+} ?: high?.let { PointerInto(it, offset) }
 
 private const val MAX_TRACE = 16
