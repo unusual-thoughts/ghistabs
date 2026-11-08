@@ -29,4 +29,17 @@ class DbxRegistersTest {
         DbxArch.X86.registerName(24) mustBe null
         DbxArch.X86_64.registerName(4) mustBe "RSI"
     }
+
+    @Test
+    fun testX87StackIsTwelveToNineteen() {
+        // i386's dbx_register_map sends gcc's fp regs 8..15 to 12..19, st(0)..st(7); 8..11 name nothing.
+        // gcc345's `long double` and `float` temporaries in the libstdc++ float conversions arrive as 12.
+        DbxArch.X86.registerName(12) mustBe "ST0"
+        DbxArch.X86.registerName(19) mustBe "ST7"
+        DbxArch.X86.registerName(8) mustBe null
+        DbxArch.X86.registerName(11) mustBe null
+        DbxArch.X86.registerName(20) mustBe null
+        // x86_64's x87 stack sits elsewhere (33..40); no fixture keeps a local there.
+        DbxArch.X86_64.registerName(12) mustBe "R12"
+    }
 }
