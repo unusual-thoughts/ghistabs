@@ -191,12 +191,20 @@ fun Program.namespaceAt(path: List<String>): Namespace? =
 /** Every category under this one, at any depth. */
 fun Category.descendants(): Sequence<Category> = categories.asSequence().flatMap { sequenceOf(it) + it.descendants() }
 
-/** The defined components sharing a byte with the bytes in [range] */
-internal fun Structure.componentsOverlapping(range: IntRange) =
-    definedComponents.filter { it.offset <= range.last && range.first < it.offset + it.length }
-internal fun Structure.componentsOverlapping(offset: Int, length: Int) =
-    componentsOverlapping(offset.withLength(length))
 val CodeUnit.range get() = minAddress..maxAddress
+val DataTypeComponent.range get() = offset.withLength(length)
+
+/** Whether [c] lies wholly within these bytes. */
+fun IntRange.holds(c: DataTypeComponent) = includes(c.range)
+
+/** Whether [c] shares a byte with these. */
+fun IntRange.overlaps(c: DataTypeComponent) = overlaps(c.range)
+
+/** The defined components sharing a byte with the bytes in [range] */
+fun Structure.componentsOverlapping(range: IntRange) = definedComponents.filter { range.overlaps(it) }
+
+/** The defined components sharing a byte with the [length] bytes at [offset]. */
+fun Structure.componentsOverlapping(offset: Int, length: Int) = componentsOverlapping(offset.withLength(length))
 
 /**
  * Clear any instructions covering [range]; true if there were any. An empty [range]
