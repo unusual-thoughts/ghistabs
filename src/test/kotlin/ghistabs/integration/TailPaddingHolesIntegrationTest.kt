@@ -35,6 +35,7 @@ class TailPaddingHolesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
     private fun mostlyUndefined(vararg structs: String): List<String> {
         val stabs = listOf(
+            "int:t(0,1)=r(0,1);-2147483648;2147483647;",
             "char:t(0,3)=r(0,3);0;127;",
             "long long unsigned int:t(0,6)=@s64;r(0,6);0000000000000;01777777777777777777777;",
         ) + structs
@@ -49,6 +50,25 @@ class TailPaddingHolesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
     fun trailingPaddingIsNotAHole() {
         mostlyUndefined("Tail:T(0,10)=s16q:(0,6),0,64;c:(0,3),64,8;;")
             .must("Tail's 7 trailing bytes are padding") { none { it.endsWith("/Tail") } }
+    }
+
+    @Test
+    fun paddingToAnExplicitAlignmentIsNotAHole() {
+        // `__attribute__((aligned))` rounds `_Unwind_Exception` from 20 bytes to 32, and CryptoPP's
+        // `CRYPTOPP_ALIGN_DATA(8)` a byte allocator from 18 to 24: more padding than their widest scalar
+        // explains, but less than the alignment the size itself implies. The stab carries no attribute.
+        mostlyUndefined(
+            "Unwound:T(0,10)=s32q:(0,6),0,64;a:(0,1),64,32;b:(0,1),96,32;c:(0,1),128,32;;",
+            "Bytes:T(0,11)=s24arr:(0,12)=ar(0,1);0;15;(0,3),0,128;f:(0,3),128,8;g:(0,3),136,8;;",
+        ).must("both tails are alignment padding") { none { it.endsWith("/Unwound") || it.endsWith("/Bytes") } }
+    }
+
+    @Test
+    fun aTailLongerThanTheDataIsStillAHole() {
+        // 16 bytes would allow 12 of padding after one int, but nothing pads more than it holds: a body
+        // that lost its later members looks just like this.
+        mostlyUndefined("Lost:T(0,10)=s16i:(0,1),0,32;;")
+            .must("Lost's 12 trailing bytes are a hole") { any { it.endsWith("/Lost") } }
     }
 
     @Test
