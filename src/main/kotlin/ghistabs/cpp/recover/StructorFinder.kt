@@ -53,12 +53,15 @@ class Structors(
      */
     val constructorStores: Map<ClassDecl, Map<Int, DataType>> by lazy {
         val built = constructors.map { (f, cls) -> f to cls } + folded.flatMap { (f, cs) -> cs.map { f to it } }
-        built.groupBy({ it.second }, { it.first }).mapValues { (_, fs) ->
-            val fields = NoisyStructureBuilder()
-            for (f in fs) thisStores[f].orEmpty().forEach { (at, dt) -> fields.addDataType(at.toLong(), dt) }
-            fields.iterator().asSequence().associate { (at, dt) -> at.toInt() to dt }
-        }
+        built.groupBy({ it.second }, { it.first }).mapValues { (_, fs) -> merged(fs.map { thisStores[it].orEmpty() }) }
     }
+}
+
+/** [stores] by offset, merged in a [NoisyStructureBuilder], which keeps the more specific type where two disagree. */
+internal fun merged(stores: Iterable<Map<Int, DataType>>): Map<Int, DataType> {
+    val fields = NoisyStructureBuilder()
+    for (store in stores) store.forEach { (at, dt) -> fields.addDataType(at.toLong(), dt) }
+    return fields.iterator().asSequence().associate { (at, dt) -> at.toInt() to dt }
 }
 
 /** Finds constructors and destructors among [classes]' by the vtables they store into `this`, decompiled. */
@@ -97,6 +100,10 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         }
         return Structors(roles, folded, thisStores)
     }
+
+    /** The fields each of [funcs] loads or stores through `this`, decompiled, by offset into it, typed off how. */
+    fun thisFields(funcs: Collection<Function>, monitor: TaskMonitor) =
+        decompile(funcs, emptyMap(), monitor, storedOnly = false).thisStores
 
     /**
      * The constructor of each base of [ctors]' classes that has no vtable, so stores none: the one function
@@ -257,6 +264,7 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         funcs: Collection<Function>,
         writes: Map<Function, Map<Address, List<Pair<ClassDecl, Long>>>>,
         monitor: TaskMonitor,
+        storedOnly: Boolean = true,
     ): Reading {
         val stores = mutableMapOf<Function, VptrStores>()
         val subobjectCalls = mutableMapOf<Function, Map<Long, Set<Function>>>()
@@ -271,7 +279,7 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
                     writes[func]?.let { stores[func] = filled.vptrStores(it, calls) }
                     subobjectCalls[func] =
                         calls.groupBy({ it.offset }, { it.callee }).mapValues { (_, fs) -> fs.toSet() }
-                    thisStores[func] = filled.thisStores()
+                    thisStores[func] = filled.thisStores(storedOnly)
                 }
             }
         }
@@ -294,12 +302,15 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         return this
     }
 
-    /** The fields the function filled stores through `this`, by offset into it, typed off what it stores. */
-    private fun FillOutStructureHelper?.thisStores(): Map<Int, DataType> {
+    /**
+     * The fields the function filled stores through `this`, or [storedOnly] false loads too, by offset into it,
+     * typed off what it stores or loads.
+     */
+    private fun FillOutStructureHelper?.thisStores(storedOnly: Boolean): Map<Int, DataType> {
         if (this == null) return emptyMap()
         val stored = storePcodeOps.mapTo(mutableSetOf()) { it.offset }
         return componentMap.iterator().asSequence()
-            .filter { (at, dt) -> at in stored && dt.length > 0 }
+            .filter { (at, dt) -> (!storedOnly || at in stored) && dt.length > 0 }
             .associate { (at, dt) -> at.toInt() to dt }
     }
 
