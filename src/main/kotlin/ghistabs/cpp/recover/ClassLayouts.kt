@@ -12,13 +12,11 @@ import ghistabs.cpp.*
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.VtableRecord
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.materialize.VfptrModel
-import ghistabs.materialize.VfptrPlacement
 
 /**
  * Lays each class struct a class pass sized but left empty, off what the pass knows of the class: each
  * non-virtual base at its offset, then a `{vfptr}` at each of its vptrs, typed to that vftable's struct. A
- * vptr inside a base subobject replaces the base's, which is split around it as [VfptrPlacement] splits a
+ * vptr inside a base subobject replaces the base's, which is split around it as [BaseSplitter] splits a
  * stabs class's primary base. In between, the virtual bases ([VirtualBases]), so their vptrs split them
  * too. A vftable no analysis typed gets a struct, a slot per function, as `RecoverClassesFromRTTIScript`
  * makes one. Bases go first, so a class embeds its bases laid: a base with virtual bases as its
@@ -28,7 +26,7 @@ class ClassLayouts(private val program: Program, private val abi: CxxAbi, sink: 
     DiagnosticSink by sink {
     private val dtm = program.dataTypeManager
     private val registry = DtmRegistry(dtm)
-    private val vfptrs = VfptrPlacement(registry, VfptrModel.SPLIT_BASE, sink)
+    private val vfptrs = BaseSplitter(registry, sink)
     private val slots = VtableSweeper(registry, program, TaskMonitor.DUMMY, sink)
     private val vbases = VirtualBases(program, abi, sink)
 
