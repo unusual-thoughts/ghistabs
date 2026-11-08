@@ -10,6 +10,8 @@ import ghistabs.cpp.*
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.path
+import ghistabs.toCategoryPath
 
 /**
  * Places the virtual bases a class struct lacks where its [abi]'s records say they are
@@ -85,8 +87,7 @@ class VirtualBases(private val program: Program, private val abi: CxxAbi, sink: 
         val ns = vbase.ns?.takeUnless { it.isGlobal }
         if (ns == null || within < ptr || within + part.length > room) return null
         val vftable = dtm.getDataType(ClassNaming.vftablePath(ns))
-        val category = ns.parentNamespace.getPathList(true)
-            .fold(CategoryPath.ROOT) { path, seg -> CategoryPath(path, seg) }
+        val category = ns.parentNamespace.path.toCategoryPath()
         val placeholder = lookup(vbase).firstOrNull { it.isZeroLength }
         val struct = (placeholder ?: StructureDataType(category, ns.name, 0, dtm)).apply {
             growStructure(room)
