@@ -49,32 +49,36 @@
             "max": 0
         },
         "demangler-retarget-bound": {
-            "min": 25,
-            "max": 25
+            "min": 24,
+            "max": 24
         },
         "demangler-retargeted-stub-site": {
-            "min": 25,
-            "max": 25
+            "min": 24,
+            "max": 24
         },
         "demangler-reverse-demangle-match": {
             "min": 61,
             "max": 61
         },
         "demangler-shortened-name-match": {
-            "min": 17,
-            "max": 17
+            "min": 16,
+            "max": 16
         },
         "demangler-skip-no-replacement": {
-            "min": 13,
-            "max": 13
+            "min": 12,
+            "max": 12
         },
         "demangler-sole-instantiation-declined": {
-            "min": 28,
-            "max": 28
+            "min": 29,
+            "max": 29
+        },
+        "demangler-sole-instantiation-match": {
+            "min": 1,
+            "max": 1
         },
         "demangler-unbound-stub": {
-            "min": 13,
-            "max": 13
+            "min": 12,
+            "max": 12
         },
         "drop-record-opt": {
             "min": 33,
@@ -730,8 +734,8 @@
             "max": 3
         },
         "replaced-demangler": {
-            "min": 61,
-            "max": 61
+            "min": 62,
+            "max": 62
         },
         "scope-from-twin": {
             "min": 3802,
