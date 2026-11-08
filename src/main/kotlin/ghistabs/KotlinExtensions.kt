@@ -34,7 +34,9 @@ class Once<T, R>(private val f: (T) -> R) : (T) -> R {
 }
 
 fun Int.withLength(len: Int) = this..<this + len
-fun IntRange.overlaps(other: IntRange) = other.first in this || first in other
+
+/** Whether these share an element with [other]; an empty range shares none. */
+fun IntRange.overlaps(other: IntRange) = !isEmpty() && !other.isEmpty() && (other.first in this || first in other)
 
 /** Whether [other] lies within these, an empty [other] included at either end. */
 fun IntRange.includes(other: IntRange) = other.first >= first && other.last <= last
