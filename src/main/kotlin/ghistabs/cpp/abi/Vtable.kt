@@ -6,6 +6,7 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Data
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
@@ -132,35 +133,9 @@ data class VtableRecord(
             .takeWhile { it < addressPoint }
             .any { at -> program.symbolTable.getSymbols(at).any { startsVtableGroup(it.name) } }
 
-    /**
-     * The functions the slots point at, in order. Nothing records how many there are, so they end at the
-     * first entry that isn't code or an imported function. Up to two nulls count when a function follows:
-     * gcc 12 leaves an abstract class's destructor slots 0.
-     */
-    fun slots(program: Program): List<Address> = buildList {
-        val ptr = program.defaultPointerSize
-        val nulls = mutableListOf<Address>()
-        for (pfn in abi.slotOffsets(ptr).map(addressPoint::add)) {
-            val target = program.pointerAt(pfn) ?: break
-            when {
-                target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target
-
-                program.isCode(target) || program.isImportedFunction(pfn, target) ->
-                    addAll(nulls + target).also { nulls.clear() }
-
-                else -> break
-            }
-        }
-    }
-
-    /**
-     * Whether [pfn] is relocated against the imported function whose thunk is at [target]. Data imports share
-     * the EXTERNAL block, so the thunk alone doesn't say: a typeinfo's vptr can land on one.
-     */
-    private fun Program.isImportedFunction(pfn: Address, target: Address): Boolean {
-        val thunk = functionManager.getFunctionAt(target)?.takeIf { it.isThunk } ?: return false
-        return relocationTable.getRelocations(pfn).any { it.symbolName == thunk.name }
-    }
+    /** The functions the slots point at, in order ([functionSlots]). */
+    fun slots(program: Program): List<Address> =
+        program.functionSlots(abi.slotOffsets(program.defaultPointerSize).map(addressPoint::add)).toList()
 
     /**
      * The rtti word's comment: the typeinfo symbol actually there, its linkage name over Ghidra's `typeinfo`
@@ -216,6 +191,38 @@ data class VtableRecord(
 
 /** gcc's two destructor entries, complete and deleting: the only slots it leaves null. */
 private const val DESTRUCTOR_SLOTS = 2
+
+/**
+ * The functions the slots at [pfns] point at, in order. Nothing records how many there are, so they end at
+ * the first entry that isn't code or an imported function [imported] takes. Up to two nulls count when a
+ * function follows: gcc 12 leaves an abstract class's destructor slots 0.
+ */
+internal fun Program.functionSlots(pfns: Sequence<Address>, imported: (Function) -> Boolean = { true }) = sequence {
+    val nulls = mutableListOf<Address>()
+    for (pfn in pfns) {
+        val target = pointerAt(pfn) ?: break
+        when {
+            target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target
+
+            isCode(target) || importedFunction(pfn, target)?.let(imported) == true -> {
+                yieldAll(nulls)
+                yield(target)
+                nulls.clear()
+            }
+
+            else -> break
+        }
+    }
+}
+
+/**
+ * The imported function whose thunk is at [target], if [pfn] is relocated against it. Data imports share
+ * the EXTERNAL block, so the thunk alone doesn't say: a typeinfo's vptr can land on one.
+ */
+private fun Program.importedFunction(pfn: Address, target: Address): Function? {
+    val thunk = functionManager.getFunctionAt(target)?.takeIf { it.isThunk } ?: return null
+    return thunk.takeIf { relocationTable.getRelocations(pfn).any { it.symbolName == thunk.name } }
+}
 
 /** Labels [at], raising an existing label to [SourceType.IMPORTED], which is what [isVtableClaimed] reads. */
 private fun Program.labelVtable(at: Address, label: String, ns: Namespace, source: SourceType) {

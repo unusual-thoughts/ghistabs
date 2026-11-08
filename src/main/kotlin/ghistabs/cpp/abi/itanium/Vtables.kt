@@ -8,6 +8,7 @@ import ghistabs.*
 import ghistabs.cpp.ClassNaming
 import ghistabs.cpp.abi.CxxAbi
 import ghistabs.cpp.abi.VtableRecord
+import ghistabs.cpp.abi.functionSlots
 import kotlin.math.abs
 
 // Itanium vtable records in memory (ABI §2.5.2): their headers, their starts, a group's secondaries, and
@@ -48,17 +49,31 @@ fun DataTypeManager.primaryHeader() = StructureDataType("PrimaryVtableHeader", 0
 
 /**
  * The primary vtable whose `offset_to_top` is at [addr], read through [header] ([primaryHeader]), or null
- * where the words don't fit: data, then 0, the typeinfo pointer, and a slot 0 into code.
+ * where the words don't fit: data, then 0, the typeinfo pointer, and slots starting with a function
+ * ([startsSlots]).
  *
  *     [vbase/vcall offsets…]  offset_to_top  rtti       slot 0  slot 1 …
  *                             0              &typeinfo  &code
  *
- * Slot 0 is needed, as an exception table's catch entry is `{0, typeinfo}` too; so a class whose only
- * virtuals are its bases' is missed. A construction vtable has the same shape, so the caller chooses.
+ * A function slot is needed, as an exception table's catch entry is `{0, typeinfo}` too; so a class whose
+ * only virtuals are its bases' is missed. A construction vtable has the same shape, so the caller chooses.
  */
 fun Program.primaryRecordAt(addr: Address, header: Structure) = addr.takeIf(::isData)?.let { dataAt(it, header) }
     ?.takeIf { it.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value == 0L }
-    ?.takeIf { it.valueOf<Address>("slot0")?.let(::isCode) == true }
+    ?.takeIf { record -> record.getComponent(2)?.address?.let(::startsSlots) == true }
+
+/**
+ * Whether the slots at [slot0] start with a function ([functionSlots]): in code, or the imported
+ * `__cxa_pure_virtual` an abstract class's pure virtuals point at. No other import: `.data`'s `DW.ref`
+ * words, `{…, &typeinfo, &__gxx_personality_v0}`, would pass for a vtable.
+ */
+private fun Program.startsSlots(slot0: Address): Boolean {
+    val pfns = generateSequence(slot0) { runCatching { it.addNoWrap(defaultPointerSize.toLong()) }.getOrNull() }
+    return functionSlots(pfns) { it.name in PURE_VIRTUAL_IMPORTS }.any()
+}
+
+/** What a pure (§3.2.5) or deleted (§3.2.6) virtual's slot points at, imported from the C++ runtime. */
+private val PURE_VIRTUAL_IMPORTS = setOf("__cxa_pure_virtual", "__cxa_deleted_virtual")
 
 /**
  * Where the record whose `offset_to_top` is at [top] starts: back past each word in front that reads as a
