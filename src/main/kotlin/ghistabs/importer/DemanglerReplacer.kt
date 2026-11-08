@@ -507,8 +507,9 @@ class DemanglerReplacer(
     /** Every instantiation we materialized, by the bare template name Ghidra's class-owner stub carries. */
     private val instantiationsByBase: Map<String, List<DataType>> by lazy {
         registry.allRegistered
-            // A DataType name is qualified (`rope<char,…>::$_19`); only a templated leaf is an instantiation.
-            .filter { it !is Pointer && it !is Array && it.name.leafName.isTemplated }
+            // A DataType name is qualified (`rope<char,…>::$_19`); only a leaf closing its template is an
+            // instantiation, as in [instantiationsInBinary]: `A<int>_vftable` or `A<int>_fields_4_96` is not another.
+            .filter { it !is Pointer && it !is Array && it.name.leafName.isInstantiation }
             .groupBy { it.name.templateLeaf }
             .mapValues { (_, v) -> v.distinctBy { it.pathName } }
     }
@@ -533,7 +534,7 @@ class DemanglerReplacer(
                     // Requiring the leaf to close a template also drops non-class scopes.
                     val leaf = scope.namespaceString.nameSegments.lastOrNull()
                         ?.substringBefore("-in-")?.trimEnd('*', '&', ' ')
-                    if (leaf != null && leaf.isTemplated && leaf.endsWith('>')) {
+                    if (leaf?.isInstantiation == true) {
                         getOrPut(leaf.templateLeaf) { mutableSetOf() }.add(ourSpelling(leaf))
                     }
                     scope = scope.namespace

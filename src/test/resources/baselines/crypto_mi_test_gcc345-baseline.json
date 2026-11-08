@@ -76,20 +76,20 @@
             "max": 2
         },
         "demangler-skip-no-replacement": {
-            "min": 77,
-            "max": 77
+            "min": 60,
+            "max": 60
         },
         "demangler-sole-instantiation-declined": {
             "min": 30,
             "max": 30
         },
         "demangler-sole-instantiation-match": {
-            "min": 5,
-            "max": 5
+            "min": 22,
+            "max": 22
         },
         "demangler-unbound-stub": {
-            "min": 77,
-            "max": 77
+            "min": 60,
+            "max": 60
         },
         "demangler-unbound-stub-in-signature": {
             "min": 1,
@@ -825,8 +825,8 @@
             "max": 656
         },
         "replaced-demangler": {
-            "min": 800,
-            "max": 804
+            "min": 817,
+            "max": 821
         },
         "resolve-ambiguous": {
             "min": 1075,
