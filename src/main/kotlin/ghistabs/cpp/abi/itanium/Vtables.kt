@@ -39,17 +39,9 @@ fun DataTypeManager.vtableHeaderLayout(prefixWords: Int): StructureDataType {
     }
 }
 
-/** What an Itanium primary vtable's address point starts with: `offset_to_top`, the rtti word, and slot 0. */
-fun DataTypeManager.primaryHeader() = StructureDataType("PrimaryVtableHeader", 0).apply {
-    add(Itanium.offsetToTopType(dataOrganization.pointerSize), Itanium.OFFSET_TO_TOP, null)
-    add(PointerDataType(this), Itanium.RTTI, null)
-    add(PointerDataType(this), "slot0", null)
-    isPackingEnabled = true
-}
-
 /**
- * The primary vtable whose `offset_to_top` is at [addr], read through [header] ([primaryHeader]), or null
- * where the words don't fit: data, then 0, the typeinfo pointer, and slots starting with a function
+ * Whether a primary vtable's `offset_to_top` is at [addr], read through [header] (`vtableHeaderLayout(0)`):
+ * data, then 0, the typeinfo pointer (the caller found it there), and slots starting with a function
  * ([startsSlots]).
  *
  *     [vbase/vcall offsets…]  offset_to_top  rtti       slot 0  slot 1 …
@@ -58,9 +50,11 @@ fun DataTypeManager.primaryHeader() = StructureDataType("PrimaryVtableHeader", 0
  * A function slot is needed, as an exception table's catch entry is `{0, typeinfo}` too; so a class whose
  * only virtuals are its bases' is missed. A construction vtable has the same shape, so the caller chooses.
  */
-fun Program.primaryRecordAt(addr: Address, header: Structure) = addr.takeIf(::isData)?.let { dataAt(it, header) }
-    ?.takeIf { it.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value == 0L }
-    ?.takeIf { record -> record.getComponent(2)?.address?.let(::startsSlots) == true }
+fun Program.isPrimaryRecordAt(addr: Address, header: Structure): Boolean {
+    val record = addr.takeIf(::isData)?.let { dataAt(it, header) } ?: return false
+    if (record.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value != 0L) return false
+    return runCatching { addr.addNoWrap(record.length.toLong()) }.getOrNull()?.let(::startsSlots) == true
+}
 
 /**
  * Whether the slots at [slot0] start with a function ([functionSlots]): in code, or the imported
