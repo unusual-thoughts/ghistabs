@@ -186,16 +186,17 @@ internal val Structure.dataSize get() = definedComponents.maxOfOrNull { it.offse
  * The alignment is at least the widest scalar, and can be more: an `aligned` attribute, which the stab
  * doesn't carry, rounds `_Unwind_Exception`'s 20 bytes to 32. The size still bounds it — a struct's size
  * is a multiple of its alignment — so a tail under the largest power of two dividing the size, up to
- * [BIGGEST_ALIGNMENT], is padding too, as long as it is shorter than the data it follows: a body that
- * lost its later members would otherwise pass as padded.
+ * [BIGGEST_ALIGNMENT], is padding too, as long as it is shorter than the data it follows and that data
+ * ends in a typed field: a body that lost its later members, or a field whose type never resolved and
+ * stands in at a guessed width (x86-64's `__va_list_tag`), would otherwise pass as padded.
  */
 internal fun Structure.isTailPadding(gap: GapRecord): Boolean {
     val start = (gap.offsetBits / 8).toInt()
     val length = (gap.lengthBits / 8).toInt()
     val sizeAlignment = minOf(this.length.takeLowestOneBit(), BIGGEST_ALIGNMENT)
-    return start > 0 && start + length == this.length &&
-        definedComponents.any { it.offset < start } &&
-        (length < widestScalar() || (length < sizeAlignment && length < start))
+    val last = definedComponents.lastOrNull { it.offset < start } ?: return false
+    val impliedPadding = length < sizeAlignment && length < start && !last.dataType.isUndefined
+    return start > 0 && start + length == this.length && (length < widestScalar() || impliedPadding)
 }
 
 /** gcc's `BIGGEST_ALIGNMENT` on i386 and x86-64, in bytes: what a bare `__attribute__((aligned))` means. */

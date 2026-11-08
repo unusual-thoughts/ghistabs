@@ -72,6 +72,14 @@ class TailPaddingHolesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
     }
 
     @Test
+    fun aTailAfterAnUntypedFieldIsStillAHole() {
+        // Fields whose type never resolved stand in at a guessed width, so what follows them may be the
+        // rest of a field, not padding: x86-64's `__va_list_tag` lost the top half of `reg_save_area` so.
+        mostlyUndefined("Vague:T(0,10)=s16a:(0,50),0,32;b:(0,50),32,32;c:(0,50),64,32;;")
+            .must("Vague's 4 trailing bytes follow an untyped field") { any { it.endsWith("/Vague") } }
+    }
+
+    @Test
     fun aStructWithNothingDefinedIsReported() {
         mostlyUndefined("Blank:T(0,10)=s8;;")
             .must("Blank has nothing but undefined bytes") { any { it.endsWith("/Blank") } }
