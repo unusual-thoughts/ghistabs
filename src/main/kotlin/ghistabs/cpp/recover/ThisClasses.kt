@@ -156,22 +156,20 @@ class ThisClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             for (op in ops) {
                 val ctor = op.directCallee() ?: continue
                 val cls = ctors[ctor] ?: continue
-                op.thisArgument(ctor)?.let { put(it.pointerInto().key(), cls) }
-                op.output?.let { put(it.pointerInto().key(), cls) }
+                op.thisArgument(ctor)?.pointerInto()?.let { put(it, cls) }
+                op.output?.pointerInto()?.let { put(it, cls) }
             }
         }
         return ops.mapNotNull { op ->
             val callee = op.directCallee() ?: return@mapNotNull null
             val obj = op.thisArgument(callee)?.pointerInto() ?: return@mapNotNull null
             when {
-                !obj.isThis(self) -> built[obj.key()]?.let { ThisCall(f, callee, it) }
+                !obj.isThis(self) -> built[obj]?.let { ThisCall(f, callee, it) }
                 obj.offset == 0L -> ThisCall(f, callee)
                 else -> null
             }
         }
     }
-
-    private fun PointerInto.key(): Pair<Any, Long> = (root.def?.seqnum ?: "${root.address}:${root.size}") to offset
 
     private fun PcodeOp.directCallee(): Function? {
         if (opcode != PcodeOp.CALL || numInputs < 2) return null

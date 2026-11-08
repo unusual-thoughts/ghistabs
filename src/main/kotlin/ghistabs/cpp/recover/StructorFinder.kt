@@ -323,5 +323,5 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
     }
 
     /** How far past `this` [this] points; null if it points into something else. */
-    private fun Varnode.thisOffset() = pointerInto().takeIf { it.isThis(thisStorage) }?.offset
+    private fun Varnode.thisOffset() = pointerInto()?.takeIf { it.isThis(thisStorage) }?.offset
 }
