@@ -126,7 +126,7 @@ class ItaniumClasses(private val program: Program, private val sink: DiagnosticS
     private fun slotFunction(at: Address): Function? {
         val func = program.functionManager.getFunctionAt(at) ?: return null
         val target = if (func.isThunk) func.getThunkedFunction(true) else func
-        return target?.takeUnless { it.isExternal || "pure_virtual" in it.name }
+        return target?.takeUnless { it.isExternal || Itanium.isPureVirtualStub(it.name) }
     }
 
     // A SymbolIterator is an Iterator and an Iterable, and `asSequence` is on both.

@@ -99,11 +99,11 @@ class RttiSymbols(
      * construction vtables among the rest.
      */
     private fun labelVtables(typeinfos: List<TypeInfoRecord>): Int {
-        val header = dtm.primaryHeader()
+        val header = dtm.vtableHeaderLayout(0)
 
         // The offset_to_top words in front of a pointer to this typeinfo that start a primary vtable.
         fun TypeInfoRecord.primaryVtables() = sitesByTarget[address]?.mapNotNull { it.plusWords(-1) }
-            ?.filter { program.primaryRecordAt(it, header) != null }.orEmpty()
+            ?.filter { program.isPrimaryRecordAt(it, header) }.orEmpty()
 
         val candidates = typeinfos.associateWith { it.primaryVtables() }
         val rtti = Typeinfo.Reader(program)
