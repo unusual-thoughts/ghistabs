@@ -2,7 +2,7 @@ package ghicpp
 
 // Pure C++ name-string operations for stabs (gcc writes names demangled) — no Ghidra dependency.
 // Source-form namespace/template splitting, template-whitespace canonicalisation, and Itanium
-// mangled-name classification. Ghidra's demangler proper lives in `ghistabs.Demangler`; prefer it
+// mangled-name classification. Ghidra's demangler proper lives in `ghidrakt.Demangler`; prefer it
 // when a mangled token is available, these are the string-only fallbacks and predicates.
 
 /**

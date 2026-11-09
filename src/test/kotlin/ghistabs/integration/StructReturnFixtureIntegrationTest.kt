@@ -6,11 +6,11 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghidrakt.functionsIterable
+import ghidrakt.runTransaction
+import ghidrakt.withProgram
 import ghistabs.entrypoints.Correction
-import ghistabs.functionsIterable
-import ghistabs.runTransaction
 import ghistabs.test.*
-import ghistabs.withProgram
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll

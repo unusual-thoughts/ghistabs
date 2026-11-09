@@ -2,8 +2,8 @@ package ghistabs.importer
 
 import ghidra.framework.options.Options
 import ghidra.program.model.listing.Program
-import ghistabs.*
-import ghistabs.diagnose.Level
+import ghidrakt.*
+import ghidrakt.diagnose.Level
 import ghistabs.materialize.VfptrModel
 
 class ImportOptions() : OptionContainer() {

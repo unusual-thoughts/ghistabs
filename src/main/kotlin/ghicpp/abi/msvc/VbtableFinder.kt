@@ -10,8 +10,8 @@ import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.useWith
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.useWith
 
 /**
  * Finds MSVC vbtables, which no RTTI points at: a function building a class, its constructor or one it

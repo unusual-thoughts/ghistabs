@@ -23,7 +23,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolType
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
+import ghidrakt.*
 
 sealed interface Drop {
     data class MoveBase(val detach: BaseEdit?, val attach: BaseEdit? = null) : Drop

@@ -8,7 +8,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
-import ghistabs.*
+import ghidrakt.*
 import kotlin.math.abs
 
 // Itanium vtable records in memory (ABI §2.5.2): their headers, their starts, a group's secondaries, and

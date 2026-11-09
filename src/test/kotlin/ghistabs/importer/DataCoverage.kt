@@ -4,11 +4,11 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryBlock
-import ghistabs.inHull
+import ghidrakt.inHull
+import ghidrakt.range
+import ghidrakt.undefinedRangesIn
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabType
-import ghistabs.range
-import ghistabs.undefinedRangesIn
 
 // a.out keeps its stabs in the linker symbol table, so `.symtab`/`.strtab` are debug info here too.
 private val NON_DATA_BLOCKS = setOf(".stab", ".stabstr", ".symtab", ".strtab", ".comment")

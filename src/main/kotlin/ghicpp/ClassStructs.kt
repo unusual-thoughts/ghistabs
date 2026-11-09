@@ -6,7 +6,7 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DiagnosticSink
 
 /**
  * Describes this struct as [owner]'s [table], led by the offset tag Ghidra 12.1's `ClassUtils.isVTable`

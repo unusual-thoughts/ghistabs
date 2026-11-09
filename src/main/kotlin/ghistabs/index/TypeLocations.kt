@@ -7,7 +7,7 @@ import ghicpp.enclosingName
 import ghicpp.leafName
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypePath
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.harvest.Type
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
@@ -90,7 +90,7 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
      * path of an out-of-line member whose `this` names it (§57). Only the latter tells apart nested
      * template instantiations sharing a leaf (`AbstractRing<Integer>::MultiplicativeGroupT`).
      *
-     * Requires [ghistabs.DtmRegistry.register] to replace Ghidra's empty namespace structs, or every reference
+     * Requires [ghidrakt.DtmRegistry.register] to replace Ghidra's empty namespace structs, or every reference
      * resolves to the empty one at the same path.
      */
     private fun statedLocation(ast: Type) = (ast.demangledClassPath() ?: index.classPathByThisParam[ast.id])

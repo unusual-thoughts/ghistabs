@@ -13,7 +13,7 @@ import ghidra.program.model.data.AlignmentDataType
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
+import ghidrakt.*
 
 /**
  * Marks compiler alignment padding in executable memory as [AlignmentDataType], so downstream passes

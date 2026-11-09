@@ -6,10 +6,10 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.LoadedProgram
+import ghidrakt.LoadedProgram
+import ghidrakt.loadProgram
+import ghidrakt.runTransaction
 import ghistabs.integration.FeatureFixtureTest
-import ghistabs.loadProgram
-import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll

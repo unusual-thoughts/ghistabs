@@ -16,7 +16,10 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.framework.Application
 import ghidra.framework.HeadlessGhidraApplicationConfiguration
 import ghidra.util.Msg
-import ghistabs.diagnose.*
+import ghidrakt.diagnose.*
+import ghidrakt.isPackedProgram
+import ghidrakt.loadPackedProgram
+import ghidrakt.loadProgram
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.StabCursor
 import ghistabs.harvest.Symbol
@@ -24,9 +27,6 @@ import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.importer.readStabs
-import ghistabs.isPackedProgram
-import ghistabs.loadPackedProgram
-import ghistabs.loadProgram
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabRecord
 import ghistabs.parse.SymbolDecl

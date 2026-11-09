@@ -2,9 +2,9 @@ package ghistabs.harvest
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.rangeUntil
 import ghistabs.parse.*
-import ghistabs.rangeUntil
 
 /**
  * Position in the stab record stream — the state a flat stream of records only means anything

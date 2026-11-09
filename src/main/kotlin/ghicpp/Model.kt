@@ -10,8 +10,8 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.util.ObjectStorage
 import ghidra.util.Saveable
-import ghistabs.GPropertiesFormat
-import ghistabs.toClass
+import ghidrakt.GPropertiesFormat
+import ghidrakt.toClass
 import kotlinx.serialization.Serializable
 
 /** A C++ member's or base's access, as a stab's visibility marker or an RTTI base flag states it. */

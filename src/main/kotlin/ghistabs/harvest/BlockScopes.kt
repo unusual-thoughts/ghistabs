@@ -3,10 +3,10 @@
 package ghistabs.harvest
 
 import ghidra.program.model.address.Address
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
+import ghidrakt.rangeUntil
 import ghistabs.parse.VariableLocation
-import ghistabs.rangeUntil
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 

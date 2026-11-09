@@ -17,7 +17,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
-import ghistabs.*
+import ghidrakt.*
 
 /** How an ABI spells a vtable's symbol, and which class one names. */
 interface VtableSymbols {

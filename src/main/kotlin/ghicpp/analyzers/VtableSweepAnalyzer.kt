@@ -10,9 +10,9 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.DtmRegistry
-import ghistabs.diagnose.AnalysisProbe
-import ghistabs.diagnose.MessageLogSink
+import ghidrakt.DtmRegistry
+import ghidrakt.diagnose.AnalysisProbe
+import ghidrakt.diagnose.MessageLogSink
 
 /**
  * Lay a `<Class>_vftable` at every gcc vtable symbol, Itanium `_ZTV…` (gcc 3 and later, the record

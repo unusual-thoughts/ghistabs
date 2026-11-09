@@ -20,7 +20,7 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.*
-import ghistabs.*
+import ghidrakt.*
 import kotlinx.serialization.Serializable
 
 /**

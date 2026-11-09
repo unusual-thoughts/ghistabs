@@ -17,8 +17,8 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolType
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.*
+import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.TemplateNameShortener

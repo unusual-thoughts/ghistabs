@@ -1,6 +1,6 @@
 package ghistabs.harvest
 
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.parse.*
 
 /**

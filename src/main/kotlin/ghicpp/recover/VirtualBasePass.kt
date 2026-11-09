@@ -8,10 +8,10 @@ import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
-import ghistabs.componentsOverlapping
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.path
-import ghistabs.toCategoryPath
+import ghidrakt.componentsOverlapping
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.path
+import ghidrakt.toCategoryPath
 
 /**
  * Places the virtual bases a class struct lacks where its [abi]'s records say they are

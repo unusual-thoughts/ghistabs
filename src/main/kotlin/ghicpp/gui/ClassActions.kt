@@ -34,8 +34,8 @@ import ghidra.util.HelpLocation
 import ghidra.util.Msg
 import ghidra.util.task.MonitoredRunnable
 import ghidra.util.task.TaskLauncher
-import ghistabs.namespaceAt
-import ghistabs.runTransaction
+import ghidrakt.namespaceAt
+import ghidrakt.runTransaction
 import resources.Icons
 
 private val STRUCT_ICON = GIcon("icon.plugin.datatypes.structure")

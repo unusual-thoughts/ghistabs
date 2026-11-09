@@ -18,8 +18,8 @@ import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.useWith
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.useWith
 
 /**
  * The [classes] whose vtables a function stores into `this` where they belong, and what it calls on `this` or a

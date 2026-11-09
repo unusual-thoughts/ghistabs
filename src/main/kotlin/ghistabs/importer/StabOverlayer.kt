@@ -5,15 +5,15 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.symbol.RefType
 import ghidra.program.model.symbol.SourceType
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.forceCreateData
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.forceCreateData
+import ghidrakt.plus
+import ghidrakt.runTransaction
 import ghistabs.parse.STAB_RECORD_SIZE
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.parse.stabRecordDataType
-import ghistabs.plus
-import ghistabs.runTransaction
 
 /** Stab types whose `n_value` is an absolute address in this image (post-link). */
 private val VALUE_IS_ADDRESS = setOf(

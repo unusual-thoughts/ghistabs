@@ -2,8 +2,8 @@ package ghicpp
 
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
-import ghistabs.*
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.*
+import ghidrakt.diagnose.DiagnosticSink
 
 /**
  * Splits a polymorphic base subobject around the vptr a deriving class takes over, whatever laid the

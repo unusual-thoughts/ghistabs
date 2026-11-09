@@ -9,8 +9,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.useWith
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.useWith
 
 /**
  * Each class's possible size range ([Long.MAX_VALUE] when unbounded above), from its non-virtual bases'

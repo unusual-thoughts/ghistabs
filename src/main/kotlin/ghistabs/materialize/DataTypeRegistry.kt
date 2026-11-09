@@ -6,11 +6,11 @@ import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.Structure
 import ghidra.util.task.TaskMonitor
-import ghistabs.Demangler
-import ghistabs.DtmRegistry
-import ghistabs.demanglerPath
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.StabsDiagnostics
+import ghidrakt.Demangler
+import ghidrakt.DtmRegistry
+import ghidrakt.demanglerPath
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.index.*
 import ghistabs.parse.CATEGORY

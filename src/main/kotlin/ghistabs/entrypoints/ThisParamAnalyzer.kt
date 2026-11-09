@@ -9,8 +9,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.isInjected
-import ghistabs.isMethod
+import ghidrakt.isInjected
+import ghidrakt.isMethod
 
 const val THIS_PARAM_ANALYZER_NAME = "Class-method this-pointer"
 

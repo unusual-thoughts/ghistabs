@@ -6,13 +6,13 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghidrakt.functionsIterable
+import ghidrakt.runTransaction
+import ghidrakt.withProgram
 import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.NoReturnAnalyzer
 import ghistabs.entrypoints.markNoReturn
-import ghistabs.functionsIterable
-import ghistabs.runTransaction
 import ghistabs.test.*
-import ghistabs.withProgram
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.io.File

@@ -11,8 +11,8 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
 import ghidra.util.bytesearch.*
 import ghidra.util.task.TaskMonitor
-import ghistabs.minus
-import ghistabs.plus
+import ghidrakt.minus
+import ghidrakt.plus
 import kotlin.math.abs
 
 /**

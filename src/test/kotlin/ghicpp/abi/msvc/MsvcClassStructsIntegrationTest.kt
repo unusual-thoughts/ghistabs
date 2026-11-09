@@ -9,7 +9,7 @@ import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 

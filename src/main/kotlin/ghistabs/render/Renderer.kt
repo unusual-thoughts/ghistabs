@@ -7,7 +7,8 @@ import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.runTransaction
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.Type
@@ -21,7 +22,6 @@ import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
 import ghistabs.render.Renderer.Companion.DECOMPILE_SECONDS
-import ghistabs.runTransaction
 import ghistabs.scan.Definition
 import ghistabs.scan.Preprocessed
 import ghistabs.scan.SourceIndexes

@@ -6,9 +6,9 @@ import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
+import ghidrakt.withProgram
 import ghistabs.test.*
-import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest

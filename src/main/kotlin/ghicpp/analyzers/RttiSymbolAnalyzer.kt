@@ -10,8 +10,8 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.MessageLogSink
-import ghistabs.get
+import ghidrakt.diagnose.MessageLogSink
+import ghidrakt.get
 
 /**
  * Puts back the `_ZTS`/`_ZTI`/`_ZTV` labels a stripped gcc binary lost, from the RTTI it kept

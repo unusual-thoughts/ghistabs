@@ -18,11 +18,11 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.util.exception.DuplicateNameException
 import ghidra.util.exception.InvalidInputException
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.frameBias
-import ghistabs.minus
-import ghistabs.overlaps
-import ghistabs.withLength
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.frameBias
+import ghidrakt.minus
+import ghidrakt.overlaps
+import ghidrakt.withLength
 import kotlin.math.abs
 
 /**

@@ -1,10 +1,10 @@
 package ghistabs.integration
 
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.LoadedProgram
+import ghidrakt.LoadedProgram
+import ghidrakt.loadProgram
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportOptions
-import ghistabs.loadProgram
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
 import org.junit.jupiter.api.AfterEach

@@ -2,8 +2,8 @@ package ghistabs.index
 
 import ghicpp.Access
 import ghicpp.VirtKind
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*

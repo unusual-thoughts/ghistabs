@@ -1,7 +1,7 @@
 package ghistabs.harvest
 
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.parse.*
 
 /**

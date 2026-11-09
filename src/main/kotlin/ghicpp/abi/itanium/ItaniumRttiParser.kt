@@ -14,8 +14,8 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolIterator
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.toClass
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.toClass
 
 /**
  * A class the Itanium RTTI describes: its [bases] off its typeinfo, its [vftables] off the `vtable` and

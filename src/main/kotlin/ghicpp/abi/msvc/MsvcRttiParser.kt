@@ -14,9 +14,9 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.pointerAt
-import ghistabs.toClass
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.pointerAt
+import ghidrakt.toClass
 
 /** Where a virtual base's offset is read: in the vbtable the vbptr at [pdisp] points at, at byte [vdisp]. */
 data class VbtableSlot(val pdisp: Long, val vdisp: Long)

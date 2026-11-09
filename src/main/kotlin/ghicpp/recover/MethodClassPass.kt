@@ -15,8 +15,8 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.useWith
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.useWith
 
 /**
  * A call passing an object as [callee]'s `this`: [caller]'s own, or one [caller] built with a

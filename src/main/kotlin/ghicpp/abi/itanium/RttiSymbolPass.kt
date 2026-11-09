@@ -4,18 +4,18 @@ import ghicpp.abi.CxxAbi.Companion.prevailingAbi
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
-import ghistabs.BoolOption
-import ghistabs.Demangler
-import ghistabs.alignTo
-import ghistabs.cStringAt
-import ghistabs.cursorAt
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.get
-import ghistabs.isData
-import ghistabs.nextPointer
-import ghistabs.pointerAt
-import ghistabs.seek
-import ghistabs.set
+import ghidrakt.BoolOption
+import ghidrakt.Demangler
+import ghidrakt.alignTo
+import ghidrakt.cStringAt
+import ghidrakt.cursorAt
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.get
+import ghidrakt.isData
+import ghidrakt.nextPointer
+import ghidrakt.pointerAt
+import ghidrakt.seek
+import ghidrakt.set
 import kotlin.ranges.rangeTo
 
 /**

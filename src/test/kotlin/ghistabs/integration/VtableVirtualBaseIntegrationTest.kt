@@ -9,12 +9,12 @@ import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.applyDemangling
-import ghistabs.diagnose.DummySink
+import ghidrakt.applyDemangling
+import ghidrakt.diagnose.DummySink
+import ghidrakt.runTransaction
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
-import ghistabs.runTransaction
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
 import ghistabs.test.must

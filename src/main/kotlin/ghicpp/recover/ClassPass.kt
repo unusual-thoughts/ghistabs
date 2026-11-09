@@ -17,8 +17,8 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.toClass
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.toClass
 
 /**
  * What a class pass does once an ABI's records have given it the classes ([RttiParser], [ClassPassInput]): each virtual

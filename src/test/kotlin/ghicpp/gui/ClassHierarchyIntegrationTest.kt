@@ -15,9 +15,9 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
+import ghidrakt.path
+import ghidrakt.runTransaction
 import ghistabs.integration.FeatureFixtureTest
-import ghistabs.path
-import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeFalse
 import ghistabs.test.mustBeIn

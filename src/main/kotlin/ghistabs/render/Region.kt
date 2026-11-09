@@ -1,7 +1,7 @@
 package ghistabs.render
 
 import ghidra.program.model.address.Address
-import ghistabs.chunkedBy
+import ghidrakt.chunkedBy
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.LineEntry

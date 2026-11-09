@@ -17,9 +17,9 @@ import ghidra.program.model.listing.FlowOverride
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.MessageLogSink
+import ghidrakt.diagnose.MessageLogSink
+import ghidrakt.runTransaction
 import ghistabs.entrypoints.HullDisassemblyAnalyzer
-import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeA
 import ghistabs.test.mustBeNull

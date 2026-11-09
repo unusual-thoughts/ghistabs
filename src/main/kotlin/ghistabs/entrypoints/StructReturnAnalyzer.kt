@@ -12,7 +12,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.XmlEncode
 import ghidra.util.task.TaskMonitor
-import ghistabs.collidesWithInjectedParameter
+import ghidrakt.collidesWithInjectedParameter
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader

@@ -1,7 +1,7 @@
 package ghistabs.index
 
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 import ghistabs.harvest.*
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl

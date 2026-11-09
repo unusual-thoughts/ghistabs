@@ -20,10 +20,10 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.util.ErrorLogger
 import ghidra.util.task.TaskMonitorAdapter
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.Level
-import ghistabs.formatSi
-import ghistabs.kebabToCamelCase
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.Level
+import ghidrakt.formatSi
+import ghidrakt.kebabToCamelCase
 
 /** Level tag style paired with the body style, mirroring the old hand-rolled SGR pairs. */
 private val Level.styles get() = when (this) {

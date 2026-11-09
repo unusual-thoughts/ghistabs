@@ -13,9 +13,9 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.*
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 
 /**
  * Fills each class struct a class pass sized but left empty, off what the pass knows of the class: each
