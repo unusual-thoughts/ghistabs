@@ -8,8 +8,8 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
-import ghistabs.importer.ImportProbe
 
 /**
  * Guess the class of each unnamed function that takes a `this`, off the objects its callers pass it
@@ -33,7 +33,7 @@ class MethodClassAnalyzer :
     override fun canAnalyze(program: Program) = program.compilerSpec.callingConventions.any { it.hasThisPointer() }
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
-        val sink = ImportProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
+        val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val moved = MethodClassPass(program, sink).run(monitor)
         if (moved > 0) log.appendMsg(NAME, "guessed the class of $moved function(s)")
         return true

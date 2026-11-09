@@ -66,7 +66,7 @@ fun <Id : IdInterface> longRange(inner: Id, min: Long, max: Long) =
 /**
  * The import with what auto-analysis would run around it: the RTTI symbols it needs back first, then
  * [analyzeAfterImport], which reports into this context's counters and sink through a probe
- * ([ImportProbe.sinkFor]), then the data coverage report over all of it. Imports [stabs] where a test
+ * ([ghistabs.diagnose.AnalysisProbe.sinkFor]), then the data coverage report over all of it. Imports [stabs] where a test
  * builds its records by hand, else what the program's own stab section holds.
  */
 fun ImportContext<*>.importAndAnalyze(stabs: StabReader.Result? = null): ImportResult {
