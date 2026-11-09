@@ -10,8 +10,8 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
-import ghistabs.importer.ImportProbe
 
 /**
  * Types gcc's SJLJ exception ABI ([SjljTypes]) where a program uses it, through [SjljContextPass]: the
@@ -43,7 +43,7 @@ class SjljContextAnalyzer :
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         // Byte analyzers run again on whatever code a later analyzer changes (call fixups re-add theirs),
         // so only what [set] covers: the whole program once, then just the changed code.
-        val sink = ImportProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
+        val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val (contexts, signatures) = SjljContextPass(program, sink).run(set, monitor)
         if (contexts + signatures > 0) log.appendMsg(NAME, "typed $contexts context(s), $signatures entry point(s)")
         return true

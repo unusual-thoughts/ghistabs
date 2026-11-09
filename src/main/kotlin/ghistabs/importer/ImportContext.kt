@@ -4,6 +4,7 @@ import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
+import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
@@ -19,7 +20,6 @@ import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import org.jetbrains.annotations.TestOnly
-import java.util.*
 
 data class ImportResult(
     val parsed: ParseResults = ParseResults(),
@@ -92,38 +92,22 @@ data class ImportArtifacts(val registry: DataTypeRegistry, val records: List<Sta
 }
 
 /**
- * Test↔analyzer rendezvous under `@Execution(CONCURRENT)`. The analyzer owns its own [ImportContext]
- * (it builds the Bookmark/MessageLog terminal), so a test that wants to read what the analyzer produced
- * pre-installs a probe: the analyzer emits into [diagnostics]/[terminal] and hands back [artifacts]. The
- * analyzers that run after it, on what it applied, emit into the same pair ([sinkFor]).
+ * The stabs import's [AnalysisProbe]: the analyzer owns its own [ImportContext], so a test that wants what
+ * the import materialized installs this one ([install]) and the analyzer hands back [artifacts].
  */
-class ImportProbe(val diagnostics: StabsDiagnostics, val terminal: DiagnosticSink) {
+class ImportProbe(diagnostics: StabsDiagnostics, terminal: DiagnosticSink) : AnalysisProbe(diagnostics, terminal) {
     @get:TestOnly
     var artifacts: ImportArtifacts? = null
         internal set
 
     companion object {
-        private val map = WeakHashMap<Program, ImportProbe>()
-
-        @Synchronized
         @TestOnly
         internal fun install(ctx: ImportContext<*>): ImportProbe =
-            ImportProbe(ctx.diagnostics, ctx.terminal).also { map[ctx.program] = it }
+            AnalysisProbe.install(ctx.program, ImportProbe(ctx.diagnostics, ctx.terminal))
 
-        @Synchronized
         @TestOnly
-        internal fun clear(program: Program) {
-            map.remove(program)
-        }
+        internal fun clear(program: Program) = AnalysisProbe.clear(program)
 
-        @Synchronized
-        internal fun get(program: Program): ImportProbe? = map[program]
-
-        /**
-         * [sink], tee'd onto the probe a test installed on [program], if any: an analyzer that runs after the
-         * import reports into the same counters and log the test reads the import's from.
-         */
-        fun sinkFor(program: Program, sink: DiagnosticSink): DiagnosticSink =
-            get(program)?.let { TeeSink(sink, it.diagnostics, it.terminal) } ?: sink
+        internal fun get(program: Program): ImportProbe? = AnalysisProbe.get(program) as? ImportProbe
     }
 }
