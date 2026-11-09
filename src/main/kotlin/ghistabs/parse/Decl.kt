@@ -3,11 +3,11 @@
 
 package ghistabs.parse
 
-import ghistabs.cpp.Access
-import ghistabs.cpp.BaseDecl
-import ghistabs.cpp.MemberDecl
-import ghistabs.cpp.VirtKind
-import ghistabs.cpp.isVptrFieldName
+import ghicpp.Access
+import ghicpp.BaseDecl
+import ghicpp.MemberDecl
+import ghicpp.VirtKind
+import ghicpp.isVptrFieldName
 import kotlinx.serialization.*
 import kotlinx.serialization.json.JsonClassDiscriminator
 import java.math.BigInteger

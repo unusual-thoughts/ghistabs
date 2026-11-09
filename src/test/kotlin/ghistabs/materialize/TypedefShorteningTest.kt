@@ -1,6 +1,6 @@
 package ghistabs.materialize
 
-import ghistabs.cpp.canonTemplateName
+import ghicpp.canonTemplateName
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test

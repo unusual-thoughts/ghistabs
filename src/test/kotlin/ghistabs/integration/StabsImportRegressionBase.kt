@@ -1,5 +1,17 @@
 package ghistabs.integration
 
+import ghicpp.*
+import ghicpp.abi.CxxAbi
+import ghicpp.abi.CxxAbi.Companion.prevailingAbi
+import ghicpp.abi.gcc2.Gcc2
+import ghicpp.abi.gcc2.Gcc2Abi
+import ghicpp.abi.isPrimaryVftable
+import ghicpp.abi.itanium.Itanium
+import ghicpp.abi.itanium.isTypeinfo
+import ghicpp.abi.vftableStructAt
+import ghicpp.eh.SjljLsda
+import ghicpp.eh.SjljLsdaPass
+import ghicpp.eh.SjljRegistrationFinder
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.demangler.gnu.GnuDemangler
@@ -19,18 +31,6 @@ import ghistabs.*
 import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.Observations
-import ghistabs.cpp.*
-import ghistabs.cpp.abi.CxxAbi
-import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.cpp.abi.gcc2.Gcc2
-import ghistabs.cpp.abi.gcc2.Gcc2Abi
-import ghistabs.cpp.abi.isPrimaryVftable
-import ghistabs.cpp.abi.itanium.Itanium
-import ghistabs.cpp.abi.itanium.isTypeinfo
-import ghistabs.cpp.abi.vftableStructAt
-import ghistabs.cpp.eh.SjljLsda
-import ghistabs.cpp.eh.SjljLsdaApplier
-import ghistabs.cpp.eh.sjljLsdas
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
@@ -777,7 +777,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun sjljLsdasAreLaidWithTheirTypeTables() {
         assumeTrue(mode != Mode.BEFORE, "Skipping: the LSDAs are laid by auto-analysis")
-        val lsdas = program.sjljLsdas(program.memory, TaskMonitor.DUMMY)
+        val lsdas = SjljRegistrationFinder(program).lsdas(program.memory, TaskMonitor.DUMMY)
         assumeTrue(lsdas.isNotEmpty(), "Skipping: no SJLJ exception tables in this fixture")
 
         val unlaid = mutableListOf<String>()
@@ -786,7 +786,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         for ((at, found) in lsdas) {
             val lsda = found.lsda
             if (lsda == null || program.listing.getDefinedDataAt(at) == null ||
-                program.symbolTable.getSymbols(at).none { it.name == SjljLsdaApplier.LABEL }
+                program.symbolTable.getSymbols(at).none { it.name == SjljLsdaPass.LABEL }
             ) {
                 unlaid += "$at (stored at ${found.registrations.first().store})"
                 continue
@@ -1386,7 +1386,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun typeInfoBaseClassesNotLeftAsStubs() {
         // std::type_info and __cxxabiv1::__{class,si_class,vmi_class}_type_info are real libsupc++
         // classes with methods (__do_upcast, …) but no stabs, so the demangler leaves empty /Demangler
-        // stubs. typeInfoLayout must give them the RttiStructs layout — no 0-component Structure may survive.
+        // stubs. structFor must give them the RttiStructs layout — no 0-component Structure may survive.
         assumeTrue(
             program.symbolTable.getNamespace(Itanium.ABI_NAMESPACE, null) != null,
             "Skipping: no __cxxabiv1 namespace (RTTI base classes absent from this binary)",
@@ -1672,7 +1672,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         ) { this < 25 }
     }
 
-    /** Every fixture is gcc's, so [GccVftableAnalyzer] has to take it: MinGW and Cygwin PEs included. */
+    /** Every fixture is gcc's, so [VtableSweepAnalyzer] has to take it: MinGW and Cygwin PEs included. */
     @Test
     fun gccVftableAnalyzerTakesTheFixture() {
         GnuDemangler().must("${program.executableFormat} (${program.compilerSpec.compilerSpecID}) not read as gcc") {

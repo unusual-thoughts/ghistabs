@@ -1,8 +1,8 @@
 package ghistabs.index
 
-import ghistabs.cpp.VirtKind
-import ghistabs.cpp.isVptrFieldName
-import ghistabs.cpp.member
+import ghicpp.VirtKind
+import ghicpp.isVptrFieldName
+import ghicpp.member
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
@@ -102,7 +102,7 @@ fun TypeGraph.inheritanceDepth(
  * `DECL_VINDEX`. Counted from wherever the `{vfptr}` points, so the keys are address-point-based
  * under Itanium (`_ZTVSt9type_info` in `crypto_mi_test_gcc421_fullstabs` declares 0, 1 and 5 — its
  * dtor, deleting dtor and `__is_function_p` exactly) but record-start-based under gcc 2.x, where the
- * reserved entries are numbered too. [ghistabs.cpp.abi.CxxAbi.reservedEntries] is that difference;
+ * reserved entries are numbered too. [ghicpp.abi.CxxAbi.reservedEntries] is that difference;
  * rebasing by it is the caller's job, since only the vtable symbol states which ABI spelled the record.
  *
  * The index is the slot's identity, which settles both overriding (a derived method reuses its

@@ -1,5 +1,9 @@
 package ghistabs.importer
 
+import ghicpp.*
+import ghicpp.abi.CxxAbi.Companion.prevailingAbi
+import ghicpp.abi.itanium.Itanium
+import ghicpp.abi.itanium.Typeinfo
 import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.database.data.DataTypeManagerDB
@@ -14,10 +18,6 @@ import ghidra.program.model.symbol.SymbolType
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
-import ghistabs.cpp.*
-import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.cpp.abi.itanium.Itanium
-import ghistabs.cpp.abi.itanium.Typeinfo
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.materialize.DataTypeRegistry
@@ -213,7 +213,7 @@ class DemanglerReplacer(
         return findByExactName(bareName, preferredCategory)?.also { debug("demangler-exact-match") }
             ?: registry.byDemangledClass[pathName]?.also { debug("demangler-reverse-demangle-match") }
             ?: soleInstantiation[bareName]?.also { debug("demangler-sole-instantiation-match", bareName) }
-            ?: rtti.typeInfoLayout(bareName)?.let(registry::resolveLayout)
+            ?: rtti.structFor(bareName)?.let(registry::resolveLayout)
                 ?.also { debug("demangler-rtti-match") }
     }
 

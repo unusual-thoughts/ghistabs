@@ -1,10 +1,10 @@
 package ghistabs.materialize
 
+import ghicpp.canonTemplateName
+import ghicpp.isBaseField
+import ghicpp.isTemplated
 import ghidra.program.model.data.*
 import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.canonTemplateName
-import ghistabs.cpp.isBaseField
-import ghistabs.cpp.isTemplated
 
 /** `__x` and `_X` are reserved to the implementation — a name the program never chose. */
 private fun String.isReservedToImplementation() =

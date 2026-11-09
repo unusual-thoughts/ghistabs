@@ -1,11 +1,11 @@
 package ghistabs.render
 
+import ghicpp.Access
+import ghicpp.abi.itanium.Itanium
+import ghicpp.templateLeaf
 import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
-import ghistabs.cpp.Access
-import ghistabs.cpp.abi.itanium.Itanium
-import ghistabs.cpp.templateLeaf
 import ghistabs.harvest.*
 import ghistabs.index.TypeGraph
 import ghistabs.index.resolveBuiltin

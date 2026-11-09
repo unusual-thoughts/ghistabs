@@ -1,7 +1,7 @@
 package ghistabs.index
 
-import ghistabs.cpp.Access
-import ghistabs.cpp.VirtKind
+import ghicpp.Access
+import ghicpp.VirtKind
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*

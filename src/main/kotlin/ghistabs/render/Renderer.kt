@@ -1,12 +1,12 @@
 package ghistabs.render
 
+import ghicpp.isTemplated
+import ghicpp.member
 import ghidra.app.decompiler.ClangToken
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.isTemplated
-import ghistabs.cpp.member
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
