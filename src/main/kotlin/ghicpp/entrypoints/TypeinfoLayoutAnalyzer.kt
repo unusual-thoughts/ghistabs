@@ -14,11 +14,11 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.util.CodeUnitInsertionException
 import ghidra.util.task.TaskMonitor
 import ghistabs.DtmRegistry
+import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.forceCreateData
-import ghistabs.importer.ImportProbe
 
 /**
  * Lays an Itanium typeinfo struct at every `_ZTI` symbol, then fills in the structs of the `__cxxabiv1`
@@ -36,7 +36,7 @@ class TypeinfoLayoutAnalyzer :
     override fun canAnalyze(program: Program) = GnuDemangler().canDemangle(program)
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
-        val sink = ImportProbe.sinkFor(program, MessageLogSink(log, Level.DEBUG, NAME))
+        val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, Level.DEBUG, NAME))
         val registry = DtmRegistry(program.dataTypeManager)
         val laid = program.layTypeinfos(registry, sink).size
         registry.replaceClassStubs(sink)

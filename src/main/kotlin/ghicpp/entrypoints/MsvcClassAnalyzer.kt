@@ -10,8 +10,8 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
-import ghistabs.importer.ImportProbe
 
 /**
  * Class records and virtual members off the MSVC RTTI ([MsvcRttiParser]), for the Class Hierarchy window
@@ -37,7 +37,7 @@ class MsvcClassAnalyzer :
     override fun canAnalyze(program: Program) = PEUtil.isVisualStudioOrClangPe(program)
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
-        val sink = ImportProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
+        val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val result = ClassPass(program, MsvcRttiParser(program, sink), sink).run(monitor)
         if (result.classes > 0) {
             log.appendMsg(
