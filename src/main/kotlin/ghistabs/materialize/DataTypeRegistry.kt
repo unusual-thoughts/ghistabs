@@ -1,5 +1,6 @@
 package ghistabs.materialize
 
+import ghicpp.abi.itanium.Typeinfo
 import ghidra.app.util.demangler.Demangled
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
@@ -7,7 +8,6 @@ import ghidra.program.model.data.Structure
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.DtmRegistry
-import ghistabs.cpp.abi.itanium.Typeinfo
 import ghistabs.demanglerPath
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
@@ -161,7 +161,7 @@ class DataTypeRegistry(
      * not cycle-break stubs — callers cache them in [byId] and must never file them under [xrefStubs].
      */
     internal fun Type.substitute(): DataType? = resolveBuiltin(body)
-        ?: rttiStructs.typeInfoLayout(ghidraName)?.let(::resolveLayout)?.also {
+        ?: rttiStructs.structFor(ghidraName)?.let(::resolveLayout)?.also {
             debug("rtti-pseudo-substituted", "name=$ghidraName")
         }
 

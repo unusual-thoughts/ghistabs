@@ -1,5 +1,14 @@
 package ghistabs.importer
 
+import ghicpp.*
+import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
+import ghicpp.abi.CxxAbi
+import ghicpp.abi.CxxAbi.Companion.prevailingAbi
+import ghicpp.abi.VftableBuilder
+import ghicpp.abi.VtableRecord
+import ghicpp.abi.definedVtableRecord
+import ghicpp.abi.primaryVtableOf
+import ghicpp.recover.VtableSweepPass
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
@@ -11,14 +20,6 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
-import ghistabs.cpp.*
-import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
-import ghistabs.cpp.abi.CxxAbi
-import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.cpp.abi.VtableRecord
-import ghistabs.cpp.abi.definedVtableRecord
-import ghistabs.cpp.abi.primaryVtableOf
-import ghistabs.cpp.recover.VtableSweeper
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.harvest.AddressResolver
@@ -33,7 +34,7 @@ import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
 /**
- * The C++ pass over the program, once [layClasses] has laid every class struct: a
+ * The C++ pass over the program, once [buildClasses] has built every class struct: a
  * class gets its Ghidra identity, a [GhidraClass] namespace with its methods reparented under it, and its
  * `<Class>_vftable` filled and applied at `_ZTV`'s address point so virtual calls resolve. It
  * writes no class struct.
@@ -46,18 +47,21 @@ import ghistabs.parse.TypeDecl.Aggregate.Method
  * included by N CUs produces. One group builds one class, off its most-detailed body.
  */
 class ClassApplier(
-    override val registry: DataTypeRegistry,
-    program: Program,
+    val registry: DataTypeRegistry,
+    internal val program: Program,
     internal val resolver: AddressResolver,
-    monitor: TaskMonitor,
+    internal val monitor: TaskMonitor,
     sink: DiagnosticSink,
-) : VtableSweeper(registry, program, monitor, sink) {
+) : DiagnosticSink by sink {
     private val types = registry.types
+    private val symtab = program.symbolTable
+    private val dtm = program.dataTypeManager
 
     /** The stabs' own type for a demangled slot parameter, where they made one. Built once a slot asks. */
     private val replacer by lazy { DemanglerReplacer(program, registry, monitor, sink) }
 
-    override fun importedType(t: DemangledDataType) = replacer.parameterType(t)
+    /** Lays the vtables and slots, typing a slot parameter as the stabs did where they made its type. */
+    internal val vftables = VftableBuilder(registry, program, sink) { replacer.parameterType(it) }
 
     companion object {
         private val source = SourceType.IMPORTED
@@ -148,7 +152,7 @@ class ClassApplier(
     }
 
     private fun DemangledFunction.formalTypes(at: String) =
-        formals.map { it.slotParameterType("method-stub-param-untyped", at) }
+        with(vftables) { formals.map { it.slotParameterType("method-stub-param-untyped", at) } }
 
     private inner class ResolvedMember(val mangledName: String, val addr: Address) {
         fun func(): Function? = program.functionManager.getFunctionAt(addr)
@@ -183,8 +187,8 @@ class ClassApplier(
      * materializeAll already collapsed by name, and iterating canonical groups builds each class
      * once, off the most-detailed body. Returns the number of classes built.
      *
-     * The vtables of classes no stab describes are left to [VtableSweeper]'s
-     * sweep, which knows the ones laid here by their `vftable` labels.
+     * The vtables of classes no stab describes are left to [VtableSweepPass],
+     * the sweep, which knows the ones laid here by their `vftable` labels.
      */
     fun applyAll(): Int {
         // A stripped binary's vtables and typeinfos are only found by their symbols, which the Itanium RTTI
@@ -284,14 +288,14 @@ class ClassApplier(
         for (m in body.methods) reparentMethod(m)
         if (isPoly) {
             buildAndApplyVtable()
-            layGcc2SecondaryVtables(qualifiedClassName, name, ns, structDt)
+            vftables.layGcc2Secondaries(qualifiedClassName, name, ns, structDt)
         }
     }
 
     /**
      * Move member [m]'s function into this class and type it from the class: rename and reparent it
      * through Ghidra's demangler, then apply the method list's signature with `this` as a pointer to
-     * [structDt], which only exists once the class is laid. Under the shared convention rule
+     * [structDt], which only exists once the class is built. Under the shared convention rule
      * ([conventionFor]) a static member keeps its N_PSYM parameters. Records where [m] lives in
      * [memberAddresses] for the vtable.
      *
@@ -426,7 +430,7 @@ class ClassApplier(
         val targets = record?.slots(program).orEmpty()
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)
-        // Read off the laid struct, which records where gcc 2.x put the vptr (after the fields). Not
+        // Read off the built struct, which records where gcc 2.x put the vptr (after the fields). Not
         // off the record's offset_to_top: a primary's is 0 by definition, and a misread record would
         // only make it wrong. Itanium puts a primary vptr at 0 whatever the struct managed to hold.
         val vfptrAt = structDt.vfptrOffset()?.toLong() ?: abi.primaryVptrOffset
@@ -451,7 +455,7 @@ class ClassApplier(
 
         val addressPoint = record.lay(registry, program, vftable, ns, virtualBases = virtualBases)
         debug("vtable-applied", "class=$name abi=$abi", address = addressPoint)
-        if (record.header != null) laySecondaryVtables(record, vftable, name, ns)
+        if (record.header != null) vftables.laySecondaries(record, vftable, name, ns)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
@@ -503,7 +507,7 @@ class ClassApplier(
                 m != null -> slotName(m, used, virtuals.values)
                     .let { vftable.add(buildVirtualSlotType(m, it), it, "virtual ${m.name}") }
 
-                slot < targets.size -> addSweptSlot(vftable, vftableCategory, targets[slot], abi, used)
+                slot < targets.size -> vftables.addSlot(vftable, vftableCategory, targets[slot], abi, used)
 
                 // Inherited from a base that links without stabs, with no record to read it off
                 // either. Still a pointer to a definition named for its own field: a bare `void*`
@@ -643,7 +647,7 @@ class ClassApplier(
         }
 
         // - A vtable a symbol names only as an external reference is in another object
-        // - A vtable of a class none of whose members was linked was never emitted, since gcc lays a vtable
+        // - A vtable of a class none of whose members was linked was never emitted, since gcc emits a vtable
         //   beside its key function and any constructor stores its address
         if (resolved.isNotEmpty() || indexed || body.methods.none { it.linked() }) {
             debug("vtable-unlinked", "class '$name': neither its vtable nor any member of it is linked here")

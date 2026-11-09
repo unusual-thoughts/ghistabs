@@ -1,5 +1,9 @@
 package ghistabs.integration
 
+import ghicpp.eh.SjljContextPass
+import ghicpp.eh.SjljTypes
+import ghicpp.entrypoints.SjljContextAnalyzer
+import ghicpp.entrypoints.SjljLsdaAnalyzer
 import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.plugin.core.clear.ClearFlowAndRepairCmd
@@ -13,12 +17,8 @@ import ghidra.program.model.listing.FlowOverride
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.eh.SjljAbi
-import ghistabs.cpp.eh.SjljApplier
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.entrypoints.HullDisassemblyAnalyzer
-import ghistabs.entrypoints.SjljContextAnalyzer
-import ghistabs.entrypoints.SjljLsdaAnalyzer
 import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeA
@@ -192,7 +192,7 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     }
 
     private val fc get() = program.functionManager.getFunctionAt(addr(fn)).stackFrame.stackVariables
-        .single { it.name == SjljApplier.LOCAL }
+        .single { it.name == SjljContextPass.LOCAL }
 
     private fun Structure.at(offset: Int) = getComponentAt(offset)
 
@@ -204,9 +204,9 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         // -0x40(%ebp), one saved %ebp below the entry's stack pointer.
         fc.stackOffset.mustBe(-0x44)
         val dt = fc.dataType.mustBeA<Structure>()
-        dt.length.mustBe(SjljAbi.JBUF_OFFSET + 12)
-        dt.at(SjljAbi.LSDA_OFFSET)?.fieldName.mustBe("lsda")
-        val jbuf = dt.at(SjljAbi.JBUF_OFFSET)?.dataType.mustBeA<Structure>()
+        dt.length.mustBe(SjljTypes.JBUF_OFFSET + 12)
+        dt.at(SjljTypes.LSDA_OFFSET)?.fieldName.mustBe("lsda")
+        val jbuf = dt.at(SjljTypes.JBUF_OFFSET)?.dataType.mustBeA<Structure>()
         jbuf.components.map { it.fieldName }.mustBe(listOf("frame", "resume", "stack"))
     }
 
@@ -334,7 +334,7 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val reg = program.functionManager.getFunctionAt(addr(register))
         val param = reg.parameters.single()
         param.name.mustBe("fc")
-        (param.dataType as Pointer).dataType.name.mustBe(SjljAbi.CONTEXT)
+        (param.dataType as Pointer).dataType.name.mustBe(SjljTypes.CONTEXT)
         program.functionManager.getFunctionAt(addr(resume)).hasNoReturn().mustBe(true)
         program.functionManager.getFunctionAt(addr(personality)).parameters.map { it.name }
             .mustBe(listOf("version", "actions", "exceptionClass", "ue_header", "context"))
@@ -372,8 +372,8 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         runAnalyzers()
         val sink = MessageLogSink(MessageLog(), originator = SjljContextAnalyzer.NAME)
         program.runTransaction("again") {
-            SjljApplier(program, TaskMonitor.DUMMY, sink).applyAll(program.memory).mustBe(0 to 0)
-            SjljApplier(program, TaskMonitor.DUMMY, sink).applyAll(AddressSet(addr(receiver))).mustBe(0 to 0)
+            SjljContextPass(program, sink).run(program.memory, TaskMonitor.DUMMY).mustBe(0 to 0)
+            SjljContextPass(program, sink).run(AddressSet(addr(receiver)), TaskMonitor.DUMMY).mustBe(0 to 0)
         }
     }
 
@@ -382,7 +382,7 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     fun extendsTheProgramsOwnContext() {
         val own = program.runTransaction("own context") {
             val dtm = program.dataTypeManager
-            val s = StructureDataType(CategoryPath("/unwind-sjlj.c"), SjljAbi.CONTEXT, 0, dtm)
+            val s = StructureDataType(CategoryPath("/unwind-sjlj.c"), SjljTypes.CONTEXT, 0, dtm)
             s.add(PointerDataType(s, dtm), "prev", null)
             s.add(IntegerDataType.dataType, "call_site", null)
             s.add(ArrayDataType(UnsignedIntegerDataType.dataType, 4, 4, dtm), "data", null)
@@ -394,6 +394,6 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         runAnalyzers()
 
         fc.dataType.mustBe(own)
-        own.length.mustBe(SjljAbi.JBUF_OFFSET + 12)
+        own.length.mustBe(SjljTypes.JBUF_OFFSET + 12)
     }
 }

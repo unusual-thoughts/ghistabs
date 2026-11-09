@@ -27,7 +27,7 @@
     gcc 12 and removed outright in gcc 13, so 12 is a hard ceiling.)</P>
 
     <P>Everything is driven by the <A href="#Stabs_Importer_Analyzer">Stabs Importer</A>
-    analyzer. Ten <A href="#Stabs_Supporting_Analyzers">supporting analyzers</A> clean up
+    analyzer. Fifteen <A href="#Stabs_Supporting_Analyzers">supporting analyzers</A> clean up
     code and ABI details around it, <A href="#Stabs_Tools_Menu">Tools &rarr; Stabs</A> re-runs
     the import, and two <A href="#Stabs_Export_Decompilation">exporters</A> write out the
     reconstructed sources.</P>
@@ -212,7 +212,7 @@
 
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
 
-    <P>Ten analyzers ship with the extension that do not read stabs at all. They are enabled
+    <P>Fifteen analyzers ship with the extension that do not read stabs at all. They are enabled
     by default, can be re-run, and are each available as one-shot analysis.</P>
 
     <BLOCKQUOTE>
@@ -274,7 +274,7 @@
           Ghidra's RTTI scripts use (<CODE>vftable</CODE>, <CODE>internal_vftable</CODE>,
           <CODE>vftable_for_&lt;Base&gt;</CODE>, <CODE>construction-vftable</CODE>), so virtual
           calls resolve to named slots even with no stabs. On a program with stabs the importer
-          does this itself once it has laid the classes the stabs describe, and leaves those
+          does this itself once it has built the classes the stabs describe, and leaves those
           alone.</TD>
         </TR>
 
@@ -315,7 +315,8 @@
           (<CODE>_ZTI&hellip;</CODE>): the <CODE>__class_type_info</CODE>,
           <CODE>__si_class_type_info</CODE> or <CODE>__vmi_class_type_info</CODE> layout its vtable
           pointer names, a vmi one's base array sized to its base count. A typeinfo that already
-          carries a struct is left alone.</TD>
+          carries a struct is left alone. It also fills in the empty structs Ghidra makes for the
+          <CODE>this</CODE> of the <CODE>__cxxabiv1</CODE> typeinfo classes' own methods.</TD>
         </TR>
 
         <TR>
@@ -335,6 +336,50 @@
           damaged, which such a function's never do. Anything the control-flow graph cannot resolve
           counts as returning. Runs after the importer, which creates most of the functions on a
           stripped program.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Itanium RTTI symbols</B></TD>
+          <TD>gcc 3 and later. Puts back the <CODE>_ZTS</CODE>, <CODE>_ZTI</CODE> and
+          <CODE>_ZTV</CODE> labels a stripped binary lost, from the RTTI it kept. Runs early, so
+          everything keyed off those symbols sees them.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>MSVC RTTI classes</B></TD>
+          <TD>MSVC and clang-cl PE programs. Off the RTTI Ghidra's <I>Windows x86 PE RTTI
+          Analyzer</I> laid, records each class's bases for the Class Hierarchy window, moves each
+          virtual function into the class that introduced it, and finds and names constructors and
+          destructors by the vftables they store through <CODE>this</CODE>. Each class gets a struct
+          where <CODE>RecoverClassesFromRTTIScript</CODE> files one, of its size, filled as the
+          script fills it: non-virtual bases, a <CODE>vfptr</CODE> at each vptr, a
+          <CODE>vbptr</CODE> where a constructor stores a vbtable, the virtual bases, and the fields
+          its constructors store in <CODE>&lt;Class&gt;_data</CODE>. A struct something else filled
+          is left alone.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Itanium RTTI classes</B></TD>
+          <TD>gcc 3 and later, without stabs. What <I>MSVC RTTI classes</I> does, off the Itanium
+          RTTI: classes from the <CODE>typeinfo</CODE> labels, their bases from the typeinfo, their
+          vtables from <I>GCC C++ vftables</I>' labels. With <I>Itanium RTTI symbols</I> this covers
+          stripped binaries; a program with stabs gets its classes from them.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Itanium virtual bases</B></TD>
+          <TD>gcc 3 and later. Places the virtual bases a class struct lacks, at the offset its
+          <CODE>_ZTV</CODE> gives, as its typeinfo names them. When nothing defines a virtual base,
+          places the first base of it that something does.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Method classes from this</B></TD>
+          <TD>Moves each unnamed global function whose first argument comes in where
+          <CODE>this</CODE> does into the class of the objects its callers pass it, using only the
+          classes the class record already holds as evidence. Where callers pass several classes it
+          goes to the one they all lead to through bases at offset 0, and nowhere if none does. Runs
+          after the class passes and leaves an Analysis bookmark on each guess.</TD>
         </TR>
       </TABLE>
     </BLOCKQUOTE>

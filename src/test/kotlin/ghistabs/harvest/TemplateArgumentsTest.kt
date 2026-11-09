@@ -1,9 +1,9 @@
 package ghistabs.harvest
 
+import ghicpp.Access
+import ghicpp.VirtKind
+import ghicpp.member
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.cpp.Access
-import ghistabs.cpp.VirtKind
-import ghistabs.cpp.member
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.test.GenericAddressResolver

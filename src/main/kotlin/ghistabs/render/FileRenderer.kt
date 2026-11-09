@@ -1,14 +1,14 @@
 package ghistabs.render
 
+import ghicpp.VirtKind
+import ghicpp.abi.CxxAbi
+import ghicpp.abi.gcc2.Gcc2
+import ghicpp.member
+import ghicpp.qualifiedName
+import ghicpp.templateLeaf
 import ghidra.program.model.address.Address
 import ghistabs.Demangler
 import ghistabs.chunkOf
-import ghistabs.cpp.VirtKind
-import ghistabs.cpp.abi.CxxAbi
-import ghistabs.cpp.abi.gcc2.Gcc2
-import ghistabs.cpp.member
-import ghistabs.cpp.qualifiedName
-import ghistabs.cpp.templateLeaf
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile

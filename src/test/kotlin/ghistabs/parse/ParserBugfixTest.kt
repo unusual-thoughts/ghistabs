@@ -1,8 +1,8 @@
 package ghistabs.parse
 
-import ghistabs.cpp.Access
-import ghistabs.cpp.isVptrFieldName
-import ghistabs.cpp.member
+import ghicpp.Access
+import ghicpp.isVptrFieldName
+import ghicpp.member
 import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.test.*
 import org.junit.jupiter.api.Test

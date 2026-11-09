@@ -1,5 +1,9 @@
 package ghistabs.entrypoints
 
+import ghicpp.entrypoints.SjljContextAnalyzer
+import ghicpp.entrypoints.TypeinfoLayoutAnalyzer
+import ghicpp.entrypoints.VirtualBaseAnalyzer
+import ghicpp.entrypoints.VtableSweepAnalyzer
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.listing.Program
@@ -12,7 +16,7 @@ import ghistabs.runTransaction
  * after the Stabs Importer by priority. The import runs none of them itself.
  */
 private fun afterImport(): List<AbstractAnalyzer> =
-    listOf(SjljContextAnalyzer(), RttiLayoutAnalyzer(), GccVftableAnalyzer(), VirtualBaseAnalyzer())
+    listOf(SjljContextAnalyzer(), TypeinfoLayoutAnalyzer(), VtableSweepAnalyzer(), VirtualBaseAnalyzer())
 
 /**
  * Run [afterImport]'s analyzers on the whole program, each that is on and takes it, as auto-analysis

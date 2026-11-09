@@ -1,8 +1,8 @@
 package ghistabs.parse
 
-import ghistabs.cpp.Access
-import ghistabs.cpp.VirtKind
-import ghistabs.cpp.member
+import ghicpp.Access
+import ghicpp.VirtKind
+import ghicpp.member
 import ghistabs.parse.TypeDecl.Aggregate.*
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
