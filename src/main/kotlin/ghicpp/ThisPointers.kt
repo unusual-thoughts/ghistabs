@@ -80,13 +80,18 @@ private fun Function.returnTypeUnder(model: PrototypeModel): DataType? {
  * Gives a method back the auto-`this` Ghidra's "Decompiler Parameter ID" froze out: it commits a decompiled
  * signature, `this` as an ordinary parameter, in custom storage whenever that storage disagrees with the
  * convention's, and custom storage is what suppresses the auto-parameter. Re-applying the formals with dynamic
- * storage drops it, and Ghidra re-derives `this` from the class. Whether it changed anything; throws where
+ * storage drops it, and Ghidra re-derives `this` from the class. A method it committed with no parameter at all,
+ * having seen `this` go unread, gets `this` back the same way. Whether it changed anything; throws where
  * Ghidra refuses the signature.
  */
 fun Function.restoreThisParam(): Boolean {
     // Custom storage means no auto-params, so a `this` among the parameters is a stored one: the shape to undo.
+    // So is no parameter at all, where an analysis saw `this` go unread, as in a `what()` returning a literal.
     val frozen = isMethod && hasCustomVariableStorage() && callingConvention?.hasThisPointer() == true &&
-        parameters.any { it.name == Function.THIS_PARAM_NAME }
+        (
+            parameters.any { it.name == Function.THIS_PARAM_NAME } ||
+                parameterCount == 0 && !signatureSource.isHigherPriorityThan(SourceType.ANALYSIS)
+            )
     if (!frozen) return false
     // Dynamic storage re-derives the return's too: not where that moves it ([returnTypeUnder]).
     val returned = callingConvention?.let { returnTypeUnder(it) } ?: return false
