@@ -5,7 +5,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.importer.StabSectionOverlay
+import ghistabs.importer.StabOverlayer
 import ghistabs.parse.STAB_RECORD_SIZE
 import ghistabs.test.defaultContext
 import ghistabs.test.mustBe
@@ -18,11 +18,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Real Ghidra headless test for [StabSectionOverlay]: decoded StabRecord structs land on every
+ * Real Ghidra headless test for [StabOverlayer]: decoded StabRecord structs land on every
  * `.stab` entry, `n_strx` references `.stabstr`, and address-bearing records reference code/data.
  */
 @Tag("integration")
-class StabSectionOverlayIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+class StabOverlayerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var builder: ProgramBuilder
 
     private val stabBase = 0x401000L
@@ -60,7 +60,7 @@ class StabSectionOverlayIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
     @Test
     fun overlaysDecodedStructsRefsAndComments() {
         val program = builder.program
-        val applied = StabSectionOverlay(program.defaultContext()).apply()
+        val applied = StabOverlayer(program.defaultContext()).apply()
         applied.mustBe(3, "all three physical records overlaid")
 
         // Every record is a StabRecord struct.
@@ -89,8 +89,8 @@ class StabSectionOverlayIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
     @Test
     fun idempotentReapply() {
         val program = builder.program
-        StabSectionOverlay(program.defaultContext()).apply()
-        val again = StabSectionOverlay(program.defaultContext()).apply()
+        StabOverlayer(program.defaultContext()).apply()
+        val again = StabOverlayer(program.defaultContext()).apply()
         again.mustBe(3, "re-apply reuses the StabRecord datatype and re-overlays cleanly")
         program.dataTypeManager.allStructures.asSequence().count { it.name == "StabRecord" } mustBe 1
     }

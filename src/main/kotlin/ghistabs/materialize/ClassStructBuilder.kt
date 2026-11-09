@@ -20,8 +20,8 @@ import ghistabs.parse.TypeDecl
 
 /**
  * A vptr at a base's offset is inherited: it is in the base subobject placed there, or in the part of a
- * base [buildClasses] places ([basesFilledByClassLayout]). Where no base could be placed, the bytes stay undefined,
- * so the stab's field is kept. A virtual base's offset is no position.
+ * base [buildClasses] places ([basesFilledByClassStructBuilder]). Where no base could be placed, the bytes
+ * stay undefined, so the stab's field is kept. A virtual base's offset is no position.
  */
 internal fun DataTypeRegistry.inheritedVptrAt(
     body: TypeDecl.Aggregate<GlobalTypeId>,
@@ -32,7 +32,7 @@ internal fun DataTypeRegistry.inheritedVptrAt(
     if (bases.isEmpty()) return false
     val at = (offsetBits / 8).toInt()
     return struct.definedComponents.any { at in it.offset..<it.offset + it.length } ||
-        bases.any { it in basesFilledByClassLayout(body) }
+        bases.any { it in basesFilledByClassStructBuilder(body) }
 }
 
 /** Null [TypeDecl.Method.cls] is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc
@@ -72,7 +72,7 @@ internal fun DataTypeRegistry.fillStructBases(
 ) {
     if (body.bases.any { !it.isVirtual && isEmptyBase(it.type) }) debug("base-empty-ebo")
     val baseCount = baseSubobjects(body)
-    val laidLater = basesFilledByClassLayout(body)
+    val laidLater = basesFilledByClassStructBuilder(body)
     for ((base, gap) in baseGaps(body)) {
         if (base in laidLater) continue
         val offsetBytes = (base.offsetBits / 8).toInt()
@@ -172,7 +172,7 @@ private fun DataTypeRegistry.baseGaps(
  * as its data alone). CryptoPP's `CCM_Base` puts `m_digestSize` at +60, inside the 64 bytes of
  * `AuthenticatedSymmetricCipherBase`, whose data ends at 60.
  */
-internal fun DataTypeRegistry.basesFilledByClassLayout(body: TypeDecl.Aggregate<GlobalTypeId>) =
+internal fun DataTypeRegistry.basesFilledByClassStructBuilder(body: TypeDecl.Aggregate<GlobalTypeId>) =
     body.bases.filter { !it.isVirtual && types.inheritsVirtually(it.type) } +
         baseGaps(body).filter { (base, gap) ->
             !types.inheritsVirtually(base.type) && gap > 0 &&
@@ -257,9 +257,10 @@ fun virtualBaseOffsets(nvEnd: Int, nvAlign: Int, vbases: List<Pair<Int, Int>>, c
  * self-bases and `_fields_` structs it creates are looked up again by name.
  */
 internal fun DataTypeRegistry.buildClasses(vfptrModel: VfptrModel?) =
-    ClassLayout(this, vfptrModel?.let { VfptrPlacement(this, it, this) }).buildAll()
+    ClassStructBuilder(this, vfptrModel?.let { VfptrPlacer(this, it, this) }).buildAll()
 
-private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlacement?) : DiagnosticSink by registry {
+private class ClassStructBuilder(val registry: DataTypeRegistry, val vfptrs: VfptrPlacer?) :
+    DiagnosticSink by registry {
     private val types = registry.types
 
     /** The non-virtual size of each class built here with virtual bases. */
@@ -282,15 +283,15 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
     }
 
     private fun placeVfptr(located: LocatedType, struct: Structure) {
-        val placement = vfptrs ?: return
+        val placer = vfptrs ?: return
         val polyBase = types.firstPolymorphicBase(located.classBody)
         if (polyBase == null && !located.classBody.declaresVptr) return
-        placement.place(struct, located.vftablePath(types), located.classBody, polyBase)
+        placer.place(struct, located.vftablePath(types), located.classBody, polyBase)
     }
 
-    /** The bases [fillStructBases] left: [basesFilledByClassLayout], then any virtual base. */
+    /** The bases [fillStructBases] left: [basesFilledByClassStructBuilder], then any virtual base. */
     private fun fillBases(body: TypeDecl.Aggregate<GlobalTypeId>, struct: Structure, qualifiedName: String) {
-        val laidHere = registry.basesFilledByClassLayout(body)
+        val laidHere = registry.basesFilledByClassStructBuilder(body)
         val virtual = types.hasVirtualBase(body)
         if (laidHere.isEmpty() && !virtual) return
         embedBaseParts(body, laidHere, struct, qualifiedName)

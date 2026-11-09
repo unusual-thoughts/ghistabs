@@ -176,7 +176,7 @@ internal fun DataTypeRegistry.fillComposite(
     // type is still an empty placeholder holds one byte until that type is filled and widens it, so
     // checking now would count the rest as a hole (`tagVARIANT`, whose only member is an anonymous union
     // filled after it).
-    if (placeholder is Structure && !types.hasVirtualBase(body) && basesFilledByClassLayout(body).isEmpty()) {
+    if (placeholder is Structure && !types.hasVirtualBase(body) && basesFilledByClassStructBuilder(body).isEmpty()) {
         holesToReport += placeholder to qualifiedName
     }
 
