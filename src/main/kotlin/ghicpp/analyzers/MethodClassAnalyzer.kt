@@ -1,4 +1,4 @@
-package ghicpp.entrypoints
+package ghicpp.analyzers
 
 import ghicpp.recover.MethodClassPass
 import ghidra.app.services.AbstractAnalyzer

@@ -34,7 +34,7 @@ class ItaniumClass(
 
 /**
  * The classes off the Itanium RTTI, each by its typeinfo's address, with its vtables as
- * [VtableSweepAnalyzer][ghicpp.entrypoints.VtableSweepAnalyzer] labels them. A base whose typeinfo has no label
+ * [VtableSweepAnalyzer][ghicpp.analyzers.VtableSweepAnalyzer] labels them. A base whose typeinfo has no label
  * in a namespace, as a shared library's, is known by its name alone.
  */
 class ItaniumRttiParser(private val program: Program, private val sink: DiagnosticSink) : RttiParser {

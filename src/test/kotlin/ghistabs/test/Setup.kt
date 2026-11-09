@@ -1,6 +1,6 @@
 package ghistabs.test
 
-import ghicpp.entrypoints.RttiSymbolAnalyzer
+import ghicpp.analyzers.RttiSymbolAnalyzer
 import ghidra.app.util.importer.MessageLog
 import ghidra.framework.options.OptionType
 import ghidra.program.model.address.Address

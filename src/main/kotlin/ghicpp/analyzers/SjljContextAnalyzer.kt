@@ -1,4 +1,4 @@
-package ghicpp.entrypoints
+package ghicpp.analyzers
 
 import ghicpp.eh.SjljContextPass
 import ghicpp.eh.SjljRegistrationFinder

@@ -193,7 +193,7 @@ class RttiSymbolPass(
         private const val MAX_TYPE_NAME = 4096
 
         /**
-         * [run] once, on a binary that may be Itanium, for [ghicpp.entrypoints.RttiSymbolAnalyzer].
+         * [run] once, on a binary that may be Itanium, for [ghicpp.analyzers.RttiSymbolAnalyzer].
          * Returns how many vtables were labelled.
          */
         fun runOnce(program: Program, sink: DiagnosticSink): Int {

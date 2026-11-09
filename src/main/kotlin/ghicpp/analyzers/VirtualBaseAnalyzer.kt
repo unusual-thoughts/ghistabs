@@ -1,4 +1,4 @@
-package ghicpp.entrypoints
+package ghicpp.analyzers
 
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.ItaniumRttiParser

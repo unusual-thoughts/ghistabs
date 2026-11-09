@@ -3,7 +3,7 @@ package ghistabs.integration
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.LoadedProgram
 import ghistabs.importer.ImportArtifacts
-import ghistabs.importer.import
+import ghistabs.importer.ImportOptions
 import ghistabs.loadProgram
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
@@ -17,10 +17,11 @@ abstract class FeatureFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
     protected lateinit var artifacts: ImportArtifacts
     protected val program get() = loaded.program
 
-    protected fun load(fixture: String) {
+    protected fun load(fixture: String, options: ImportOptions.() -> Unit = {}) {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
         loaded = loadProgram(File(FEATURES, fixture))
-        artifacts = checkNotNull(program.defaultContext().importAndAnalyze().artifacts) { "$fixture carries no stabs" }
+        val ctx = program.defaultContext().apply { this.options.options() }
+        artifacts = checkNotNull(ctx.importAndAnalyze().artifacts) { "$fixture carries no stabs" }
     }
 
     @AfterEach

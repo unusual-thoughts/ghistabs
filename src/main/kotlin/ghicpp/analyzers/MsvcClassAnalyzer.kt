@@ -1,4 +1,4 @@
-package ghicpp.entrypoints
+package ghicpp.analyzers
 
 import ghicpp.abi.msvc.MsvcRttiParser
 import ghicpp.recover.ClassPass

@@ -1,4 +1,4 @@
-package ghicpp.entrypoints
+package ghicpp.analyzers
 
 import ghicpp.abi.itanium.ItaniumRttiParser
 import ghicpp.recover.ClassPass
