@@ -4,13 +4,6 @@
             "min": 194,
             "max": 194
         },
-        "base-synthesized": {
-            "min": 1,
-            "max": 1,
-            "degrades": [
-                "/des.cpp/multi/CryptoPP/ClonableImpl<CryptoPP::BlockCipherFinal<ENCRYPTION,CryptoPP::DES::Base>,CryptoPP::DES::Base>@+0"
-            ]
-        },
         "canonical-content-merged": {
             "min": 2,
             "max": 2
@@ -280,8 +273,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 614,
-            "max": 614
+            "min": 612,
+            "max": 612
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -789,13 +782,6 @@
             "min": 25651,
             "max": 25651
         },
-        "placeholder-undefined-fields": {
-            "min": 2,
-            "max": 2,
-            "degrades": [
-                "ClonableImpl<CryptoPP::DESEncryption,CryptoPP::DES::Base>"
-            ]
-        },
         "pointee-typed": {
             "min": 28,
             "max": 28
@@ -883,13 +869,6 @@
                 "/std/winnt/_REPARSE_DATA_BUFFER"
             ]
         },
-        "struct-mostly-undefined": {
-            "min": 1,
-            "max": 1,
-            "degrades": [
-                "/des.cpp/multi/CryptoPP/ClonableImpl<CryptoPP::BlockCipherFinal<ENCRYPTION,CryptoPP::DES::Base>,CryptoPP::DES::Base>"
-            ]
-        },
         "text-boundaries-out-of-order": {
             "min": 1,
             "max": 1
@@ -939,16 +918,16 @@
             "max": 11
         },
         "vfptr-inherited-from-base": {
-            "min": 97,
-            "max": 97
+            "min": 96,
+            "max": 96
         },
         "vfptr-normalized": {
             "min": 50,
             "max": 50
         },
         "vfptr-split-from-base": {
-            "min": 375,
-            "max": 375
+            "min": 376,
+            "max": 376
         },
         "vtable-applied": {
             "min": 98,

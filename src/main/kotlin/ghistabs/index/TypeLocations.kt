@@ -26,6 +26,17 @@ private fun TypeGraph.countUnresolvedRefs(body: GlobalTypeDecl): Int {
 }
 
 /**
+ * [body]'s bases and fields held by value whose type its CU only forward-declares (`xsBase:`). A copy
+ * that defines them can lay them; one that doesn't leaves them to a by-tag lookup, which an ambiguous
+ * tag (`Base`, nested in a dozen CryptoPP ciphers) fails or answers with the wrong class.
+ */
+private fun TypeGraph.countForwardOnlyMembers(body: GlobalTypeDecl): Int {
+    if (body !is TypeDecl.Aggregate) return 0
+    val byValue = body.bases.map { it.type } + body.fields.filterNot { it.isStatic }.map { it.type }
+    return byValue.count { t -> resolveWith(t) { d -> true.takeIf { d is TypeDecl.XRef } } == true }
+}
+
+/**
  * Id of the struct or union [t] embeds by value (through Ref, InlineDef, Const and Volatile, never a
  * pointer or array), or null: the containment edge that scopes a method-less nested member type.
  */
@@ -39,14 +50,16 @@ private fun TypeGraph.byValueStructId(t: GlobalTypeDecl) = resolveWith(t) { d ->
 
 /**
  * The member whose body is materialized for the group: largest body, then most methods, then fewest
- * unresolved Refs, then [tiebreak]. Copies of one class share a layout, since [ContentIndex.content]
- * leaves methods out, so the method count usually decides; ClassApplier reads the winner's methods
- * for vtable slots, `__thiscall` and the namespace chain.
+ * unresolved Refs, then fewest [forward-only][countForwardOnlyMembers] by-value members, then [tiebreak].
+ * Copies of one class share a layout, since [ContentIndex.content] leaves methods out, so the method
+ * count usually decides; ClassApplier reads the winner's methods for vtable slots, `__thiscall` and the
+ * namespace chain.
  */
 private fun <T> List<T>.pickWinner(index: TypeGraph, bodyOf: (T) -> GlobalTypeDecl, tiebreak: (T) -> String) = maxWith(
     compareBy<T> { bodyOf(it).sizeBytes }
         .thenBy { (bodyOf(it) as? TypeDecl.Aggregate)?.methods?.size ?: 0 }
         .thenByDescending { index.countUnresolvedRefs(bodyOf(it)) }
+        .thenByDescending { index.countForwardOnlyMembers(bodyOf(it)) }
         .thenBy(tiebreak),
 )
 
