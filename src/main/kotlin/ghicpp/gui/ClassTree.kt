@@ -7,6 +7,7 @@ import docking.widgets.tree.GTreeNode
 import docking.widgets.tree.support.GTreeSelectionEvent.EventOrigin
 import ghicpp.ClassHierarchyRecords.Companion.areClassesRecorded
 import ghicpp.ClassNaming
+import ghicpp.ClassRecordSource
 import ghicpp.abi.msvc.Msvc
 import ghicpp.analyzers.ItaniumClassAnalyzer
 import ghicpp.analyzers.MsvcClassAnalyzer
@@ -47,13 +48,13 @@ import javax.swing.SwingUtilities
  * symbol actions (Edit Function, …) work on them, and the Symbol Tree's own that suit a member are
  * here: Rename, Delete, Show References to, Set Primary, Pin.
  *
- * [hasStabs] tells the stabs import's class record from the class pass's, as the stabs stages know.
+ * A [ClassRecordSource] tells another source's class record (the stabs import's) from the class pass's.
  *
  * Its toolbar ([addToolbarActions]) and popup actions ([addSelectionActions]) are in ClassActions.kt,
  * drag and drop in [ClassDnDHandler]. Below it here: going to and selecting nodes ([select], [openSelected]),
  * carrying paths over a rebuild ([replaceRoot]) and the status line ([statusLine]).
  */
-class ClassTree(plugin: Plugin, private val hasStabs: (Program) -> Boolean) :
+class ClassTree(plugin: Plugin) :
     ComponentProviderAdapter(plugin.tool, NAME, plugin.name),
     DomainObjectListener {
     companion object {
@@ -165,7 +166,7 @@ class ClassTree(plugin: Plugin, private val hasStabs: (Program) -> Boolean) :
         program?.takeIf { isVisible }?.let { p ->
             status.text = "Reading classes…"
             builder.execute {
-                val result = runCatching { ClassHierarchy.of(p, hasStabs(p)) }
+                val result = runCatching { ClassHierarchy.of(p, ClassRecordSource.describedElsewhere(p)) }
                 SwingUtilities.invokeLater {
                     if (gen != generation.get() || p !== program) return@invokeLater
                     result.onSuccess { show(p, it) }.onFailure {
@@ -180,7 +181,7 @@ class ClassTree(plugin: Plugin, private val hasStabs: (Program) -> Boolean) :
     private fun show(p: Program, hierarchy: ClassHierarchy) {
         shown = hierarchy
         reshow()
-        counts = p.statusLine(hierarchy, hasStabs(p))
+        counts = p.statusLine(hierarchy)
         status.text = counts
     }
 
@@ -301,7 +302,7 @@ internal fun GTreeNode.find(steps: List<Pair<String, Int>>): GTreeNode? =
     steps.fold(this as GTreeNode?) { node, (name, rank) -> node?.children?.filter { it.name == name }?.getOrNull(rank) }
 
 /** The status line under the tree: [hierarchy]'s classes counted by where they came from, then [staleNote]. */
-internal fun Program.statusLine(hierarchy: ClassHierarchy, hasStabs: Boolean): String {
+internal fun Program.statusLine(hierarchy: ClassHierarchy): String {
     val byOrigin = hierarchy.classes.groupingBy { it.origin }.eachCount()
     return buildString {
         // By source: the stabs, else what the class's typeinfo, its vtable or, failing both, its
@@ -312,25 +313,25 @@ internal fun Program.statusLine(hierarchy: ClassHierarchy, hasStabs: Boolean): S
         )
         val empty = hierarchy.classes.count(hierarchy::isEmpty)
         if (empty > 0) append(", $empty empty")
-        staleNote(hasStabs)?.let { append(" ($it)") }
+        staleNote()?.let { append(" ($it)") }
     }
 }
 
 /**
- * The status line's caveat when [this]'s classes may be under-attributed. Stabs but no record: imported
- * before the record existed, so the stabs classes count as from typeinfo or vtables until a re-import.
+ * The status line's caveat when [this]'s classes may be under-attributed. Another source but no record (stabs
+ * imported before the record existed): its classes count as from typeinfo or vtables until it records them.
  * RTTI but no record: analyzed before its class analyzer.
  */
-private fun Program.staleNote(hasStabs: Boolean): String? = when {
-    areClassesRecorded() -> null
+private fun Program.staleNote(): String? = if (areClassesRecorded()) {
+    null
+} else {
+    ClassRecordSource.hintFor(this) ?: when {
+        symbolTable.getSymbols(Msvc.CLASS_HIERARCHY_DESCRIPTOR).hasNext() ->
+            "no class record: Analysis > One Shot > ${MsvcClassAnalyzer.NAME} to add it"
 
-    hasStabs -> "no stabs record: Tools > Stabs > Re-import to add it"
+        symbolTable.getSymbols(ClassNaming.TYPEINFO).hasNext() ->
+            "no class record: Analysis > One Shot > ${ItaniumClassAnalyzer.NAME} to add it"
 
-    symbolTable.getSymbols(Msvc.CLASS_HIERARCHY_DESCRIPTOR).hasNext() ->
-        "no class record: Analysis > One Shot > ${MsvcClassAnalyzer.NAME} to add it"
-
-    symbolTable.getSymbols(ClassNaming.TYPEINFO).hasNext() ->
-        "no class record: Analysis > One Shot > ${ItaniumClassAnalyzer.NAME} to add it"
-
-    else -> null
+        else -> null
+    }
 }
