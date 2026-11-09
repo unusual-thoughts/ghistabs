@@ -21,6 +21,7 @@ class MethodConventionProbe : AbstractGhidraHeadlessIntegrationTest() {
         "features/hello_msvc.exe, windows",
         "features/hello_msvc_clang.exe, windows",
         "features/hello_elf_gcc12_stripped, gcc",
+        "features/hello_gcc421_stripped.exe, gcc",
         "crypto_mi_test_gcc421_stripped.exe, gcc",
         "xmltest_gcc421_stripped.exe, gcc",
         "locale_test_customlibstdcxx_stripped.exe, gcc",
