@@ -1,6 +1,6 @@
 package ghistabs.importer
 
-import ghistabs.cpp.recover.VtableSweeper.Companion.markVtablesSwept
+import ghicpp.recover.VtableSweepPass.Companion.markVtablesSwept
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.isOverlayDone
@@ -76,7 +76,7 @@ internal fun ImportContext<*>.runOnRecords(stabs: StabReader.Result): ImportResu
     val materialized = program.runTransaction("Stabs: materialize types") {
         registry.materializeAll().also {
             if (options.shortenTypedefs) registry.shortenTypedefs(monitor)
-            registry.layClasses(options.vfptrModel.takeIf { options.buildClasses })
+            registry.buildClasses(options.vfptrModel.takeIf { options.buildClasses })
             // The render spells types to match the decompiler, and it may run much later from the GUI
             // against analyzer options that have since been toggled — so record what actually happened.
             program.markStabsTypedefsShortened(options.shortenTypedefs)
@@ -97,7 +97,7 @@ internal fun ImportContext<*>.runOnRecords(stabs: StabReader.Result): ImportResu
                     else -> 0
                 },
             )
-        }.also { layAfterSymbols(registry) }
+        }.also { applyAfterSymbols(registry) }
     }
     // The class pass claimed its tables: a sweep from before this import has more to leave alone now.
     program.markVtablesSwept(false)
@@ -124,10 +124,10 @@ internal fun ImportContext<*>.runOnRecords(stabs: StabReader.Result): ImportResu
 
 /**
  * What needs the stabs' symbols applied first, in the order each depends on. The ABI passes that lay
- * typeinfos, sweep vtables, lay virtual bases and type the SJLJ contexts are their own analyzers, which
+ * typeinfos, sweep vtables, place virtual bases and type the SJLJ contexts are their own analyzers, which
  * run after this import and read what it left in the program.
  */
-private fun ImportContext<*>.layAfterSymbols(registry: DataTypeRegistry) {
+private fun ImportContext<*>.applyAfterSymbols(registry: DataTypeRegistry) {
     demanglerReplacer(registry).replace()
     // After the demangle passes above, which re-file methods under their mangled scope, so the
     // labels the virtual-bases analyzer finds a class by sit in its shortened namespace.

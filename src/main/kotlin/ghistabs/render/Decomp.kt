@@ -1,10 +1,10 @@
 package ghistabs.render
 
+import ghicpp.eh.SjljTypes
+import ghicpp.templateLeaf
 import ghidra.app.decompiler.*
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.listing.Function
-import ghistabs.cpp.eh.SjljAbi
-import ghistabs.cpp.templateLeaf
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.blockAt
@@ -63,7 +63,7 @@ private fun ClangLine.storesSjljContext(): Boolean {
     val assign = toks.indexOfFirst { it is ClangOpToken && it.text == "=" }.takeIf { it > 0 } ?: return false
     val lhs = toks.subList(0, assign)
     return !(lhs.first() !is ClangVariableToken || lhs.drop(1).any { it !is ClangFieldToken && it.text != "." }) &&
-        (lhs.firstOrNull { it is ClangFieldToken } as? ClangFieldToken)?.dataType?.name == SjljAbi.CONTEXT
+        (lhs.firstOrNull { it is ClangFieldToken } as? ClangFieldToken)?.dataType?.name == SjljTypes.CONTEXT
 }
 
 /**
@@ -74,8 +74,8 @@ private fun ClangLine.storesSjljContext(): Boolean {
  * keep unwinding out of the code, match nothing.
  */
 private fun sjljScaffolding(lines: List<ClangLine>): Set<ClangLine> {
-    val personality = setOf(SjljAbi.PERSONALITY)
-    val calls = SjljAbi.REGISTRATION_CALLS
+    val personality = setOf(SjljTypes.PERSONALITY)
+    val calls = SjljTypes.REGISTRATION_CALLS
     val stores = lines.filterTo(mutableSetOf()) { it.storesSjljContext() }
     if (stores.isEmpty() && lines.none { l -> l.content().any { it.isOneOf(personality) } }) return emptySet()
     // Where nothing typed the context, its `&ctx` passed to _Unwind_SjLj_Register is an address-of,

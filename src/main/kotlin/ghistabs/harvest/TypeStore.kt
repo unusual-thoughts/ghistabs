@@ -1,13 +1,13 @@
 package ghistabs.harvest
 
+import ghicpp.Access
+import ghicpp.canonTemplateName
+import ghicpp.isTemplated
+import ghicpp.isVptrFieldName
+import ghicpp.nameSegments
+import ghicpp.qualifiedName
+import ghicpp.templateName
 import ghistabs.Demangler
-import ghistabs.cpp.Access
-import ghistabs.cpp.canonTemplateName
-import ghistabs.cpp.isTemplated
-import ghistabs.cpp.isVptrFieldName
-import ghistabs.cpp.nameSegments
-import ghistabs.cpp.qualifiedName
-import ghistabs.cpp.templateName
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.*

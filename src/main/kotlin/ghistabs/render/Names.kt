@@ -1,6 +1,6 @@
 package ghistabs.render
 
-import ghistabs.cpp.isTemplated
+import ghicpp.isTemplated
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.rootSegment
 import ghistabs.harvest.segments

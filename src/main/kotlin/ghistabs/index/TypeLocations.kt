@@ -2,11 +2,11 @@
 
 package ghistabs.index
 
+import ghicpp.canonTemplateName
+import ghicpp.enclosingName
+import ghicpp.leafName
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypePath
-import ghistabs.cpp.canonTemplateName
-import ghistabs.cpp.enclosingName
-import ghistabs.cpp.leafName
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Type
 import ghistabs.parse.GlobalTypeDecl

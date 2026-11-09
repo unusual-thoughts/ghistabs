@@ -1,8 +1,8 @@
 package ghistabs.parse
 
-import ghistabs.cpp.Access
-import ghistabs.cpp.VirtKind
-import ghistabs.cpp.isVptrFieldName
+import ghicpp.Access
+import ghicpp.VirtKind
+import ghicpp.isVptrFieldName
 import ghistabs.parse.TypeDecl.Aggregate.*
 import java.math.BigInteger
 

@@ -1,11 +1,11 @@
 package ghistabs.materialize
 
+import ghicpp.isVptrFieldName
+import ghicpp.member
+import ghicpp.qualifiedName
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.componentsOverlapping
-import ghistabs.cpp.isVptrFieldName
-import ghistabs.cpp.member
-import ghistabs.cpp.qualifiedName
 import ghistabs.harvest.Type
 import ghistabs.parse.*
 import ghistabs.runTransaction
@@ -171,12 +171,12 @@ internal fun DataTypeRegistry.fillComposite(
         }
     }
 
-    // A class with virtual bases, or with a base [layClasses] lays, is [layClasses]'s to finish, and to
+    // A class with virtual bases, or with a base [buildClasses] places, is [buildClasses]'s to finish, and to
     // report. Any other struct is reported once [materializeAll] has filled every type: a member whose
     // type is still an empty placeholder holds one byte until that type is filled and widens it, so
     // checking now would count the rest as a hole (`tagVARIANT`, whose only member is an anonymous union
     // filled after it).
-    if (placeholder is Structure && !types.hasVirtualBase(body) && basesLaidByClassLayout(body).isEmpty()) {
+    if (placeholder is Structure && !types.hasVirtualBase(body) && basesFilledByClassLayout(body).isEmpty()) {
         holesToReport += placeholder to qualifiedName
     }
 

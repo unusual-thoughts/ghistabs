@@ -3,6 +3,8 @@
 
 package ghistabs.harvest
 
+import ghicpp.canonTemplateName
+import ghicpp.templateName
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
@@ -11,8 +13,6 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.*
-import ghistabs.cpp.canonTemplateName
-import ghistabs.cpp.templateName
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable

@@ -1,5 +1,8 @@
 package ghistabs.integration
 
+import ghicpp.eh.MIN_UNNAMED_PERSONALITY
+import ghicpp.eh.SjljLsdaPass
+import ghicpp.entrypoints.SjljLsdaAnalyzer
 import ghidra.app.plugin.exceptionhandlers.gcc.datatype.DwarfEncodingModeDataType
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
@@ -11,9 +14,6 @@ import ghidra.program.model.data.VoidDataType
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.cpp.eh.MIN_UNNAMED_PERSONALITY
-import ghistabs.cpp.eh.SjljLsdaApplier
-import ghistabs.entrypoints.SjljLsdaAnalyzer
 import ghistabs.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -90,7 +90,7 @@ class SjljLsdaAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         type?.value.mustBe(addr(zti))
         program.listing.getComment(CommentType.EOL, addr(lsda + 9)).mustBe("(LSDA Action Table) Type Filter")
 
-        val label = program.symbolTable.getSymbols(addr(lsda)).single { it.name == SjljLsdaApplier.LABEL }
+        val label = program.symbolTable.getSymbols(addr(lsda)).single { it.name == SjljLsdaPass.LABEL }
         label.parentNamespace.name.mustBe("_ZN3Bar3runEv")
         program.symbolTable.getPrimarySymbol(addr(lsda))?.name.mustBe("lsda_exception_table_00402000")
     }
@@ -101,7 +101,7 @@ class SjljLsdaAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         function(0x401000, "first")
         function(0x401100, "second")
         runAnalyzer()
-        program.symbolTable.getSymbols(addr(lsda)).filter { it.name == SjljLsdaApplier.LABEL }
+        program.symbolTable.getSymbols(addr(lsda)).filter { it.name == SjljLsdaPass.LABEL }
             .map { it.parentNamespace.name }.toSet().mustBe(setOf("first", "second"))
     }
 

@@ -1,5 +1,6 @@
 package ghistabs.test
 
+import ghicpp.entrypoints.RttiSymbolAnalyzer
 import ghidra.app.util.importer.MessageLog
 import ghidra.framework.options.OptionType
 import ghidra.program.model.address.Address
@@ -8,7 +9,6 @@ import ghidra.program.model.address.GenericAddressSpace
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.*
-import ghistabs.entrypoints.RttiSymbolsAnalyzer
 import ghistabs.entrypoints.analyzeAfterImport
 import ghistabs.harvest.*
 import ghistabs.importer.ImportContext
@@ -71,7 +71,7 @@ fun <Id : IdInterface> longRange(inner: Id, min: Long, max: Long) =
  */
 fun ImportContext<*>.importAndAnalyze(stabs: StabReader.Result? = null): ImportResult {
     if (ImportProbe.get(program) == null) ImportProbe.install(this)
-    RttiSymbolsAnalyzer().takeIf { program.isAnalyzerEnabled(it.name) && it.canAnalyze(program) }?.let {
+    RttiSymbolAnalyzer().takeIf { program.isAnalyzerEnabled(it.name) && it.canAnalyze(program) }?.let {
         program.runTransaction("rtti-symbols") { it.added(program, program.memory, monitor, MessageLog()) }
     }
     return (stabs?.let(::runOnRecords) ?: import()).also {

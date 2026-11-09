@@ -1,15 +1,15 @@
 package ghistabs.materialize
 
+import ghicpp.Access
+import ghicpp.ClassHierarchyRecords
+import ghicpp.ClassHierarchyRecords.Base
+import ghicpp.ClassHierarchyRecords.Entry
+import ghicpp.MemberAttrs
+import ghicpp.VirtKind
 import ghidra.framework.options.GProperties
 import ghidra.util.Saveable
 import ghidra.util.datastruct.DataTable
 import ghidra.util.map.ObjectStorageAdapter
-import ghistabs.cpp.Access
-import ghistabs.cpp.ClassHierarchyRecords
-import ghistabs.cpp.ClassHierarchyRecords.Base
-import ghistabs.cpp.ClassHierarchyRecords.Entry
-import ghistabs.cpp.MemberAttrs
-import ghistabs.cpp.VirtKind
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 

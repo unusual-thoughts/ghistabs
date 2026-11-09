@@ -1,5 +1,10 @@
 package ghistabs.importer
 
+import ghicpp.MemberAttrs
+import ghicpp.MemberAttrs.Companion.writeMember
+import ghicpp.abi.CxxAbi.Companion.prevailingAbi
+import ghicpp.abi.itanium.Itanium.isInlineStdMember
+import ghicpp.qualifiedName
 import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
@@ -16,11 +21,6 @@ import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.*
-import ghistabs.cpp.MemberAttrs
-import ghistabs.cpp.MemberAttrs.Companion.writeMember
-import ghistabs.cpp.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.cpp.abi.itanium.Itanium.isInlineStdMember
-import ghistabs.cpp.qualifiedName
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level

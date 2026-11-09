@@ -1,6 +1,6 @@
 package ghistabs.index
 
-import ghistabs.cpp.leafName
+import ghicpp.leafName
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Type
 import ghistabs.parse.GlobalTypeDecl

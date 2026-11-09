@@ -1,12 +1,12 @@
 package ghistabs.materialize
 
+import ghicpp.ClassNaming
+import ghicpp.member
+import ghicpp.placeBase
 import ghidra.program.model.data.*
 import ghidra.program.model.data.DataOrganizationImpl.getAlignedOffset
 import ghidra.program.model.gclass.ClassUtils
 import ghistabs.componentsOverlapping
-import ghistabs.cpp.ClassNaming
-import ghistabs.cpp.member
-import ghistabs.cpp.placeBase
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
@@ -19,8 +19,8 @@ import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
 /**
- * A vptr at a base's offset is inherited: it is in the base subobject laid there, or in the part of a
- * base [layClasses] lays ([basesLaidByClassLayout]). Where no base could be laid, the bytes stay undefined,
+ * A vptr at a base's offset is inherited: it is in the base subobject placed there, or in the part of a
+ * base [buildClasses] places ([basesFilledByClassLayout]). Where no base could be placed, the bytes stay undefined,
  * so the stab's field is kept. A virtual base's offset is no position.
  */
 internal fun DataTypeRegistry.inheritedVptrAt(
@@ -32,7 +32,7 @@ internal fun DataTypeRegistry.inheritedVptrAt(
     if (bases.isEmpty()) return false
     val at = (offsetBits / 8).toInt()
     return struct.definedComponents.any { at in it.offset..<it.offset + it.length } ||
-        bases.any { it in basesLaidByClassLayout(body) }
+        bases.any { it in basesFilledByClassLayout(body) }
 }
 
 /** Null [TypeDecl.Method.cls] is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc
@@ -63,7 +63,7 @@ fun TypeDecl.Aggregate.Base<GlobalTypeId>.baseComment() = buildString {
 
 /**
  * Splices each non-virtual base's fields into [placeholder] at the offset the stab's inheritance line
- * gives it. Virtual bases, and bases with virtual bases of their own, are [layClasses]'s.
+ * gives it. Virtual bases, and bases with virtual bases of their own, are [buildClasses]'s.
  */
 internal fun DataTypeRegistry.fillStructBases(
     body: TypeDecl.Aggregate<GlobalTypeId>,
@@ -72,7 +72,7 @@ internal fun DataTypeRegistry.fillStructBases(
 ) {
     if (body.bases.any { !it.isVirtual && isEmptyBase(it.type) }) debug("base-empty-ebo")
     val baseCount = baseSubobjects(body)
-    val laidLater = basesLaidByClassLayout(body)
+    val laidLater = basesFilledByClassLayout(body)
     for ((base, gap) in baseGaps(body)) {
         if (base in laidLater) continue
         val offsetBytes = (base.offsetBits / 8).toInt()
@@ -130,8 +130,8 @@ internal fun DataTypeRegistry.fillStructBases(
  * A base class no CU defines, only forward-references (`!1,020,(51,22)` naming an
  * `xsbasic_ifstream<char,std:…` everywhere), has no size of its own; the [gap] its deriving class leaves
  * before its next base or own field is the only evidence there is. The empty stub is grown to that
- * many undefined bytes, in the DTM, the first time a deriving class lays it, so the base is named
- * rather than left as bare Undefined1. A later deriving class with a smaller gap gets nothing laid.
+ * many undefined bytes, in the DTM, the first time a deriving class places it, so the base is named
+ * rather than left as bare Undefined1. A later deriving class with a smaller gap gets nothing placed.
  */
 private fun DataTypeRegistry.sizedXRefStub(stub: DataType, gap: Int, qualifiedName: String): DataType? {
     if (stub !in xrefStubs || stub !is Structure || gap <= 0) return null
@@ -166,13 +166,13 @@ private fun DataTypeRegistry.baseGaps(
 }
 
 /**
- * The non-virtual bases [layClasses] lays rather than [fillStructBases], since only a finished base says
- * what of it goes there: one with virtual bases of its own, whose non-virtual part it lays, and one longer
- * than its gap, whose tail padding the deriving class's fields reuse (the Itanium ABI lays a non-POD base
+ * The non-virtual bases [buildClasses] places rather than [fillStructBases], since only a finished base says
+ * what of it goes there: one with virtual bases of its own, whose non-virtual part it places, and one longer
+ * than its gap, whose tail padding the deriving class's fields reuse (the Itanium ABI places a non-POD base
  * as its data alone). CryptoPP's `CCM_Base` puts `m_digestSize` at +60, inside the 64 bytes of
  * `AuthenticatedSymmetricCipherBase`, whose data ends at 60.
  */
-internal fun DataTypeRegistry.basesLaidByClassLayout(body: TypeDecl.Aggregate<GlobalTypeId>) =
+internal fun DataTypeRegistry.basesFilledByClassLayout(body: TypeDecl.Aggregate<GlobalTypeId>) =
     body.bases.filter { !it.isVirtual && types.inheritsVirtually(it.type) } +
         baseGaps(body).filter { (base, gap) ->
             !types.inheritsVirtually(base.type) && gap > 0 &&
@@ -183,7 +183,7 @@ private fun DataTypeRegistry.isEmptyBase(type: GlobalTypeDecl) =
     types.resolveAgg(type)?.sizeBytes?.let { it <= 1 } == true
 
 /**
- * Each distinct virtual base in [body]'s graph, with the struct it lays as, or null where it resolves to none.
+ * Each distinct virtual base in [body]'s graph, with the struct it is placed as, or null where it resolves to none.
  * Distinct by that struct: a diamond reaches one class through several edges (`basic_iostream` reaches
  * `basic_ios` through `basic_istream` and `basic_ostream`), and the struct is what gets one vbase offset and
  * one subobject. A stab body is no identity for that, since equal bodies need not be one class.
@@ -248,7 +248,7 @@ fun virtualBaseOffsets(nvEnd: Int, nvAlign: Int, vbases: List<Pair<Int, Int>>, c
  * that embed them. A class with a virtual base in its graph gets its virtual half: a virtual base is
  * not where its inheritance line says (gcc ≥ 3.0 writes where in the *vtable* its offset can be found,
  * `!1,12-96,` being −12 bytes; gcc 2.x writes 0 and reaches the base through a `_vb$` field), so it is
- * laid once, in the complete object, after the non-virtual data, and a class embedded as a base
+ * placed once, in the complete object, after the non-virtual data, and a class embedded as a base
  * contributes only its non-virtual part. With a [VfptrModel], a polymorphic class then gets its `{vfptr}`.
  *
  * A class is final once its turn is over, so the non-virtual part a derived class embeds is copied from
@@ -256,26 +256,26 @@ fun virtualBaseOffsets(nvEnd: Int, nvAlign: Int, vbases: List<Pair<Int, Int>>, c
  * the `_fields_` structs it cut from them, the same bytes. Runs after typedef shortening: the vftables,
  * self-bases and `_fields_` structs it creates are looked up again by name.
  */
-internal fun DataTypeRegistry.layClasses(vfptrModel: VfptrModel?) =
-    ClassLayout(this, vfptrModel?.let { VfptrPlacement(this, it, this) }).layAll()
+internal fun DataTypeRegistry.buildClasses(vfptrModel: VfptrModel?) =
+    ClassLayout(this, vfptrModel?.let { VfptrPlacement(this, it, this) }).buildAll()
 
 private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlacement?) : DiagnosticSink by registry {
     private val types = registry.types
 
-    /** The non-virtual size of each class laid here with virtual bases. */
+    /** The non-virtual size of each class built here with virtual bases. */
     private val nonVirtualSizes = mutableMapOf<DataTypePath, Int>()
 
     /** Each embedded class's non-virtual part, as a struct of its own. */
     private val selfBases = mutableMapOf<DataTypePath, Structure>()
 
-    fun layAll() = buildSet {
+    fun buildAll() = buildSet {
         for (located in registry.classesBasesFirst()) {
             val struct = registry.dataTypeFor(located.type.id) as? Structure ?: continue
             runCatching {
                 // Two locations can fill one struct (`/stabs/basic_ostream<…>` and `/std/basic_ostream<…>`),
-                // and a second pass would take the laid virtual base for own data.
+                // and a second pass would take the placed virtual base for own data.
                 val qualifiedName = "${located.location.category}/${located.type.ghidraName}"
-                if (add(struct.dataTypePath)) layBases(located.classBody, struct, qualifiedName)
+                if (add(struct.dataTypePath)) fillBases(located.classBody, struct, qualifiedName)
                 placeVfptr(located, struct)
             }.onFailure { err("class-layout-error", "${located.location}: ${it.message}") }
         }
@@ -288,16 +288,16 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         placement.place(struct, located.vftablePath(types), located.classBody, polyBase)
     }
 
-    /** The bases [fillStructBases] left: [basesLaidByClassLayout], then any virtual base. */
-    private fun layBases(body: TypeDecl.Aggregate<GlobalTypeId>, struct: Structure, qualifiedName: String) {
-        val laidHere = registry.basesLaidByClassLayout(body)
+    /** The bases [fillStructBases] left: [basesFilledByClassLayout], then any virtual base. */
+    private fun fillBases(body: TypeDecl.Aggregate<GlobalTypeId>, struct: Structure, qualifiedName: String) {
+        val laidHere = registry.basesFilledByClassLayout(body)
         val virtual = types.hasVirtualBase(body)
         if (laidHere.isEmpty() && !virtual) return
         embedBaseParts(body, laidHere, struct, qualifiedName)
         if (virtual) {
             val nvEnd = struct.dataSize
             val nvAlign = struct.naturalAlignment()
-            layVirtualBases(body, struct, qualifiedName, nvEnd, nvAlign)
+            fillVirtualBases(body, struct, qualifiedName, nvEnd, nvAlign)
             nonVirtualSizes[struct.dataTypePath] = getAlignedOffset(nvAlign, nvEnd)
         }
         registry.reportHoles(struct, qualifiedName)
@@ -340,7 +340,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         }
     }
 
-    private fun layVirtualBases(
+    private fun fillVirtualBases(
         body: TypeDecl.Aggregate<GlobalTypeId>,
         struct: Structure,
         qualifiedName: String,
@@ -380,7 +380,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
 
     /**
      * [cls] as a base subobject: its non-virtual part, without the virtual bases the most-derived class
-     * lays for itself. Null for a class not laid here, which has no virtual base or never got that far.
+     * places for itself. Null for a class not built here, which has no virtual base or never got that far.
      */
     private fun selfBaseOf(cls: DataType): Structure? =
         (cls as? Structure)?.let { nonVirtualSizes[it.dataTypePath]?.let { size -> selfBaseOf(cls, size) } }

@@ -1,10 +1,10 @@
 package ghistabs.index
 
+import ghicpp.Access
+import ghicpp.VirtKind
+import ghicpp.member
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.cpp.Access
-import ghistabs.cpp.VirtKind
-import ghistabs.cpp.member
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding

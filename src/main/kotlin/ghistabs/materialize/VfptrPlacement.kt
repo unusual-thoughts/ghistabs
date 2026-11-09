@@ -1,12 +1,12 @@
 package ghistabs.materialize
 
+import ghicpp.*
 import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.Undefined1DataType
 import ghidra.program.model.gclass.ClassUtils
 import ghistabs.DtmRegistry
-import ghistabs.cpp.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.vptrOffsetBytesOf
 import ghistabs.parse.GlobalTypeId
