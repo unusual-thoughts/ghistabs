@@ -14,10 +14,10 @@ import ghistabs.parse.TypeDecl
 
 /**
  * Where a polymorphic class's `{vfptr}` goes, and what happens to the base subobject that would
- * otherwise own it. See [VfptrModel] for what the choice costs a virtual call. [cpp.ClassLayout]'s, which
+ * otherwise own it. See [VfptrModel] for what the choice costs a virtual call. [ClassStructBuilder]'s, which
  * runs it on each class in its turn.
  */
-internal class VfptrPlacement(private val registry: DtmRegistry, private val model: VfptrModel, sink: DiagnosticSink) :
+internal class VfptrPlacer(private val registry: DtmRegistry, private val model: VfptrModel, sink: DiagnosticSink) :
     DiagnosticSink by sink {
     private val dtm = registry.dtm
     private val splitter = BaseSplitter(registry, sink)

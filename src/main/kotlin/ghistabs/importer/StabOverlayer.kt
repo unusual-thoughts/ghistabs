@@ -42,7 +42,7 @@ private val VALUE_IS_FUNC_RELATIVE = setOf(StabType.N_SLINE, StabType.N_LBRAC, S
  * string it names in `.stabstr`, and address-bearing records (`N_FUN`, `N_STSYM`, …) reference the
  * code/data their `n_value` points at. Idempotent — re-runs reuse the `/stabs/StabRecord` datatype.
  */
-class StabSectionOverlay(private val ctx: ImportContext<*>) : DiagnosticSink by ctx {
+class StabOverlayer(private val ctx: ImportContext<*>) : DiagnosticSink by ctx {
     private val program = ctx.program
 
     fun apply(): Int {

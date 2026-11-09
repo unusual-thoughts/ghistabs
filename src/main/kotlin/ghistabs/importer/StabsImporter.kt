@@ -23,7 +23,7 @@ fun ImportContext<*>.import(): ImportResult {
     if (program.isStabsDone) return ImportResult()
 
     if (options.overlaySection && !program.isOverlayDone) {
-        debug("stab-section-overlaid", count = StabSectionOverlay(this).apply().toLong())
+        debug("stab-section-overlaid", count = StabOverlayer(this).apply().toLong())
         program.markOverlayDone()
     }
 
