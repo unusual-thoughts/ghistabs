@@ -1,11 +1,13 @@
 package ghicpp.recover
 
+import ghicpp.ClassNaming
 import ghicpp.abi.importedFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRangeImpl
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Listing
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
 
@@ -41,7 +43,7 @@ data class PotentialVtable(val addr: Address, val slots: List<Address>, val refs
     val range get() = AddressRangeImpl(addr, (slots.size * addr.pointerSize).toLong())
 }
 
-class GenericVftableFinder(program: Program) {
+class GenericVftableFinder(val program: Program) {
     val ptr = program.defaultPointerSize.toLong()
     val listing: Listing = program.listing
 
@@ -49,7 +51,7 @@ class GenericVftableFinder(program: Program) {
         program.isCode(dst) || program.importedFunction(src, dst) != null
     }.asIterable()
         .map { (src, dst) -> program.pointerOf(src, dst) }
-        .chunkWith { (a), (b, _, refs) -> b == a + ptr && refs.isEmpty() }
+        .chunkWith { a, b -> b.src == a.src + ptr && b.refs.isEmpty() }
         .map { PotentialVtable(it) }.filter { vt ->
             listing.getDefinedData(AddressSet(vt.range), true).all {
                 it.baseDataType.length == program.defaultPointerSize
@@ -57,5 +59,18 @@ class GenericVftableFinder(program: Program) {
         }
 
     fun run(monitor: TaskMonitor) {
+        for (vtable in potentialVtables) {
+            val structorNs = vtable.refs.mapNotNull {
+                program.functionManager.getFunctionContaining(it)?.parentNamespace
+            }
+            if (structorNs.isEmpty()) {
+                val ns = program.symbolTable.createClass(
+                    program.globalNamespace,
+                    "Klass_${vtable.addr}",
+                    SourceType.ANALYSIS,
+                )
+                val sym = program.symbolTable.createLabel(vtable.addr, ClassNaming.VFTABLE, ns, SourceType.ANALYSIS)
+            }
+        }
     }
 }
