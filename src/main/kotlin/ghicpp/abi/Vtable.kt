@@ -1,10 +1,12 @@
 package ghicpp.abi
 
 import ghicpp.ClassNaming
+import ghicpp.abi.gcc2.Gcc2Plain
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.TypeinfoReader
 import ghicpp.abi.itanium.startsVtableGroup
 import ghicpp.abi.itanium.vtableOffsetField
+import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.msvc.msvcSubobjectOffset
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.address.Address
@@ -68,6 +70,10 @@ interface VtableLayout {
 
     /** Whether [name] is the runtime function this ABI points a pure virtual's slot at. */
     fun isPureVirtualStub(name: String): Boolean
+
+    companion object {
+        fun looksLikePureVirtual(name: String) = sequenceOf(Itanium, Msvc, Gcc2Plain).any { it.isPureVirtualStub(name) }
+    }
 }
 
 /**
