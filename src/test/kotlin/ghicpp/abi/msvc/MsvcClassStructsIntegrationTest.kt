@@ -1,6 +1,7 @@
 package ghicpp.abi.msvc
 
 import ghicpp.ClassStructsFixtureTest
+import ghicpp.recover.ClassPassTags
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
@@ -105,6 +106,17 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
             it.parentNamespace.name == "Label" && it.callingConventionName == "__thiscall"
         }
         (method.getParameter(0).dataType as Pointer).dataType.pathName mustBe "/ClassDataTypes/Label/Label"
+    }
+
+    @Test
+    fun `every function the class pass places, its virtual functions too, takes this as __thiscall`() {
+        val edx = program.language.getRegister("EDX")
+        val placed = program.functionManager.getFunctions(true)
+            .filter { f -> f.tags.any { it.name == ClassPassTags.METHOD } }
+        placed.mustNotBeEmpty()
+        placed.filter { f ->
+            f.callingConventionName == "__fastcall" && f.parameters.none { it.register?.baseRegister == edx }
+        }.map { "${it.parentNamespace.name}::${it.name}" } mustBe emptyList()
     }
 
     private fun Program.secondSlot(table: String) = (classStruct(table).getComponent(1).dataType as Pointer).dataType

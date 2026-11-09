@@ -96,15 +96,21 @@ class ClassPass(
     }
 
     /**
-     * Marks [func] virtual unless recorded otherwise, and [claim]s it for [cls] under [name]; whether it moved.
+     * Marks [func] virtual unless recorded otherwise, and [claim]s it for [cls] under [name], its convention then a
+     * method's ([fixMethodConvention]); whether it moved.
      */
     private fun attach(func: Function, cls: ClassDecl, name: String?): Boolean {
         val entry = func.entryPoint
         if (program.memberAttrs(entry) == null) program.writeMember(entry, MemberAttrs(virt = VirtKind.VIRTUAL))
         val ns = cls.ns?.toClass() ?: return false
-        return runCatching { claim(func, ns, name).first }
+        val moved = runCatching { claim(func, ns, name).first }
             .onFailure { warn("class-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
             .getOrDefault(false)
+        if (func.parentNamespace.id == ns.id) {
+            runCatching { func.fixMethodConvention() }
+                .onFailure { warn("class-vfunction-convention", "${func.name} -> ${ns.getName(true)}: $it", entry) }
+        }
+        return moved
     }
 
     /**
@@ -212,7 +218,7 @@ class ClassPass(
             ?: if (role == StructorRole.CONSTRUCTOR) cls.name else "~${cls.name}"
         return runCatching {
             val (moves, renames) = claim(func, cls, name)
-            val retyped = func.parentNamespace.id == cls.id && func.fastcallToThiscall()
+            val retyped = func.parentNamespace.id == cls.id && func.fixMethodConvention()
             moves || renames || retyped
         }.onFailure {
             warn("class-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)

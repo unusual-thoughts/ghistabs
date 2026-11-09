@@ -9,6 +9,8 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
+import ghistabs.isInjected
+import ghistabs.isMethod
 
 /** How long a class pass waits on the decompiler for one function. */
 const val DECOMPILE_TIMEOUT_SECONDS = 30
@@ -47,6 +49,37 @@ fun Function.fastcallToThiscall(): Boolean {
         )
     }.isSuccess
 }
+
+/**
+ * Gives a method back the auto-`this` Ghidra's "Decompiler Parameter ID" froze out: it commits a decompiled
+ * signature, `this` as an ordinary parameter, in custom storage whenever that storage disagrees with the
+ * convention's, and custom storage is what suppresses the auto-parameter. Re-applying the formals with dynamic
+ * storage drops it, and Ghidra re-derives `this` from the class. Whether it changed anything; throws where
+ * Ghidra refuses the signature.
+ */
+fun Function.restoreThisParam(): Boolean {
+    // Custom storage means no auto-params, so a `this` among the parameters is a stored one: the shape to undo.
+    val frozen = isMethod && hasCustomVariableStorage() && callingConvention?.hasThisPointer() == true &&
+        parameters.any { it.name == Function.THIS_PARAM_NAME }
+    if (!frozen) return false
+    // Ours to drop: `updateFunction` strips an explicit `this` only when it is pointer-typed. Copies, not the
+    // live parameters: `updateFunction` clears the names off those before reading the list back, so passing
+    // them in loses the name and source it is being asked to keep.
+    replaceParameters(
+        parameters.filterNot { it.isInjected }.map { ParameterImpl(it.name, it.dataType, program, it.source) },
+        Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+        true,
+        signatureSource,
+    )
+    return true
+}
+
+/**
+ * A method's convention as `this` makes it: [fastcallToThiscall], then [restoreThisParam]. What every function
+ * that lands in a class goes through, from the analyzer ([ghicpp.entrypoints.MethodConventionAnalyzer]) or a
+ * class pass placing it. Whether it changed anything; throws where Ghidra refuses the signature.
+ */
+fun Function.fixMethodConvention(): Boolean = fastcallToThiscall() or restoreThisParam()
 
 private const val FASTCALL = CompilerSpec.CALLING_CONVENTION_fastcall
 private const val THISCALL = CompilerSpec.CALLING_CONVENTION_thiscall
