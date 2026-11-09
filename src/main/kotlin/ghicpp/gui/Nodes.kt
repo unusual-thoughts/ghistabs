@@ -181,6 +181,7 @@ class ClassNode private constructor(
         // The typedef shortening pass renamed its struct; the namespace keeps the long spelling.
         info?.structName?.takeIf { it != info.name }?.let { append("<br>shortened: ").append(escape(it)) }
         val origin = when (info?.origin) {
+            Origin.EDITED -> "bases set by hand"
             Origin.STABS -> "from the stabs"
             Origin.MSVC_RTTI -> "from its MSVC RTTI"
             Origin.ITANIUM_RTTI -> "from its Itanium RTTI"

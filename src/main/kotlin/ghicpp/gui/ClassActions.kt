@@ -5,9 +5,13 @@ import docking.action.DockingAction
 import docking.action.MenuData
 import docking.action.ToggleDockingAction
 import docking.action.ToolBarData
+import docking.widgets.dialogs.InputDialog
 import generic.theme.GIcon
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghicpp.hierarchy.relocateNamespace
+import ghicpp.hierarchy.renameClass
 import ghicpp.hierarchy.resolve
+import ghicpp.hierarchy.updateFieldTypes
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.app.context.ProgramSymbolActionContext
 import ghidra.app.plugin.core.navigation.locationreferences.LocationReferencesService
@@ -24,6 +28,9 @@ import ghidra.program.util.FunctionSignatureFieldLocation
 import ghidra.util.HTMLUtilities
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
+import ghidra.util.task.MonitoredRunnable
+import ghidra.util.task.TaskLauncher
+import ghistabs.namespaceAt
 import ghistabs.runTransaction
 import resources.Icons
 
@@ -31,8 +38,9 @@ private val STRUCT_ICON = GIcon("icon.plugin.datatypes.structure")
 private val VTABLE_ICON = GIcon("icon.plugin.navigation.bytes")
 
 /**
- * The popup actions on the selection: a class's struct and vtable, a member's overridden function, and
- * the Symbol Tree's own actions on a member's symbol. The toolbar's are below ([addToolbarActions]).
+ * The popup actions on the selection: a class's struct and vtable, renames, field types, a member's
+ * overridden function and attributes, and the Symbol Tree's own actions on a member's symbol. The
+ * toolbar's are below ([addToolbarActions]).
  */
 internal fun ClassTree.addSelectionActions() {
     addClassActions()
@@ -40,7 +48,7 @@ internal fun ClassTree.addSelectionActions() {
     addSymbolActions()
 }
 
-/** The popup actions on the selected class: its structs. */
+/** The popup actions on the selected class or namespace: its structs, its name, its field types. */
 private fun ClassTree.addClassActions() {
     addLocalAction(
         object : DockingAction("Edit class struct", owner) {
@@ -57,6 +65,26 @@ private fun ClassTree.addClassActions() {
         },
     )
     addLocalAction(
+        object : DockingAction("Rename Class", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                selectedClass?.let(::renameSelected)
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Rename Class"), "0")
+            popupWhen { selectedClass?.let { it.origin != Origin.IMPORTED } == true }
+        },
+    )
+    addLocalAction(
+        object : DockingAction("Rename Namespace", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                (selectedNode as? NamespaceNode)?.let(::renameNamespace)
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Rename Namespace"), "0")
+            popupWhen { selectedNode is NamespaceNode }
+        },
+    )
+    addLocalAction(
         object : DockingAction("Edit vtable struct", owner) {
             override fun actionPerformed(context: ActionContext?) {
                 selectedClass?.vftableStructId?.let { openStruct(it) }
@@ -66,10 +94,35 @@ private fun ClassTree.addClassActions() {
             popupWhen { selectedClass?.vftableStructId != null }
         },
     )
+    addLocalAction(
+        object : DockingAction("Update Class Field Types", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                selectedClass?.let { updateFieldTypes(listOf(it to null)) }
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Update Field Types"), STRUCT_ICON)
+            popupWhen { selectedClass?.let { it.structId != null && it.origin != Origin.IMPORTED } == true }
+        },
+    )
 }
 
-/** The popup action on the selected member: the function it overrides. */
+/** The popup actions on the selected members: their field types, the function overridden, their attributes. */
 private fun ClassTree.addMemberActions() {
+    addLocalAction(
+        object : DockingAction("Update Field Types from Method", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                updateFieldTypes(selectedMembers.groupBy({ it.second }, { it.first }).toList())
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Update Field Types"), STRUCT_ICON)
+            popupWhen {
+                selectedMembers.let { sel ->
+                    sel.isNotEmpty() &&
+                        sel.all { (m, cls) -> m.kind == MemberKind.FUNCTION && cls.structId != null }
+                }
+            }
+        },
+    )
     addLocalAction(
         object : DockingAction("Go to Overridden", owner) {
             override fun actionPerformed(context: ActionContext?) {
@@ -79,6 +132,16 @@ private fun ClassTree.addMemberActions() {
             popupMenuData = MenuData(arrayOf("Go to Overridden"), "0")
             popupWhen { selectedMember?.kind == MemberKind.FUNCTION }
             enabledWhen { selectedOverridden != null }
+        },
+    )
+    addLocalAction(
+        object : DockingAction("Set Member Attributes", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                program?.setMemberAttrs(selectedMembers, tool, component)
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Set Member Attributes..."), "0")
+            popupWhen { selectedMembers.let { it.isNotEmpty() && it.all { (m, _) -> m.takesAttrs } } }
         },
     )
 }
@@ -154,6 +217,24 @@ private fun memberSymbols(context: ActionContext): List<Symbol> =
         .takeIf { all -> all.all { it.symbolType == SymbolType.FUNCTION || it.symbolType == SymbolType.LABEL } }
         .orEmpty()
 
+/**
+ * Retypes each class's fields off the methods paired with it, or off all its own when null, decompiling
+ * them in a task that can be cancelled: what it retyped before then stays.
+ */
+private fun ClassTree.updateFieldTypes(targets: List<Pair<ClassView, List<Member>?>>) {
+    val p = program ?: return
+    TaskLauncher.launchModal(
+        "Update Field Types",
+        MonitoredRunnable { monitor ->
+            p.runTransaction("Update field types") {
+                for ((cls, methods) in targets) {
+                    if (!monitor.isCancelled) p.updateFieldTypes(cls, methods, monitor)
+                }
+            }
+        },
+    )
+}
+
 /** A struct for [cls], which has none, where Ghidra files a class's; its datatype id. */
 private fun ClassTree.createStruct(cls: ClassView): Long? {
     val program = program ?: return null
@@ -162,6 +243,34 @@ private fun ClassTree.createStruct(cls: ClassView): Long? {
     return program.runTransaction("Create class struct") {
         val struct = VariableUtilities.findOrCreateClassStruct(ns, dtm)
         dtm.getID(dtm.resolve(struct, DataTypeConflictHandler.DEFAULT_HANDLER))
+    }
+}
+
+/** Ask for [cls]'s new name, then [renameClass]: a name Ghidra refuses changes nothing. */
+private fun ClassTree.renameNamespace(node: NamespaceNode) {
+    val p = program ?: return
+    val ns = p.namespaceAt(node.path) ?: return
+    val dialog = InputDialog("Rename Namespace", "New name:", ns.name)
+    tool.showDialog(dialog, this)
+    val name = dialog.value?.trim()?.takeUnless { dialog.isCanceled || it.isEmpty() || it == ns.name } ?: return
+    val skipped = runCatching {
+        p.runTransaction("Rename namespace ${ns.name}") { p.relocateNamespace(ns, ns.parentNamespace, name) }
+    }.onFailure { Msg.showError(this, component, "Rename Namespace", it.message, it) }.getOrNull()
+    if (!skipped.isNullOrEmpty()) {
+        Msg.showWarn(this, component, "Rename Namespace", "Kept their old place:\n" + skipped.joinToString("\n"))
+    }
+}
+
+private fun ClassTree.renameSelected(cls: ClassView) {
+    val p = program ?: return
+    val h = shown ?: return
+    val dialog = InputDialog("Rename Class", "New name:", cls.name)
+    tool.showDialog(dialog, this)
+    val name = dialog.value?.trim()?.takeUnless { dialog.isCanceled || it.isEmpty() || it == cls.name } ?: return
+    val skipped = runCatching { p.runTransaction("Rename class ${cls.name}") { p.renameClass(h, cls, name) } }
+        .getOrElse { return Msg.showError(this, component, "Rename Class", it.message) }
+    if (skipped.isNotEmpty()) {
+        Msg.showWarn(this, component, "Rename Class", "Kept their old names:\n" + skipped.joinToString("\n"))
     }
 }
 

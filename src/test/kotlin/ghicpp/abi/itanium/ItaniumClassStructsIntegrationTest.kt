@@ -3,6 +3,10 @@ package ghicpp.abi.itanium
 import ghicpp.ClassNaming
 import ghicpp.ClassStructsFixtureTest
 import ghicpp.analyzers.ItaniumClassAnalyzer
+import ghicpp.hierarchy.ClassHierarchy
+import ghicpp.hierarchy.methodsOf
+import ghicpp.hierarchy.resolve
+import ghicpp.hierarchy.updateFieldTypes
 import ghicpp.recover.updateFieldTypes
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.DoubleDataType
@@ -95,6 +99,23 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
         val methods = program.methods("Diamond")
         program.runTransaction { program.updateFieldTypes(methods[0].classNs, methods, TaskMonitor.DUMMY) }
         program.data("Diamond") mustBe listOf(0 to "field_0x1c: int")
+    }
+
+    @Test
+    fun `the window updates a class's field types from its own methods`() {
+        val diamond = ClassHierarchy.of(program, hasStabs = false).classes.single { it.qualifiedName == "Diamond" }
+        program.methodsOf(program.resolve(diamond)!!).map { it.entryPoint }.sorted() mustBe
+            program.methods("Diamond").filterNot { it.isThunk }.map { it.entryPoint }.sorted()
+        program.runTransaction { program.updateFieldTypes(diamond, null, TaskMonitor.DUMMY) }
+        program.data("Diamond") mustBe listOf(0 to "field_0x1c: int")
+    }
+
+    @Test
+    fun `the window updates a class's field types from a method selected`() {
+        val label = ClassHierarchy.of(program, hasStabs = false).classes.single { it.qualifiedName == "Label" }
+        val area = label.members.single { it.name == "vfunction3_for_Rect" }
+        program.runTransaction { program.updateFieldTypes(label, listOf(area), TaskMonitor.DUMMY) }
+        program.data("Label") mustBe listOf(0 to "field_0x24: int")
     }
 
     private fun Program.methods(cls: String) = functionManager.getFunctions(true).filter {
