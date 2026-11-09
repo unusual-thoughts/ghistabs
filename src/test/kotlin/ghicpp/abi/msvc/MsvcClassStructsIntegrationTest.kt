@@ -1,10 +1,13 @@
 package ghicpp.abi.msvc
 
 import ghicpp.ClassStructsFixtureTest
-import ghicpp.recover.ClassPassTags
+import ghicpp.entrypoints.MsvcClassAnalyzer
+import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
+import ghidra.util.task.TaskMonitor
+import ghistabs.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 
@@ -109,14 +112,13 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
     }
 
     @Test
-    fun `every function the class pass places, its virtual functions too, takes this as __thiscall`() {
-        val edx = program.language.getRegister("EDX")
-        val placed = program.functionManager.getFunctions(true)
-            .filter { f -> f.tags.any { it.name == ClassPassTags.METHOD } }
-        placed.mustNotBeEmpty()
-        placed.filter { f ->
-            f.callingConventionName == "__fastcall" && f.parameters.none { it.register?.baseRegister == edx }
-        }.map { "${it.parentNamespace.name}::${it.name}" } mustBe emptyList()
+    fun `a virtual function Ghidra typed __fastcall is __thiscall again once the class pass places it`() {
+        val vfunction = program.functionManager.getFunctions(true).first {
+            it.name.startsWith("vfunction") && it.callingConventionName == "__thiscall" && it.parameterCount == 1
+        }
+        program.runTransaction { vfunction.setCallingConvention("__fastcall") }
+        program.runTransaction { MsvcClassAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog()) }
+        vfunction.callingConventionName mustBe "__thiscall"
     }
 
     private fun Program.secondSlot(table: String) = (classStruct(table).getComponent(1).dataType as Pointer).dataType
