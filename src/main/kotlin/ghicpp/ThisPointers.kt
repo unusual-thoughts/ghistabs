@@ -14,6 +14,7 @@ import ghidra.program.model.listing.ReturnParameterImpl
 import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
+import ghidra.program.model.symbol.SourceType
 import ghistabs.isInjected
 import ghistabs.isMethod
 
@@ -104,11 +105,50 @@ fun Function.restoreThisParam(): Boolean {
 }
 
 /**
- * A method's convention as `this` makes it: [fastcallToThiscall], then [restoreThisParam]. What every function
- * that lands in a class goes through, from the analyzer ([ghicpp.entrypoints.MethodConventionAnalyzer]) or a
- * class pass placing it. Whether it changed anything; throws where Ghidra refuses the signature.
+ * Gives a function that takes `this` but no convention saying so the `__thiscall` that does, where that only
+ * names its first argument: its convention unknown, the default or the compiler's default, set by an analysis,
+ * and `__thiscall` taking `this` where that convention takes the first argument, its return where it is
+ * ([returnTypeUnder]). Under x86 gcc, whose `__thiscall` takes `this` on the stack as `__cdecl` takes its
+ * first argument; not under MSVC, whose takes it in ECX ([fastcallToThiscall] covers that). Only for a
+ * function known to take `this`: a static member function sits in its class too. Whether it changed anything.
  */
-fun Function.fixMethodConvention(): Boolean = fastcallToThiscall() or restoreThisParam()
+fun Function.thiscallFromFirstArgument(): Boolean {
+    val fm = program.functionManager
+    val thiscall = fm.getCallingConvention(THISCALL) ?: return false
+    val defaultModel = program.compilerSpec.defaultCallingConvention
+    val current = when (callingConventionName) {
+        Function.UNKNOWN_CALLING_CONVENTION_STRING, Function.DEFAULT_CALLING_CONVENTION_STRING -> defaultModel
+        defaultModel.name -> defaultModel
+        else -> return false
+    }
+    if (signatureSource.isHigherPriorityThan(SourceType.ANALYSIS)) return false
+    val pointer = PointerDataType(program.dataTypeManager)
+    val thisAt = thiscall.getArgLocation(0, null, pointer, program)
+    if (current.getArgLocation(0, null, pointer, program) != thisAt) return false
+    val returned = returnTypeUnder(thiscall) ?: return false
+    val params = parameters.filterNot { it.isAutoParameter }
+    val rest = if (params.firstOrNull()?.variableStorage == thisAt) params.drop(1) else params
+    return runCatching {
+        updateFunction(
+            THISCALL,
+            ReturnParameterImpl(returned, program),
+            rest.map { ParameterImpl(it.name, it.dataType, program, it.source) },
+            Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+            true,
+            signatureSource,
+        )
+    }.isSuccess
+}
+
+/**
+ * A method's convention as `this` makes it: [fastcallToThiscall], then [restoreThisParam], and where the
+ * caller knows it [takesThis] (a class pass placed it: a virtual function, a structor, a method guessed off its
+ * callers), [thiscallFromFirstArgument]. What every function that lands in a class goes through, from the
+ * analyzer ([ghicpp.entrypoints.MethodConventionAnalyzer]) or a class pass placing it. Whether it changed
+ * anything; throws where Ghidra refuses the signature.
+ */
+fun Function.fixMethodConvention(takesThis: Boolean = false): Boolean =
+    fastcallToThiscall() or (takesThis && thiscallFromFirstArgument()) or restoreThisParam()
 
 private const val FASTCALL = CompilerSpec.CALLING_CONVENTION_fastcall
 private const val THISCALL = CompilerSpec.CALLING_CONVENTION_thiscall

@@ -107,7 +107,7 @@ class ClassPass(
             .onFailure { warn("class-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
             .getOrDefault(false)
         if (func.parentNamespace.id == ns.id) {
-            runCatching { func.fixMethodConvention() }
+            runCatching { func.fixMethodConvention(takesThis = true) }
                 .onFailure { warn("class-vfunction-convention", "${func.name} -> ${ns.getName(true)}: $it", entry) }
         }
         return moved
@@ -218,7 +218,7 @@ class ClassPass(
             ?: if (role == StructorRole.CONSTRUCTOR) cls.name else "~${cls.name}"
         return runCatching {
             val (moves, renames) = claim(func, cls, name)
-            val retyped = func.parentNamespace.id == cls.id && func.fixMethodConvention()
+            val retyped = func.parentNamespace.id == cls.id && func.fixMethodConvention(takesThis = true)
             moves || renames || retyped
         }.onFailure {
             warn("class-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)

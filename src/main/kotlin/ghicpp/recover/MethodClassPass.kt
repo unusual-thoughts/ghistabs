@@ -181,7 +181,7 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
 
     private fun place(f: Function, guess: MethodClassGuess): Boolean = runCatching {
         f.parentNamespace = guess.cls
-        f.fixMethodConvention()
+        f.fixMethodConvention(takesThis = true)
         program.bookmarkManager.setBookmark(
             f.entryPoint,
             BookmarkType.ANALYSIS,

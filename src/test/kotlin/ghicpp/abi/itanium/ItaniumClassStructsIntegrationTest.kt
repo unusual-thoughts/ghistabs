@@ -27,6 +27,16 @@ import org.junit.jupiter.api.Test
  */
 class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gcc12_stripped", compiler = "gcc") {
     @Test
+    fun `every method the class passes place takes this, typed to its class, as __thiscall`() {
+        val methods = program.functionManager.getFunctions(true).filter { it.parentNamespace is GhidraClass }
+        methods.filter { f ->
+            f.callingConventionName != CompilerSpec.CALLING_CONVENTION_thiscall ||
+                f.getParameter(0)?.let { it.isAutoParameter && it.dataType.name == "${f.parentNamespace.name} *" } !=
+                true
+        }.map { "${it.getName(true)}: ${it.getPrototypeString(false, false)}" } mustBe emptyList()
+    }
+
+    @Test
     fun `a virtual base is laid where its vtable's vbase offset says`() {
         program.layout("Down") mustBe listOf(
             0 to "vfptr: Down_vftable0 *",
