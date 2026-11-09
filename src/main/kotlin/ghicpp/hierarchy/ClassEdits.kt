@@ -10,6 +10,9 @@ import ghicpp.hierarchy.ClassHierarchy.*
 import ghicpp.recover.updateFieldTypes
 import ghidra.program.model.data.Category
 import ghidra.program.model.data.DataTypeComponent
+import ghidra.program.model.data.FunctionDefinition
+import ghidra.program.model.data.FunctionDefinitionDataType
+import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Function
@@ -217,6 +220,35 @@ internal fun Program.updateFieldTypes(cls: ClassView, methods: List<Member>?, mo
         methods?.mapNotNull { m -> addressFactory.getAddress(m.address)?.let(functionManager::getFunctionAt) }
             ?: methodsOf(ns)
     updateFieldTypes(ns, functions, monitor)
+}
+
+/**
+ * The definitions laid vftables type [func]'s slots with: a slot pointing at it or at a thunk to it. The class
+ * pass gives each function one, shared by every table holding it.
+ */
+internal fun Program.slotDefinitionsOf(func: Function): Set<FunctionDefinition> =
+    (listOf(func.entryPoint) + func.functionThunkAddresses.orEmpty()).asSequence()
+        .flatMap { referenceManager.getReferencesTo(it).iterator().asSequence() }
+        .mapNotNull { ref ->
+            val table = listing.getDataContaining(ref.fromAddress)?.takeIf { it.dataType is Structure }
+            val slot = table?.getPrimitiveAt(ref.fromAddress.subtract(table.address).toInt())
+            (slot?.dataType as? Pointer)?.dataType as? FunctionDefinition
+        }
+        .toSet()
+
+/**
+ * Copies [func]'s signature into each of its [slotDefinitionsOf], as `ApplyClassFunctionSignatureUpdatesScript`
+ * does for a whole class: every vftable holding it then calls it so. A definition keeps its name. How many
+ * it changed.
+ */
+internal fun Program.applySignatureToSlots(func: Function): Int {
+    val defs = slotDefinitionsOf(func)
+    for (def in defs) {
+        def.replaceWith(
+            FunctionDefinitionDataType(def.categoryPath, def.name, func.signature, dataTypeManager),
+        )
+    }
+    return defs.size
 }
 
 /**

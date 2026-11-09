@@ -1,9 +1,15 @@
 package ghicpp.abi.msvc
 
 import ghicpp.ClassStructsFixtureTest
+import ghicpp.hierarchy.ClassHierarchy
+import ghicpp.hierarchy.applySignatureToSlots
+import ghidra.program.model.data.FunctionDefinition
+import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.SourceType
+import ghistabs.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 
@@ -105,6 +111,30 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
             it.parentNamespace.name == "Label" && it.callingConventionName == "__thiscall"
         }
         (method.getParameter(0).dataType as Pointer).dataType.pathName mustBe "/ClassDataTypes/Label/Label"
+    }
+
+    @Test
+    fun `applying a method's signature to its slot retypes it in every vftable holding it`() {
+        // `Core::f`, the second slot of `Core`'s table and of `Up`'s for it.
+        val f = program.functionManager.getFunctions(true).single { it.getName(true) == "Core::vfunction2" }
+        program.runTransaction {
+            f.setReturnType(IntegerDataType.dataType, SourceType.USER_DEFINED)
+            program.applySignatureToSlots(f) mustBe 1
+        }
+        for (table in listOf("Core_vftable", "Up_vftable_for_Core")) {
+            (program.secondSlot(table) as FunctionDefinition).returnType.name mustBe "int"
+        }
+    }
+
+    @Test
+    fun `the window shows which constructor or destructor a member is`() {
+        // The class pass names `Circle`'s two constructors; this build's destructors stay `FUN_`s.
+        val circle = ClassHierarchy.of(program, hasStabs = false).classes.single { it.qualifiedName == "Circle" }
+        circle.members.filter { it.msvcStructor != null }.map { it.label } mustBe
+            listOf("Circle(int) [constructor]", "Circle(undefined8) [constructor]")
+        MsvcStructor.ofName("~Circle", "Circle") mustBe MsvcStructor.DESTRUCTOR
+        MsvcStructor.ofName("`scalar_deleting_destructor'", "Circle") mustBe MsvcStructor.SCALAR_DELETING_DESTRUCTOR
+        MsvcStructor.ofMangled("??_ECircle@@UAEPAXI@Z") mustBe MsvcStructor.VECTOR_DELETING_DESTRUCTOR
     }
 
     private fun Program.secondSlot(table: String) = (classStruct(table).getComponent(1).dataType as Pointer).dataType

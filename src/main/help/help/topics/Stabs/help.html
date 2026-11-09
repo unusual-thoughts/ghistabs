@@ -239,7 +239,9 @@
       <LI>its functions and labels, by name. An overloaded function is spelled with its parameter
       types (<CODE>Circle(double)</CODE>). A constructor or destructor gcc emitted once per variant
       is listed per variant, the variant in brackets (<CODE>~Circle() [deleting]</CODE>,
-      <CODE>[complete]</CODE>, <CODE>[base]</CODE>), several when gcc aliased them to one body. A
+      <CODE>[complete]</CODE>, <CODE>[base]</CODE>), several when gcc aliased them to one body. An
+      MSVC one says which it is (<CODE>Circle(int) [constructor]</CODE>, <CODE>[scalar deleting
+      destructor]</CODE>). A
       thunk has the thunk icon;</LI>
 
       <LI>its nested classes.</LI>
@@ -292,7 +294,9 @@
       <CODE>Stabs Member Attributes</CODE> property map); with no stabs, virtuality is read off the
       vtable's slots and <CODE>const</CODE>/<CODE>volatile</CODE> off the mangled name. Constructor
       and destructor variants come from the Itanium mangled names (<CODE>C1</CODE>,
-      <CODE>C2</CODE>, <CODE>D0</CODE>&hellip;).</LI>
+      <CODE>C2</CODE>, <CODE>D0</CODE>&hellip;); MSVC's from theirs (<CODE>??0</CODE>,
+      <CODE>??1</CODE>, <CODE>??_G</CODE>&hellip;), or with none, from the names the RTTI class
+      analysis gives the constructors and destructors it finds.</LI>
 
       <LI><B>Abstract</B> means one of the class's vtable slots holds
       <CODE>__cxa_pure_virtual</CODE> (gcc 2.x: <CODE>__pure_virtual</CODE>).</LI>
@@ -324,6 +328,9 @@
     gives the fields its constructors store a more specific type off what they all load and store
     through <CODE>this</CODE>, as analysis first did; on functions, it does the same off just those.
     Names and comments stay.
+    <B>Apply Signature to Vftables</B>, on functions some vftable's slot points at, copies each
+    one's signature, as edited, into the function definition its slots are typed with, which every
+    vftable holding it shares, so they all call it the same way.
     A function's offers <B>Go to Overridden</B>, which goes to the base class's virtual function it
     overrides (greyed out when it overrides none), and every member's the Symbol Tree's
     <B>Rename</B>, <B>Delete</B>, <B>Show References to</B>,

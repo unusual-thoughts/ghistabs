@@ -8,9 +8,11 @@ import docking.action.ToolBarData
 import docking.widgets.dialogs.InputDialog
 import generic.theme.GIcon
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghicpp.hierarchy.applySignatureToSlots
 import ghicpp.hierarchy.relocateNamespace
 import ghicpp.hierarchy.renameClass
 import ghicpp.hierarchy.resolve
+import ghicpp.hierarchy.slotDefinitionsOf
 import ghicpp.hierarchy.updateFieldTypes
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.app.context.ProgramSymbolActionContext
@@ -21,6 +23,7 @@ import ghidra.app.services.CodeViewerService
 import ghidra.app.services.DataTypeManagerService
 import ghidra.app.util.AddEditDialog
 import ghidra.program.model.data.DataTypeConflictHandler
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolType
@@ -119,6 +122,26 @@ private fun ClassTree.addMemberActions() {
                 selectedMembers.let { sel ->
                     sel.isNotEmpty() &&
                         sel.all { (m, cls) -> m.kind == MemberKind.FUNCTION && cls.structId != null }
+                }
+            }
+        },
+    )
+    addLocalAction(
+        object : DockingAction("Apply Signature to Vftables", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                val p = program ?: return
+                val funcs = selectedFunctions()
+                val changed = p.runTransaction("Apply signature to vftables") {
+                    funcs.sumOf { p.applySignatureToSlots(it) }
+                }
+                tool.setStatusInfo("Applied ${funcs.size} signature(s) to $changed vftable slot definition(s)")
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Apply Signature to Vftables"), VTABLE_ICON)
+            popupWhen {
+                selectedFunctions().let { fs ->
+                    fs.isNotEmpty() &&
+                        fs.all { program?.slotDefinitionsOf(it)?.isNotEmpty() == true }
                 }
             }
         },
@@ -233,6 +256,16 @@ private fun ClassTree.updateFieldTypes(targets: List<Pair<ClassView, List<Member
             }
         },
     )
+}
+
+/** The selected members' functions, when they are all functions. */
+private fun ClassTree.selectedFunctions(): List<Function> {
+    val p = program ?: return emptyList()
+    return selectedMembers.map { (m, _) ->
+        m.takeIf { it.kind == MemberKind.FUNCTION }
+            ?.let { p.addressFactory.getAddress(it.address) }
+            ?.let(p.functionManager::getFunctionAt) ?: return emptyList()
+    }
 }
 
 /** A struct for [cls], which has none, where Ghidra files a class's; its datatype id. */

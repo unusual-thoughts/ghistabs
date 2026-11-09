@@ -10,6 +10,7 @@ import ghicpp.abi.isPrimaryVftable
 import ghicpp.abi.itanium.*
 import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.msvc.MsvcRttiParser
+import ghicpp.abi.msvc.MsvcStructor
 import ghicpp.abi.vftableStructAt
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
@@ -93,6 +94,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val attrs: MemberAttrs? = null,
         /** Which of its constructor's or destructor's variants it is: several when gcc aliased them. */
         val variants: List<ItaniumStructor> = emptyList(),
+        /** Which MSVC constructor or destructor it is, off its mangled name or the name the class pass gives it. */
+        val msvcStructor: MsvcStructor? = null,
         /** Its symbol's id, for the symbol actions on it. */
         val symbolId: Long? = null,
         /** The library it is imported from, for an external function or label. */
@@ -101,7 +104,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val aliases: List<String> = emptyList(),
     ) {
         val label: String get() = (if (isOverloaded && parameters != null) name + parameters else name) +
-            variants.takeIf { it.isNotEmpty() }?.joinToString(", ", " [", "]") { it.label }.orEmpty()
+            (variants.map { it.label } + listOfNotNull(msvcStructor?.label))
+                .takeIf { it.isNotEmpty() }?.joinToString(", ", " [", "]").orEmpty()
 
         /** The program's own function or label: a vtable, typeinfo or import stays where its name files it. */
         val isMovable: Boolean get() =
@@ -326,6 +330,9 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         fun vftableStructOf(ns: GhidraClass, label: Symbol?): Structure? = label?.let(program::vftableStructAt)
             ?: program.dataTypeManager.getDataType(ClassNaming.vftablePath(ns)) as? Structure
 
+        // A program with MSVC RTTI, whose class pass names its structors `Foo`, `~Foo` and the deleting ones.
+        val isMsvc by lazy { typeDescriptorByClass.isNotEmpty() }
+
         /** [ns]'s members, and its [imports]: the same class's namespaces under the libraries it's imported from. */
         fun membersOf(ns: Namespace, imports: List<Namespace> = emptyList()): List<Member> {
             val virtuals by lazy { program.virtualsOf(ns) }
@@ -344,6 +351,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                             attrs = program.memberAttrs(sym.address) ?: fn.derivedAttrs(virtuals),
                             variants = symtab.getSymbols(sym.address).mapNotNull { ItaniumStructor.of(it.name) }
                                 .distinct().sorted(),
+                            msvcStructor = symtab.msvcStructorOf(sym, ns, isMsvc),
                             symbolId = sym.id,
                             library = sym.library,
                             aliases = aliases[sym.address].orEmpty(),
@@ -483,6 +491,11 @@ private fun Program.slotTargets(vftable: Address): Sequence<Address> {
 
 // What Ghidra's RTTI analyzer labels each MSVC RTTI record: `RTTI_Type_Descriptor`, `RTTI_Base_Class_Array`…
 private const val MSVC_RTTI_PREFIX = "RTTI_"
+
+/** Which MSVC structor [sym] is in [ns]: off a mangled name at it, else, in an MSVC program, its own name. */
+private fun SymbolTable.msvcStructorOf(sym: Symbol, ns: Namespace, isMsvc: Boolean): MsvcStructor? =
+    getSymbols(sym.address).firstNotNullOfOrNull { MsvcStructor.ofMangled(it.name) }
+        ?: MsvcStructor.ofName(sym.name, ns.name).takeIf { isMsvc }
 
 // Vtables, then the other ABI objects, then functions and labels mixed by name, as the Symbol Tree.
 private val MEMBER_ORDER = compareBy<ClassHierarchy.Member>(
