@@ -210,16 +210,18 @@ internal fun Program.methodsOf(ns: GhidraClass): List<Function> = symbolTable.ge
     .filter { it.symbolType == SymbolType.FUNCTION && !it.isExternal }
     .mapNotNull { functionManager.getFunctionAt(it.address)?.takeUnless(Function::isThunk) }
 
+/** The function at [m]'s address, when it is a function member. */
+internal fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == MemberKind.FUNCTION }
+    ?.let { addressFactory.getAddress(it.address) }
+    ?.let(functionManager::getFunctionAt)
+
 /**
  * Retypes [cls]'s own fields off what [methods] load and store through `this`, or off all of [methodsOf] its
  * namespace's when null.
  */
-internal fun Program.updateFieldTypes(cls: ClassView, methods: List<Member>?, monitor: TaskMonitor) {
+internal fun Program.updateFieldTypes(cls: ClassView, methods: List<Function>?, monitor: TaskMonitor) {
     val ns = resolve(cls) ?: return
-    val functions =
-        methods?.mapNotNull { m -> addressFactory.getAddress(m.address)?.let(functionManager::getFunctionAt) }
-            ?: methodsOf(ns)
-    updateFieldTypes(ns, functions, monitor)
+    updateFieldTypes(ns, methods ?: methodsOf(ns), monitor)
 }
 
 /**
