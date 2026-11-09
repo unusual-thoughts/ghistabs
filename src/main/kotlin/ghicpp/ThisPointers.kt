@@ -1,11 +1,16 @@
 package ghicpp
 
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DoubleDataType
+import ghidra.program.model.data.Float10DataType
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.lang.CompilerSpec
+import ghidra.program.model.lang.PrototypeModel
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
+import ghidra.program.model.listing.ReturnParameterImpl
 import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
@@ -29,25 +34,45 @@ fun Program.thisStorage(): Address? {
 /**
  * Turns a method's x86 `__fastcall` with nothing in EDX into the `__thiscall` it really is, the ECX
  * parameter becoming `this`. Ghidra picks `__fastcall` when `this` is the only register argument.
- * Returns whether it changed anything.
+ * Not where `__thiscall` would return the value elsewhere ([keepsReturn]). Returns whether it changed anything.
  */
 fun Function.fastcallToThiscall(): Boolean {
     if (callingConventionName != FASTCALL) return false
-    if (program.functionManager.getCallingConvention(THISCALL) == null) return false
+    val model = program.functionManager.getCallingConvention(THISCALL) ?: return false
     val (ecx, edx) = listOf("ECX", "EDX").map { program.language.getRegister(it) ?: return false }
     if (parameters.any { it.register?.baseRegister == edx.baseRegister }) return false
+    val returned = returnTypeUnder(model) ?: return false
     val params = parameters.toList()
     val rest = if (params.firstOrNull()?.register?.baseRegister == ecx.baseRegister) params.drop(1) else params
     return runCatching {
         updateFunction(
             THISCALL,
-            `return`,
+            ReturnParameterImpl(returned, program),
             rest.map { ParameterImpl(it.name, it.dataType, program, it.source) },
             Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
             true,
             signatureSource,
         )
     }.isSuccess
+}
+
+/**
+ * The return type to give this function under [model]'s own storage, or null where [model] would return it
+ * somewhere else than it now is: a `float10` in ST0, which a `__thiscall` with dynamic storage returns through
+ * a hidden pointer, its aligned size past ST0's. Under MSVC a `long double` is a `double`, so there a `float10`
+ * in ST0 is the `double` it was, which `__thiscall` returns in ST0 too.
+ */
+private fun Function.returnTypeUnder(model: PrototypeModel): DataType? {
+    val now = `return`
+    val type = if (now.dataType is Float10DataType && program.compilerSpec.compilerSpecID.idAsString == MSVC) {
+        DoubleDataType.dataType
+    } else {
+        now.dataType
+    }
+    if (now.variableStorage.isVoidStorage || now.variableStorage.isUnassignedStorage) return type
+    val then = model.getStorageLocations(program, arrayOf(type), false)[0]
+    val keepsReturn = !then.isForcedIndirect && then.firstVarnode?.address == now.variableStorage.firstVarnode?.address
+    return type.takeIf { keepsReturn }
 }
 
 /**
@@ -62,10 +87,14 @@ fun Function.restoreThisParam(): Boolean {
     val frozen = isMethod && hasCustomVariableStorage() && callingConvention?.hasThisPointer() == true &&
         parameters.any { it.name == Function.THIS_PARAM_NAME }
     if (!frozen) return false
+    // Dynamic storage re-derives the return's too: not where that moves it ([returnTypeUnder]).
+    val returned = callingConvention?.let { returnTypeUnder(it) } ?: return false
     // Ours to drop: `updateFunction` strips an explicit `this` only when it is pointer-typed. Copies, not the
     // live parameters: `updateFunction` clears the names off those before reading the list back, so passing
     // them in loses the name and source it is being asked to keep.
-    replaceParameters(
+    updateFunction(
+        callingConventionName,
+        ReturnParameterImpl(returned, program),
         parameters.filterNot { it.isInjected }.map { ParameterImpl(it.name, it.dataType, program, it.source) },
         Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
         true,
@@ -83,6 +112,7 @@ fun Function.fixMethodConvention(): Boolean = fastcallToThiscall() or restoreThi
 
 private const val FASTCALL = CompilerSpec.CALLING_CONVENTION_fastcall
 private const val THISCALL = CompilerSpec.CALLING_CONVENTION_thiscall
+private const val MSVC = "windows"
 
 /**
  * A pointer as the variable it points into ([root]) and how far past it ([offset]). The decompiler merges a
