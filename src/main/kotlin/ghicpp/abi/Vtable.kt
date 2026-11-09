@@ -232,7 +232,7 @@ fun Program.slotFunction(at: Address, abi: CxxAbi): Function? {
  * The imported function whose thunk is at [target], if [pfn] is relocated against it. Data imports share
  * the EXTERNAL block, so the thunk alone doesn't say: a typeinfo's vptr can land on one.
  */
-private fun Program.importedFunction(pfn: Address, target: Address): Function? {
+fun Program.importedFunction(pfn: Address, target: Address): Function? {
     val thunk = functionManager.getFunctionAt(target)?.takeIf { it.isThunk } ?: return null
     return thunk.takeIf { relocationTable.getRelocations(pfn).any { it.symbolName == thunk.name } }
 }

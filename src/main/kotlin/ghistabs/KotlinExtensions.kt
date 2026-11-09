@@ -11,25 +11,26 @@ fun String.removePrefixOrNull(prefix: String): String? = when {
 fun <T> List<T>.startsWith(head: List<T>) = size >= head.size && subList(0, head.size) == head
 fun <T> List<T>.endsWith(tail: List<T>) = size >= tail.size && subList(size - tail.size, size) == tail
 
-inline fun <T> List<T>.chunkNotNull(f: (List<T>?, T) -> Boolean?) = fold(mutableListOf<MutableList<T>>()) { acc, item ->
-    acc.apply {
-        val prev = lastOrNull()
-        when (f(prev, item)) {
-            null -> {}
-            true -> prev?.add(item)
-            false -> acc.add(mutableListOf(item))
+inline fun <T> Iterable<T>.chunkNotNull(f: (List<T>?, T) -> Boolean?) =
+    fold(mutableListOf<MutableList<T>>()) { acc, item ->
+        acc.apply {
+            val prev = lastOrNull()
+            when (f(prev, item)) {
+                null -> {}
+                true -> prev?.add(item)
+                false -> acc.add(mutableListOf(item))
+            }
         }
-    }
-} as List<List<T>>
+    } as List<List<T>>
 
-inline fun <T> List<T>.chunkOf(f: (List<T>, T) -> Boolean) = chunkNotNull { prev, item ->
+inline fun <T> Iterable<T>.chunkOf(f: (List<T>, T) -> Boolean) = chunkNotNull { prev, item ->
     prev != null && f(prev, item)
 }
 
-inline fun <T> List<T>.chunkWith(eq: (T, T) -> Boolean) = chunkOf { acc, item -> eq(acc.last(), item) }
+inline fun <T> Iterable<T>.chunkWith(eq: (T, T) -> Boolean) = chunkOf { acc, item -> eq(acc.last(), item) }
 
 /** Consecutive runs sharing a [key] — `groupBy` would merge runs that aren't adjacent. */
-inline fun <T, K> List<T>.chunkedBy(key: (T) -> K) = chunkWith { a, b -> key(a) == key(b) }
+inline fun <T, K> Iterable<T>.chunkedBy(key: (T) -> K) = chunkWith { a, b -> key(a) == key(b) }
 
 class Once<T, R>(private val f: (T) -> R) : (T) -> R {
     private var value: R? = null
