@@ -1,10 +1,7 @@
 package ghicpp.recover
 
 import ghicpp.ClassNaming
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.PlainVtables
-import ghicpp.abi.VftableBuilder
-import ghicpp.abi.importedFunction
+import ghicpp.abi.*
 import ghicpp.describeVxTable
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRangeImpl
@@ -78,8 +75,8 @@ class GenericVftableFinder(
     /**
      * Every run of words pointing at functions ([isSlot]) that no ABI's labels claim ([isClaimed]), whose
      * first word code takes the address of ([codeReferences]). A run ends before the next such word, which begins
-     * another, at a symbol, at data laid other than one word ([isFree]), or past [MAX_NULLS] nulls; the nulls that
-     * end it are no slots. A table whose constructor isn't disassembled yet waits for a later run.
+     * another, at a symbol, at data laid other than one word ([isFree]), or past [DESTRUCTOR_SLOTS] nulls;
+     * the nulls that end it are no slots. A table whose constructor isn't disassembled yet waits for a later run.
      */
     val potentialVtables: List<PotentialVtable> by lazy {
         program.findPointers()
@@ -96,16 +93,15 @@ class GenericVftableFinder(
 
     private fun pointerOf(src: Address, dst: Address) = Pointer(src, dst, codeReferences(src))
 
-    /** [this] split past [MAX_NULLS] nulls in a row, each part without the nulls that end it. */
+    /** [this] split past [DESTRUCTOR_SLOTS] nulls in a row, each part without the nulls that end it. */
     private fun List<Pointer>.splitAtNulls(): List<List<Pointer>> {
         val parts = mutableListOf(mutableListOf<Pointer>())
         var nulls = 0
         for (p in this) {
             nulls = if (p.dst.offset == 0L) nulls + 1 else 0
-            if (nulls > MAX_NULLS) {
-                if (parts.last().isNotEmpty()) parts += mutableListOf<Pointer>()
-            } else {
-                parts.last() += p
+            when {
+                nulls > DESTRUCTOR_SLOTS -> if (parts.last().isNotEmpty()) parts.add(mutableListOf())
+                else -> parts.last() += p
             }
         }
         return parts.map { part -> part.dropLastWhile { it.dst.offset == 0L } }.filter { it.isNotEmpty() }
@@ -117,10 +113,9 @@ class GenericVftableFinder(
      * named after where its table is, `Klass_<address>`, since nothing else names it.
      */
     fun seed(monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
-        val found = potentialVtables
-        monitor.initialize(found.size.toLong(), "Seeding vftables from pointer tables")
+        monitor.initialize(potentialVtables.size.toLong(), "Seeding vftables from pointer tables")
         var seeded = 0
-        for (table in found) {
+        for (table in potentialVtables) {
             monitor.increment()
             val laid = listing.getDefinedDataContaining(table.addr)?.takeIf(::isSeeded)
             when {
@@ -169,7 +164,7 @@ class GenericVftableFinder(
      * jump or call there, nor read or write the word, as code does a GOT's or an import table's.
      */
     private fun codeReferences(at: Address): List<Address> =
-        program.referenceManager.getReferencesTo(at).let { it as Iterator<Reference> }.asSequence()
+        program.referenceManager.getReferencesTo(at).iterator().asSequence()
             .filterNot { it.referenceType.let { t -> t.isFlow || t.isRead || t.isWrite } }
             .filter { it.isFromInstruction() || it.isFromCodePointer() }
             .map { it.fromAddress }
@@ -227,8 +222,5 @@ class GenericVftableFinder(
         val SEEDED = SourceType.ANALYSIS
 
         const val SEEDED_CLASS_PREFIX = "Klass_"
-
-        /** gcc leaves an abstract class's two destructor slots null. */
-        private const val MAX_NULLS = 2
     }
 }

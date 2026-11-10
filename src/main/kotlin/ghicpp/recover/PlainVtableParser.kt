@@ -1,16 +1,8 @@
 package ghicpp.recover
 
-import ghicpp.Access
-import ghicpp.ClassBase
-import ghicpp.ClassDecl
-import ghicpp.ClassNaming
-import ghicpp.ClassPassInput
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.PlainVtables
-import ghicpp.abi.RttiParser
-import ghicpp.abi.VtableRecord
+import ghicpp.*
+import ghicpp.abi.*
 import ghicpp.abi.msvc.Msvc
-import ghicpp.abi.slotFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -21,47 +13,12 @@ import ghidra.program.model.symbol.Symbol
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
+import ghistabs.minus
 
 /** A class known by its vftables alone, with no RTTI to give it bases: those its structors show ([inferBases]). */
 class PlainClass(override val ns: Namespace, override val vftables: List<VtableRecord>) : ClassDecl {
     override val name: String get() = ns.name
     override val bases = mutableListOf<ClassBase>()
-}
-
-/**
- * The direct bases of [classes] at the start of their objects, off what their structors store and call
- * ([reading]) and the functions their tables' [slots] share, each table's slots in order, null where no function
- * of the program's own is (a null slot, a pure virtual stub, an import) or one that never returns, as an unnamed
- * pure virtual stub doesn't.
- *
- * A function storing D's vptr that calls on `this` a function storing B's makes B a base of D, as a constructor
- * builds its bases and a destructor destroys them. A function storing several classes' vptrs at once, inlining
- * its bases', stores a base's first in a constructor and last in a destructor, so there their tables' lengths
- * order them: a derived class's table holds at least its base's slots.
- *
- * A function several tables hold, in the same slot of each, was introduced by a class all of theirs derive from:
- * the one with the shortest table, if no other is as short, which is then a candidate base of the others. Not
- * where that class overrides a slot that the other inherits from a class with a shorter table still, which a class
- * deriving from it couldn't ([inheritsPast]); and not for a function in different slots, as the linker folds
- * functions alike across unrelated classes.
- *
- * Of the candidates, the one deriving from all the others is the base; none if no one does, or if two classes
- * would derive from each other. A call on `this` + k is no evidence: it builds a member as well as a base, and
- * only a store of D's own table at k, which [PlainVtables] doesn't place, would tell them apart.
- */
-fun inferBases(
-    classes: Collection<PlainClass>,
-    reading: StructorFinder.Reading,
-    slots: Map<out ClassDecl, List<Function?>>,
-) {
-    val candidates = BaseCandidates(slots)
-    candidates.addStructors(reading)
-    candidates.addSharedSlots()
-    val direct = candidates.byClass.mapValues { (_, cs) -> cs.mostDerived(candidates.byClass) }
-    for (cls in classes) {
-        val base = direct[cls] ?: continue
-        if (direct[base] != cls) cls.bases += ClassBase(base, isVirtual = false, Access.PUBLIC, 0L)
-    }
 }
 
 /** The candidate bases of each class, as [inferBases] finds them, off their tables' [slots]. */
@@ -95,10 +52,41 @@ private class BaseCandidates(private val slots: Map<out ClassDecl, List<Function
             if (at.map { it.second }.distinct().size != 1) continue
             val classes = at.map { it.third }.distinct()
             val shortest = classes.minOf(::length)
-            val introducer = classes.filter { length(it) == shortest }.singleOrNull() ?: continue
+            val introducer = classes.singleOrNull { length(it) == shortest } ?: continue
             for (cls in classes) {
                 if (cls != introducer && !cls.inheritsPast(introducer, slots, holders, ::length)) add(cls, introducer)
             }
+        }
+    }
+
+    /**
+     * The direct bases of [classes] at the start of their objects, off what their structors store and call
+     * ([reading]) and the functions their tables' [slots] share, each table's slots in order, null where no function
+     * of the program's own is (a null slot, a pure virtual stub, an import) or one that never returns, as an unnamed
+     * pure virtual stub doesn't.
+     *
+     * A function storing D's vptr that calls on `this` a function storing B's makes B a base of D, as a constructor
+     * builds its bases and a destructor destroys them. A function storing several classes' vptrs at once, inlining
+     * its bases', stores a base's first in a constructor and last in a destructor, so there their tables' lengths
+     * order them: a derived class's table holds at least its base's slots.
+     *
+     * A function several tables hold, in the same slot of each, was introduced by a class all of theirs derive from:
+     * the one with the shortest table, if no other is as short, which is then a candidate base of the others. Not
+     * where that class overrides a slot that the other inherits from a class with a shorter table still, which a class
+     * deriving from it couldn't ([inheritsPast]); and not for a function in different slots, as the linker folds
+     * functions alike across unrelated classes.
+     *
+     * Of the candidates, the one deriving from all the others is the base; none if no one does, or if two classes
+     * would derive from each other. A call on `this` + k is no evidence: it builds a member as well as a base, and
+     * only a store of D's own table at k, which [PlainVtables] doesn't place, would tell them apart.
+     */
+    fun inferBases(classes: Collection<PlainClass>, reading: StructorFinder.Reading) {
+        addStructors(reading)
+        addSharedSlots()
+        val direct = byClass.mapValues { (_, cs) -> cs.mostDerived(byClass) }
+        for (cls in classes) {
+            val base = direct[cls] ?: continue
+            if (direct[base] != cls) cls.bases += ClassBase(base, isVirtual = false, Access.PUBLIC, 0L)
         }
     }
 }
@@ -141,12 +129,13 @@ private fun Set<ClassDecl>.mostDerived(candidates: Map<ClassDecl, Set<ClassDecl>
  * The classes whose `vftable` labels no ABI's records describe, as [GenericVftableFinder] seeds them or a user
  * labels them, for the class pass: each label in a class namespace with no RTTI labels of its own, which isn't
  * an ABI's vtable symbol nor the stabs import's, read as [PlainVtables]. A class with RTTI goes to its ABI's
- * parser, which knows its bases; these get theirs off their structors ([inferBases]).
+ * parser, which knows its bases; these get theirs off their structors ([BaseCandidates.inferBases]).
  */
 class PlainVtableParser(private val program: Program, private val sink: DiagnosticSink = DummySink) : RttiParser {
     override val abi get() = PlainVtables
 
     private val symbols = program.symbolTable
+    private val ptr = program.defaultPointerSize.toLong()
 
     override fun parse(monitor: TaskMonitor): ClassPassInput {
         val classes = symbols.getSymbols(ClassNaming.VFTABLE).iterator().asSequence()
@@ -163,7 +152,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
                     ?.takeUnless { it.hasNoReturn() }
             }
         }
-        inferBases(classes, reading, slots)
+        BaseCandidates(slots).inferBases(classes, reading)
         return ClassPassInput(classes, classes, holders(classes))
     }
 
@@ -171,9 +160,9 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
     private fun Symbol.isPlain(): Boolean {
         if (source == SourceType.IMPORTED || parentNamespace !is GhidraClass) return false
         if (symbols.getSymbols(address).any { CxxAbi.ofVtableSymbol(it.name) != null }) return false
-        val meta = runCatching { address.subtract(program.defaultPointerSize.toLong()) }.getOrNull()
-        if (meta != null && symbols.getSymbols(meta).any { it.name == Msvc.VFTABLE_META_PTR }) return false
-        return symbols.getSymbols(parentNamespace).iterator().asSequence().none { it.name in RTTI_LABELS }
+        val meta = runCatching { symbols.getSymbols(address - ptr) }.getOrNull().orEmpty()
+        return meta.none { it.name == Msvc.VFTABLE_META_PTR } &&
+            symbols.getSymbols(parentNamespace).iterator().asSequence().none { it.name in RTTI_LABELS }
     }
 
     /** Each function a slot holds, and the classes whose tables hold it. */

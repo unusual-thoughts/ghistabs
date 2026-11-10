@@ -192,7 +192,7 @@ data class VtableRecord(
 }
 
 /** gcc's two destructor entries, complete and deleting: the only slots it leaves null. */
-private const val DESTRUCTOR_SLOTS = 2
+const val DESTRUCTOR_SLOTS = 2
 
 /**
  * The functions the slots of the [abi]'s vtable whose address point is [at] point at, in order. Nothing
