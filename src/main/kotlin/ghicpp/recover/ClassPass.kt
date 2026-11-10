@@ -96,8 +96,9 @@ class ClassPass(
     }
 
     /**
-     * Marks [func] virtual unless recorded otherwise, and [claim]s it for [cls] under [name], its convention then a
-     * method's ([fixMethodConvention]); whether it moved.
+     * Moves the virtual function [func] into [cls]'s namespace, renamed to [name] if one is given, and marks it
+     * virtual unless its member attributes already say otherwise. Once it is in the class, its calling convention
+     * is fixed to take `this` ([fixMethodConvention]). Returns whether it was moved.
      */
     private fun attach(func: Function, cls: ClassDecl, name: String?): Boolean {
         val entry = func.entryPoint
