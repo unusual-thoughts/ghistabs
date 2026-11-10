@@ -87,11 +87,10 @@ private fun Function.returnTypeUnder(model: PrototypeModel): DataType? {
 fun Function.restoreThisParam(): Boolean {
     // Custom storage means no auto-params, so a `this` among the parameters is a stored one: the shape to undo.
     // So is no parameter at all, where an analysis saw `this` go unread, as in a `what()` returning a literal.
+    val storedThis = parameters.any { it.name == Function.THIS_PARAM_NAME }
+    val unreadThis = parameterCount == 0 && !signatureSource.isHigherPriorityThan(SourceType.ANALYSIS)
     val frozen = isMethod && hasCustomVariableStorage() && callingConvention?.hasThisPointer() == true &&
-        (
-            parameters.any { it.name == Function.THIS_PARAM_NAME } ||
-                parameterCount == 0 && !signatureSource.isHigherPriorityThan(SourceType.ANALYSIS)
-            )
+        (storedThis || unreadThis)
     if (!frozen) return false
     // Dynamic storage re-derives the return's too: not where that moves it ([returnTypeUnder]).
     val returned = callingConvention?.let { returnTypeUnder(it) } ?: return false

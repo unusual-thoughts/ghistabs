@@ -27,7 +27,9 @@ class MingwClassStructsIntegrationTest : ClassStructsFixtureTest("hello_gcc421_s
     @Test
     fun `every method but those returning a long double takes this, typed to its class, as __thiscall`() {
         val (longDouble, rest) = methods.partition { it.returnType.length == LONG_DOUBLE }
-        rest.filterNot { it.takesTypedThis() }.map { "${it.getName(true)}: ${it.callingConventionName} ${it.getPrototypeString(false, false)}" }
+        rest.filterNot {
+            it.takesTypedThis()
+        }.map { "${it.getName(true)}: ${it.callingConventionName} ${it.getPrototypeString(false, false)}" }
             .mustBe(emptyList())
         longDouble.map { it.getName(true) }.sorted() mustBe
             listOf("Circle::vfunction3", "Label::vfunction3_for_Rect", "Rect::vfunction3")
