@@ -8,7 +8,8 @@ import java.io.File
 
 /**
  * Imports [binary], hinting the [compiler] spec where the file's own loaders offer one (see
- * [offersCompilerSpec]; null leaves the loader its own preference). The caller owns the result and
+ * [offersCompilerSpec]; null leaves the loader its own preference), unless Microsoft's linker made it
+ * ([isMsvcLinked]). The caller owns the result and
  * must [close][LoadedProgram.close] it - prefer [withProgram] when the program's life is a single scope.
  *
  * `load()` holds what it loads with the builder as consumer, so the program is taken over with a
@@ -18,7 +19,7 @@ fun Any.loadProgram(binary: File, compiler: String? = "gcc", log: MessageLog? = 
     ProgramLoader.builder()
         .source(binary)
         .apply {
-            if (compiler != null && binary.offersCompilerSpec(compiler)) compiler(compiler)
+            if (compiler != null && binary.offersCompilerSpec(compiler) && !binary.isMsvcLinked()) compiler(compiler)
             if (monitor != null) monitor(monitor)
             if (log != null) log(log)
         }
