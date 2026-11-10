@@ -14,6 +14,7 @@ import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
+import ghistabs.diagnose.report
 
 /**
  * Marks compiler alignment padding in executable memory as [AlignmentDataType], so downstream passes
@@ -60,7 +61,7 @@ class FillerByteAnalyzer :
             }
         }
         if (marked != 0) {
-            log.appendMsg(NAME, "collapsed $marked alignment-padding run(s)")
+            report("collapsed $marked alignment-padding run(s)")
         }
         return true
     }

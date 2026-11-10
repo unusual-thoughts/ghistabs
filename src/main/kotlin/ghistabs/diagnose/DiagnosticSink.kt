@@ -4,6 +4,7 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
+import ghidra.util.Msg
 import ghistabs.diagnose.BookmarkSink.Companion.toBookmark
 import java.io.Writer
 
@@ -107,7 +108,11 @@ class TeeSink(private vararg val sinks: DiagnosticSink?) : DiagnosticSink {
     }
 }
 
-/** Writes message-bearing diagnostics at/above [minLevel] to Ghidra's [MessageLog]. */
+/**
+ * Writes message-bearing diagnostics at/above [minLevel]: warnings and errors to Ghidra's [MessageLog],
+ * which Ghidra shows in a "warnings/errors issued during analysis" dialog when analysis ends, and the
+ * rest to the application log ([Msg]), where an analyzer's account of what it did belongs.
+ */
 class MessageLogSink(
     private val messageLog: MessageLog,
     private val minLevel: Level = Level.INFO,
@@ -127,7 +132,12 @@ class MessageLogSink(
         val prefix = "[${level.name}]"
         val line = if (address != null) "$prefix $category at $address: $text" else "$prefix $category: $text"
 
-        messageLog.appendMsg(originator, if (level == Level.ERROR) "ERROR: $line" else line)
+        when (level) {
+            Level.ERROR -> messageLog.appendMsg(originator, "ERROR: $line")
+            Level.WARN -> messageLog.appendMsg(originator, line)
+            Level.INFO -> Msg.info(this, "$originator: $line")
+            Level.DEBUG -> Msg.debug(this, "$originator: $line")
+        }
     }
 }
 

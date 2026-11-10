@@ -13,6 +13,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.diagnose.report
 
 /**
  * Places the virtual bases a class struct lacks where its Itanium vtable says they are ([VirtualBasePass] over
@@ -37,7 +38,7 @@ class VirtualBaseAnalyzer :
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val placed = VirtualBasePass(program, Itanium, sink).placeAll(ItaniumRttiParser(program, sink).withVtables())
-        if (placed > 0) log.appendMsg(NAME, "placed $placed virtual base(s)")
+        if (placed > 0) report("placed $placed virtual base(s)")
         return true
     }
 
