@@ -103,7 +103,14 @@ export GHIDRA_INSTALL_DIR=/opt/ghidra   # or pass -PGHIDRA_INSTALL_DIR=...
 ./gradlew installExtension              # build + install into the Ghidra user dir
 ./gradlew buildCli                      # standalone headless CLI at build/libs/ghistabs
 ./gradlew test                          # unit tests (see TESTING.md for the other tiers)
+./gradlew ghidraJavadocZip              # javadoc of every Ghidra module, see below
 ```
+
+Ghidra's own API javadoc (`docs/GhidraAPI_javadoc.zip`) covers only the modules whose build applies
+`gradle/javadoc.gradle`, less what they exclude: none of MicrosoftCodeAnalyzer, PDB or the demanglers,
+nor Base's `ghidra.app.plugin.core`. `ghidraJavadoc` builds it from every `*-src.zip` of the install
+instead, into `build/ghidra-javadoc/api`, follows the system's dark mode, and marks what the official
+javadoc leaves out: a banner naming the module on the page, and dotted orange links to it.
 
 ## Using it in Ghidra
 
