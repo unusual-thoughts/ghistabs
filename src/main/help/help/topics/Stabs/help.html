@@ -398,6 +398,20 @@
           goes to the one they all lead to through bases at offset 0, and nowhere if none does. Runs
           after the class passes and leaves an Analysis bookmark on each guess.</TD>
         </TR>
+
+        <TR>
+          <TD><B>Vftables from pointer tables</B></TD>
+          <TD>Off by default. For a program whose RTTI no class analyzer reads, absent or in an
+          unknown format. Finds vtables by their shape: a run of words pointing at functions,
+          beginning at one whose address code takes, ending at the next such word, a symbol, data
+          laid other than one plain word, or past two nulls. Each becomes the <CODE>vftable</CODE>
+          of a class <CODE>Klass_&lt;address&gt;</CODE> and goes through the class pass, as the RTTI
+          class analyzers' classes do. A class's base is inferred from the vtable a structor's call
+          on <CODE>this</CODE> stores, or from the slots its table shares with others; bases at an
+          offset are not. Run it once most of the
+          program is disassembled and its references marked, and again after: a rerun finds more,
+          and cuts a table it seeded where code now refers into it.</TD>
+        </TR>
       </TABLE>
     </BLOCKQUOTE>
 

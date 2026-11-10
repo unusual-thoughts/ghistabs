@@ -298,7 +298,7 @@ fun MutableMemBuffer.nextPointerData(): Data? = nextData(pointerType)
 fun MutableMemBuffer.nextPointer(): Address? = nextValue(pointerType)
 
 /** A buffer for reading forward from [start]: it caches a window of memory, so reads near the last are cheap. */
-fun Program.cursorAt(start: Address): MutableMemBuffer = MemoryBufferImpl(memory, start)
+fun Program.cursorAt(start: Address = memory.minAddress): MutableMemBuffer = MemoryBufferImpl(memory, start)
 
 /** A buffer that reads straight from memory at [addr], for a one-off read where a cached window would be wasted. */
 fun Program.bytesAt(addr: Address): MemBuffer = DumbMemBufferImpl(memory, addr)
