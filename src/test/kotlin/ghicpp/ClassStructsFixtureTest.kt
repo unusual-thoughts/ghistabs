@@ -1,5 +1,7 @@
 package ghicpp
 
+import ghicpp.entrypoints.ItaniumClassAnalyzer
+import ghicpp.entrypoints.MsvcClassAnalyzer
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
@@ -10,6 +12,7 @@ import ghistabs.LoadedProgram
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.loadProgram
 import ghistabs.runTransaction
+import ghistabs.set
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -20,18 +23,26 @@ import java.io.File
 
 /**
  * A stripped [fixture] under `features/` through the whole analysis, once for all its tests: the class pass
- * lays each class struct off the RTTI and the constructors.
+ * lays each class struct off the RTTI and the constructors, under [vfptrModel] for every class analyzer.
  */
 @Tag("integration")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-abstract class ClassStructsFixtureTest(private val fixture: String, private val compiler: String) :
-    AbstractGhidraHeadlessIntegrationTest() {
+abstract class ClassStructsFixtureTest(
+    private val fixture: String,
+    private val compiler: String,
+    private val vfptrModel: VfptrModel = VfptrModel.OPTION.default,
+) : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var loaded: LoadedProgram
     protected val program: Program get() = loaded.program
 
     @BeforeAll
     fun analyze() {
         loaded = loadProgram(File(FeatureFixtureTest.FEATURES, fixture), compiler)
+        program.runTransaction("vfptr model") {
+            for (analyzer in listOf(ItaniumClassAnalyzer.NAME, MsvcClassAnalyzer.NAME)) {
+                program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(analyzer)[VfptrModel.OPTION] = vfptrModel
+            }
+        }
         analyzeAll()
     }
 

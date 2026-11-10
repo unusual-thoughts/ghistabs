@@ -24,10 +24,15 @@ import ghistabs.toClass
  * What a class pass does once an ABI's records have given it the classes ([RttiParser], [ClassPassInput]): each virtual
  * function moved into the class that introduced it ([introducingClass]) and marked virtual, each constructor
  * and destructor ([StructorFinder]) moved there and named, each class sized off its allocations and layout
- * ([sizeBounds]), and the classes written to [ClassHierarchyRecords].
+ * ([sizeBounds]), and the classes written to [ClassHierarchyRecords]. [vfptrModel] says whether a class
+ * struct splits a base around the vptr it takes over ([ClassStructFiller]).
  */
-class ClassPass(private val program: Program, private val parser: RttiParser, sink: DiagnosticSink) :
-    DiagnosticSink by sink {
+class ClassPass(
+    private val program: Program,
+    private val parser: RttiParser,
+    sink: DiagnosticSink,
+    private val vfptrModel: VfptrModel = VfptrModel.OPTION.default,
+) : DiagnosticSink by sink {
     data class Result(
         val classes: Int,
         val owned: Int,
@@ -71,7 +76,7 @@ class ClassPass(private val program: Program, private val parser: RttiParser, si
             (end + align - 1) / align * align
         }
         val sizes = sizeClasses(read.classes, AllocationSizeFinder(program, abi, this).read(ctors, monitor), reached)
-        val filled = ClassStructFiller(program, abi, this).fillAll(read.recorded, stores)
+        val filled = ClassStructFiller(program, abi, this, vfptrModel).fillAll(read.recorded, stores)
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
             structors.map { (f, structor) -> f to structor.first }
         for ((func, _) in placed) func.addTag(ClassPassTags.METHOD)

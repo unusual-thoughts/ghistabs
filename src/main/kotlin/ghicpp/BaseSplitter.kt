@@ -18,7 +18,7 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
     /**
      * Give this class its own `{vfptr}` where a polymorphic base subobject would otherwise own it:
      * the pointer goes at the vptr offset and the base is re-embedded as its *fields*, the same
-     * bytes minus the vptr it no longer holds ([ghistabs.materialize.VfptrModel.SPLIT_BASE]).
+     * bytes minus the vptr it no longer holds ([VfptrModel.SPLIT_BASE]).
      *
      * What matters is the pointer's static type. A shared `{vfptr}` is typed with whichever class
      * declares it, so every derived slot indexes past the end of that class's vftable and the
