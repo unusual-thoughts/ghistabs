@@ -283,16 +283,23 @@ private class EspWalk(private val program: Program, private val f: Function) {
     private lateinit var incoming: MutableMap<Address, MutableMap<Address, Long>>
     private var conflict: Address? = null
 
+    /**
+     * Set when the walk reaches a call whose purge it can't know: unrecorded, under a convention that
+     * pops an unknown amount itself (`windows`' `__stdcall`, `__thiscall`, `__fastcall`, and its default).
+     * Counting it as 0 would put every path through it a few bytes deep and blame the call for it.
+     */
+    private var unmodelled = false
+
     /** Merges with no call to pop at on some way in: passed over, so the rest of the function is still fixed. */
     private val stuck = mutableMapOf<Address, Map<Address, Long>>()
 
     /**
      * Calls to make pop more, and by how much, so that no two paths meet with ESP apart, and the merges
-     * that can't be evened out; null if paths never meet apart.
+     * that can't be evened out; null if paths never meet apart, or if some call's purge is unknown.
      */
     fun plan(): Plan? {
         walk()
-        if (conflict == null) return null
+        if (conflict == null || unmodelled) return null
         repeat(MAX_ROUNDS) {
             val at = conflict ?: return planned()
             val into = incoming.getValue(at)
@@ -422,18 +429,25 @@ private class EspWalk(private val program: Program, private val f: Function) {
         return true
     }
 
-    /** What a direct call's callee pops beyond its return address; null if it never returns, 0 if unknown. */
-    private fun PcodeOp.calleePurge(): Int? = when (opcode) {
-        PcodeOp.CALL -> program.functionManager.getFunctionAt(getInput(0).address)?.let { return it.purgeOf() } ?: 0
-        else -> 0
-    }
-
-    /** The bytes [callee] pops beyond its return address, or null if it never returns. */
-    private fun Function.purgeOf(): Int? = (if (isThunk) getThunkedFunction(true) else this).run {
-        if (hasNoReturn()) return null
-        stackPurgeSize.takeUnless {
+    /**
+     * What a call's callee pops beyond its return address: its recorded purge, else what its convention
+     * pops (the default convention's, for an indirect call or an unknown callee). Null if it never
+     * returns, or if neither is known, which also sets [unmodelled].
+     */
+    private fun PcodeOp.calleePurge(): Int? {
+        val callee = getInput(0).takeIf { opcode == PcodeOp.CALL }
+            ?.let { program.functionManager.getFunctionAt(it.address) }
+            ?.let { if (it.isThunk) it.getThunkedFunction(true) else it }
+        if (callee?.hasNoReturn() == true) return null
+        callee?.stackPurgeSize?.takeUnless {
             it == Function.UNKNOWN_STACK_DEPTH_CHANGE || it == Function.INVALID_STACK_DEPTH_CHANGE
-        } ?: 0
+        }?.let { return it }
+        val model = callee?.callingConvention ?: program.compilerSpec.defaultCallingConvention
+        if (model.extrapop == PrototypeModel.UNKNOWN_EXTRAPOP) {
+            unmodelled = true
+            return null
+        }
+        return model.extrapop - 4
     }
 
     /**
