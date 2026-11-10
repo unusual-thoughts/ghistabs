@@ -15,6 +15,7 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
+import ghistabs.BoolOption
 import ghistabs.OptionContainer
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.toClass
@@ -35,6 +36,9 @@ class ClassPass(
     DiagnosticSink by sink {
     val vfptrModel: VfptrModel by VfptrModel.OPTION
 
+    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorFinder]). */
+    var fillArrays: Boolean by FILL_ARRAYS
+
     init {
         options?.let { import(it) }
     }
@@ -47,7 +51,11 @@ class ClassPass(
         val structors: Int,
         val sized: Int,
         val filled: Int,
-    )
+    ) {
+        /** The constructors and destructors the pass found, and what they call, for a later pass to read. */
+        var found: FoundStructors? = null
+            internal set
+    }
 
     private val abi = parser.abi
 
@@ -56,7 +64,7 @@ class ClassPass(
         val read = parser.parse(monitor)
         stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
-        val finder = StructorFinder(program, read.classes, this)
+        val finder = StructorFinder(program, read.classes, this, fillArrays)
         val found = finder.find(read.holders, abi, monitor)
         val structors = found.roles
         var moved = 0
@@ -89,6 +97,7 @@ class ClassPass(
         for (func in ctors.keys) func.addTag(ClassPassTags.CONSTRUCTOR)
         writeRecords(read.recorded)
         return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size, filled)
+            .also { it.found = found }
     }
 
     /**
@@ -228,8 +237,14 @@ class ClassPass(
         return program.dataTypeManager.getID(struct).takeIf { it >= 0 }
     }
 
-    private companion object {
-        const val VFUNCTION = "vfunction"
+    companion object {
+        private const val VFUNCTION = "vfunction"
+        val FILL_ARRAYS = BoolOption(
+            "Arrays from fill loops",
+            "Type a field a constructor fills in a loop counted down from a constant, as x86's rep stos does, " +
+                "or with memset of a constant size, as an array",
+            true,
+        )
     }
 }
 
