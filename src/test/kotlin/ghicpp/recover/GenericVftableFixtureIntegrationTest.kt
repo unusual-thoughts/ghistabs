@@ -1,5 +1,6 @@
 package ghicpp.recover
 
+import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassNaming
 import ghicpp.entrypoints.GenericVftableAnalyzer
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
@@ -93,6 +94,25 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         targets.all { it.dataType is Pointer }.mustBeTrue()
         program.functionManager.getFunctionAt(targets[2].value as Address).getThunkedFunction(true).name mustBe
             "__cxa_pure_virtual"
+    }
+
+    @Test
+    fun `a class derives from the one whose table its constructor's call stores or whose slots it shares`() {
+        val symbols = program.symbolTable
+        fun table(id: Long?) = id?.let { symbols.getSymbol(it) }?.let { cls ->
+            symbols.getSymbols(cls.`object` as ghidra.program.model.symbol.Namespace).iterator().asSequence()
+                .first { it.name == ClassNaming.VFTABLE }.address.subtract(program.imageBase)
+        }
+        val bases = program.readClassRecord().orEmpty().entries
+            .filter { (_, e) -> e.bases.isNotEmpty() }
+            .associate { (id, e) -> table(id) to e.bases.map { table(it.namespaceId) } }
+        // Each primary table only: a base at an offset, as Label's Named and every virtual one, goes unseen.
+        bases mustBe mapOf(
+            0x6930L to listOf(SHAPE), // Circle
+            0x6960L to listOf(0x6988L), // Secret : Logger
+            0x6bf0L to listOf(0x6c48L), // Label : Rect
+            0x6c48L to listOf(SHAPE), // Rect
+        )
     }
 
     private companion object {

@@ -46,7 +46,7 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private fun bases(
         stores: Map<String, Set<String>>,
         calls: Map<String, Map<Long, Set<String>>> = emptyMap(),
-        slots: Map<String, Int> = emptyMap(),
+        slots: Map<String, List<String?>> = emptyMap(),
     ): Map<String, List<Pair<String, Long?>>> {
         val reading = StructorFinder.Reading(
             stores.entries.associate { (f, cs) -> fn(f) to VptrStores(cs.mapTo(mutableSetOf(), ::cls)) },
@@ -54,8 +54,9 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 fn(f) to byOffset.mapValues { (_, called) -> called.mapTo(mutableSetOf(), ::fn) }
             },
         )
-        val counts: Map<ClassDecl, Int> = slots.mapKeys { cls(it.key) }
-        inferBases(classes.values, reading, counts)
+        val tables: Map<ClassDecl, List<Function?>> =
+            slots.entries.associate { (c, fs) -> cls(c) to fs.map { it?.let(::fn) } }
+        inferBases(classes.values, reading, tables)
         return classes.values.filter { it.bases.isNotEmpty() }
             .associate { c -> c.name to c.bases.map { it.cls.name to it.offset } }
     }
@@ -79,10 +80,52 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun `vptrs stored together go base first by their tables' lengths, and a tie says nothing`() {
-        bases(mapOf("ctor" to setOf("A", "B")), slots = mapOf("A" to 2, "B" to 3)) mustBe
+        bases(mapOf("ctor" to setOf("A", "B")), slots = mapOf("A" to unique("a", 2), "B" to unique("b", 3))) mustBe
             mapOf("B" to listOf("A" to 0L))
         classes.clear()
-        bases(mapOf("ctor" to setOf("X", "Y")), slots = mapOf("X" to 2, "Y" to 2)) mustBe emptyMap()
+        bases(mapOf("ctor" to setOf("X", "Y")), slots = mapOf("X" to unique("x", 2), "Y" to unique("y", 2))) mustBe
+            emptyMap()
+    }
+
+    /** [n] slots of functions no other table holds. */
+    private fun unique(prefix: String, n: Int) = (1..n).map { "$prefix$it" }
+
+    @Test
+    fun `a function tables share in one slot was introduced by the shortest, which each other derives from`() {
+        // B adds b3, which D inherits; X adds nothing but overrides x1, as each of them does.
+        val slots = mapOf(
+            "A" to listOf("a1", "a2"),
+            "B" to listOf("b1", "a2", "b3"),
+            "D" to listOf("d1", "a2", "b3", "d4"),
+            "X" to listOf("x1", "a2", "x3"),
+        )
+        bases(emptyMap(), slots = slots) mustBe mapOf(
+            "B" to listOf("A" to 0L),
+            "D" to listOf("B" to 0L),
+            "X" to listOf("A" to 0L),
+        )
+    }
+
+    @Test
+    fun `a function in different slots, folded, a tie for the shortest and a null say nothing`() {
+        val slots = mapOf(
+            "A" to listOf("a1", "folded"),
+            "B" to listOf("folded", "b2", "b3"),
+            "X" to listOf("x1", "tie", null),
+            "Y" to listOf("y1", "tie", null),
+        )
+        bases(emptyMap(), slots = slots) mustBe emptyMap()
+    }
+
+    @Test
+    fun `a class doesn't derive from one overriding a slot it inherits unchanged from further up`() {
+        // X overrides a2; Y keeps A's, so it can't derive from X though it shares x3 with it.
+        val slots = mapOf(
+            "A" to listOf("a1", "a2"),
+            "X" to listOf("x1", "x2", "x3"),
+            "Y" to listOf("y1", "a2", "x3", "y4"),
+        )
+        bases(emptyMap(), slots = slots) mustBe mapOf("Y" to listOf("A" to 0L))
     }
 
     @Test

@@ -30,33 +30,94 @@ class PlainClass(override val ns: Namespace, override val vftables: List<VtableR
 
 /**
  * The direct bases of [classes] at the start of their objects, off what their structors store and call
- * ([reading]): a function storing D's vptr that calls on `this` a function storing B's makes B a base of D, as a
- * constructor builds its bases and a destructor destroys them. A function storing several classes' vptrs at once,
- * inlining its bases', stores a base's first in a constructor and last in a destructor, so there [slotCounts]
- * order them: a derived class's table holds at least its base's slots. Of the candidates, the one deriving from all
- * the others is the base; none if no one does, or if two classes would derive from each other.
+ * ([reading]) and the functions their tables' [slots] share, each table's slots in order, null where no function
+ * of the program's own is (a null slot, a pure virtual stub, an import) or one that never returns, as an unnamed
+ * pure virtual stub doesn't.
  *
- * A call on `this` + k is no evidence: it builds a member as well as a base, and only a store of D's own table at
- * k, which [PlainVtables] doesn't place, would tell them apart.
+ * A function storing D's vptr that calls on `this` a function storing B's makes B a base of D, as a constructor
+ * builds its bases and a destructor destroys them. A function storing several classes' vptrs at once, inlining
+ * its bases', stores a base's first in a constructor and last in a destructor, so there their tables' lengths
+ * order them: a derived class's table holds at least its base's slots.
+ *
+ * A function several tables hold, in the same slot of each, was introduced by a class all of theirs derive from:
+ * the one with the shortest table, if no other is as short, which is then a candidate base of the others. Not
+ * where that class overrides a slot that the other inherits from a class with a shorter table still, which a class
+ * deriving from it couldn't ([inheritsPast]); and not for a function in different slots, as the linker folds
+ * functions alike across unrelated classes.
+ *
+ * Of the candidates, the one deriving from all the others is the base; none if no one does, or if two classes
+ * would derive from each other. A call on `this` + k is no evidence: it builds a member as well as a base, and
+ * only a store of D's own table at k, which [PlainVtables] doesn't place, would tell them apart.
  */
-fun inferBases(classes: Collection<PlainClass>, reading: StructorFinder.Reading, slotCounts: Map<out ClassDecl, Int>) {
-    val candidates = mutableMapOf<ClassDecl, MutableSet<ClassDecl>>()
-    fun candidate(derived: ClassDecl, base: ClassDecl) {
-        if (derived != base) candidates.getOrPut(derived) { mutableSetOf() } += base
-    }
-    for ((f, stores) in reading.stores) {
-        val own = stores.classes
-        val callees = reading.subobjectCalls[f].orEmpty()[0L].orEmpty()
-        for (base in callees.flatMap { reading.stores[it]?.classes.orEmpty() }.filterNot { it in own }) {
-            own.forEach { candidate(it, base) }
-        }
-        val inlined = own.groupBy { slotCounts[it] ?: 0 }.toSortedMap().values
-        if (inlined.all { it.size == 1 }) inlined.zipWithNext { (base), (derived) -> candidate(derived, base) }
-    }
-    val direct = candidates.mapValues { (_, cs) -> cs.mostDerived(candidates) }
+fun inferBases(
+    classes: Collection<PlainClass>,
+    reading: StructorFinder.Reading,
+    slots: Map<out ClassDecl, List<Function?>>,
+) {
+    val candidates = BaseCandidates(slots)
+    candidates.addStructors(reading)
+    candidates.addSharedSlots()
+    val direct = candidates.byClass.mapValues { (_, cs) -> cs.mostDerived(candidates.byClass) }
     for (cls in classes) {
         val base = direct[cls] ?: continue
         if (direct[base] != cls) cls.bases += ClassBase(base, isVirtual = false, Access.PUBLIC, 0L)
+    }
+}
+
+/** The candidate bases of each class, as [inferBases] finds them, off their tables' [slots]. */
+private class BaseCandidates(private val slots: Map<out ClassDecl, List<Function?>>) {
+    val byClass = mutableMapOf<ClassDecl, MutableSet<ClassDecl>>()
+
+    private fun length(c: ClassDecl) = slots[c]?.size ?: 0
+
+    private fun add(derived: ClassDecl, base: ClassDecl) {
+        if (derived != base) byClass.getOrPut(derived) { mutableSetOf() } += base
+    }
+
+    /** Off the calls of each structor on `this`, and the vptrs it stores together. */
+    fun addStructors(reading: StructorFinder.Reading) {
+        for ((f, stores) in reading.stores) {
+            val own = stores.classes
+            val callees = reading.subobjectCalls[f].orEmpty()[0L].orEmpty()
+            for (base in callees.flatMap { reading.stores[it]?.classes.orEmpty() }.filterNot { it in own }) {
+                own.forEach { add(it, base) }
+            }
+            val inlined = own.groupBy(::length).toSortedMap().values
+            if (inlined.all { it.size == 1 }) inlined.zipWithNext { (base), (derived) -> add(derived, base) }
+        }
+    }
+
+    /** Off the functions several tables hold in one slot, each introduced by the shortest. */
+    fun addSharedSlots() {
+        val held = slots.flatMap { (c, fs) -> fs.mapIndexedNotNull { i, f -> f?.let { Triple(it, i, c) } } }
+        val holders = held.groupBy({ it.first to it.second }, { it.third })
+        for ((_, at) in held.groupBy { it.first }) {
+            if (at.map { it.second }.distinct().size != 1) continue
+            val classes = at.map { it.third }.distinct()
+            val shortest = classes.minOf(::length)
+            val introducer = classes.filter { length(it) == shortest }.singleOrNull() ?: continue
+            for (cls in classes) {
+                if (cls != introducer && !cls.inheritsPast(introducer, slots, holders, ::length)) add(cls, introducer)
+            }
+        }
+    }
+}
+
+/**
+ * Whether this class holds, in a slot [base] overrides, a function that a class with a shorter table than
+ * this one's holds there too: inherited from past [base], so not through it.
+ */
+private fun ClassDecl.inheritsPast(
+    base: ClassDecl,
+    slots: Map<out ClassDecl, List<Function?>>,
+    holders: Map<Pair<Function, Int>, List<ClassDecl>>,
+    length: (ClassDecl) -> Int,
+): Boolean {
+    val own = slots[this].orEmpty()
+    return slots[base].orEmpty().withIndex().any { (i, b) ->
+        val d = own.getOrNull(i)
+        b != null && d != null && b != d &&
+            holders[d to i].orEmpty().any { it != this && length(it) < length(this) }
     }
 }
 
@@ -95,8 +156,14 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
                 PlainClass(labels.first().parentNamespace, labels.map { PlainVtables.recordAt(program, it.address) })
             }
         val reading = StructorFinder(program, classes, sink).readStorers(monitor)
-        val slotCounts = classes.associateWith { c -> c.vftables.firstOrNull()?.let { slotsOf(it).size } ?: 0 }
-        inferBases(classes, reading, slotCounts)
+        val slots = classes.associateWith { c ->
+            c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
+                // An unnamed pure virtual stub never returns: it aborts.
+                at.takeIf { it.offset != 0L }?.let { program.slotFunction(it, PlainVtables) }
+                    ?.takeUnless { it.hasNoReturn() }
+            }
+        }
+        inferBases(classes, reading, slots)
         return ClassPassInput(classes, classes, holders(classes))
     }
 
@@ -122,14 +189,15 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
     } as Map<Function, Set<ClassDecl>>
 
     /**
-     * The functions [record]'s slots point at: those of the struct laid at it, which ends where its table
-     * does, else as many as the words that follow hold ([VtableRecord.slots]), which may run into the next table.
+     * The functions [record]'s slots point at, without its null slots unless [keepNulls]: those of the struct laid
+     * at it, which ends where its table does, else as many as the words that follow hold ([VtableRecord.slots]),
+     * which may run into the next table.
      */
-    private fun slotsOf(record: VtableRecord): List<Address> {
+    private fun slotsOf(record: VtableRecord, keepNulls: Boolean = false): List<Address> {
         val laid = program.listing.getDataAt(record.addressPoint)
         if (laid == null || laid.numComponents == 0 || !laid.isStructure) return record.slots(program)
         return (0 until laid.numComponents).mapNotNull { laid.getComponent(it).value as? Address }
-            .filter { it.offset != 0L }
+            .filter { keepNulls || it.offset != 0L }
     }
 
     private companion object {
