@@ -1,18 +1,24 @@
 package ghicpp.entrypoints
 
+import ghicpp.VfptrModel
 import ghicpp.abi.itanium.ItaniumRttiParser
 import ghicpp.recover.ClassPass
+import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
 import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.importer.MessageLog
+import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.analyzerOptions
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.diagnose.report
 import ghistabs.parse.StabReader
+import ghistabs.register
 
 /**
  * Class records and virtual members off the Itanium RTTI ([ItaniumRttiParser]), what [MsvcClassAnalyzer] does
@@ -36,12 +42,14 @@ class ItaniumClassAnalyzer :
 
     override fun canAnalyze(program: Program) = GnuDemangler().canDemangle(program) && !StabReader.hasStabs(program)
 
+    override fun registerOptions(options: Options, program: Program) = options.register(VfptrModel.OPTION, FILL_ARRAYS)
+
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val result = ClassPass(program, ItaniumRttiParser(program, sink), sink).run(monitor)
+        val pass = ClassPass(program, ItaniumRttiParser(program, sink), sink, program.analyzerOptions(NAME))
+        val result = pass.run(monitor)
         if (result.classes > 0) {
-            log.appendMsg(
-                NAME,
+            report(
                 "${result.classes} class(es), ${result.owned} virtual function(s) owned, ${result.moved} moved, " +
                     "${result.shared} shared, ${result.structors} constructor(s) and destructor(s) named, " +
                     "${result.sized} class size(s) recorded, ${result.filled} struct(s) filled",

@@ -13,6 +13,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.XmlEncode
 import ghidra.util.task.TaskMonitor
 import ghistabs.collidesWithInjectedParameter
+import ghistabs.diagnose.report
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
@@ -101,7 +102,7 @@ class StructReturnAnalyzer :
         val fixed = work.count { (f, base, fix) ->
             (base to fix) in ready && reassign(f, fix.conventionFor(base), log)
         }
-        if (fixed > 0) log.appendMsg(STRUCT_RETURN_ANALYZER_NAME, "corrected return storage on $fixed function(s)")
+        if (fixed > 0) report("corrected return storage on $fixed function(s)")
         return true
     }
 

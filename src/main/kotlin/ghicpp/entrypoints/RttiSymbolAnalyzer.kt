@@ -11,6 +11,7 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.diagnose.report
 import ghistabs.get
 
 /**
@@ -35,7 +36,7 @@ class RttiSymbolAnalyzer :
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val laid = RttiSymbolPass.runOnce(program, MessageLogSink(log, originator = NAME))
-        if (laid > 0) log.appendMsg(NAME, "labelled $laid vtable(s)")
+        if (laid > 0) report("labelled $laid vtable(s)")
         return true
     }
 

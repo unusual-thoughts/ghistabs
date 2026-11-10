@@ -13,6 +13,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.DtmRegistry
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.diagnose.report
 
 /**
  * Lay a `<Class>_vftable` at every gcc vtable symbol, Itanium `_ZTV…` (gcc 3 and later, the record
@@ -70,7 +71,7 @@ class VtableSweepAnalyzer :
         // label and struct already mark it; what goes wrong (an empty table) is a WARN, so it is logged.
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val laid = VtableSweepPass(DtmRegistry(program.dataTypeManager), program, sink).run(monitor)
-        if (laid > 0) log.appendMsg(NAME, "laid $laid vtable(s)")
+        if (laid > 0) report("laid $laid vtable(s)")
         return true
     }
 

@@ -234,12 +234,15 @@ class BarLoggerMonitorSink(
 
 /**
  * A [MessageLog] that keeps nothing: each line goes to [sink] as it is appended, under its originator
- * as the category when it names one, else `analysis`.
+ * as the category when it names one, else `analysis`. At WARN: an analyzer's MessageLog is for what went
+ * wrong (ERROR for [ghistabs.diagnose.MessageLogSink]'s `ERROR: ` lines), and what it did comes through the
+ * application log ([BarSinkAppender]) at INFO.
  */
 internal class ForwardingMessageLog(private val sink: DiagnosticSink) : MessageLog() {
     override fun appendMsg(message: String) = appendMsg(null, message)
 
-    override fun appendMsg(originator: String?, message: String) = sink.log(originator ?: "analysis", message)
+    override fun appendMsg(originator: String?, message: String) =
+        sink.log(originator ?: "analysis", message, if (message.startsWith("ERROR: ")) Level.ERROR else Level.WARN)
 
     override fun appendMsg(lineNum: Int, message: String) = appendMsg("Line #$lineNum - $message")
 

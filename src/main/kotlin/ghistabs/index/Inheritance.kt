@@ -1,5 +1,6 @@
 package ghistabs.index
 
+import ghicpp.VfptrModel
 import ghicpp.VirtKind
 import ghicpp.isVptrFieldName
 import ghicpp.member

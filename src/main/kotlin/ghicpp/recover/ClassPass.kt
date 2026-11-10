@@ -5,18 +5,18 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.MemberAttrs.Companion.writeMember
-import ghicpp.abi.CxxAbi
 import ghicpp.abi.RttiParser
 import ghicpp.abi.StructorRole
-import ghicpp.abi.VtableRecord
+import ghidra.framework.options.Options
 import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
+import ghistabs.BoolOption
+import ghistabs.OptionContainer
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.toClass
 
@@ -24,10 +24,25 @@ import ghistabs.toClass
  * What a class pass does once an ABI's records have given it the classes ([RttiParser], [ClassPassInput]): each virtual
  * function moved into the class that introduced it ([introducingClass]) and marked virtual, each constructor
  * and destructor ([StructorFinder]) moved there and named, each class sized off its allocations and layout
- * ([sizeBounds]), and the classes written to [ClassHierarchyRecords].
+ * ([sizeBounds]), and the classes written to [ClassHierarchyRecords]. [vfptrModel] says whether a class
+ * struct splits a base around the vptr it takes over ([ClassStructFiller]).
  */
-class ClassPass(private val program: Program, private val parser: RttiParser, sink: DiagnosticSink) :
+class ClassPass(
+    private val program: Program,
+    private val parser: RttiParser,
+    sink: DiagnosticSink,
+    options: Options? = null,
+) : OptionContainer(),
     DiagnosticSink by sink {
+    val vfptrModel: VfptrModel by VfptrModel.OPTION
+
+    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorFinder]). */
+    var fillArrays: Boolean by FILL_ARRAYS
+
+    init {
+        options?.let { import(it) }
+    }
+
     data class Result(
         val classes: Int,
         val owned: Int,
@@ -45,7 +60,7 @@ class ClassPass(private val program: Program, private val parser: RttiParser, si
         val read = parser.parse(monitor)
         stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
-        val finder = StructorFinder(program, read.classes, this)
+        val finder = StructorFinder(program, read.classes, this, fillArrays)
         val found = finder.find(read.holders, abi, monitor)
         val structors = found.roles
         var moved = 0
@@ -71,7 +86,7 @@ class ClassPass(private val program: Program, private val parser: RttiParser, si
             (end + align - 1) / align * align
         }
         val sizes = sizeClasses(read.classes, AllocationSizeFinder(program, abi, this).read(ctors, monitor), reached)
-        val filled = ClassStructFiller(program, abi, this).fillAll(read.recorded, stores)
+        val filled = ClassStructFiller(program, abi, this, vfptrModel).fillAll(read.recorded, stores)
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
             structors.map { (f, structor) -> f to structor.first }
         for ((func, _) in placed) func.addTag(ClassPassTags.METHOD)
@@ -217,8 +232,14 @@ class ClassPass(private val program: Program, private val parser: RttiParser, si
         return program.dataTypeManager.getID(struct).takeIf { it >= 0 }
     }
 
-    private companion object {
-        const val VFUNCTION = "vfunction"
+    companion object {
+        private const val VFUNCTION = "vfunction"
+        val FILL_ARRAYS = BoolOption(
+            "Arrays from fill loops",
+            "Type a field a constructor fills in a loop counted down from a constant, as x86's rep stos does, " +
+                "or with memset of a constant size, as an array",
+            true,
+        )
     }
 }
 

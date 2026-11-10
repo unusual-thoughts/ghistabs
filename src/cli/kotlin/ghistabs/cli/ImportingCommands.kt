@@ -8,6 +8,7 @@ import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.file
+import ghicpp.VfptrModel
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
@@ -25,7 +26,6 @@ import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.import
-import ghistabs.materialize.VfptrModel
 import ghistabs.runTransaction
 import java.io.File
 

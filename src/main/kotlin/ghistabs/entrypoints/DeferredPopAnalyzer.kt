@@ -15,7 +15,9 @@ import ghidra.program.model.lang.PrototypeModel
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.pcode.*
+import ghidra.util.Msg
 import ghidra.util.task.TaskMonitor
+import ghistabs.diagnose.report
 import ghistabs.useWith
 
 /**
@@ -59,7 +61,6 @@ class DeferredPopAnalyzer :
         // After every pass that settles a callee's signature or convention — the Stabs Importer (LOW)
         // and [StructReturnAnalyzer] — since an override freezes the callee's signature as it stands.
         priority = AnalysisPriority.LOW_PRIORITY.after().after().after()
-        setDefaultEnablement(true)
         setSupportsOneTimeAnalysis()
     }
 
@@ -67,9 +68,16 @@ class DeferredPopAnalyzer :
         language.processor.toString() == "x86" && !language.isBigEndian && defaultPointerSize == 4
     }
 
+    /**
+     * On by default for gcc only. Other x86 compilers even ESP out before paths meet, so a merge
+     * with ESP apart there usually means a callee-pops call whose purge Ghidra hasn't worked out,
+     * not arguments left pushed. The analyzer can still be turned on by hand for any program.
+     */
+    override fun getDefaultEnablement(program: Program) = program.compilerSpec.compilerSpecID.idAsString == "gcc"
+
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val stdcall = program.fixImportPurges()
-        if (stdcall > 0) log.appendMsg(NAME, "set the purge of $stdcall stdcall import(s)")
+        if (stdcall > 0) report("set the purge of $stdcall stdcall import(s)")
 
         val plans = program.functionManager.getFunctions(set, true)
             .filterNot { it.isThunk || it.isExternal }
@@ -80,8 +88,12 @@ class DeferredPopAnalyzer :
         plans.forEach { (_, plan) -> plan.unfixed.forEach { (merge, into) -> program.bookmarkUnfixed(merge, into) } }
         val fixable = plans.filter { it.second.pops.isNotEmpty() }
         return fixable.isEmpty() || DecompInterface().useWith(program) { decomp ->
-            val kept = fixable.count { (f, plan) -> program.applyExtraPops(decomp, f, plan.pops, monitor, log) }
-            if (kept > 0) log.appendMsg(NAME, "popped deferred arguments in $kept function(s)")
+            var refused = 0
+            val kept = fixable.count { (f, plan) ->
+                program.applyExtraPops(decomp, f, plan.pops, monitor) { refused++ }
+            }
+            if (kept > 0) report("popped deferred arguments in $kept function(s)")
+            if (refused > 0) log.appendMsg(NAME, "could not override $refused call(s); the debug log says why")
         } != null
     }
 
@@ -95,10 +107,14 @@ private fun Program.applyExtraPops(
     f: Function,
     pops: Map<Address, Pop>,
     monitor: TaskMonitor,
-    log: MessageLog,
+    refused: () -> Unit,
 ): Boolean {
     val before = decomp.pointerStores(f, monitor) ?: return false
-    val written = pops.mapNotNull { (call, pop) -> override(f, call, pop.extra, log)?.let { call to it } }
+    val written = pops.mapNotNull { (call, pop) ->
+        val convention = override(f, call, pop.extra)
+        if (convention == null) refused()
+        convention?.let { call to it }
+    }
     if (written.isEmpty()) return false
     val after = decomp.pointerStores(f, monitor)
     val kept = after != null && after < before
@@ -207,8 +223,11 @@ private fun HighFunction.stores() = pcodeOps.asSequence().count { it.opcode == P
 
 private const val DECOMPILE_TIMEOUT_SECONDS = 60
 
-/** Writes the call-site prototype popping [extra] more at [call]; the convention it uses, or null if it can't. */
-private fun Program.override(caller: Function, call: Address, extra: Int, log: MessageLog) = runCatching {
+/**
+ * Writes the call-site prototype popping [extra] more at [call]; the convention it uses, or null if it
+ * can't. Why it can't goes to the debug log, one line per call, since a program can have hundreds.
+ */
+private fun Program.override(caller: Function, call: Address, extra: Int) = runCatching {
     val callee = listing.getInstructionAt(call).flows.single().let { functionManager.getFunctionAt(it) }
     val model = callee.callingConvention ?: compilerSpec.defaultCallingConvention
     require(model.extrapop != PrototypeModel.UNKNOWN_EXTRAPOP) { "${model.name} pops an unknown amount" }
@@ -222,7 +241,7 @@ private fun Program.override(caller: Function, call: Address, extra: Int, log: M
         }
         HighFunctionDBUtil.writeOverride(caller, call, sig)
     }
-}.onFailure { log.appendMsg(DeferredPopAnalyzer.NAME, "no override at $call in ${caller.name}: ${it.message}") }
+}.onFailure { Msg.debug(DeferredPopAnalyzer::class.java, "no override at $call in ${caller.name}: ${it.message}") }
     .getOrNull()
 
 private fun Program.removeOverrides(f: Function, calls: Set<Address>) {

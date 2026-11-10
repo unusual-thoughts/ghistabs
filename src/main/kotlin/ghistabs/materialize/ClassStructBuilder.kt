@@ -1,6 +1,7 @@
 package ghistabs.materialize
 
 import ghicpp.ClassNaming
+import ghicpp.VfptrModel
 import ghicpp.member
 import ghicpp.placeBase
 import ghidra.program.model.data.*

@@ -1,6 +1,7 @@
 package ghistabs.integration
 
 import ghicpp.*
+import ghicpp.VfptrModel
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.CxxAbi.Companion.prevailingAbi
 import ghicpp.abi.gcc2.Gcc2
@@ -44,7 +45,6 @@ import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
 import ghistabs.index.hasPolymorphicBaseSubobject
 import ghistabs.index.vptrOffsetBytesOf
-import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.conflictCount
 import ghistabs.parse.*
 import ghistabs.test.*
