@@ -1,11 +1,8 @@
 package ghicpp.analyzers
 
 import ghicpp.VfptrModel
-import ghicpp.recover.ClassPass
+import ghicpp.recover.*
 import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
-import ghicpp.recover.GenericVftableFinder
-import ghicpp.recover.MethodClassPass
-import ghicpp.recover.PlainVtableParser
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -14,9 +11,11 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.BoolOption
 import ghistabs.analyzerOptions
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.get
 import ghistabs.register
 
 /**
@@ -46,7 +45,8 @@ class GenericVftableAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun registerOptions(options: Options, program: Program) = options.register(VfptrModel.OPTION, FILL_ARRAYS)
+    override fun registerOptions(options: Options, program: Program) =
+        options.register(VfptrModel.OPTION, FILL_ARRAYS, MEMBER_CLASSES)
 
     override fun canAnalyze(program: Program) = program.compilerSpec.callingConventions.any { it.hasThisPointer() }
 
@@ -54,17 +54,28 @@ class GenericVftableAnalyzer :
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val seeded = GenericVftableFinder(program, sink = sink).seed(monitor)
         val options = program.analyzerOptions(NAME)
-        val result = ClassPass(program, PlainVtableParser(program, sink), sink, options).run(monitor)
+        val pass = ClassPass(program, PlainVtableParser(program, sink), sink, options)
+        val result = pass.run(monitor)
+        val members = result.found?.takeIf { options[MEMBER_CLASSES] }
+            ?.let { MemberClassPass(program, sink, pass.fillArrays).run(it, monitor) } ?: 0
         val guessed = MethodClassPass(program, sink).run(monitor)
         log.appendMsg(
             NAME,
             "$seeded vftable(s) seeded; ${result.classes} class(es), ${result.owned} virtual function(s) owned, " +
-                "${result.structors} constructor(s) and destructor(s) named, $guessed method class(es) guessed",
+                "${result.structors} constructor(s) and destructor(s) named, $members member class(es), " +
+                "$guessed method class(es) guessed",
         )
         return true
     }
 
     companion object {
         const val NAME = "Vftables from pointer tables"
+
+        val MEMBER_CLASSES = BoolOption(
+            "Member classes without vtables",
+            "Give a class to each member a constructor builds at an offset into this with a function that " +
+                "stores no vtable, and lay it in the class holding it",
+            true,
+        )
     }
 }

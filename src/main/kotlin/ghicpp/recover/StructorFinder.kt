@@ -45,6 +45,8 @@ class FoundStructors(
     val roles: Map<Function, Pair<ClassDecl, StructorRole>>,
     val folded: Map<Function, Set<ClassDecl>>,
     private val thisStores: Map<Function, Map<Int, DataType>>,
+    /** What each function read calls on `this` or a subobject of it, by offset into it, in the order it calls. */
+    val subobjectCalls: Map<Function, Map<Long, Set<Function>>> = emptyMap(),
 ) {
     /** Each constructor, by the class it builds. */
     val constructors = roles.filterValues { it.second == CONSTRUCTOR }.mapValues { it.value.first }
@@ -114,8 +116,11 @@ class StructorFinder(
             thisStores += more.thisStores
             built = found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
         }
-        return FoundStructors(roles, folded, thisStores)
+        return FoundStructors(roles, folded, thisStores, subobjectCalls)
     }
+
+    /** What [funcs] store and call through `this`, decompiled, whatever vptrs they store. */
+    fun readCalls(funcs: Collection<Function>, monitor: TaskMonitor): Reading = decompile(funcs, emptyMap(), monitor)
 
     /** The fields each of [funcs] loads or stores through `this`, decompiled, by offset into it, typed off how. */
     fun thisFields(funcs: Collection<Function>, monitor: TaskMonitor) =

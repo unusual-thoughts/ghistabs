@@ -51,7 +51,11 @@ class ClassPass(
         val structors: Int,
         val sized: Int,
         val filled: Int,
-    )
+    ) {
+        /** The constructors and destructors the pass found, and what they call, for a later pass to read. */
+        var found: FoundStructors? = null
+            internal set
+    }
 
     private val abi = parser.abi
 
@@ -99,6 +103,7 @@ class ClassPass(
         for (func in ctors.keys) func.addTag(ClassPassTags.CONSTRUCTOR)
         writeRecords(read.recorded)
         return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size, filled)
+            .also { it.found = found }
     }
 
     /**

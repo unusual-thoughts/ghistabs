@@ -586,7 +586,10 @@
           of a class <CODE>Klass_&lt;address&gt;</CODE> and goes through the class pass, as the RTTI
           class analyzers' classes do. A class's base is inferred from the vtable a structor's call
           on <CODE>this</CODE> stores, or from the slots its table shares with others; bases at an
-          offset are not. It also has the <I>Virtual function pointer model</I> and <I>Arrays from fill loops</I> options. Run it once most of the
+          offset are not. Its <I>Member classes without vtables</I> option, on by default, gives a
+          class to each member a constructor builds at an offset into <CODE>this</CODE> with a
+          function that stores no vptr, sized off that function's stores and laid in the holding
+          class. It also has the <I>Virtual function pointer model</I> and <I>Arrays from fill loops</I> options. Run it once most of the
           program is disassembled and its references marked, and again after: a rerun finds more,
           and cuts a table it seeded where code now refers into it.</TD>
         </TR>
