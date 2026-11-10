@@ -78,8 +78,9 @@ fun Function.hasKnownClass() = symbol.source == SourceType.IMPORTED || symbol.so
  * objects their constructors build. Only a method whose class is known counts ([hasKnownClass]), or one a class
  * pass tagged ([ClassPassTags]), so neither another guess nor `RecoverClassesFromRTTIScript`'s placements
  * are evidence.
- * Each guess moves the function into its class, a `__fastcall` that takes nothing in EDX becoming a
- * `__thiscall` ([fastcallToThiscall]), and leaves an Analysis bookmark saying where it came from.
+ * Each guess moves the function into its class, its convention then a method's ([fixMethodConvention]: a
+ * `__fastcall` that takes nothing in EDX becomes a `__thiscall`), and leaves an Analysis bookmark saying where
+ * it came from.
  */
 class MethodClassPass(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
@@ -180,7 +181,7 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
 
     private fun place(f: Function, guess: MethodClassGuess): Boolean = runCatching {
         f.parentNamespace = guess.cls
-        f.fastcallToThiscall()
+        f.fixMethodConvention(takesThis = true)
         program.bookmarkManager.setBookmark(
             f.entryPoint,
             BookmarkType.ANALYSIS,
