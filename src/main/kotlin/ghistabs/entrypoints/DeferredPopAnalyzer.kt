@@ -59,13 +59,19 @@ class DeferredPopAnalyzer :
         // After every pass that settles a callee's signature or convention — the Stabs Importer (LOW)
         // and [StructReturnAnalyzer] — since an override freezes the callee's signature as it stands.
         priority = AnalysisPriority.LOW_PRIORITY.after().after().after()
-        setDefaultEnablement(true)
         setSupportsOneTimeAnalysis()
     }
 
     override fun canAnalyze(program: Program) = program.run {
         language.processor.toString() == "x86" && !language.isBigEndian && defaultPointerSize == 4
     }
+
+    /**
+     * On by default for gcc only. Other x86 compilers even ESP out before paths meet, so a merge
+     * with ESP apart there usually means a callee-pops call whose purge Ghidra hasn't worked out,
+     * not arguments left pushed. The analyzer can still be turned on by hand for any program.
+     */
+    override fun getDefaultEnablement(program: Program) = program.compilerSpec.compilerSpecID.idAsString == "gcc"
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val stdcall = program.fixImportPurges()

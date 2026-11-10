@@ -128,6 +128,18 @@ class DeferredPopAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     }
 
     @Test
+    fun onByDefaultForGccOnly() {
+        DeferredPopAnalyzer().getDefaultEnablement(program) mustBe true
+        val msvc = ProgramBuilder("msvc", ProgramBuilder._X86, "windows", this)
+        try {
+            DeferredPopAnalyzer().getDefaultEnablement(msvc.program) mustBe false
+            DeferredPopAnalyzer().canAnalyze(msvc.program) mustBe true
+        } finally {
+            msvc.dispose()
+        }
+    }
+
+    @Test
     fun rerunIsIdempotent() {
         runAnalyzer()
         val before = overrides(DEFERRED).mapValues { it.value.callingConventionName }
