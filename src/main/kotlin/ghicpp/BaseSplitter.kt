@@ -1,9 +1,7 @@
 package ghicpp
 
-import ghidra.framework.options.Options
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
-import ghidra.program.model.listing.Program
 import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
 
@@ -220,12 +218,5 @@ enum class VfptrModel {
                 "the vptr as that base's fields without it, so virtual calls resolve to named slots.",
             SPLIT_BASE,
         )
-
-        /** Registers [OPTION] among an analyzer's [options]. */
-        fun register(options: Options) = OPTION.register(options)
-
-        /** The model the analyzer called [analyzer] is set to in [program]'s analysis options. */
-        fun Program.vfptrModelOf(analyzer: String): VfptrModel =
-            getOptions(Program.ANALYSIS_PROPERTIES).getOptions(analyzer)[OPTION]
     }
 }

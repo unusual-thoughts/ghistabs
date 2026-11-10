@@ -1,7 +1,6 @@
 package ghicpp.entrypoints
 
 import ghicpp.VfptrModel
-import ghicpp.VfptrModel.Companion.vfptrModelOf
 import ghicpp.abi.msvc.MsvcRttiParser
 import ghicpp.recover.ClassPass
 import ghidra.app.plugin.prototype.MicrosoftCodeAnalyzerPlugin.PEUtil
@@ -13,8 +12,10 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.analyzerOptions
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.register
 
 /**
  * Class records and virtual members off the MSVC RTTI ([MsvcRttiParser]), for the Class Hierarchy window
@@ -39,11 +40,12 @@ class MsvcClassAnalyzer :
 
     override fun canAnalyze(program: Program) = PEUtil.isVisualStudioOrClangPe(program)
 
-    override fun registerOptions(options: Options, program: Program) = VfptrModel.register(options)
+    override fun registerOptions(options: Options, program: Program) = options.register(VfptrModel.OPTION)
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val result = ClassPass(program, MsvcRttiParser(program, sink), sink, program.vfptrModelOf(NAME)).run(monitor)
+        val pass = ClassPass(program, MsvcRttiParser(program, sink), sink, program.analyzerOptions(NAME))
+        val result = pass.run(monitor)
         if (result.classes > 0) {
             log.appendMsg(
                 NAME,
