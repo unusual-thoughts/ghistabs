@@ -51,8 +51,6 @@ object Msvc : CxxAbi {
     override fun vfptrOffsetOf(record: VtableRecord, program: Program) =
         program.msvcSubobjectOffset(record.address)?.toLong()
 
-    override val assignmentOperatorName = "operator="
-
     override val virtualBaseRecord get() = "vbtable"
 
     override val mangledOperatorNew get() = setOf("??2@YAPAXI@Z", "??2@YAPEAX_K@Z")

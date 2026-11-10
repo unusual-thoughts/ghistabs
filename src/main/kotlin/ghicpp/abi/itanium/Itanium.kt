@@ -106,9 +106,6 @@ object Itanium : CxxAbi {
     /** A vtable's fixed header: `offset_to_top` and the rtti pointer. */
     fun vtablePrefixBytes(ptrSize: Int) = 2L * ptrSize.toLong()
 
-    /** gcc 3.x spells a member's stab name the way the source does. */
-    override val assignmentOperatorName = "operator="
-
     /** Found by its rtti word ([itaniumVtableRecord]), which says how long its header is. */
     override fun recordAt(program: Program, at: Address) = program.itaniumVtableRecord(at)
 

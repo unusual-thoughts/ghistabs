@@ -20,15 +20,13 @@ class ImportOptions() : OptionContainer() {
         /** The Stabs Importer analyzer's name: its switch, and the options bucket these live in. */
         const val ANALYZER = "Stabs Importer"
 
-        private fun Program.analyzerOptions() = getOptions(Program.ANALYSIS_PROPERTIES).getOptions(ANALYZER)
+        private fun Program.analyzerOptions() = analyzerOptions(ANALYZER)
 
         fun Program.stabsOptions() = ImportOptions(analyzerOptions())
 
         private fun Program.setStabsOptions(options: ImportOptions) = options.exportTo(analyzerOptions())
 
-        private fun Program.setEnabled(value: Boolean = true) {
-            getOptions(Program.ANALYSIS_PROPERTIES).setBoolean(ANALYZER, value)
-        }
+        private fun Program.setEnabled(value: Boolean = true) = setAnalyzerEnabled(ANALYZER, value)
 
         private fun Program.updateOptions(mod: ImportOptions.() -> Unit) = analyzerOptions().apply {
             ImportOptions(this).also { mod(it) }.exportTo(this)
@@ -142,11 +140,7 @@ class ImportOptions() : OptionContainer() {
             this[OVERLAY_DONE] = true
         }
 
-        fun Options.registerStabs() {
-            for (opt in IMPORT_OPTIONS) {
-                opt.register(this)
-            }
-        }
+        fun Options.registerStabs() = register(*IMPORT_OPTIONS.toTypedArray())
     }
 
     constructor(opts: Options) : this() {

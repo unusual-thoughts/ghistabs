@@ -1,7 +1,6 @@
 package ghicpp.entrypoints
 
 import ghicpp.VfptrModel
-import ghicpp.VfptrModel.Companion.vfptrModelOf
 import ghicpp.abi.itanium.ItaniumRttiParser
 import ghicpp.recover.ClassPass
 import ghidra.app.services.AbstractAnalyzer
@@ -13,9 +12,11 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.analyzerOptions
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.parse.StabReader
+import ghistabs.register
 
 /**
  * Class records and virtual members off the Itanium RTTI ([ItaniumRttiParser]), what [MsvcClassAnalyzer] does
@@ -39,11 +40,12 @@ class ItaniumClassAnalyzer :
 
     override fun canAnalyze(program: Program) = GnuDemangler().canDemangle(program) && !StabReader.hasStabs(program)
 
-    override fun registerOptions(options: Options, program: Program) = VfptrModel.register(options)
+    override fun registerOptions(options: Options, program: Program) = options.register(VfptrModel.OPTION)
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val result = ClassPass(program, ItaniumRttiParser(program, sink), sink, program.vfptrModelOf(NAME)).run(monitor)
+        val pass = ClassPass(program, ItaniumRttiParser(program, sink), sink, program.analyzerOptions(NAME))
+        val result = pass.run(monitor)
         if (result.classes > 0) {
             log.appendMsg(
                 NAME,

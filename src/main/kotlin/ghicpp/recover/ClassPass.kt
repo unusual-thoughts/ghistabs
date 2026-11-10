@@ -5,18 +5,17 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.MemberAttrs.Companion.writeMember
-import ghicpp.abi.CxxAbi
 import ghicpp.abi.RttiParser
 import ghicpp.abi.StructorRole
-import ghicpp.abi.VtableRecord
+import ghidra.framework.options.Options
 import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
+import ghistabs.OptionContainer
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.toClass
 
@@ -31,8 +30,15 @@ class ClassPass(
     private val program: Program,
     private val parser: RttiParser,
     sink: DiagnosticSink,
-    private val vfptrModel: VfptrModel = VfptrModel.OPTION.default,
-) : DiagnosticSink by sink {
+    options: Options? = null,
+) : OptionContainer(),
+    DiagnosticSink by sink {
+    val vfptrModel: VfptrModel by VfptrModel.OPTION
+
+    init {
+        options?.let { import(it) }
+    }
+
     data class Result(
         val classes: Int,
         val owned: Int,
