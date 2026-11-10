@@ -1,9 +1,14 @@
 package ghicpp.abi.msvc
 
 import ghicpp.ClassStructsFixtureTest
+import ghicpp.entrypoints.MsvcClassAnalyzer
+import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
+import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghidra.util.task.TaskMonitor
+import ghistabs.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 
@@ -105,6 +110,34 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
             it.parentNamespace.name == "Label" && it.callingConventionName == "__thiscall"
         }
         (method.getParameter(0).dataType as Pointer).dataType.pathName mustBe "/ClassDataTypes/Label/Label"
+    }
+
+    @Test
+    fun `no method is left the __fastcall Ghidra picks when this is the only register argument`() {
+        val edx = program.language.getRegister("EDX")
+        program.functionManager.getFunctions(true).filter { f ->
+            f.parentNamespace is GhidraClass && f.callingConventionName == "__fastcall" &&
+                f.parameters.none { it.register?.baseRegister == edx }
+        }.map { it.getName(true) } mustBe emptyList()
+    }
+
+    @Test
+    fun `a virtual returning a double still returns it in ST0 once it is __thiscall`() {
+        val area = program.functionManager.getFunctions(true).single { it.getName(true) == "Circle::vfunction2" }
+        area.callingConventionName mustBe "__thiscall"
+        area.returnType.name mustBe "double"
+        area.`return`.register?.name mustBe "ST0"
+        area.parameters.map { it.name } mustBe listOf("this")
+    }
+
+    @Test
+    fun `a virtual function Ghidra typed __fastcall is __thiscall again once the class pass places it`() {
+        val vfunction = program.functionManager.getFunctions(true).first {
+            it.name.startsWith("vfunction") && it.callingConventionName == "__thiscall" && it.parameterCount == 1
+        }
+        program.runTransaction { vfunction.setCallingConvention("__fastcall") }
+        program.runTransaction { MsvcClassAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog()) }
+        vfunction.callingConventionName mustBe "__thiscall"
     }
 
     private fun Program.secondSlot(table: String) = (classStruct(table).getComponent(1).dataType as Pointer).dataType

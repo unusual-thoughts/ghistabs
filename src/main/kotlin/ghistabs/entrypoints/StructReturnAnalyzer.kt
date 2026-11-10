@@ -73,9 +73,9 @@ class StructReturnAnalyzer :
         AnalyzerType.FUNCTION_ANALYZER,
     ) {
     init {
-        // After the Stabs Importer (LOW), which sets the composite return types this reads, and
-        // after [ThisParamAnalyzer], whose repair is what makes a frozen method visible here at all
-        // ([correctionFor] skips custom storage).
+        // After the Stabs Importer (LOW), which sets the composite return types this reads, and after
+        // [ghicpp.entrypoints.MethodConventionAnalyzer], whose repair is what makes a frozen method visible
+        // here at all ([correctionFor] skips custom storage).
         priority = AnalysisPriority.LOW_PRIORITY.after().after()
         setDefaultEnablement(true)
         setSupportsOneTimeAnalysis()

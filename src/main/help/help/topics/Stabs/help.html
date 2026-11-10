@@ -332,12 +332,14 @@
         </TR>
 
         <TR>
-          <TD><B>Class-method this-pointer</B></TD>
-          <TD>Gives class methods back the automatic <CODE>this</CODE> that
-          <I>Decompiler Parameter ID</I> freezes out when it commits a signature in custom storage:
-          the parameters are re-applied with dynamic storage, and Ghidra derives
-          <CODE>this</CODE> from the class structure again. Can be re-run alone after Decompiler
-          Parameter ID.</TD>
+          <TD><B>C++ method calling convention</B></TD>
+          <TD>Makes each class method's convention take <CODE>this</CODE>: a
+          <CODE>__fastcall</CODE> that takes nothing in <CODE>EDX</CODE> becomes the
+          <CODE>__thiscall</CODE> it is, and a method <I>Decompiler Parameter ID</I> committed in
+          custom storage gets its automatic <CODE>this</CODE> back (the parameters are re-applied
+          with dynamic storage, and Ghidra derives <CODE>this</CODE> from the class structure
+          again). The class passes, which run later, do the same to every function they place in a
+          class, virtual functions included. Can be re-run alone after Decompiler Parameter ID.</TD>
         </TR>
 
         <TR>
