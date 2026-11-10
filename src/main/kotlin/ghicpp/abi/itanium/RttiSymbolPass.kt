@@ -1,20 +1,17 @@
 package ghicpp.abi.itanium
 
 import ghicpp.abi.CxxAbi.Companion.prevailingAbi
+import ghicpp.recover.findPointers
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghistabs.BoolOption
 import ghistabs.Demangler
-import ghistabs.alignTo
 import ghistabs.cStringAt
-import ghistabs.cursorAt
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.get
 import ghistabs.isData
-import ghistabs.nextPointer
 import ghistabs.pointerAt
-import ghistabs.seek
 import ghistabs.set
 import kotlin.ranges.rangeTo
 
@@ -46,18 +43,9 @@ class RttiSymbolPass(
 
     /** Every aligned word in the data blocks that points into them, by what it points at. */
     private val sitesByTarget: Map<Address, List<Address>> by lazy {
-        val buf = program.cursorAt(memory.minAddress)
-        buildMap<Address, MutableList<Address>> {
-            for (b in memory.blocks.filter { it.isInitialized && !it.isExecute && it.start.addressSpace == space }) {
-                buf.seek(b.start.alignTo(ptr.toLong()))
-                while (buf.address in b) {
-                    val site = buf.address
-                    (buf.nextPointer() ?: break).takeIf(program::isData)?.let { target ->
-                        getOrPut(target) { mutableListOf() }.add(site)
-                    }
-                }
-            }
-        }
+        program.findPointers()
+            .filter { (src, dst) -> program.isData(dst) }
+            .groupBy({ (_, dst) -> dst }) { (src, _) -> src }
     }
 
     /** The NUL-terminated class name at [addr], or null if what is there can't be one. */

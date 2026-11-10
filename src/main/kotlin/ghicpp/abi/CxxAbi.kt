@@ -26,7 +26,7 @@ interface CxxMemberNaming {
     fun physnameCandidates(m: MemberDecl, className: String): List<String> = listOfNotNull(m.mangled)
 
     /** How this ABI's stabs spell the implicit assignment operator. */
-    val assignmentOperatorName: String
+    val assignmentOperatorName: String get() = "operator="
 
     /** Whether [physname] is itself the symbol of an implicit special member. */
     fun physnameIsImplicit(physname: String) = false

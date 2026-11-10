@@ -9,14 +9,19 @@ import ghicpp.introducingClass
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.decompiler.util.FillOutStructureHelper
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.ArrayDataType
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.NoisyStructureBuilder
+import ghidra.program.model.data.Undefined
+import ghidra.program.model.data.Undefined1DataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.HighVariable
+import ghidra.program.model.pcode.PcodeBlockBasic
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
+import ghidra.program.model.scalar.Scalar
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
@@ -64,9 +69,16 @@ internal fun mergedStores(stores: Iterable<Map<Int, DataType>>): Map<Int, DataTy
     return fields.iterator().asSequence().associate { (at, dt) -> at.toInt() to dt }
 }
 
-/** Finds constructors and destructors among [classes]' by the vtables they store into `this`, decompiled. */
-class StructorFinder(private val program: Program, classes: Collection<ClassDecl>, sink: DiagnosticSink) :
-    DiagnosticSink by sink {
+/**
+ * Finds constructors and destructors among [classes]' by the vtables they store into `this`, decompiled. With
+ * [fillArrays], a field one fills in a counted loop or with `memset` is read as an array ([thisFills]).
+ */
+class StructorFinder(
+    private val program: Program,
+    classes: Collection<ClassDecl>,
+    sink: DiagnosticSink,
+    private val fillArrays: Boolean = true,
+) : DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
 
     private val tables = classes.vptrTables(program)
@@ -243,6 +255,9 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
             thisCalls[f].orEmpty().any { it.name in convention.operatorDeleteNames }
     }
 
+    /** What the functions storing the classes' vptrs store and call through `this`, decompiled. */
+    fun readStorers(monitor: TaskMonitor): Reading = read(emptyList(), monitor)
+
     /**
      * The stores of each function writing one of [tables], and what those and [others] call on `this`. A
      * store counts only through `this` at the table's own offset, which leaves out locals built inline and
@@ -283,7 +298,8 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
                     writes[func]?.let { stores[func] = filled.vptrStores(it, calls) }
                     subobjectCalls[func] =
                         calls.groupBy({ it.offset }, { it.callee }).mapValues { (_, fs) -> fs.toSet() }
-                    thisStores[func] = filled.thisStores(storedOnly)
+                    val fills = if (fillArrays) high.thisFills() else emptyMap()
+                    thisStores[func] = filled.thisStores(storedOnly).withFills(fills)
                 }
             }
         }
@@ -316,6 +332,77 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
         return componentMap.iterator().asSequence()
             .filter { (at, dt) -> (!storedOnly || at in stored) && dt.length > 0 }
             .associate { (at, dt) -> at.toInt() to dt }
+    }
+
+    /**
+     * The arrays [this] fills through `this`, by offset into it: a pointer from `this` + k stepping by what it
+     * stores each turn of a loop that a counter counts down from a constant, as x86's `rep stos` does, or a
+     * call of `memset` with a constant size.
+     */
+    private fun HighFunction.thisFills(): Map<Int, DataType> = buildMap {
+        for (op in pcodeOps.asSequence()) {
+            when (op.opcode) {
+                PcodeOp.STORE -> loopFill(op)?.let { (at, dt) -> put(at, dt) }
+                PcodeOp.CALL -> memsetFill(op)?.let { (at, dt) -> put(at, dt) }
+            }
+        }
+    }
+
+    /** The array the loop [store] stores in fills, where its pointer steps from `this` + k by what it stores. */
+    private fun loopFill(store: PcodeOp): Pair<Int, DataType>? {
+        val size = store.getInput(2).size
+        val phi = store.getInput(1).uncopied().def?.takeIf { it.opcode == PcodeOp.MULTIEQUAL } ?: return null
+        val inputs = phi.inputs.map { it.uncopied() }
+        val start = inputs.firstNotNullOfOrNull { it.thisOffset() } ?: return null
+        if (inputs.none { it.steps(phi.output, size.toLong()) }) return null
+        val count = phi.parent.countdown() ?: return null
+        val elem = Undefined.getUndefinedDataType(size)
+        return start.toInt() to ArrayDataType(elem, count, size, program.dataTypeManager)
+    }
+
+    /** `memset(this + k, c, n)`'s n bytes at k, where `memset` is named so and n is a constant. */
+    private fun memsetFill(call: PcodeOp): Pair<Int, DataType>? {
+        if (call.numInputs < 4) return null
+        val callee = program.functionManager.getFunctionAt(call.getInput(0).address) ?: return null
+        if ((callee.getThunkedFunction(true) ?: callee).name !in MEMSET_NAMES) return null
+        val at = call.getInput(1).uncopied().thisOffset() ?: return null
+        val n = call.getInput(3).uncopied().takeIf { it.isConstant }?.offset?.toInt()?.takeIf { it in 1..MAX_FILL }
+            ?: return null
+        return at.toInt() to ArrayDataType(Undefined1DataType.dataType, n, 1, program.dataTypeManager)
+    }
+
+    /** Whether [this] is [from] stepped by [by] bytes, `from + by` or `from[1]` of [by]-byte elements. */
+    private fun Varnode.steps(from: Varnode, by: Long): Boolean {
+        val op = def ?: return false
+        fun const(i: Int, value: Long) = op.getInput(i).let { it.isConstant && it.offset == value }
+        return op.getInput(0) == from && when (op.opcode) {
+            PcodeOp.PTRADD -> const(1, 1L) && const(2, by)
+            PcodeOp.INT_ADD -> const(1, by)
+            else -> false
+        }
+    }
+
+    /** How many turns the loop heading at [this] takes: the constant one counter there counts down from by 1. */
+    private fun PcodeBlockBasic.countdown(): Int? = iterator.asSequence()
+        .filter { it.opcode == PcodeOp.MULTIEQUAL }
+        .mapNotNull { phi ->
+            val inputs = phi.inputs.map { it.uncopied() }
+            val decrements = inputs.any { v ->
+                val op = v.def
+                op != null && op.opcode == PcodeOp.INT_ADD && op.getInput(0) == phi.output &&
+                    op.getInput(1).let {
+                        it.isConstant && Scalar(it.size * Byte.SIZE_BITS, it.offset).signedValue == -1L
+                    }
+            }
+            inputs.singleOrNull { it.isConstant }?.offset?.toInt()?.takeIf { decrements && it in 1..MAX_FILL }
+        }
+        .singleOrNull()
+
+    /** [this] through the copies the decompiler leaves where it merges a loop's variables. */
+    private fun Varnode.uncopied(): Varnode {
+        var v = this
+        repeat(MAX_COPIES) { v = v.def?.takeIf { it.opcode == PcodeOp.COPY }?.getInput(0) ?: return v }
+        return v
     }
 
     /** The variable `this` comes in as, at [thisStorage]; null where nothing reads it. */
@@ -359,4 +446,20 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
 
     /** How far past `this` [this] points; null if it points into something else. */
     private fun Varnode.thisOffset() = pointerInto()?.takeIf { it.isThis(thisStorage) }?.offset
+
+    private companion object {
+        val MEMSET_NAMES = setOf("memset", "_memset")
+
+        /** The most elements a fill may count, past which its count is likely no constant at all. */
+        const val MAX_FILL = 0x10000
+
+        const val MAX_COPIES = 8
+    }
+}
+
+/** [this] with the arrays [fills] in place of what it stores where they lie, but at each one's start. */
+private fun Map<Int, DataType>.withFills(fills: Map<Int, DataType>): Map<Int, DataType> {
+    if (fills.isEmpty()) return this
+    val covered = filterKeys { at -> fills.none { (start, dt) -> at in start until start + dt.length } }
+    return covered + fills
 }
