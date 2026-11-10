@@ -126,6 +126,17 @@
         </TR>
 
         <TR>
+          <TD><B>Virtual function pointer model</B></TD>
+          <TD>SPLIT_BASE</TD>
+          <TD>Where a polymorphic class's <CODE>{vfptr}</CODE> comes from. <CODE>SPLIT_BASE</CODE>
+          gives every polymorphic class its own, typed to its own vftable, embedding the primary
+          base as that base's fields without the vptr, so virtual calls resolve to named slots.
+          <CODE>INHERITED</CODE> keeps one on the root of each hierarchy, shared through the base
+          subobject: derived slots then sit past the end of the root's vftable and virtual calls
+          render as <CODE>vfptr[N].field</CODE>.</TD>
+        </TR>
+
+        <TR>
           <TD><B>Minimum log level</B></TD>
           <TD>INFO</TD>
           <TD>Floor for messages written to the analysis log: <CODE>DEBUG</CODE>,
@@ -355,14 +366,20 @@
           script fills it: non-virtual bases, a <CODE>vfptr</CODE> at each vptr, a
           <CODE>vbptr</CODE> where a constructor stores a vbtable, the virtual bases, and the fields
           its constructors store in <CODE>&lt;Class&gt;_data</CODE>. A struct something else filled
-          is left alone.</TD>
+          is left alone. A base holding a vptr is split around it, a <CODE>vfptr</CODE> then the
+          base's <CODE>&lt;Base&gt;_fields_&lt;from&gt;_&lt;to&gt;</CODE>, under the analyzer's
+          <I>Virtual function pointer model</I> option: <CODE>SPLIT_BASE</CODE> by default, as for
+          the importer, while <CODE>INHERITED</CODE> keeps the base whole with its own
+          <CODE>vfptr</CODE>, typed to the base's vftable. Unlike the importer, which only knows the
+          primary vptr, this splits every base holding one, secondary and virtual ones too.</TD>
         </TR>
 
         <TR>
           <TD><B>Itanium RTTI classes</B></TD>
           <TD>gcc 3 and later, without stabs. What <I>MSVC RTTI classes</I> does, off the Itanium
           RTTI: classes from the <CODE>typeinfo</CODE> labels, their bases from the typeinfo, their
-          vtables from <I>GCC C++ vftables</I>' labels. With <I>Itanium RTTI symbols</I> this covers
+          vtables from <I>GCC C++ vftables</I>' labels, with the same <I>Virtual function pointer
+          model</I> option. With <I>Itanium RTTI symbols</I> this covers
           stripped binaries; a program with stabs gets its classes from them.</TD>
         </TR>
 

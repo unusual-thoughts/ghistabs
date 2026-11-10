@@ -25,9 +25,17 @@ import ghistabs.diagnose.DummySink
  * too. A vftable no analysis typed gets a struct, a slot per function, as `RecoverClassesFromRTTIScript`
  * makes one. Bases go first, so a class embeds its bases filled: a base with virtual bases as its
  * non-virtual part alone, its "self-base", which the deriving class's own virtual bases follow.
+ *
+ * The split is [VfptrModel.SPLIT_BASE]'s, as for the stabs import. Under [VfptrModel.INHERITED] a base
+ * subobject keeps its own `{vfptr}`, typed to the base's vftable, and the class adds one only where no
+ * base holds its vptr.
  */
-class ClassStructFiller(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
-    DiagnosticSink by sink {
+class ClassStructFiller(
+    private val program: Program,
+    private val abi: CxxAbi,
+    sink: DiagnosticSink,
+    private val vfptrModel: VfptrModel = VfptrModel.OPTION.default,
+) : DiagnosticSink by sink {
     private val dtm = program.dataTypeManager
     private val registry = DtmRegistry(dtm)
     private val vfptrs = BaseSplitter(registry, sink)
@@ -157,7 +165,8 @@ class ClassStructFiller(private val program: Program, private val abi: CxxAbi, s
     private fun Structure.placeVfptr(at: Int, vfptr: DataType, ns: GhidraClass) {
         val holder = getComponentContaining(at)?.takeIf { it.isBaseField() }
         if (holder != null) {
-            if (!vfptrs.splitBase(this, ns.path, at, holder, vfptr)) {
+            val split = vfptrModel == VfptrModel.SPLIT_BASE && vfptrs.splitBase(this, ns.path, at, holder, vfptr)
+            if (!split) {
                 debug("vfptr-inherited-from-base", ns.getName(true))
             }
             return

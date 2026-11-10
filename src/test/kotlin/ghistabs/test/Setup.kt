@@ -1,5 +1,6 @@
 package ghistabs.test
 
+import ghicpp.VfptrModel
 import ghicpp.entrypoints.RttiSymbolAnalyzer
 import ghidra.app.util.importer.MessageLog
 import ghidra.framework.options.OptionType
@@ -23,7 +24,6 @@ import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
 import ghistabs.isAnalyzerEnabled
 import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.VfptrModel
 import ghistabs.parse.IdInterface
 import ghistabs.parse.StabReader
 import ghistabs.parse.TypeDecl

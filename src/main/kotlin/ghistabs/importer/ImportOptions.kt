@@ -1,10 +1,10 @@
 package ghistabs.importer
 
+import ghicpp.VfptrModel
 import ghidra.framework.options.Options
 import ghidra.program.model.listing.Program
 import ghistabs.*
 import ghistabs.diagnose.Level
-import ghistabs.materialize.VfptrModel
 
 class ImportOptions() : OptionContainer() {
     var applyPlateComments: Boolean by PLATE_COMMENTS
@@ -83,15 +83,7 @@ class ImportOptions() : OptionContainer() {
                 "#include \"x.h\") onto one rendered output file, by unique basename.",
             true,
         )
-        val VFPTR_MODEL = EnumOption(
-            "Virtual function pointer model",
-            "Where a polymorphic class's {vfptr} comes from. INHERITED keeps one on the root of each " +
-                "hierarchy, shared through the base subobject — derived slots then sit past the end of " +
-                "the root's vftable and virtual calls render as vfptr[N].field. SPLIT_BASE gives every " +
-                "polymorphic class its own {vfptr} typed to its own vftable, embedding the primary base " +
-                "as that base's fields without the vptr, so virtual calls resolve to named slots.",
-            VfptrModel.SPLIT_BASE,
-        )
+        val VFPTR_MODEL = VfptrModel.OPTION
         val LOG_LEVEL = EnumOption(
             "Minimum log level",
             "Minimum level for MessageLog diagnostic output (bookmarks and counters are unaffected).",
