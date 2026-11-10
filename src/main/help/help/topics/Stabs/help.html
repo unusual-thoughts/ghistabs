@@ -371,7 +371,10 @@
           <I>Virtual function pointer model</I> option: <CODE>SPLIT_BASE</CODE> by default, as for
           the importer, while <CODE>INHERITED</CODE> keeps the base whole with its own
           <CODE>vfptr</CODE>, typed to the base's vftable. Unlike the importer, which only knows the
-          primary vptr, this splits every base holding one, secondary and virtual ones too.</TD>
+          primary vptr, this splits every base holding one, secondary and virtual ones too. Its
+          <I>Arrays from fill loops</I> option, on by default, types a field a constructor fills in a
+          loop counted down from a constant (x86 <CODE>rep stos</CODE>), or with
+          <CODE>memset</CODE> of a constant size, as an array.</TD>
         </TR>
 
         <TR>
@@ -379,7 +382,7 @@
           <TD>gcc 3 and later, without stabs. What <I>MSVC RTTI classes</I> does, off the Itanium
           RTTI: classes from the <CODE>typeinfo</CODE> labels, their bases from the typeinfo, their
           vtables from <I>GCC C++ vftables</I>' labels, with the same <I>Virtual function pointer
-          model</I> option. With <I>Itanium RTTI symbols</I> this covers
+          model</I> and <I>Arrays from fill loops</I> options. With <I>Itanium RTTI symbols</I> this covers
           stripped binaries; a program with stabs gets its classes from them.</TD>
         </TR>
 
@@ -408,7 +411,7 @@
           of a class <CODE>Klass_&lt;address&gt;</CODE> and goes through the class pass, as the RTTI
           class analyzers' classes do. A class's base is inferred from the vtable a structor's call
           on <CODE>this</CODE> stores, or from the slots its table shares with others; bases at an
-          offset are not. Run it once most of the
+          offset are not. It also has the <I>Virtual function pointer model</I> and <I>Arrays from fill loops</I> options. Run it once most of the
           program is disassembled and its references marked, and again after: a rerun finds more,
           and cuts a table it seeded where code now refers into it.</TD>
         </TR>
