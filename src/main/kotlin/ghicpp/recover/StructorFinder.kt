@@ -243,6 +243,9 @@ class StructorFinder(private val program: Program, classes: Collection<ClassDecl
             thisCalls[f].orEmpty().any { it.name in convention.operatorDeleteNames }
     }
 
+    /** What the functions storing the classes' vptrs store and call through `this`, decompiled. */
+    fun readStorers(monitor: TaskMonitor): Reading = read(emptyList(), monitor)
+
     /**
      * The stores of each function writing one of [tables], and what those and [others] call on `this`. A
      * store counts only through `this` at the table's own offset, which leaves out locals built inline and

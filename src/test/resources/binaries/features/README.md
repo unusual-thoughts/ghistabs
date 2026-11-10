@@ -16,6 +16,7 @@ and exercised by their own integration test.
 | `hello_elf_gcc41` … `_gcc8` | gcc 4.1.2 / 4.3.2 / 4.4.5 / 4.7.2 / 4.9.2 / 6.3.0 / 8.3.0, i386 | `debian/eol:` etch / lenny / squeeze / wheezy / jessie / stretch / buster | — |
 | `hello_elf_gcc10`, `_gcc12` | gcc 10.2.1 / 12.2.0, i386 PIE | `debian/eol:bullseye` (security via its snapshot.debian.org line), `debian:bookworm` | — |
 | `hello_elf_gcc12_stripped` | gcc 12.2.0, i386 PIE, no stabs, no symbols | `hello_elf_gcc12` through `strip --strip-all -R .stab -R .stabstr -R .comment` | `ItaniumClassStructsIntegrationTest` |
+| `hello_elf64_gcc13_nortti_stripped` | gcc 13.3.0, x86-64 PIE, no RTTI, no symbols | Ubuntu 24.04 `g++ -O0 -fno-rtti hello.cc`, then `strip --strip-all -R .comment` | `GenericVftableFixtureIntegrationTest` |
 | `latetypedef_elf64_gcc9`, `_gcc10`, `_gcc12` | gcc 9.5.0 / 10.5.0 / 12.4.0, x86-64 PIE | Ubuntu 24.04 `apt-get install gcc-9 gcc-10 gcc-12` | `LateTypedefIntegrationTest` |
 | `hello_gcc345.exe`, `hello_gcc421.exe` | MinGW gcc 3.4.5 / 4.2.1, PE32 | `debian/eol:etch` / `lenny`, package `mingw32`, `-static`; 4.2.1 then `objcopy --remove-section='.debug_*'` | — |
 | `hello_gcc323_fullstabs.exe` | MinGW gcc 3.2.3, PE32, SJLJ | the MinGW-3.1.0-1 bundle rebuilt from its own sources in a sarge i386 chroot, every target library with stabs: `build_mingw323.sh`, then `mingw32-g++ -gstabs+ -O0 -static` | — |
