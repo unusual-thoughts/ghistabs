@@ -18,6 +18,7 @@ import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.diagnose.report
 import ghistabs.forceCreateData
 
 /**
@@ -40,7 +41,7 @@ class TypeinfoLayoutAnalyzer :
         val registry = DtmRegistry(program.dataTypeManager)
         val laid = program.layTypeinfos(registry, sink).size
         registry.replaceClassStubs(sink)
-        if (laid > 0) log.appendMsg(NAME, "laid $laid typeinfo(s)")
+        if (laid > 0) report("laid $laid typeinfo(s)")
         return true
     }
 

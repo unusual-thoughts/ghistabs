@@ -596,7 +596,8 @@ class DemanglerReplacer(
         // demangler stub is `/Demangler/std/…`, matching neither the `/src/…` nor `/stabs/` home).
         collapsed.filterNot { it.categoryPath.isAncestorOrSelf(CATEGORY) }
             .singleOrNull()?.let { return it }
-        log(
+        // The demangler stub stays unreplaced: a warning, not an account of what was done.
+        warn(
             "demangler-ambiguous",
             "Multiple matches for '$simpleName' (preferred=$preferredCategory): " +
                 matches.joinToString { "${it.pathName}(${it::class.simpleName})" },

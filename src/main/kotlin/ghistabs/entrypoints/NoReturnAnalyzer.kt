@@ -12,6 +12,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.ExternalLocation
 import ghidra.util.task.TaskMonitor
+import ghistabs.diagnose.report
 
 const val NO_RETURN_ANALYZER_NAME = "Non-returning functions (reachability)"
 
@@ -68,7 +69,7 @@ class NoReturnAnalyzer :
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val marked = markNoReturn(program, set, monitor)
         if (marked.isNotEmpty()) {
-            log.appendMsg(NO_RETURN_ANALYZER_NAME, "marked ${marked.size} function(s) non-returning")
+            report("marked ${marked.size} function(s) non-returning")
         }
         return true
     }

@@ -9,6 +9,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.diagnose.report
 import ghistabs.isInjected
 import ghistabs.isMethod
 
@@ -50,7 +51,7 @@ class ThisParamAnalyzer :
         monitor.checkCancelled()
 
         frozen.count { it.redoStorage(log) }.takeIf { it > 0 }?.let { restored ->
-            log.appendMsg(THIS_PARAM_ANALYZER_NAME, "restored `this` on $restored method(s)")
+            report("restored `this` on $restored method(s)")
         }
         return true
     }

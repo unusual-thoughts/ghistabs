@@ -139,8 +139,9 @@
         <TR>
           <TD><B>Minimum log level</B></TD>
           <TD>INFO</TD>
-          <TD>Floor for messages written to the analysis log: <CODE>DEBUG</CODE>,
-          <CODE>INFO</CODE>, <CODE>WARN</CODE> or <CODE>ERROR</CODE>. Bookmarks and the
+          <TD>Floor for diagnostic messages: <CODE>DEBUG</CODE>, <CODE>INFO</CODE>,
+          <CODE>WARN</CODE> or <CODE>ERROR</CODE>. Warnings and errors go to the analysis log, which
+          Ghidra shows when analysis ends; the rest go to the application log. Bookmarks and the
           end-of-import counter summary are emitted regardless.</TD>
         </TR>
 

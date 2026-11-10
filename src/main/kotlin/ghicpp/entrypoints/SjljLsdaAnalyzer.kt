@@ -12,6 +12,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.diagnose.report
 
 /**
  * Lays the LSDA of every function MinGW's gcc built with SJLJ exceptions ([SjljLsdaPass]): the
@@ -57,7 +58,7 @@ class SjljLsdaAnalyzer :
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val laid = SjljLsdaPass(program, sink).run(set, monitor)
-        if (laid > 0) log.appendMsg(NAME, "laid $laid LSDA(s)")
+        if (laid > 0) report("laid $laid LSDA(s)")
         return true
     }
 
