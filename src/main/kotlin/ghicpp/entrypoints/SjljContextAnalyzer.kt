@@ -12,6 +12,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.diagnose.report
 
 /**
  * Types gcc's SJLJ exception ABI ([SjljTypes]) where a program uses it, through [SjljContextPass]: the
@@ -45,7 +46,7 @@ class SjljContextAnalyzer :
         // so only what [set] covers: the whole program once, then just the changed code.
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val (contexts, signatures) = SjljContextPass(program, sink).run(set, monitor)
-        if (contexts + signatures > 0) log.appendMsg(NAME, "typed $contexts context(s), $signatures entry point(s)")
+        if (contexts + signatures > 0) report("typed $contexts context(s), $signatures entry point(s)")
         return true
     }
 

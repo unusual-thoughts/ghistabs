@@ -86,7 +86,8 @@ class ImportOptions() : OptionContainer() {
         val VFPTR_MODEL = VfptrModel.OPTION
         val LOG_LEVEL = EnumOption(
             "Minimum log level",
-            "Minimum level for MessageLog diagnostic output (bookmarks and counters are unaffected).",
+            "Minimum level for diagnostic output: warnings and errors go to the analysis log, the rest to " +
+                "the application log (bookmarks and counters are unaffected).",
             Level.INFO,
         )
         val OVERLAY_SECTION = BoolOption(

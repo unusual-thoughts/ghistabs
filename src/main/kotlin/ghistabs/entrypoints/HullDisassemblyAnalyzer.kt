@@ -18,6 +18,7 @@ import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
+import ghistabs.diagnose.report
 
 /**
  * Recovers code Ghidra left undisassembled *inside* a function's extent — hot/cold split holes and
@@ -85,7 +86,7 @@ class HullDisassemblyAnalyzer :
             for ((range, why) in recover) {
                 program.bookmarkManager.setBookmark(range.minAddress, BookmarkType.ANALYSIS, NAME, "Disassembled: $why")
             }
-            log.appendMsg(NAME, "recovered ${all.numAddresses} in-function code bytes")
+            report("recovered ${all.numAddresses} in-function code bytes")
         }
         return true
     }

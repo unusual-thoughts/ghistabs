@@ -15,6 +15,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.diagnose.report
 import ghistabs.parse.StabReader
 
 /**
@@ -45,8 +46,7 @@ class ItaniumClassAnalyzer :
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val result = ClassPass(program, ItaniumRttiParser(program, sink), sink, program.vfptrModelOf(NAME)).run(monitor)
         if (result.classes > 0) {
-            log.appendMsg(
-                NAME,
+            report(
                 "${result.classes} class(es), ${result.owned} virtual function(s) owned, ${result.moved} moved, " +
                     "${result.shared} shared, ${result.structors} constructor(s) and destructor(s) named, " +
                     "${result.sized} class size(s) recorded, ${result.filled} struct(s) filled",
