@@ -276,7 +276,7 @@ class StructorFinder(
             }
         }
         if (writes.isEmpty()) return Reading(emptyMap(), emptyMap())
-        return decompile(writes.keys + others, writes, monitor, "Decompiling constructors and destructors")
+        return decompile(writes.keys + others, writes, monitor)
     }
 
     /** What [funcs] store and call through `this`, decompiled, and which of [writes]' vptrs each stores. */
@@ -284,7 +284,7 @@ class StructorFinder(
         funcs: Collection<Function>,
         writes: Map<Function, Map<Address, List<Pair<ClassDecl, Long>>>>,
         monitor: TaskMonitor,
-        message: String,
+        message: String = "Decompiling constructors and destructors",
         storedOnly: Boolean = true,
     ): Reading {
         val stores = mutableMapOf<Function, VptrStores>()
