@@ -43,16 +43,19 @@ class MemberObjectPass(
      * The members, or bases, whose class the pass found already, a class with a vtable whose constructor
      * another's calls on `this` + k: laid there whole too.
      */
-    private val known = linkedMapOf<Slot, ClassDecl>()
+    private val known = linkedMapOf<Subobject, ClassDecl>()
 
-    /** What holds a member: a class the pass found, or another member. */
-    private sealed interface Holder {
-        /** A class the pass found. */
-        data class Found(val cls: ClassDecl) : Holder
+    /** A class holding subobjects: one the class pass found, or a [VtablelessClass] this pass drafts. */
+    private sealed interface SubobjectClass {
+        /** A class the class pass found. */
+        data class Existing(val cls: ClassDecl) : SubobjectClass
     }
 
-    /** A member object class's constructors and destructors, what its constructors store, and the class it's given. */
-    private class Member : Holder {
+    /**
+     * A class with no vtable, known only from its structors: those a found class's structors call on `this` + k,
+     * what its constructors store, and the class it's given.
+     */
+    private class VtablelessClass : SubobjectClass {
         val ctors = mutableSetOf<Function>()
         val dtors = mutableSetOf<Function>()
         var stores: Map<Int, DataType> = emptyMap()
@@ -60,8 +63,8 @@ class MemberObjectPass(
         val functions get() = ctors + dtors
     }
 
-    /** A member at [offset] in [holder]. */
-    private data class Slot(val holder: Holder, val offset: Long)
+    /** The subobject at [offset] in [container]. */
+    private data class Subobject(val container: SubobjectClass, val offset: Long)
 
     /** Recovers the classes of the member objects of [found]'s classes, and returns how many it made or found again. */
     fun run(found: FoundStructors, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
@@ -85,23 +88,23 @@ class MemberObjectPass(
         ClassStructFiller(program, PlainVtables, this)
             .fillAll(classes.mapNotNull { it.cls }, classes.associate { it.cls!! to it.stores })
         // The deepest members first, so a class embeds its members whole.
-        val order = held.keys.sortedByDescending { slot ->
-            (slot.holder as? Member)?.let { held.values.indexOf(it) } ?: -1
+        val order = held.keys.sortedByDescending { sub ->
+            (sub.container as? VtablelessClass)?.let { held.values.indexOf(it) } ?: -1
         }
-        fun holderOf(slot: Slot) = when (val h = slot.holder) {
-            is Member -> root[h]?.cls
-            is Holder.Found -> h.cls
+        fun containerOf(sub: Subobject) = when (val h = sub.container) {
+            is VtablelessClass -> root[h]?.cls
+            is SubobjectClass.Existing -> h.cls
         }?.let(::structOf)
-        monitor.initialize((order.size + known.size).toLong(), "Laying members in their holders")
-        for (slot in order) {
+        monitor.initialize((order.size + known.size).toLong(), "Laying member objects in their classes")
+        for (sub in order) {
             monitor.increment()
-            val member = root.getValue(held.getValue(slot)).cls?.let(::structOf)?.takeUnless { it.isZeroLength }
-            if (member != null) holderOf(slot)?.placeMember(slot.offset.toInt(), member)
+            val member = root.getValue(held.getValue(sub)).cls?.let(::structOf)?.takeUnless { it.isZeroLength }
+            if (member != null) containerOf(sub)?.placeMember(sub.offset.toInt(), member)
         }
-        for ((slot, cls) in known) {
+        for ((sub, cls) in known) {
             monitor.increment()
             val member = structOf(cls)?.takeUnless { it.isZeroLength } ?: continue
-            holderOf(slot)?.placeMember(slot.offset.toInt(), member)
+            containerOf(sub)?.placeMember(sub.offset.toInt(), member)
         }
         writeRecords(classes.mapNotNull { it.cls })
         return classes.size
@@ -111,21 +114,21 @@ class MemberObjectPass(
      * The members [found]'s structors build and destroy, by where they are, then those members' own, decompiled,
      * down to [MAX_DEPTH].
      */
-    private fun collect(found: FoundStructors, monitor: TaskMonitor): Map<Slot, Member> {
+    private fun collect(found: FoundStructors, monitor: TaskMonitor): Map<Subobject, VtablelessClass> {
         val inspector = StructorInspector(program, emptyList(), this, fillArrays)
-        val held = linkedMapOf<Slot, Member>()
+        val held = linkedMapOf<Subobject, VtablelessClass>()
         known.clear()
-        var structors: Map<Function, Pair<Holder, StructorRole>> =
-            found.roles.mapValues { (_, by) -> Holder.Found(by.first) to by.second }
+        var structors: Map<Function, Pair<SubobjectClass, StructorRole>> =
+            found.roles.mapValues { (_, by) -> SubobjectClass.Existing(by.first) to by.second }
         var calls = found.subobjectCalls
         for (depth in 1..MAX_DEPTH) {
             if (monitor.isCancelled) break
-            val fresh = linkedSetOf<Member>()
+            val fresh = linkedSetOf<VtablelessClass>()
             for ((f, by) in structors) {
                 for ((offset, called) in calls[f].orEmpty()) {
-                    val slot = Slot(by.first, offset)
-                    val structor = memberStructor(f, slot, by.second, called, found) ?: continue
-                    val member = held.getOrPut(slot) { Member().also(fresh::add) }
+                    val sub = Subobject(by.first, offset)
+                    val structor = memberStructor(f, sub, by.second, called, found) ?: continue
+                    val member = held.getOrPut(sub) { VtablelessClass().also(fresh::add) }
                     (if (by.second == CONSTRUCTOR) member.ctors else member.dtors) += structor
                 }
             }
@@ -141,13 +144,13 @@ class MemberObjectPass(
     }
 
     /**
-     * The structor of the member at [slot] that [f], a [role] of its holder, [called] there: the first it calls
+     * The structor of the member at [sub] that [f], a [role] of its container, [called] there: the first it calls
      * if it builds, the last if it destroys. Null where that's a structor [found] already, whose class is
-     * [known] at [slot] then.
+     * [known] at [sub] then.
      */
     private fun memberStructor(
         f: Function,
-        slot: Slot,
+        sub: Subobject,
         role: StructorRole,
         called: Set<Function>,
         found: FoundStructors,
@@ -157,10 +160,12 @@ class MemberObjectPass(
             DESTRUCTOR -> called.last()
             else -> return null
         }
-        if (slot.offset <= 0L || structor == f || !structor.takesThis()) return null
+        if (sub.offset <= 0L || structor == f || !structor.takesThis()) return null
         val built = found.roles[structor] ?: return structor
-        if (role == CONSTRUCTOR && built.second == CONSTRUCTOR && Holder.Found(built.first) != slot.holder) {
-            known.putIfAbsent(slot, built.first)
+        if (role == CONSTRUCTOR && built.second == CONSTRUCTOR &&
+            SubobjectClass.Existing(built.first) != sub.container
+        ) {
+            known.putIfAbsent(sub, built.first)
         }
         return null
     }
@@ -169,15 +174,15 @@ class MemberObjectPass(
      * Each of [members] mapped to the one it's merged into with those it shares a structor with. A function that
      * both builds one and destroys one is neither's.
      */
-    private fun merge(members: List<Member>): Map<Member, Member> {
+    private fun merge(members: List<VtablelessClass>): Map<VtablelessClass, VtablelessClass> {
         val into = members.associateWith { it }.toMutableMap()
-        fun find(m: Member): Member {
+        fun find(m: VtablelessClass): VtablelessClass {
             var r = m
             while (into.getValue(r) != r) r = into.getValue(r)
             into[m] = r
             return r
         }
-        val byFunction = mutableMapOf<Function, Member>()
+        val byFunction = mutableMapOf<Function, VtablelessClass>()
         for (m in members) {
             for (f in m.functions) {
                 val (a, b) = find(byFunction.getOrPut(f) { m }) to find(m)
@@ -200,7 +205,7 @@ class MemberObjectPass(
      * The class [m] builds: the one a structor of it is named in already, by a user or an analysis, else
      * `Klass_<address>` after its first constructor, or destructor.
      */
-    private fun classFor(m: Member): PlainClass? {
+    private fun classFor(m: VtablelessClass): PlainClass? {
         val named = m.functions.firstNotNullOfOrNull { f ->
             (f.parentNamespace as? GhidraClass)?.takeIf { f.symbol.source != SourceType.DEFAULT }
         }
@@ -213,14 +218,18 @@ class MemberObjectPass(
     }
 
     /** Each member object class's size: how far its constructors store or its own members reach, the further. */
-    private fun sizes(classes: List<Member>, held: Map<Slot, Member>, root: Map<Member, Member>): Map<Member, Int> {
+    private fun sizes(
+        classes: List<VtablelessClass>,
+        held: Map<Subobject, VtablelessClass>,
+        root: Map<VtablelessClass, VtablelessClass>,
+    ): Map<VtablelessClass, Int> {
         val size = classes.associateWith { m -> m.stores.maxOfOrNull { (at, dt) -> at + dt.length } ?: 0 }
             .toMutableMap()
         repeat(MAX_DEPTH) {
-            for ((slot, m) in held) {
-                val holder = (slot.holder as? Member)?.let(root::getValue) ?: continue
-                val end = slot.offset.toInt() + (size[m] ?: 0)
-                if (end > (size[holder] ?: 0)) size[holder] = end
+            for ((sub, m) in held) {
+                val container = (sub.container as? VtablelessClass)?.let(root::getValue) ?: continue
+                val end = sub.offset.toInt() + (size[m] ?: 0)
+                if (end > (size[container] ?: 0)) size[container] = end
             }
         }
         return size
