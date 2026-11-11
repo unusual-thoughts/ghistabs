@@ -15,6 +15,7 @@ import ghistabs.BoolOption
 import ghistabs.analyzerOptions
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
+import ghistabs.diagnose.report
 import ghistabs.get
 import ghistabs.register
 
@@ -59,8 +60,7 @@ class GenericVftableAnalyzer :
         val members = result.found?.takeIf { options[MEMBER_OBJECTS] }
             ?.let { MemberObjectPass(program, sink, pass.fillArrays).run(it, monitor) } ?: 0
         val guessed = MethodClassPass(program, sink).run(monitor)
-        log.appendMsg(
-            NAME,
+        report(
             "$seeded vftable(s) seeded; ${result.classes} class(es), ${result.owned} virtual function(s) owned, " +
                 "${result.structors} constructor(s) and destructor(s) named, $members member object class(es), " +
                 "$guessed method class(es) guessed",
