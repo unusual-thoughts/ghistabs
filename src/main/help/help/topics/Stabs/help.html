@@ -591,8 +591,8 @@
           offset are not. Its <I>Classes of member objects</I> option, on by default, gives a
           class to each member a constructor builds at an offset into <CODE>this</CODE> with a
           function that stores no vptr, sized off that function's stores and laid in the holding
-          class. It has no vtable, so the address in its <CODE>Klass_&lt;address&gt;</CODE> is its
-          first constructor's, not a table's, as its struct's description says. It also has the <I>Virtual function pointer model</I> and <I>Arrays from fill loops</I> options. Run it once most of the
+          class. It has no vtable, so it is named <CODE>NPKlass_&lt;address&gt;</CODE> after its
+          first constructor's address, not a table's, as its struct's description says. It also has the <I>Virtual function pointer model</I> and <I>Arrays from fill loops</I> options. Run it once most of the
           program is disassembled and its references marked, and again after: a rerun finds more,
           and cuts a table it seeded where code now refers into it.</TD>
         </TR>

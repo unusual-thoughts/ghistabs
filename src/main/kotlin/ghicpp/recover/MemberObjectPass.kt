@@ -23,8 +23,8 @@ import ghistabs.toClass
  * on `this` + k, k past 0, is the constructor of the member there, and what a destructor calls last there its
  * destructor, where neither stores a vptr, as [FoundStructors.roles]' do. The structors one class's structors
  * call at one offset build and destroy one class, and so does any sharing one of them: the class one of them is
- * named in already, else `Klass_<address>` after its first constructor: the address is that function's, not a
- * vtable's, as it has none, unlike the `Klass_<address>` classes [GenericVftableFinder] seeds off their tables.
+ * named in already, else `NPKlass_<address>` ([NON_POLYMORPHIC_PREFIX]) after its first constructor: the address
+ * is that function's, as it has no vtable, where a `Klass_<address>` [GenericVftableFinder] seeds is its table's.
  * Its struct says so in its description. It is sized and filled off what
  * its constructors store, and laid in each class holding it at its offset. Its own members follow, down to
  * [MAX_DEPTH].
@@ -209,7 +209,7 @@ class MemberObjectPass(
 
     /**
      * The class [m] builds: the one a structor of it is named in already, by a user or an analysis, else
-     * `Klass_<address>` after its first constructor, or destructor: that function's address, as it has no vtable.
+     * `NPKlass_<address>` after its first constructor, or destructor: that function's address, as it has no vtable.
      */
     private fun classFor(m: NonPolymorphicClass): PlainClass? {
         val named = m.functions.firstNotNullOfOrNull { f ->
@@ -218,7 +218,7 @@ class MemberObjectPass(
         val first = m.ctors.minByOrNull { it.entryPoint } ?: m.dtors.minByOrNull { it.entryPoint } ?: return null
         if (named == null) m.namedAfter = first to if (first in m.ctors) CONSTRUCTOR else DESTRUCTOR
         val ns = named ?: program.symbolTable.buildClassNamespaces(
-            listOf("${GenericVftableFinder.SEEDED_CLASS_PREFIX}${first.entryPoint}"),
+            listOf("$NON_POLYMORPHIC_PREFIX${first.entryPoint}"),
             GenericVftableFinder.SEEDED,
         )
         return PlainClass(ns, emptyList())
@@ -298,8 +298,11 @@ class MemberObjectPass(
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
 
-    private companion object {
+    companion object {
         /** How deep members of members go. */
-        const val MAX_DEPTH = 4
+        private const val MAX_DEPTH = 4
+
+        /** The prefix of a non-polymorphic class this pass names after its first constructor's address. */
+        const val NON_POLYMORPHIC_PREFIX = "NPKlass_"
     }
 }

@@ -84,7 +84,7 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val found = ClassPass(program, PlainVtableParser(program), DummySink).run(TaskMonitor.DUMMY).found!!
             MemberObjectPass(program, DummySink).run(found) mustBe 1
         }
-        val member = "${GenericVftableFinder.SEEDED_CLASS_PREFIX}00401080"
+        val member = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
         program.functionManager.getFunctionAt(addr(MEMBER_CTOR)).getName(true) mustBe "$member::$member"
         structOf(member).length mustBe 8
         structOf(member).description mustBe "No vtable: named after its first constructor, at 00401080"
