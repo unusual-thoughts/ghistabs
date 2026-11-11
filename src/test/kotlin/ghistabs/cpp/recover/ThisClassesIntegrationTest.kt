@@ -54,8 +54,8 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private fun call(caller: String, callee: String, built: GhidraClass? = null) =
         ThisCall(fn(caller), fn(callee), built)
 
-    private fun guess(calls: List<ThisCall>) =
-        ThisClassGuesser(mapOf(a to null, b to a, c to a, d to b)).guess(calls).mapKeys { it.key.name }
+    private fun guess(calls: List<ThisCall>, recorded: Set<Function> = emptySet()) =
+        ThisClassGuesser(mapOf(a to null, b to a, c to a, d to b), recorded).guess(calls).mapKeys { it.key.name }
 
     @Test
     fun `a function called on a method's this belongs to that method's class`() {
@@ -76,6 +76,21 @@ class ThisClassesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun `an object a constructor built counts as that class, and an unknown caller not at all`() {
         guess(listOf(call("x", "f", built = c), call("y", "f")))["f"] mustBe ThisClassGuess(c, 1)
         guess(listOf(call("y", "f")))["f"].mustBeNull()
+    }
+
+    @Test
+    fun `a method another analysis named is no evidence`() {
+        // As RecoverClassesFromRTTIScript names what it places
+        val placed = fn("placed", d)
+        builder.withTransaction { placed.setName("vfunction1", SourceType.ANALYSIS) }
+        guess(listOf(ThisCall(placed, fn("f"))))["f"].mustBeNull()
+    }
+
+    @Test
+    fun `a method a class pass recorded is evidence though an analysis named it`() {
+        val ctor = fn("ctor", d)
+        builder.withTransaction { ctor.setName("D", SourceType.ANALYSIS) }
+        guess(listOf(ThisCall(ctor, fn("f"))), setOf(ctor))["f"] mustBe ThisClassGuess(d, 1)
     }
 
     @Test
