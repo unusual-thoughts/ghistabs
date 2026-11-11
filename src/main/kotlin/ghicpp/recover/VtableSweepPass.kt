@@ -19,7 +19,7 @@ import ghistabs.diagnose.DummySink
 /**
  * Lays the vtables no class claimed ([isVtableClaimed]), Itanium's and gcc 2.x's, typed off the functions
  * their slots point at, through a [VftableBuilder]. Needs only symbols and memory, so
- * [ghicpp.entrypoints.VtableSweepAnalyzer] sweeps with or without stabs.
+ * [ghicpp.analyzers.VtableSweepAnalyzer] sweeps with or without stabs.
  */
 class VtableSweepPass(
     private val registry: DtmRegistry,

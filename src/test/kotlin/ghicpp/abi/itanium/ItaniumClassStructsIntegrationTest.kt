@@ -2,7 +2,7 @@ package ghicpp.abi.itanium
 
 import ghicpp.ClassNaming
 import ghicpp.ClassStructsFixtureTest
-import ghicpp.entrypoints.ItaniumClassAnalyzer
+import ghicpp.analyzers.ItaniumClassAnalyzer
 import ghicpp.recover.updateFieldTypes
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.DoubleDataType

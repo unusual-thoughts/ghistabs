@@ -2,7 +2,7 @@ package ghicpp.recover
 
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassNaming
-import ghicpp.entrypoints.GenericVftableAnalyzer
+import ghicpp.analyzers.GenericVftableAnalyzer
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Pointer
@@ -17,11 +17,7 @@ import ghistabs.loadProgram
 import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeTrue
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Tag
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.*
 import java.io.File
 
 /**
