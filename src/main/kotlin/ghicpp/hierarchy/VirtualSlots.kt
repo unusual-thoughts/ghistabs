@@ -1,16 +1,22 @@
 package ghicpp.hierarchy
 
 import ghicpp.ClassNaming
+import ghicpp.abi.CxxAbi
+import ghicpp.abi.gcc2.Gcc2Abi
 import ghicpp.abi.gcc2.Gcc2Plain
 import ghicpp.abi.itanium.Itanium
+import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.abi.msvc.Msvc
+import ghicpp.abi.msvc.MsvcStructor
 import ghicpp.hierarchy.ClassHierarchy.ClassView
+import ghicpp.hierarchy.ClassHierarchy.Origin
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.FunctionDefinition
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Function
+import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
@@ -85,11 +91,16 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
 
     /**
      * Renames [func]'s virtual slot to [newName]: every function its slots hold, [func] with them, and the
-     * slot's field in every table, with the definition the field points at, which shares its name.
+     * slot's field in every table, with the definition the field points at, which shares its name. A name
+     * starting with `~` names a destructor slot instead ([renameDestructor]); any other is refused on one.
      */
     fun rename(func: Function, newName: String): SlotRenames {
-        val skipped = mutableListOf<String>()
         val slots = implementing(func)
+        if (newName.startsWith("~")) return renameDestructor(func, slots)
+        require(slots.none(::isDestructor)) {
+            "${func.name} fills a destructor slot: name it ~ to name every class's destructor after its class"
+        }
+        val skipped = mutableListOf<String>()
         var functions = 0
         for (f in (slots.mapNotNull(::target) + func).distinct()) {
             if (f.name == newName) continue
@@ -117,8 +128,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         if (field.fieldName == name) return false
         val used = struct.definedComponents.filter { it.ordinal != field.ordinal }.mapNotNull { it.fieldName }.toSet()
         val unique = generateSequence(0) { it + 1 }.map { if (it == 0) name else "${name}_$it" }.first { it !in used }
-        if (field.fieldName == unique) return false
-        return runCatching {
+        return field.fieldName != unique && runCatching {
             field.fieldName = unique
             ((field.dataType as? Pointer)?.dataType as? FunctionDefinition)
                 ?.let { def -> runCatching { def.name = unique } }
@@ -145,6 +155,65 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         val ts = tables[cls.id].orEmpty()
         return ts.firstOrNull { forBase(it) == null }
             ?: cls.bases.firstNotNullOfOrNull { b -> ts.firstOrNull { forBase(it) == b.name } }
+    }
+
+    /**
+     * Names the destructor slot [func] fills, with [slots], those of every class's override of it: each
+     * function after its own class, as its ABI spells the function a vftable holds, and each table's field
+     * the same. Itanium's destructor takes two slots, complete then deleting, so the other one of the pair
+     * is named with it: off [func]'s variant where its mangled name says, else the pair is taken to start
+     * at an even slot, destructors being declared first. MSVC's slot holds the scalar deleting destructor,
+     * gcc 2.x's the destructor itself.
+     */
+    internal fun renameDestructor(func: Function, slots: List<VirtualSlot>): SlotRenames {
+        val abi = destructorAbi()
+        val all = if (abi == Itanium) slots + pairedWith(func) else slots
+        val skipped = mutableListOf<String>()
+        var functions = 0
+        var fields = 0
+        for (slot in all.distinct()) {
+            val f = target(slot)
+            val cls = (f?.parentNamespace as? GhidraClass)?.name ?: owner[slot.table]?.name ?: continue
+            val name = if (abi == Msvc) MsvcStructor.SCALAR_DELETING_DESTRUCTOR.displayName(cls) else "~$cls"
+            if (f != null && f.name != name) {
+                runCatching { f.setName(name, SourceType.USER_DEFINED) }
+                    .onSuccess { functions++ }.onFailure { skipped += "${f.getName(true)}: ${it.message}" }
+            }
+            if (nameSlot(slot, name, skipped)) fields++
+        }
+        return SlotRenames(functions, fields, skipped)
+    }
+
+    /** Whether [slot] holds a destructor, by its name or its mangled one: `~Foo`, a deleting one, a `D` variant. */
+    internal fun isDestructor(slot: VirtualSlot): Boolean {
+        val f = target(slot) ?: return false
+        return f.program.symbolTable.getSymbols(f.entryPoint).map { it.name }.any { n ->
+            n.startsWith("~") || MsvcStructor.ofName(n, f.parentNamespace.name)?.isDestructor == true ||
+                MsvcStructor.ofMangled(n)?.isDestructor == true || ItaniumStructor.of(n)?.isDestructor == true
+        }
+    }
+
+    /** The ABI the program's vtables are laid by: gcc 2.x's by their labels, MSVC's by its RTTI, else Itanium. */
+    private fun destructorAbi(): CxxAbi {
+        val labels = owner.keys.asSequence().flatMap { program.symbolTable.getSymbols(it).asSequence() }
+        return when {
+            labels.any { CxxAbi.ofVtableSymbol(it.name) is Gcc2Abi } -> Gcc2Plain
+            hierarchy.classes.any { it.origin == Origin.MSVC_RTTI } -> Msvc
+            else -> Itanium
+        }
+    }
+
+    /** The slots of the other half of the Itanium destructor pair [func] is one of: complete first, deleting next. */
+    private fun pairedWith(func: Function): List<VirtualSlot> {
+        val own = slotsOf(func).firstOrNull() ?: return emptyList()
+        val variant = program.symbolTable.getSymbols(func.entryPoint).firstNotNullOfOrNull {
+            ItaniumStructor.of(it.name)
+        }
+        val deleting = variant?.isDeleting ?: (own.index % 2 == 1)
+        val partner = VirtualSlot(own.table, own.label, if (deleting) own.index - 1 else own.index + 1)
+        if (partner.index < 0 || owner[own.table]?.let(::slotsOf)?.contains(partner) != true) return emptyList()
+        val root = root(partner)
+        return hierarchy.classes.flatMap(::slotsOf).filter { root(it) == root }
     }
 
     private companion object {
