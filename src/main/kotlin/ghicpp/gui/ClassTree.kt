@@ -15,6 +15,7 @@ import ghicpp.hierarchy.BaseEdit
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.ClassView
 import ghicpp.hierarchy.ClassHierarchy.Member
+import ghicpp.hierarchy.ClassHierarchy.MemberKind
 import ghicpp.hierarchy.ClassHierarchy.Origin
 import ghicpp.hierarchy.reclause
 import ghidra.app.context.ProgramSymbolActionContext
@@ -103,7 +104,7 @@ class ClassTree(plugin: Plugin) :
     private var counts = " "
     internal var shown: ClassHierarchy? = null
         private set
-    internal var showMembers = true
+    internal var memberKinds: Set<MemberKind> = MemberKind.entries.toSet()
     internal var inverted = false
     internal var expandAll = false
     internal var showEmpty = false
@@ -191,7 +192,7 @@ class ClassTree(plugin: Plugin) :
     internal fun reshow() {
         val p = program ?: return
         val h = shown ?: return
-        val root = ClassTreeRoot(p.name, h, showMembers, inverted, showEmpty)
+        val root = ClassTreeRoot(p.name, h, memberKinds, inverted, showEmpty)
         tree.replaceRoot(root)
         if (expandAll) tree.expandAll()
         reveal?.let { (steps, names) ->

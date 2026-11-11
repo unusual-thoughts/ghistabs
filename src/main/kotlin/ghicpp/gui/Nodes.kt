@@ -28,14 +28,14 @@ private val NAMESPACE_ICON: Icon = GIcon("icon.plugin.symboltree.node.namespace"
 private val ROOT_ICON: Icon = GIcon("icon.plugin.symboltree.node.category.classes.closed")
 
 /**
- * The program's classes, filed by namespace, with their members unless [showMembers] is off. [inverted],
+ * The program's classes, filed by namespace, with their members of the [memberKinds] shown. [inverted],
  * files only the basal classes, each expanding into the classes derived from it: a class with several
  * bases shows under each, and a virtual derivation is marked on the derived class.
  */
 class ClassTreeRoot(
     private val programName: String,
     private val hierarchy: ClassHierarchy,
-    val showMembers: Boolean = true,
+    val memberKinds: Set<MemberKind> = MemberKind.entries.toSet(),
     val inverted: Boolean = false,
     val showEmpty: Boolean = false,
 ) : GTreeNode() {
@@ -43,7 +43,7 @@ class ClassTreeRoot(
         val filed = (if (inverted) hierarchy.classes.filter(hierarchy::isBasal) else hierarchy.classes)
             .filter { showEmpty || !hierarchy.isEmpty(it) }
         val classNodes = filed.associate {
-            it.path to ClassNode(hierarchy, it, inverted).also { n -> n.showMembers = showMembers }
+            it.path to ClassNode(hierarchy, it, inverted).also { n -> n.memberKinds = memberKinds }
         }
         val folders = mutableMapOf<List<String>, NamespaceNode>()
         val children = mutableMapOf<List<String>, MutableList<GTreeNode>>()
@@ -137,18 +137,21 @@ class ClassNode private constructor(
 
     private fun linked(): List<ClassNode> = if (inverted) {
         info?.let(hierarchy::derivedOf).orEmpty().map {
-            ClassNode(hierarchy, it.cls, it.clause, true).also { n -> n.showMembers = showMembers }
+            ClassNode(hierarchy, it.cls, it.clause, true).also { n -> n.memberKinds = memberKinds }
         }
     } else {
         info?.bases.orEmpty().map { ClassNode(hierarchy, hierarchy[it], it, false) }
     }
 
-    /** Set off by a root built without members. */
-    internal var showMembers = true
+    /** The kinds of member it lists, as its root shows them. */
+    internal var memberKinds: Set<MemberKind> = MemberKind.entries.toSet()
 
     // Normally only the class filed under its namespace lists its members: under a base, they'd repeat.
     // Inverted, only the basal classes are filed, so every class lists them.
-    private fun membersOf() = info?.members?.takeIf { (edge == null || inverted) && showMembers }.orEmpty()
+    private fun membersOf() = info?.members?.takeIf { edge == null || inverted }.orEmpty().filter {
+        it.kind in
+            memberKinds
+    }
 
     override fun generateChildren(): List<GTreeNode> = linked() + membersOf().map(::MemberNode) + nested
 
@@ -281,6 +284,9 @@ enum class Hues(val hue: Float) {
     BLUE(2f / 3),
     MAGENTA(5f / 6),
 }
+
+/** The icon a [kind] of member is drawn with, untinted. */
+internal fun memberKindIcon(kind: MemberKind): Icon = MEMBER_ICONS.getValue(kind).first
 
 // The Symbol Tree's own icons, but for the ABI's objects: a table for a vtable, an info sign for the rest.
 // Each with the hue, in degrees, it is drawn in, which a tint turns from.

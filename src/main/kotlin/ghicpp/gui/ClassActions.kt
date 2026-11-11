@@ -392,7 +392,15 @@ internal fun ClassTree.addToolbarActions() {
     addDirectionAndNavigateToggles()
 }
 
-/** Refresh, and what the tree shows: members, empty classes, everything expanded. */
+// A toggle per kind of member: functions with their thunks and the labels, vtables, and typeinfo with the
+// other ABI objects. Each shows its first kind's icon.
+private val MEMBER_TOGGLES = listOf(
+    "Functions and Labels" to setOf(MemberKind.FUNCTION, MemberKind.THUNK, MemberKind.LABEL),
+    "Vtables" to setOf(MemberKind.VTABLE),
+    "Typeinfo" to setOf(MemberKind.ABI),
+)
+
+/** Refresh, and what the tree shows: each kind of member, empty classes, everything expanded. */
 private fun ClassTree.addViewToggles() {
     addLocalAction(
         object : DockingAction("Refresh Class Hierarchy", owner) {
@@ -403,19 +411,21 @@ private fun ClassTree.addViewToggles() {
             helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
         },
     )
-    addLocalAction(
-        object : ToggleDockingAction("Show Class Members", owner) {
-            override fun actionPerformed(context: ActionContext?) {
-                showMembers = isSelected
-                reshow()
-            }
-        }.apply {
-            toolBarData = ToolBarData(GIcon("icon.plugin.symboltree.node.function"), null)
-            description = "Show each class's functions and labels, or only the classes"
-            isSelected = true
-            helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
-        },
-    )
+    for ((name, kinds) in MEMBER_TOGGLES) {
+        addLocalAction(
+            object : ToggleDockingAction("Show Class $name", owner) {
+                override fun actionPerformed(context: ActionContext?) {
+                    memberKinds = if (isSelected) memberKinds + kinds else memberKinds - kinds
+                    reshow()
+                }
+            }.apply {
+                toolBarData = ToolBarData(memberKindIcon(kinds.first()), null)
+                description = "Show each class's ${name.lowercase()}"
+                isSelected = true
+                helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+            },
+        )
+    }
     addLocalAction(
         object : ToggleDockingAction("Show Empty Classes", owner) {
             override fun actionPerformed(context: ActionContext?) {
