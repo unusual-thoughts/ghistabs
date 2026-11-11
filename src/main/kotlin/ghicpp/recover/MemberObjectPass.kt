@@ -8,9 +8,7 @@ import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
 import ghicpp.abi.StructorRole.DESTRUCTOR
 import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -79,7 +77,9 @@ class MemberObjectPass(
             val ns = m.cls?.ns?.toClass() ?: continue
             m.ctors.forEach { name(it, ns, CONSTRUCTOR) }
             m.dtors.forEach { name(it, ns, DESTRUCTOR) }
-            sizeStruct(ns, sizes[m] ?: 0)
+            val size = sizes[m] ?: 0
+            runCatching { program.sizeClassStruct(ns, size) }
+                .onFailure { warn("member-struct-unsized", "${ns.getName(true)} -> $size: $it") }
         }
         monitor.setMessage("Filling member object class structs")
         ClassStructFiller(program, PlainVtables, this)
@@ -246,23 +246,6 @@ class MemberObjectPass(
         (parameterCount == 0 || getParameter(0).variableStorage.firstVarnode?.address == thisStorage)
 
     private fun structOf(cls: ClassDecl): Structure? = cls.ns?.toClass()?.let(program::classStruct)
-
-    /** Gives [ns] a struct of [size] bytes, or grows its own to them. */
-    private fun sizeStruct(ns: GhidraClass, size: Int) {
-        if (size <= 0) return
-        runCatching {
-            when (val struct = program.classStruct(ns)) {
-                null -> dtm.addDataType(
-                    StructureDataType(ClassNaming.vftableCategory(ns), ns.name, size),
-                    DataTypeConflictHandler.KEEP_HANDLER,
-                )
-
-                else if struct.isZeroLength -> struct.growStructure(size)
-
-                else if struct.length < size -> struct.growStructure(size - struct.length)
-            }
-        }.onFailure { warn("member-struct-unsized", "${ns.getName(true)} -> $size: $it") }
-    }
 
     /**
      * Lays [member] at [at] in this, or in the `<Class>_data` struct there, over the plain fields there; this

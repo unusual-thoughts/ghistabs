@@ -2,7 +2,9 @@ package ghicpp
 
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeComponent
+import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -80,3 +82,18 @@ internal fun DiagnosticSink.placeBase(
 /** The class's struct where `RecoverClassesFromRTTIScript` files it. */
 fun Program.classStruct(ns: GhidraClass) =
     dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
+
+/** Gives [ns] a [classStruct] of [size] bytes, or grows its own to them. */
+fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
+    if (size <= 0) return
+    when (val struct = classStruct(ns)) {
+        null -> dataTypeManager.addDataType(
+            StructureDataType(ClassNaming.vftableCategory(ns), ns.name, size),
+            DataTypeConflictHandler.KEEP_HANDLER,
+        )
+
+        else if struct.isZeroLength -> struct.growStructure(size)
+
+        else if struct.length < size -> struct.growStructure(size - struct.length)
+    }
+}

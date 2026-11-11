@@ -209,16 +209,7 @@ class ClassPass(
             val ns = cls.ns?.toClass() ?: continue
             val length = size.first.toInt()
             runCatching {
-                when (val struct = program.classStruct(ns)) {
-                    null -> program.dataTypeManager.addDataType(
-                        StructureDataType(ClassNaming.vftableCategory(ns), ns.name, length),
-                        DataTypeConflictHandler.KEEP_HANDLER,
-                    )
-
-                    else if struct.isZeroLength -> struct.growStructure(length)
-
-                    else if struct.length < length -> struct.growStructure(length - struct.length)
-                }
+                program.sizeClassStruct(ns, length)
             }.onFailure { warn("class-struct-unsized", "${ns.getName(true)} -> $length: $it") }
         }
         return sized
