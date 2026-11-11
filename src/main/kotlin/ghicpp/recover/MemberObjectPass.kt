@@ -47,8 +47,14 @@ class MemberObjectPass(
      */
     private val known = linkedMapOf<Slot, ClassDecl>()
 
+    /** What holds a member: a class the pass found, or another member. */
+    private sealed interface Holder {
+        /** A class the pass found. */
+        data class Found(val cls: ClassDecl) : Holder
+    }
+
     /** A member object class's constructors and destructors, what its constructors store, and the class it's given. */
-    private class Member {
+    private class Member : Holder {
         val ctors = mutableSetOf<Function>()
         val dtors = mutableSetOf<Function>()
         var stores: Map<Int, DataType> = emptyMap()
@@ -56,8 +62,8 @@ class MemberObjectPass(
         val functions get() = ctors + dtors
     }
 
-    /** A member at [offset] in [holder], a class the pass found or another member. */
-    private data class Slot(val holder: Any, val offset: Long)
+    /** A member at [offset] in [holder]. */
+    private data class Slot(val holder: Holder, val offset: Long)
 
     /** Recovers the classes of the member objects of [found]'s classes, and returns how many it made or found again. */
     fun run(found: FoundStructors, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
@@ -84,7 +90,7 @@ class MemberObjectPass(
         }
         fun holderOf(slot: Slot) = when (val h = slot.holder) {
             is Member -> root[h]?.cls
-            else -> h as ClassDecl
+            is Holder.Found -> h.cls
         }?.let(::structOf)
         monitor.initialize((order.size + known.size).toLong(), "Laying members in their holders")
         for (slot in order) {
@@ -109,7 +115,8 @@ class MemberObjectPass(
         val finder = StructorFinder(program, emptyList(), this, fillArrays)
         val held = linkedMapOf<Slot, Member>()
         known.clear()
-        var structors: Map<Function, Pair<Any, StructorRole>> = found.roles
+        var structors: Map<Function, Pair<Holder, StructorRole>> =
+            found.roles.mapValues { (_, by) -> Holder.Found(by.first) to by.second }
         var calls = found.subobjectCalls
         for (depth in 1..MAX_DEPTH) {
             if (monitor.isCancelled) break
@@ -152,7 +159,7 @@ class MemberObjectPass(
         }
         if (slot.offset <= 0L || structor == f || !structor.takesThis()) return null
         val built = found.roles[structor] ?: return structor
-        if (role == CONSTRUCTOR && built.second == CONSTRUCTOR && built.first != slot.holder) {
+        if (role == CONSTRUCTOR && built.second == CONSTRUCTOR && Holder.Found(built.first) != slot.holder) {
             known.putIfAbsent(slot, built.first)
         }
         return null
