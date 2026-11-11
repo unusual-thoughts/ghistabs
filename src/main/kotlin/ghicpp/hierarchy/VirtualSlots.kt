@@ -14,9 +14,25 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghistabs.components
+import ghistabs.pointerAt
+import kotlinx.serialization.Serializable
 
-/** A slot of a class's laid vftable: where the table is, and the slot's place among its function pointers. */
-data class VirtualSlot(val table: Address, val index: Int)
+/** A slot of a class's vftable:
+ *  - [table] where the table is,
+ *  - [label] its label
+ *  - [index] the slot's place among its function pointers.
+ */
+@Serializable
+data class VirtualSlot(val table: Address, val label: String, val index: Int) : Comparable<VirtualSlot> {
+    /** like label but null for the primary one */
+    val name get() = label.takeUnless { it == ClassNaming.VFTABLE }
+
+    override fun compareTo(other: VirtualSlot) =
+        compareValuesBy(this, other, { it.name != null }, { it.name }, { it.index })
+
+    override fun toString() = "slot $index" + name?.let { " of $it" }.orEmpty()
+}
 
 /** How many functions and slot fields a rename changed, and what kept its old name, and why. */
 data class SlotRenames(val functions: Int, val fields: Int, val skipped: List<String>)
@@ -36,7 +52,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
 
     /** Every slot of [cls]'s tables. */
     fun slotsOf(cls: ClassView): List<VirtualSlot> =
-        tables[cls.id].orEmpty().flatMap { t -> t.functionSlots().indices.map { VirtualSlot(t.address, it) } }
+        tables[cls.id].orEmpty().flatMap { t -> t.functionSlots().indices.map { VirtualSlot(t.address, t.label, it) } }
 
     /** The slots that hold [func], or a thunk to it. */
     fun slotsOf(func: Function): List<VirtualSlot> =
@@ -57,7 +73,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         while (true) {
             val up = byAddress[s.table]?.let(::extended)?.takeIf { seen.add(it.address) } ?: return s
             if (s.index >= up.functionSlots().size) return s
-            s = VirtualSlot(up.address, s.index)
+            s = VirtualSlot(up.address, up.label, s.index)
         }
     }
 
@@ -140,19 +156,41 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
     }
 }
 
-/** [cls]'s bases, theirs after them, each once. */
-private fun ClassHierarchy.ancestorsOf(cls: ClassView): Sequence<ClassView> = sequence {
-    val seen = mutableSetOf(cls.id)
-    var level = cls.bases.mapNotNull(::get).filter { seen.add(it.id) }
-    while (level.isNotEmpty()) {
-        yieldAll(level)
-        level = level.flatMap { it.bases.mapNotNull(::get) }.filter { seen.add(it.id) }
+/** Every function [ns]'s vtables hold, a thunk's target with it, by its first slot, the primary table's first. */
+internal fun Program.slotsOf(ns: Namespace): Map<Address, VirtualSlot> = buildMap {
+    val slots = vftablesOf(ns).flatMap { (at, label) ->
+        slotTargets(at).mapIndexed { i, target -> target to VirtualSlot(target, label, i) }.toList()
+    }.sortedBy { it.second }
+    for ((target, slot) in slots) {
+        putIfAbsent(target, slot)
+        functionManager.getFunctionAt(target)?.getThunkedFunction(true)?.let { putIfAbsent(it.entryPoint, slot) }
     }
 }
 
+/**
+ * Read off memory by the ABI's slot geometry rather than the laid struct's components: a gcc
+ * 2.x slot is `{delta, index, pfn}`, and gcc 2.7's own stab types the pfn as a union a short
+ * shows through. Only a gcc 2.x table carries its ABI's symbol at the label; an Itanium
+ * `vftable` sits at the address point, past `_ZTV`.
+ */
+internal fun Program.slotTargets(vftable: Address): Sequence<Address> {
+    val length = listing.getDataAt(vftable)?.length ?: return emptySequence()
+    val abi = CxxAbi.ofVftable(this, vftable)
+    val end = vftable.add(length.toLong())
+    return abi.slotOffsets(defaultPointerSize).map(vftable::add).takeWhile { it < end }
+        .mapNotNull { runCatching { pointerAt(it) }.getOrNull() }
+}
+
 /** The function pointers of a laid vftable, in order, empty and pure virtual slots among them. */
-private fun Data.functionSlots(): List<Data> = (0 until numComponents).map(::getComponent)
-    .filter { (it.dataType as? Pointer)?.dataType is FunctionDefinition }
+private fun Data.functionSlots(): List<Data> = components.filter {
+    (it.dataType as? Pointer)?.dataType is FunctionDefinition
+}
+
+/** Where each of [ns]'s vftables sits: the primary and every `internal_vftable`, or each `vftable_for_<Base>`. */
+internal fun Program.vftablesOf(ns: Namespace): Sequence<Pair<Address, String>> =
+    symbolTable.getSymbols(ns).iterator().asSequence()
+        .filter { ClassNaming.isClassVftableLabel(it.name) }
+        .map { it.address to it.name }
 
 /** Each of [ns]'s laid vftables: at each of its vftable labels, the vftable struct there. */
 private fun Program.laidVftablesOf(ns: Namespace): List<Data> = symbolTable.getSymbols(ns).iterator().asSequence()
