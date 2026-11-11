@@ -36,7 +36,7 @@ import ghistabs.toClass
  * A call at `this` + 0 builds a base, which the class pass reads. An ordinary method a constructor calls first
  * on a member with no constructor of its own looks the same as one, so this is a guess, as the pass's are.
  */
-class MemberClassPass(
+class MemberObjectPass(
     private val program: Program,
     sink: DiagnosticSink,
     /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorFinder]). */
@@ -51,7 +51,7 @@ class MemberClassPass(
      */
     private val known = linkedMapOf<Slot, ClassDecl>()
 
-    /** A member class's constructors and destructors, what its constructors store, and the class it's given. */
+    /** A member object class's constructors and destructors, what its constructors store, and the class it's given. */
     private class Member {
         val ctors = mutableSetOf<Function>()
         val dtors = mutableSetOf<Function>()
@@ -63,7 +63,7 @@ class MemberClassPass(
     /** A member at [offset] in [holder], a class the pass found or another member. */
     private data class Slot(val holder: Any, val offset: Long)
 
-    /** Recovers the member classes of [found]'s classes, and returns how many it made or found again. */
+    /** Recovers the classes of the member objects of [found]'s classes, and returns how many it made or found again. */
     fun run(found: FoundStructors, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
         val held = collect(found, monitor)
         val root = merge(held.values.distinct())
@@ -71,7 +71,7 @@ class MemberClassPass(
         for (m in members) m.cls = classFor(m)
         val classes = members.filter { it.cls != null }
         val sizes = sizes(classes, held.mapValues { (_, m) -> root.getValue(m) }, root)
-        monitor.initialize(classes.size.toLong(), "Naming member classes' constructors and destructors")
+        monitor.initialize(classes.size.toLong(), "Naming member object classes' constructors and destructors")
         for (m in classes) {
             monitor.increment()
             val ns = m.cls?.ns?.toClass() ?: continue
@@ -79,7 +79,7 @@ class MemberClassPass(
             m.dtors.forEach { name(it, ns, DESTRUCTOR) }
             sizeStruct(ns, sizes[m] ?: 0)
         }
-        monitor.setMessage("Filling member class structs")
+        monitor.setMessage("Filling member object class structs")
         ClassStructFiller(program, PlainVtables, this)
             .fillAll(classes.mapNotNull { it.cls }, classes.associate { it.cls!! to it.stores })
         // The deepest members first, so a class embeds its members whole.
@@ -209,7 +209,7 @@ class MemberClassPass(
         return PlainClass(ns, emptyList())
     }
 
-    /** Each member class's size: how far its constructors store, or its own members reach, whichever is further. */
+    /** Each member object class's size: how far its constructors store or its own members reach, the further. */
     private fun sizes(classes: List<Member>, held: Map<Slot, Member>, root: Map<Member, Member>): Map<Member, Int> {
         val size = classes.associateWith { m -> m.stores.maxOfOrNull { (at, dt) -> at + dt.length } ?: 0 }
             .toMutableMap()

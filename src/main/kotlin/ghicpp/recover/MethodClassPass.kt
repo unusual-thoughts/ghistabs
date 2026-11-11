@@ -5,6 +5,7 @@ import ghicpp.ClassHierarchyRecords
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.Structure
 import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
@@ -19,8 +20,8 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.useWith
 
 /**
- * A call passing an object as [callee]'s `this`: [caller]'s own, or one [caller] built with a
- * constructor of class [built].
+ * A call passing an object as [callee]'s `this`: [caller]'s own, or one of class [built], which [caller] built
+ * with a constructor or holds at an offset into its own `this`.
  */
 data class ThisCall(val caller: Function, val callee: Function, val built: GhidraClass? = null)
 
@@ -74,10 +75,10 @@ fun Function.hasKnownClass() = symbol.source == SourceType.IMPORTED || symbol.so
 /**
  * [MethodClassGuesser] over a program, for any ABI: every unnamed function in the global namespace whose
  * convention takes `this` (`__thiscall`, or `__fastcall`, whose first argument comes in the same register),
- * off its callers' decompiled calls, against the classes [ClassHierarchyRecords] holds, their methods and the
- * objects their constructors build. Only a method whose class is known counts ([hasKnownClass]), or one a class
- * pass tagged ([ClassPassTags]), so neither another guess nor `RecoverClassesFromRTTIScript`'s placements
- * are evidence.
+ * off its callers' decompiled calls, against the classes [ClassHierarchyRecords] holds, their methods, the
+ * objects their constructors build, and the member objects and bases their structs lay at an offset. Only a
+ * method whose class is known counts ([hasKnownClass]), or one a class pass tagged ([ClassPassTags]), so
+ * neither another guess nor `RecoverClassesFromRTTIScript`'s placements are evidence.
  * Each guess moves the function into its class, its convention then a method's ([fixMethodConvention]: a
  * `__fastcall` that takes nothing in EDX becomes a `__thiscall`), and leaves an Analysis bookmark saying where
  * it came from.
@@ -120,7 +121,7 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
                     if (monitor.isCancelled) break
                     monitor.incrementProgress()
                     val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
-                    addAll(thisCalls(f, high, ctors).filter { it.callee in candidates })
+                    addAll(thisCalls(f, high, ctors, methods[f]).filter { it.callee in candidates })
                 }
             }
         }
@@ -158,8 +159,17 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
         if (numInputs > i + 1) getInput(i + 1) else null
     }
 
-    /** The calls [f] makes on its own `this` and on objects it built with one of [ctors], decompiled as [high]. */
-    private fun thisCalls(f: Function, high: HighFunction, ctors: Map<Function, GhidraClass>): List<ThisCall> {
+    /**
+     * The calls [f] makes on its own `this`, on objects it built with one of [ctors], and, where it's a method
+     * of [own], on the object of a class [own]'s struct lays at an offset into `this` ([classAt]), decompiled as
+     * [high].
+     */
+    private fun thisCalls(
+        f: Function,
+        high: HighFunction,
+        ctors: Map<Function, GhidraClass>,
+        own: GhidraClass?,
+    ): List<ThisCall> {
         val self = f.argumentAt(f.thisIndex())
         val ops = high.pcodeOps.asSequence().toList()
         // The objects the function built, by where they point, from their constructor's argument and result.
@@ -177,9 +187,33 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
             when {
                 !obj.isThis(self) -> built[obj]?.let { ThisCall(f, callee, it) }
                 obj.offset == 0L -> ThisCall(f, callee)
-                else -> null
+                else -> own?.let { classAt(it, obj.offset) }?.let { ThisCall(f, callee, it) }
             }
         }
+    }
+
+    /** Each recorded class, by the id of its struct. */
+    private val byStruct by lazy {
+        bases.keys.mapNotNull { cls ->
+            program.classStruct(cls)?.let { program.dataTypeManager.getID(it) to cls }
+        }.toMap()
+    }
+
+    /**
+     * The class whose struct [cls]'s lays at [offset], a member object or a base there, inside its `<Class>_data`
+     * structs and its bases' too; null where none starts there.
+     */
+    private fun classAt(cls: GhidraClass, offset: Long): GhidraClass? {
+        var struct: Structure = program.classStruct(cls) ?: return null
+        var at = offset.toInt()
+        repeat(MAX_NESTING) {
+            val part = struct.getComponentContaining(at)?.takeIf { it.dataType is Structure } ?: return null
+            val inner = part.dataType as Structure
+            if (part.offset == at) byStruct[program.dataTypeManager.getID(inner)]?.let { return it }
+            struct = inner
+            at -= part.offset
+        }
+        return null
     }
 
     private fun PcodeOp.directCallee(): Function? {
@@ -204,5 +238,8 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
     companion object {
         const val BOOKMARK = "Method class guess"
         private const val CDECL = CompilerSpec.CALLING_CONVENTION_cdecl
+
+        /** How deep [classAt] looks into structs within structs. */
+        private const val MAX_NESTING = 8
     }
 }
