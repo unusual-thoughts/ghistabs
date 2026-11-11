@@ -112,6 +112,17 @@ private fun ClassTree.addClassActions() {
         },
     )
     addLocalAction(
+        object : DockingAction("Edit Base Attributes", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                val edit = selectedClause ?: return
+                program?.applyEdits(listOf(edit), tool, component)
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Edit Base Attributes..."), STRUCT_ICON)
+            popupWhen { selectedClause != null }
+        },
+    )
+    addLocalAction(
         object : DockingAction("Update Class Field Types", owner) {
             override fun actionPerformed(context: ActionContext?) {
                 selectedClass?.let { updateFieldTypes(listOf(it to null)) }

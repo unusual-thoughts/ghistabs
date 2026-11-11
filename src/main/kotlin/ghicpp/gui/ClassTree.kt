@@ -11,10 +11,12 @@ import ghicpp.ClassRecordSource
 import ghicpp.abi.msvc.Msvc
 import ghicpp.analyzers.ItaniumClassAnalyzer
 import ghicpp.analyzers.MsvcClassAnalyzer
+import ghicpp.hierarchy.BaseEdit
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.ClassView
 import ghicpp.hierarchy.ClassHierarchy.Member
 import ghicpp.hierarchy.ClassHierarchy.Origin
+import ghicpp.hierarchy.reclause
 import ghidra.app.context.ProgramSymbolActionContext
 import ghidra.app.services.GoToService
 import ghidra.framework.model.DomainObjectChangedEvent
@@ -221,6 +223,19 @@ class ClassTree(plugin: Plugin) :
     internal val selectedClass get() = (tree.selectionPath?.lastPathComponent as? ClassNode)?.info
 
     internal val selectedMember get() = (tree.selectionPath?.lastPathComponent as? MemberNode)?.member
+
+    /**
+     * The selected class's base clause, as an edit of the class holding it that keeps the base: normally
+     * the clause of the class above it, inverted its own, naming the class above.
+     */
+    internal val selectedClause: BaseEdit? get() {
+        val h = shown ?: return null
+        val node = tree.selectionPath?.lastPathComponent as? ClassNode ?: return null
+        val edge = node.edge ?: return null
+        val inverted = (node.root as? ClassTreeRoot)?.inverted == true
+        val owner = (if (inverted) node else node.parent as? ClassNode)?.info?.let { h[it.id] } ?: return null
+        return h.reclause(owner, edge)
+    }
 
     /** The selected members, each with the class listing it. */
     internal val selectedMembers: List<Pair<Member, ClassView>> get() =
