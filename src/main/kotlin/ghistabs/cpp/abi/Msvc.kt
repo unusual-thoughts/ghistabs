@@ -55,6 +55,8 @@ object Msvc : CxxAbi {
 
     override val constructorsReturnThis get() = true
 
+    override val mangledOperatorNew get() = setOf("??2@YAPAXI@Z", "??2@YAPEAX_K@Z")
+
     /** A class's one constructor and destructor, and its deleting one, scalar unless it tests the vector flag. */
     override fun structorFor(role: StructorRole, func: Function) = when (role) {
         StructorRole.CONSTRUCTOR -> MsvcStructor.CONSTRUCTOR

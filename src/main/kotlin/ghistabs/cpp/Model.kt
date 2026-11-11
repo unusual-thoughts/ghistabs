@@ -67,9 +67,17 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         override val offset: Long? = null,
     ) : BaseDecl
 
-    /** A class's struct, by datatype id, and its direct bases in declaration order. */
+    /**
+     * A class's struct, by datatype id, its direct bases in declaration order, and its [size] where
+     * something says: the class's `sizeof` if [exactSize], else as large as it is sure to be.
+     */
     @Serializable
-    data class Entry(val structId: Long?, val bases: List<Base>)
+    data class Entry(
+        val structId: Long?,
+        val bases: List<Base>,
+        val size: Long? = null,
+        val exactSize: Boolean = false,
+    )
 
     override fun readState(properties: GProperties) {
         classes = GPropertiesFormat.decode<ClassHierarchyRecords>(properties).classes
