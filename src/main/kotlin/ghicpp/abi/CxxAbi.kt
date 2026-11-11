@@ -10,6 +10,7 @@ import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.SpecialName
 import ghicpp.abi.msvc.Msvc
 import ghicpp.templateLeaf
+import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
@@ -67,6 +68,13 @@ interface CxxAbi :
     /** The record that says where an object's virtual bases sit: Itanium's vtable, MSVC's vbtable. */
     val virtualBaseRecord: String get() = "vtable"
 
+    /**
+     * Whether the table whose address point is [vftable] is one of this ABI's records, by the record's symbols.
+     * By default a record starts at its address point, so its vtable symbol is there, as gcc 2.x's is.
+     */
+    fun ownsVftable(program: Program, vftable: Address): Boolean =
+        program.symbolTable.getSymbols(vftable).any { looksLikeVtable(it.name) }
+
     companion object {
         /** The ABI whose vtable symbol [symbolName] is, a gcc 2.x secondary's included; null if none. */
         fun ofVtableSymbol(symbolName: String): CxxAbi? = when {
@@ -76,6 +84,14 @@ interface CxxAbi :
             Msvc.looksLikeVtable(symbolName) -> Msvc
             else -> null
         }
+
+        /**
+         * The ABI whose record the table at the address point [vftable] is ([ownsVftable]); [PlainVtables] for a
+         * table no record names, such as one seeded off a pointer table.
+         */
+        fun ofVftable(program: Program, vftable: Address): CxxAbi =
+            listOf(Gcc2Thunks, Gcc2Plain, Msvc, Itanium).firstOrNull { it.ownsVftable(program, vftable) }
+                ?: PlainVtables
 
         /** Data the compiler generated for a class, a vtable or typeinfo, rather than any the source declares. */
         fun isGeneratedData(name: String) =

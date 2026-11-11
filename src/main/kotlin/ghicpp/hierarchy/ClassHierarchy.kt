@@ -293,13 +293,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                     structId = struct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
                     structName = struct?.name,
                     isAbstract = program.vftablesOf(ns).any {
-                        hasPureVirtualSlot(
-                            it,
-                            Msvc.takeIf {
-                                typeDescriptor !=
-                                    null
-                            },
-                        )
+                        val rttiAbi = Msvc.takeIf { typeDescriptor != null } ?: Itanium.takeIf { typeinfo != null }
+                        hasPureVirtualSlot(it, rttiAbi)
                     },
                     members = membersOf(ns, group - ns),
                     bases = basesOf(ns, typeinfo, idOf) { path -> byPath[path]?.id },
@@ -452,9 +447,9 @@ data class ClassHierarchy(val classes: List<ClassView>) {
             }
         }
 
-        // An MSVC table's `vftable` label doesn't name its ABI: the class's type descriptor does.
+        // A class's RTTI names its tables' ABI before their labels do: an MSVC type descriptor, an Itanium typeinfo.
         fun hasPureVirtualSlot(vftable: Address, known: CxxAbi? = null): Boolean {
-            val abi = known ?: program.vtableAbi(vftable)
+            val abi = known ?: CxxAbi.ofVftable(program, vftable)
             return program.slotTargets(vftable).any { target ->
                 val name = program.functionManager.getFunctionAt(target)?.let { fn ->
                     fn.getThunkedFunction(true)?.name ?: fn.name
@@ -478,10 +473,6 @@ private fun Program.vftablesOf(ns: Namespace): Sequence<Address> = symbolTable.g
     .filter { ClassNaming.isClassVftableLabel(it.name) }
     .map { it.address }
 
-/** The ABI of the vtable labelled at [vftable], by its label; Itanium when that doesn't say. */
-private fun Program.vtableAbi(vftable: Address): CxxAbi =
-    symbolTable.getSymbols(vftable).firstNotNullOfOrNull { CxxAbi.ofVtableSymbol(it.name) } ?: Itanium
-
 /**
  * Read off memory by the ABI's slot geometry rather than the laid struct's components: a gcc
  * 2.x slot is `{delta, index, pfn}`, and gcc 2.7's own stab types the pfn as a union a short
@@ -490,7 +481,7 @@ private fun Program.vtableAbi(vftable: Address): CxxAbi =
  */
 private fun Program.slotTargets(vftable: Address): Sequence<Address> {
     val length = listing.getDataAt(vftable)?.length ?: return emptySequence()
-    val abi = vtableAbi(vftable)
+    val abi = CxxAbi.ofVftable(this, vftable)
     val end = vftable.add(length.toLong())
     return abi.slotOffsets(defaultPointerSize).map(vftable::add).takeWhile { it < end }
         .mapNotNull { runCatching { pointerAt(it) }.getOrNull() }
