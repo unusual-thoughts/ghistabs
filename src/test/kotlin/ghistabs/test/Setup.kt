@@ -1,7 +1,7 @@
 package ghistabs.test
 
 import ghicpp.VfptrModel
-import ghicpp.entrypoints.RttiSymbolAnalyzer
+import ghicpp.analyzers.RttiSymbolAnalyzer
 import ghidra.app.util.importer.MessageLog
 import ghidra.framework.options.OptionType
 import ghidra.program.model.address.Address
@@ -12,13 +12,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.*
 import ghistabs.entrypoints.analyzeAfterImport
 import ghistabs.harvest.*
-import ghistabs.importer.ImportContext
-import ghistabs.importer.ImportOptions
-import ghistabs.importer.ImportProbe
-import ghistabs.importer.ImportResult
-import ghistabs.importer.analyzeDataCoverage
-import ghistabs.importer.import
-import ghistabs.importer.runOnRecords
+import ghistabs.importer.*
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph

@@ -2,7 +2,7 @@ package ghistabs.integration
 
 import ghicpp.ClassNaming
 import ghicpp.abi.itanium.Itanium
-import ghicpp.entrypoints.RttiSymbolAnalyzer
+import ghicpp.analyzers.RttiSymbolAnalyzer
 import ghicpp.recover.VtableSweepPass
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.listing.CommentType

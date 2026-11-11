@@ -148,7 +148,7 @@ fun Function.thiscallFromFirstArgument(): Boolean {
  * A method's convention as `this` makes it: [fastcallToThiscall], then [restoreThisParam], and where the
  * caller knows it [takesThis] (a class pass placed it: a virtual function, a structor, a method guessed off its
  * callers), [thiscallFromFirstArgument]. What every function that lands in a class goes through, from the
- * analyzer ([ghicpp.entrypoints.MethodConventionAnalyzer]) or a class pass placing it. Whether it changed
+ * analyzer ([ghicpp.analyzers.MethodConventionAnalyzer]) or a class pass placing it. Whether it changed
  * anything; throws where Ghidra refuses the signature.
  */
 fun Function.fixMethodConvention(takesThis: Boolean = false): Boolean =

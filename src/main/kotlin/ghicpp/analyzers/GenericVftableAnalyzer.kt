@@ -1,4 +1,4 @@
-package ghicpp.entrypoints
+package ghicpp.analyzers
 
 import ghicpp.VfptrModel
 import ghicpp.recover.ClassPass

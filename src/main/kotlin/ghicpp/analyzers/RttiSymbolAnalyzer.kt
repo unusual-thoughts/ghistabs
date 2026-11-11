@@ -1,4 +1,4 @@
-package ghicpp.entrypoints
+package ghicpp.analyzers
 
 import ghicpp.abi.itanium.RttiSymbolPass
 import ghicpp.abi.itanium.RttiSymbolPass.Companion.RTTI_SYMBOLS_RESTORED

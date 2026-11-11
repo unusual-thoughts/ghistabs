@@ -1,13 +1,13 @@
-package ghicpp.entrypoints
+package ghicpp.analyzers
 
 import ghicpp.VfptrModel
-import ghicpp.abi.itanium.ItaniumRttiParser
+import ghicpp.abi.msvc.MsvcRttiParser
 import ghicpp.recover.ClassPass
 import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
+import ghidra.app.plugin.prototype.MicrosoftCodeAnalyzerPlugin.PEUtil
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
-import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.importer.MessageLog
 import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
@@ -17,36 +17,36 @@ import ghistabs.analyzerOptions
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.diagnose.report
-import ghistabs.parse.StabReader
 import ghistabs.register
 
 /**
- * Class records and virtual members off the Itanium RTTI ([ItaniumRttiParser]), what [MsvcClassAnalyzer] does
- * for MSVC: on a gcc 3+ binary with no stabs, a stripped one included once [RttiSymbolAnalyzer] has put
- * its RTTI labels back. A binary with stabs gets its classes from them.
+ * Class records and virtual members off the MSVC RTTI ([MsvcRttiParser]), for the Class Hierarchy window
+ * on a binary with nothing else to say about its classes. Ghidra's `Windows x86 PE RTTI Analyzer` lays
+ * and labels the RTTI and the vftables, in class namespaces, but records no base and moves no method:
+ * only `RecoverClassesFromRTTIScript` does, and it keeps its hierarchy in a struct description.
  *
- * After [VtableSweepAnalyzer], whose `vtable` labels it reads.
+ * Late, after that analyzer and after the functions its vftables point at have been made.
  */
-class ItaniumClassAnalyzer :
+class MsvcClassAnalyzer :
     AbstractAnalyzer(
         NAME,
-        "Record each class's bases from its Itanium typeinfo, and move each virtual function into the class " +
-            "that introduced it, and its destructors off the vtable stores they make",
+        "Record each class's bases from its MSVC RTTI, and move each virtual function into the class " +
+            "that introduced it, and its constructors and destructors off the vftable stores they make",
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
-        priority = AnalysisPriority.LOW_PRIORITY.after().after().after()
+        priority = AnalysisPriority.LOW_PRIORITY.after().after()
         setDefaultEnablement(true)
         setSupportsOneTimeAnalysis()
     }
 
-    override fun canAnalyze(program: Program) = GnuDemangler().canDemangle(program) && !StabReader.hasStabs(program)
+    override fun canAnalyze(program: Program) = PEUtil.isVisualStudioOrClangPe(program)
 
     override fun registerOptions(options: Options, program: Program) = options.register(VfptrModel.OPTION, FILL_ARRAYS)
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val pass = ClassPass(program, ItaniumRttiParser(program, sink), sink, program.analyzerOptions(NAME))
+        val pass = ClassPass(program, MsvcRttiParser(program, sink), sink, program.analyzerOptions(NAME))
         val result = pass.run(monitor)
         if (result.classes > 0) {
             report(
@@ -59,6 +59,6 @@ class ItaniumClassAnalyzer :
     }
 
     companion object {
-        const val NAME = "Itanium RTTI classes"
+        const val NAME = "MSVC RTTI classes"
     }
 }

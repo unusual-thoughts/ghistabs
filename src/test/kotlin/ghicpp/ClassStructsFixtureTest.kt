@@ -1,7 +1,7 @@
 package ghicpp
 
-import ghicpp.entrypoints.ItaniumClassAnalyzer
-import ghicpp.entrypoints.MsvcClassAnalyzer
+import ghicpp.analyzers.ItaniumClassAnalyzer
+import ghicpp.analyzers.MsvcClassAnalyzer
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure

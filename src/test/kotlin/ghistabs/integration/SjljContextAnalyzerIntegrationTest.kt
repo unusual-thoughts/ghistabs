@@ -1,9 +1,9 @@
 package ghistabs.integration
 
+import ghicpp.analyzers.SjljContextAnalyzer
+import ghicpp.analyzers.SjljLsdaAnalyzer
 import ghicpp.eh.SjljContextPass
 import ghicpp.eh.SjljTypes
-import ghicpp.entrypoints.SjljContextAnalyzer
-import ghicpp.entrypoints.SjljLsdaAnalyzer
 import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.plugin.core.clear.ClearFlowAndRepairCmd
