@@ -1,10 +1,10 @@
 package ghicpp.recover
 
-import ghicpp.*
 import ghicpp.ClassDecl
+import ghicpp.DECOMPILE_TIMEOUT_SECONDS
 import ghicpp.abi.CxxAbi
+import ghicpp.pointerInto
 import ghidra.app.decompiler.DecompInterface
-import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
@@ -85,7 +85,7 @@ private const val MAX_DEPTH = 64
 class AllocationSizeFinder(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
     DiagnosticSink by sink {
     fun read(ctors: Map<Function, ClassDecl>, monitor: TaskMonitor): Map<ClassDecl, Long> {
-        monitor.setMessage("Finding constructors' callers")
+        monitor.message = "Finding constructors' callers"
         val callers = ctors.keys.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
         val sizes = mutableMapOf<ClassDecl, MutableSet<Long>>()
         monitor.initialize(callers.size.toLong(), "Decompiling constructors' callers for allocation sizes")

@@ -1,7 +1,6 @@
 package ghicpp.recover
 
 import ghicpp.*
-import ghicpp.ClassHierarchyRecords
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.data.Structure
@@ -111,7 +110,7 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
             .mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
         // A constructor the debug info names goes by its class's name.
         val ctors = methods.filter { (f, cls) -> f in recordedCtors || (f.hasKnownClass() && f.name == cls.name) }
-        monitor.setMessage("Finding constructors' callers")
+        monitor.message = "Finding constructors' callers"
         val evidence = methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }
         monitor.initialize(evidence.size.toLong(), "Decompiling methods and constructors' callers")
         val calls = buildList {

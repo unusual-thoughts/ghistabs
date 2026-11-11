@@ -94,11 +94,11 @@ class ClassPass(
             (end + align - 1) / align * align
         }
         val sizes = sizeClasses(read.classes, AllocationSizeFinder(program, abi, this).read(ctors, monitor), reached)
-        monitor.setMessage("Filling class structs")
+        monitor.message = "Filling class structs"
         val filled = ClassStructFiller(program, abi, this, vfptrModel).fillAll(read.recorded, stores)
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
             structors.map { (f, structor) -> f to structor.first }
-        monitor.setMessage("Recording classes")
+        monitor.message = "Recording classes"
         for ((func, _) in placed) func.addTag(ClassPassTags.METHOD)
         for (func in ctors.keys) func.addTag(ClassPassTags.CONSTRUCTOR)
         writeRecords(read.recorded)

@@ -138,7 +138,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
     private val ptr = program.defaultPointerSize.toLong()
 
     override fun parse(monitor: TaskMonitor): ClassPassInput {
-        monitor.setMessage("Reading vftable labels")
+        monitor.message = "Reading vftable labels"
         val classes = symbols.getSymbols(ClassNaming.VFTABLE).iterator().asSequence()
             .filter { it.isPlain() }
             .groupBy { it.parentNamespace.id }
@@ -153,7 +153,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
                     ?.takeUnless { it.hasNoReturn() }
             }
         }
-        monitor.setMessage("Inferring bases from constructors")
+        monitor.message = "Inferring bases from constructors"
         BaseCandidates(slots).inferBases(classes, uses)
         return ClassPassInput(classes, classes, holders(classes))
     }

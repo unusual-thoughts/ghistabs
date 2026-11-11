@@ -90,7 +90,7 @@ class MemberObjectPass(
                 .onFailure { warn("member-struct-unsized", "${ns.getName(true)} -> $size: $it") }
             m.namedAfter?.let { (f, role) -> describe(ns, f, role) }
         }
-        monitor.setMessage("Filling member object class structs")
+        monitor.message = "Filling member object class structs"
         ClassStructFiller(program, PlainVtables, this)
             .fillAll(classes.mapNotNull { it.cls }, classes.associate { it.cls!! to it.stores })
         // The deepest members first, so a class embeds its members whole.

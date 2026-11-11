@@ -272,7 +272,7 @@ class StructorInspector(
      * member objects; a call, only with `this` first, which leaves out a local built and destroyed.
      */
     private fun read(others: Collection<Function>, monitor: TaskMonitor): ThisUses {
-        monitor.setMessage("Finding vptr stores")
+        monitor.message = "Finding vptr stores"
         val writes = buildMap {
             for ((table, served) in tables) {
                 for (ref in program.referenceManager.getReferencesTo(table)) {

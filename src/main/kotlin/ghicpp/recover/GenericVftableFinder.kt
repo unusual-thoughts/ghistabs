@@ -113,7 +113,7 @@ class GenericVftableFinder(
      * named after where its table is, `Klass_<address>`, since nothing else names it.
      */
     fun seed(monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
-        monitor.setMessage("Finding pointer tables")
+        monitor.message = "Finding pointer tables"
         monitor.initialize(potentialVtables.size.toLong(), "Seeding vftables from pointer tables")
         var seeded = 0
         for (table in potentialVtables) {
