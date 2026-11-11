@@ -1,12 +1,13 @@
 package ghistabs.cpp.abi
 
+import ghistabs.cpp.ClassNaming
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
-import org.junit.jupiter.params.BeforeParameterizedClassInvocation
 import org.junit.jupiter.params.Parameter
 import org.junit.jupiter.params.ParameterizedClass
 import org.junit.jupiter.params.provider.MethodSource
@@ -27,8 +28,9 @@ class RttiReaderIntegrationTest : FeatureFixtureTest() {
             .mapNotNull { Itanium.typeinfoClassOf(it.name)?.to(it.address) }
             .toMap()
 
-    @BeforeParameterizedClassInvocation
-    fun setUp(fixture: File) {
+    // Each test: the program is closed after each.
+    @BeforeEach
+    fun setUp() {
         assumeTrue(fixture.exists(), "Skipping: ${fixture.path} absent, must be added manually")
         load(fixture.name)
     }
@@ -47,6 +49,19 @@ class RttiReaderIntegrationTest : FeatureFixtureTest() {
             "Right" to TypeinfoKind.VMI, // : virtual Base
             "Diamond" to TypeinfoKind.VMI, // : Left, Right, Named
         )
+    }
+
+    @Test
+    fun `the abi reads a class's bases off the typeinfo in its namespace`() {
+        assumeTrue { ztis.keys.containsAll(CLASSES) }
+        val reader = Rtti.Reader(program)
+        for (zti in ztis.filterKeys { it in CLASSES }.values) {
+            val ns = program.symbolTable.getSymbols(zti).first { it.name == ClassNaming.TYPEINFO }.parentNamespace
+            Itanium.basesOf(program, ns) mustBe reader.basesOf(zti)
+        }
+        val diamond = program.symbolTable.getSymbols(ztis.getValue("Diamond"))
+            .first { it.name == ClassNaming.TYPEINFO }.parentNamespace
+        Itanium.basesOf(program, diamond)?.map { it.isVirtual } mustBe listOf(false, false, false)
     }
 
     companion object {

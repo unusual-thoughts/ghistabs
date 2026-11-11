@@ -4,6 +4,7 @@
 package ghistabs.parse
 
 import ghistabs.cpp.Access
+import ghistabs.cpp.BaseDecl
 import ghistabs.cpp.MemberDecl
 import ghistabs.cpp.VirtKind
 import ghistabs.cpp.isVptrFieldName
@@ -308,10 +309,12 @@ sealed interface TypeDecl<out Id : IdInterface> {
         @Serializable
         data class Base<Id : IdInterface>(
             val type: TypeDecl<Id>,
-            val isVirtual: Boolean,
-            val access: Access,
+            override val isVirtual: Boolean,
+            override val access: Access,
             val offsetBits: Long,
-        )
+        ) : BaseDecl {
+            override val offset get() = offsetBits / Byte.SIZE_BITS
+        }
 
         @Serializable
         data class Method<Id : IdInterface>(
