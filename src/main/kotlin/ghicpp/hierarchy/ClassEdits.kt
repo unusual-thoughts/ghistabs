@@ -252,6 +252,7 @@ internal fun Program.applySignatureToSlots(func: Function): Int {
  * - its struct, its self-base (`…/Old/!internal/Old`) and their `Old_fields_…` runs, and each
  *   category whose trailing path is the class's (`/ClassDataTypes/…/Old`, a DWARF or Ghidra `…/Old`),
  *   so the vftable structs and nested classes' types follow it;
+ * - its own fields' `Old_data…` structs and the fields holding them;
  * - its vftable structs (`Old_vftable…`), and its derived classes' `vftable_for_Old` labels, their
  *   `…_vftable_for_Old` structs and `_base_Old` / `_vbase_Old` fields.
  *
@@ -286,6 +287,8 @@ internal fun Program.renameClass(hierarchy: ClassHierarchy, cls: ClassView, newN
         .flatMap { it.dataTypes.filter { dt -> dt.name.startsWith(fieldsPrefix) } }
         .forEach { dt -> attempt(dt.pathName) { dt.name = newName + dt.name.removePrefix(old) } }
 
+    renameData(ns, struct, old, newName, ::attempt)
+
     // Old_vftable, Old_vftable_for_Base, Old_vftable1: in the (renamed) class's category.
     val vftablePrefix = ClassNaming.vftableName(old)
     dataTypeManager.getCategory(ClassNaming.vftableCategory(ns))?.dataTypes.orEmpty()
@@ -299,6 +302,27 @@ internal fun Program.renameClass(hierarchy: ClassHierarchy, cls: ClassView, newN
     // What derived classes name after it.
     for (d in hierarchy.derivedOf(cls).map { it.cls }) renameInDerived(d, old, newName, ::attempt)
     return skipped
+}
+
+/**
+ * Renames [old]'s own fields' structs, `Old_data` and `Old_data_1`…, in its (renamed) class's category,
+ * and the fields of its [struct] holding them, which share their names.
+ */
+private fun Program.renameData(
+    ns: Namespace,
+    struct: Structure?,
+    old: String,
+    newName: String,
+    attempt: (String, () -> Unit) -> Unit,
+) {
+    val dataName = old + ClassNaming.DATA
+    fun isData(name: String?) = name == dataName || name?.startsWith(dataName + "_") == true
+    dataTypeManager.getCategory(ClassNaming.vftableCategory(ns))?.dataTypes.orEmpty()
+        .filter { isData(it.name) }
+        .forEach { dt -> attempt(dt.pathName) { dt.name = newName + dt.name.removePrefix(old) } }
+    struct?.definedComponents.orEmpty().filter { isData(it.fieldName) }.forEach { c ->
+        attempt("${struct?.pathName}.${c.fieldName}") { c.fieldName = newName + c.fieldName.removePrefix(old) }
+    }
 }
 
 /**

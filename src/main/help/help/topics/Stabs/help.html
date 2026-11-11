@@ -335,8 +335,8 @@
     <P>Double-click a member (or press Enter) to go to it, and a class to go to its vtable, else its
     typeinfo. A class's popup menu offers <B>Rename Class</B>, <B>Edit class struct</B> and
     <B>Edit vtable struct</B>. <B>Rename Class</B> renames the class's namespace and what is named
-    after it: its constructors and destructors, its struct, self-base struct, split-base field runs
-    and data type category, its vftable structs, and in each derived class the <CODE>vftable_for_</CODE> labels and structs and the
+    after it: its constructors and destructors, its struct, self-base struct, split-base field runs,
+    its own fields' <CODE>_data</CODE> structs and the fields holding them, and its data type category, its vftable structs, and in each derived class the <CODE>vftable_for_</CODE> labels and structs and the
     <CODE>_base_</CODE> and <CODE>_vbase_</CODE> fields; anything that can't take the new name (one
     already taken) keeps its old one, and a warning lists it. Classes only imported from a library
     have no rename.
@@ -347,6 +347,13 @@
     <B>Apply Signature to Vftables</B>, on functions some vftable's slot points at, copies each
     one's signature, as edited, into the function definition its slots are typed with, which every
     vftable holding it shares, so they all call it the same way.
+    <B>Apply Slot Names to Vftables</B>, on such functions, names each slot holding one after it, in
+    every vftable; on a class, it names each slot of the class's own vftables after the function it
+    holds. Slots of functions still named <CODE>FUN_</CODE> keep their names.
+    <B>Rename Virtual Slot</B>, on one such function, renames the function, every function that
+    overrides the same slot or that it overrides, and the slot's field, with its function definition,
+    in every vftable that has it. A slot is the one at the same place in the vftable of the base a
+    table is for (<CODE>D_vftable_for_B</CODE>), else of the class's primary base.
     A function's offers <B>Go to Overridden</B>, which goes to the base class's virtual function it
     overrides (greyed out when it overrides none), and every member's the Symbol Tree's
     <B>Rename</B>, <B>Delete</B>, <B>Show References to</B>,

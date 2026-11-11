@@ -8,6 +8,8 @@ import docking.action.ToolBarData
 import docking.widgets.dialogs.InputDialog
 import generic.theme.GIcon
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghicpp.hierarchy.VirtualSlot
+import ghicpp.hierarchy.VirtualSlots
 import ghicpp.hierarchy.applySignatureToSlots
 import ghicpp.hierarchy.functionOf
 import ghicpp.hierarchy.relocateNamespace
@@ -99,6 +101,17 @@ private fun ClassTree.addClassActions() {
         },
     )
     addLocalAction(
+        object : DockingAction("Apply Class Slot Names to Vftables", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                val cls = selectedClass ?: return
+                applySlotNames { it.slotsOf(cls) }
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Apply Slot Names to Vftables"), VTABLE_ICON)
+            popupWhen { selectedClass?.vftable != null }
+        },
+    )
+    addLocalAction(
         object : DockingAction("Update Class Field Types", owner) {
             override fun actionPerformed(context: ActionContext?) {
                 selectedClass?.let { updateFieldTypes(listOf(it to null)) }
@@ -141,6 +154,25 @@ private fun ClassTree.addMemberActions() {
                     sel.isNotEmpty() && sel.all { (f, _) -> program?.slotDefinitionsOf(f)?.isNotEmpty() == true }
                 }
             }
+        },
+    )
+    addLocalAction(
+        object : DockingAction("Apply Slot Names to Vftables", owner) {
+            override fun actionPerformed(context: ActionContext?) =
+                applySlotNames { slots -> selectedMethods().flatMap { (f, _) -> slots.slotsOf(f) } }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Apply Slot Names to Vftables"), VTABLE_ICON)
+            popupWhen { hasSlots(selectedMethods()) }
+        },
+    )
+    addLocalAction(
+        object : DockingAction("Rename Virtual Slot", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                selectedMethods().singleOrNull()?.let { (f, _) -> renameSlot(f) }
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Rename Virtual Slot..."), "1")
+            popupWhen { selectedMethods().let { it.size == 1 && hasSlots(it) } }
         },
     )
     addLocalAction(
@@ -259,6 +291,43 @@ private fun ClassTree.updateFieldTypes(targets: List<Pair<ClassView, List<Functi
 private fun ClassTree.selectedMethods(): List<Pair<Function, ClassView>> {
     val p = program ?: return emptyList()
     return selectedMembers.map { (m, cls) -> (p.functionOf(m) ?: return emptyList()) to cls }
+}
+
+/** Whether every one of [methods] is in a vftable. */
+private fun ClassTree.hasSlots(methods: List<Pair<Function, ClassView>>) =
+    methods.isNotEmpty() && methods.all { (f, _) -> program?.slotDefinitionsOf(f)?.isNotEmpty() == true }
+
+/** Names the slots [of] picks after the functions they hold. */
+private fun ClassTree.applySlotNames(of: (VirtualSlots) -> List<VirtualSlot>) {
+    val p = program ?: return
+    val h = shown ?: return
+    val done = p.runTransaction("Apply slot names to vftables") { VirtualSlots(p, h).run { applyNames(of(this)) } }
+    tool.setStatusInfo("Named ${done.fields} vftable slot(s)")
+    if (done.skipped.isNotEmpty()) {
+        Msg.showWarn(this, component, "Apply Slot Names", "Kept their old names:\n" + done.skipped.joinToString("\n"))
+    }
+}
+
+/** Ask for [func]'s slot's new name, then rename the slot, and every function that implements it. */
+private fun ClassTree.renameSlot(func: Function) {
+    val p = program ?: return
+    val h = shown ?: return
+    val dialog = InputDialog("Rename Virtual Slot", "New name:", func.name)
+    tool.showDialog(dialog, this)
+    val name = dialog.value?.trim()?.takeUnless { dialog.isCanceled || it.isEmpty() } ?: return
+    val done = runCatching {
+        p.runTransaction("Rename virtual slot ${func.name}") { VirtualSlots(p, h).rename(func, name) }
+    }
+        .getOrElse { return Msg.showError(this, component, "Rename Virtual Slot", it.message) }
+    tool.setStatusInfo("Renamed ${done.functions} function(s) and ${done.fields} vftable slot(s)")
+    if (done.skipped.isNotEmpty()) {
+        Msg.showWarn(
+            this,
+            component,
+            "Rename Virtual Slot",
+            "Kept their old names:\n" + done.skipped.joinToString("\n"),
+        )
+    }
 }
 
 /** A struct for [cls], which has none, where Ghidra files a class's; its datatype id. */

@@ -3,7 +3,9 @@ package ghicpp.abi.msvc
 import ghicpp.ClassStructsFixtureTest
 import ghicpp.analyzers.MsvcClassAnalyzer
 import ghicpp.hierarchy.ClassHierarchy
+import ghicpp.hierarchy.VirtualSlots
 import ghicpp.hierarchy.applySignatureToSlots
+import ghicpp.hierarchy.renameClass
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.FunctionDefinition
 import ghidra.program.model.data.IntegerDataType
@@ -167,6 +169,56 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
         MsvcStructor.ofName("~Circle", "Circle") mustBe MsvcStructor.DESTRUCTOR
         MsvcStructor.ofName("`scalar_deleting_destructor'", "Circle") mustBe MsvcStructor.SCALAR_DELETING_DESTRUCTOR
         MsvcStructor.ofMangled("??_ECircle@@UAEPAXI@Z") mustBe MsvcStructor.VECTOR_DELETING_DESTRUCTOR
+    }
+
+    @Test
+    fun `renaming a virtual slot renames every override of it and its field in every vftable`() = program.rolledBack {
+        val h = ClassHierarchy.of(program, hasStabs = false)
+        val slots = VirtualSlots(program, h)
+        // `Rect::area`, the second slot of `Rect`'s table: `Shape`'s pure `area`, `Circle`'s and `Label`'s too.
+        val area = slots.target(slots.slotsOf(h.classes.single { it.qualifiedName == "Rect" })[1])!!
+        val done = slots.rename(area, "area")
+        done.skipped mustBe emptyList()
+        done.functions mustBe 3
+        for (table in listOf("Shape_vftable", "Circle_vftable", "Rect_vftable", "Label_vftable_for_Rect")) {
+            program.classStruct(table).getComponent(1).fieldName mustBe "area"
+        }
+        program.functionManager.getFunctions(true).filter { it.name == "area" }.map { it.parentNamespace.name }
+            .sorted() mustBe listOf("Circle", "Label", "Rect")
+        program.classStruct("Core_vftable").getComponent(1).fieldName mustBe "vfunction2"
+    }
+
+    @Test
+    fun `applying slot names names a class's slots, or a method's, after the functions they hold`() =
+        program.rolledBack {
+            val h = ClassHierarchy.of(program, hasStabs = false)
+            val slots = VirtualSlots(program, h)
+            val rect = h.classes.single { it.qualifiedName == "Rect" }
+            // `Rect::perim`, its fourth slot, inherited by `Label`.
+            val perim = slots.target(slots.slotsOf(rect)[3])!!
+            perim.setName("perim", SourceType.USER_DEFINED)
+            slots.applyNames(slots.slotsOf(rect)).fields mustBe 1
+            program.classStruct("Rect_vftable").getComponent(3).fieldName mustBe "perim"
+            program.classStruct("Label_vftable_for_Rect").getComponent(3).fieldName mustBe "vfunction4"
+            slots.applyNames(slots.slotsOf(perim)).fields mustBe 1
+            program.classStruct("Label_vftable_for_Rect").getComponent(3).fieldName mustBe "perim"
+        }
+
+    @Test
+    fun `renaming a class renames its own fields' struct and the field holding it`() = program.rolledBack {
+        val h = ClassHierarchy.of(program, hasStabs = false)
+        program.renameClass(h, h.classes.single { it.qualifiedName == "Label" }, "Tag") mustBe emptyList()
+        program.layout("Tag").last() mustBe (36 to "Tag_data: Tag_data")
+    }
+
+    /** Runs [edit] in a transaction it then rolls back, so the other tests see the program as analysed. */
+    private fun Program.rolledBack(edit: () -> Unit) {
+        val tx = startTransaction("rolled back")
+        try {
+            edit()
+        } finally {
+            endTransaction(tx, false)
+        }
     }
 
     private fun Program.secondSlot(table: String) = (classStruct(table).getComponent(1).dataType as Pointer).dataType
