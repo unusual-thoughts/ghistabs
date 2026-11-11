@@ -4,6 +4,7 @@ import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode
 import ghistabs.test.*
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.io.File
@@ -30,5 +31,14 @@ class GlobalDeclarationIntegrationTest : FeatureFixtureTest() {
             text.lines().single { global in it && "(global)" in it }.mustNot("$global initialized") { " = " in this }
         }
         text.lines().single { "g_ld" in it && "(global)" in it }.must("g_ld lost its initializer") { "= 1.5L;" in this }
+    }
+
+    // C's `typedef struct {…} div_t;` is a variant of the anonymous struct: `div_t:t(1,1)=(1,2)=s8…` (§93).
+    @Test
+    fun `a C typedef of an anonymous struct renders once`() {
+        val text = decomp("hello_gcc345.exe", "stdlib.h")
+        text.must("div_t's body missing") { "} div_t; /* 8 bytes */" in this }
+        text.mustNot("div_t typedef'd to itself") { "typedef struct div_t;" in this }
+        text.mustNot("ldiv_t typedef'd to itself") { "typedef struct ldiv_t;" in this }
     }
 }
