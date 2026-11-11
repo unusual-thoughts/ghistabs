@@ -334,7 +334,9 @@
 
     <P>Double-click a member (or press Enter) to go to it, and a class to go to its vtable, else its
     typeinfo. A class's popup menu offers <B>Rename Class</B>, <B>Edit class struct</B> and
-    <B>Edit vtable struct</B>. <B>Rename Class</B> renames the class's namespace and what is named
+    <B>Edit vtable struct</B>; a class shown as a base (or, inverted, as a derived class) also offers
+    <B>Edit Base Attributes</B>, which asks again, in the dialog a drop shows, whether that base is
+    virtual, its access and its offset, and respells its clause in place. <B>Rename Class</B> renames the class's namespace and what is named
     after it: its constructors and destructors, its struct, self-base struct, split-base field runs,
     its own fields' <CODE>_data</CODE> structs and the fields holding them, and its data type category, its vftable structs, and in each derived class the <CODE>vftable_for_</CODE> labels and structs and the
     <CODE>_base_</CODE> and <CODE>_vbase_</CODE> fields; anything that can't take the new name (one

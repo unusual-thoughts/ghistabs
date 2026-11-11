@@ -43,6 +43,13 @@ internal fun checkNamespaceMove(from: List<String>, to: List<String>): String? =
  */
 data class BaseEdit(val of: ClassView, val removed: BaseRef?, val added: ClassView? = null)
 
+/** An edit of [owner]'s base clause [edge] that keeps its base, to spell it anew; null for a base with no class. */
+internal fun ClassHierarchy.reclause(owner: ClassView, edge: BaseRef): BaseEdit? =
+    this[edge]?.takeIf { owner.origin != Origin.LIBRARY && edge in owner.bases }?.let { BaseEdit(owner, edge, it) }
+
+/** Whether this keeps the base it removes, only spelling its clause anew. */
+internal val BaseEdit.isReclause get() = added != null && removed?.targetId == added.id
+
 /**
  * The edits a drop in the Class Hierarchy window asks for: [owner] gains [base], and [removedFrom] loses
  * [edge], the clause that put the dropped node where it was. [removedFrom] is null when copying or when

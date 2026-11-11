@@ -21,6 +21,7 @@ import ghistabs.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeFalse
 import ghistabs.test.mustBeIn
+import ghistabs.test.mustBeNull
 import ghistabs.test.mustBeTrue
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.fail
@@ -252,6 +253,23 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
             listOf(BaseEdit(circle, shapeClause, null))
         refusal { h.planDrop(owner = shape, base = null, removedFrom = null, edge = null) } mustBe
             "Shape has no base here to remove"
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `editing a base's attributes respells its clause in place`(fixture: String) {
+        load(fixture)
+        val h = ClassHierarchy.of(program)
+        val (shape, circle, named) = listOf("Shape", "Circle", "Named").map { h.cls(it) }
+        val shapeClause = circle.bases.single()
+        val edit = h.reclause(circle, shapeClause)!!
+        edit mustBe BaseEdit(circle, shapeClause, shape)
+        edit.isReclause.mustBeTrue()
+        val clause = shapeClause.copy(isVirtual = true, access = Access.PROTECTED)
+        edit.bases(clause) mustBe listOf(clause)
+        // A clause the class doesn't hold, or one naming no class of the program's, has nothing to edit.
+        h.reclause(named, shapeClause).mustBeNull()
+        h.reclause(circle, shapeClause.copy(targetId = null)).mustBeNull()
     }
 
     @ParameterizedTest

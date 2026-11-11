@@ -34,7 +34,8 @@ private fun Program.askClause(edit: BaseEdit, tool: PluginTool, component: Compo
     val offset = old?.offset ?: found?.toLong()
 
     // Virtual or not, access, and the offset to place the base at (blank: don't place it).
-    return object : DialogComponentProvider("Add ${base.qualifiedName} as a base of ${edit.of.qualifiedName}") {
+    val verb = if (edit.isReclause) "Edit" else "Add"
+    return object : DialogComponentProvider("$verb ${base.qualifiedName} as a base of ${edit.of.qualifiedName}") {
         private val virtual = JCheckBox("Virtual", old?.isVirtual ?: false)
         private val accessBox = JComboBox(Access.entries.toTypedArray()).apply {
             selectedItem = old?.access ?: Access.PUBLIC
@@ -85,43 +86,49 @@ private fun Program.askClause(edit: BaseEdit, tool: PluginTool, component: Compo
 private fun Component.confirm(title: String, message: String) =
     OptionDialog.showYesNoDialog(this, title, message) == OptionDialog.YES_OPTION
 
-fun Program.applyEdits(edits: List<BaseEdit>, tool: PluginTool, component: Component) {
-    for ((owner, removed, added) in edits) {
-        val source = owner.solidSource() ?: continue
-        val change = when (added) {
-            null -> "remove ${removed?.name}"
-            else -> "add ${added.qualifiedName}"
-        }
-        val ok = component.confirm(
-            "Change ${owner.qualifiedName}'s bases",
-            "${owner.qualifiedName}'s bases come from $source. ${change.replaceFirstChar(
-                Char::uppercase,
-            )} as a base anyway?",
-        )
-        if (!ok) return
+/** Whether each of [edits] whose owner's bases come from somewhere solid is confirmed. */
+private fun Component.confirmSolid(edits: List<BaseEdit>): Boolean = edits.all { (owner, removed, added) ->
+    val source = owner.solidSource() ?: return@all true
+    val change = when {
+        added == null -> "Remove ${removed?.name}"
+        removed?.targetId == added.id -> "Change ${added.qualifiedName}"
+        else -> "Add ${added.qualifiedName}"
     }
+    confirm(
+        "Change ${owner.qualifiedName}'s bases",
+        "${owner.qualifiedName}'s bases come from $source. $change as a base anyway?",
+    )
+}
+
+/**
+ * Where [addition] places its base as [clause] spells it, once whatever that overwrites is confirmed: none
+ * for no offset, or for an edited clause that keeps its offset and virtuality. Null when declined.
+ */
+private fun Program.placement(addition: BaseEdit?, clause: BaseRef?, component: Component): Placement? {
+    val base = addition?.added ?: return Placement(null)
+    val old = addition.removed
+    val unmoved = addition.isReclause && clause?.offset == old?.offset && clause?.isVirtual == old?.isVirtual
+    val offset = clause?.offset?.toInt()?.takeUnless { unmoved } ?: return Placement(null)
+    val hit = overwrittenBy(addition.of, base, offset)
+    val list = hit.joinToString("\n") { "  +0x%x %s".format(it.offset, it.fieldName ?: it.defaultFieldName) }
+    val declined = hit.isNotEmpty() &&
+        !component.confirm("Place ${base.qualifiedName}", "Placing it overwrites:\n$list\nGo on?")
+    return if (declined) null else Placement(base to offset)
+}
+
+/** A base and the offset to place it at, if any. */
+private data class Placement(val at: Pair<ClassView, Int>?)
+
+fun Program.applyEdits(edits: List<BaseEdit>, tool: PluginTool, component: Component) {
+    if (!component.confirmSolid(edits)) return
     val addition = edits.firstOrNull { it.added != null }
     val clause = addition?.let { askClause(it, tool, component) ?: return }
-    val place = addition?.added?.let { base ->
-        clause?.offset?.toInt()?.let { offset -> base to offset }
-    }
-    if (place != null) {
-        val hit = overwrittenBy(addition.of, place.first, place.second)
-        val list = hit.joinToString("\n") {
-            "  +0x%x %s".format(it.offset, it.fieldName ?: it.defaultFieldName)
-        }
-        if (hit.isNotEmpty() &&
-            !component.confirm("Place ${place.first.qualifiedName}", "Placing it overwrites:\n$list\nGo on?")
-        ) {
-            return
-        }
-    }
+    val place = (placement(addition, clause, component) ?: return).at
     runCatching {
         runTransaction("Edit class hierarchy") {
             for (edit in edits) setBases(edit.of, edit.bases(clause.takeIf { edit.added != null }))
             place?.let { (base, offset) ->
-                val count = addition.bases(clause).size
-                placeBase(addition.of, base, offset, clause!!.isVirtual, count)
+                placeBase(addition!!.of, base, offset, clause!!.isVirtual, addition.bases(clause).size)
             }
         }
     }.onFailure {
