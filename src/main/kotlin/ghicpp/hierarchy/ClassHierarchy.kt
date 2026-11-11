@@ -5,7 +5,6 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassEdits
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.CxxAbi
-import ghicpp.abi.PlainVtables
 import ghicpp.abi.gcc2.Gcc2
 import ghicpp.abi.isPrimaryVftable
 import ghicpp.abi.itanium.*
@@ -450,7 +449,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
 
         // A class's RTTI names its tables' ABI before their labels do: an MSVC type descriptor, an Itanium typeinfo.
         fun hasPureVirtualSlot(vftable: Address, known: CxxAbi? = null): Boolean {
-            val abi = known ?: program.vtableAbi(vftable)
+            val abi = known ?: CxxAbi.ofVftable(program, vftable)
             return program.slotTargets(vftable).any { target ->
                 val name = program.functionManager.getFunctionAt(target)?.let { fn ->
                     fn.getThunkedFunction(true)?.name ?: fn.name
@@ -475,24 +474,6 @@ private fun Program.vftablesOf(ns: Namespace): Sequence<Address> = symbolTable.g
     .map { it.address }
 
 /**
- * The ABI of the table whose address point is [vftable], by its record's symbols. A gcc 2.x or MSVC record
- * starts at its address point, so its vtable symbol (`_vt.3Foo`, `??_7Foo@@6B@`) is there, or for MSVC the
- * `meta` pointer to its locator just before. An Itanium record starts at its header, laid just before and
- * labelled `_ZTV…` or `vtable`. A table no record names, such as one seeded off a pointer table, is
- * [PlainVtables], which knows every ABI's pure virtual stub.
- */
-private fun Program.vtableAbi(vftable: Address): CxxAbi {
-    symbolTable.getSymbols(vftable).firstNotNullOfOrNull { CxxAbi.ofVtableSymbol(it.name) }?.let { return it }
-    val meta = runCatching { vftable.subtract(defaultPointerSize.toLong()) }.getOrNull()
-    if (meta != null && symbolTable.getSymbols(meta).any { it.name == Msvc.VFTABLE_META_PTR }) return Msvc
-    val header = listing.getDataBefore(vftable)?.takeIf { it.maxAddress.next() == vftable }
-    val isItaniumHeader = header != null && symbolTable.getSymbols(header.address).any {
-        Itanium.looksLikeVtable(it.name) || it.name.endsWith(ClassNaming.VTABLE)
-    }
-    return if (isItaniumHeader) Itanium else PlainVtables
-}
-
-/**
  * Read off memory by the ABI's slot geometry rather than the laid struct's components: a gcc
  * 2.x slot is `{delta, index, pfn}`, and gcc 2.7's own stab types the pfn as a union a short
  * shows through. Only a gcc 2.x table carries its ABI's symbol at the label; an Itanium
@@ -500,7 +481,7 @@ private fun Program.vtableAbi(vftable: Address): CxxAbi {
  */
 private fun Program.slotTargets(vftable: Address): Sequence<Address> {
     val length = listing.getDataAt(vftable)?.length ?: return emptySequence()
-    val abi = vtableAbi(vftable)
+    val abi = CxxAbi.ofVftable(this, vftable)
     val end = vftable.add(length.toLong())
     return abi.slotOffsets(defaultPointerSize).map(vftable::add).takeWhile { it < end }
         .mapNotNull { runCatching { pointerAt(it) }.getOrNull() }

@@ -109,6 +109,14 @@ object Itanium : CxxAbi {
     /** Found by its rtti word ([itaniumVtableRecord]), which says how long its header is. */
     override fun recordAt(program: Program, at: Address) = program.itaniumVtableRecord(at)
 
+    /** The header in front of the address point, laid just before it and labelled `_ZTV…` or `vtable`. */
+    override fun ownsVftable(program: Program, vftable: Address): Boolean {
+        val header = program.listing.getDataBefore(vftable)?.takeIf { it.maxAddress.next() == vftable } ?: return false
+        return program.symbolTable.getSymbols(header.address).any {
+            looksLikeVtable(it.name) || it.name.endsWith(ClassNaming.VTABLE)
+        }
+    }
+
     // `size_t` is `unsigned int` (j) on 32-bit targets and `unsigned long` (m) on 64-bit ones.
     override val mangledOperatorNew get() = setOf("_Znwj", "_Znwm")
     override val mangledOperatorDelete get() = setOf("_ZdlPv", "_ZdlPvj", "_ZdlPvm")
