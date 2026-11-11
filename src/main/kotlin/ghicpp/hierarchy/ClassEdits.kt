@@ -8,9 +8,7 @@ import ghicpp.ClassNaming
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.hierarchy.ClassHierarchy.*
 import ghicpp.recover.updateFieldTypes
-import ghidra.program.model.data.Category
-import ghidra.program.model.data.DataTypeComponent
-import ghidra.program.model.data.Structure
+import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -203,16 +201,47 @@ internal fun Program.methodsOf(ns: GhidraClass): List<Function> = symbolTable.ge
     .filter { it.symbolType == SymbolType.FUNCTION && !it.isExternal }
     .mapNotNull { functionManager.getFunctionAt(it.address)?.takeUnless(Function::isThunk) }
 
+/** The function at [m]'s address, when it is a function member. */
+internal fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == MemberKind.FUNCTION }
+    ?.let { addressFactory.getAddress(it.address) }
+    ?.let(functionManager::getFunctionAt)
+
 /**
  * Retypes [cls]'s own fields off what [methods] load and store through `this`, or off all of [methodsOf] its
  * namespace's when null.
  */
-internal fun Program.updateFieldTypes(cls: ClassView, methods: List<Member>?, monitor: TaskMonitor) {
+internal fun Program.updateFieldTypes(cls: ClassView, methods: List<Function>?, monitor: TaskMonitor) {
     val ns = resolve(cls) ?: return
-    val functions =
-        methods?.mapNotNull { m -> addressFactory.getAddress(m.address)?.let(functionManager::getFunctionAt) }
-            ?: methodsOf(ns)
-    updateFieldTypes(ns, functions, monitor)
+    updateFieldTypes(ns, methods ?: methodsOf(ns), monitor)
+}
+
+/**
+ * The definitions laid vftables type [func]'s slots with: a slot pointing at it or at a thunk to it. The class
+ * pass gives each function one, shared by every table holding it.
+ */
+internal fun Program.slotDefinitionsOf(func: Function): Set<FunctionDefinition> =
+    (listOf(func.entryPoint) + func.getFunctionThunkAddresses(false).orEmpty()).asSequence()
+        .flatMap { referenceManager.getReferencesTo(it).iterator().asSequence() }
+        .mapNotNull { ref ->
+            val table = listing.getDataContaining(ref.fromAddress)?.takeIf { it.dataType is Structure }
+            val slot = table?.getPrimitiveAt(ref.fromAddress.subtract(table.address).toInt())
+            (slot?.dataType as? Pointer)?.dataType as? FunctionDefinition
+        }
+        .toSet()
+
+/**
+ * Copies [func]'s signature into each of its [slotDefinitionsOf], as `ApplyClassFunctionSignatureUpdatesScript`
+ * does for a whole class: every vftable holding it then calls it so. A definition keeps its name. How many
+ * it changed.
+ */
+internal fun Program.applySignatureToSlots(func: Function): Int {
+    val defs = slotDefinitionsOf(func)
+    for (def in defs) {
+        def.replaceWith(
+            FunctionDefinitionDataType(def.categoryPath, def.name, func.signature, dataTypeManager),
+        )
+    }
+    return defs.size
 }
 
 /**
