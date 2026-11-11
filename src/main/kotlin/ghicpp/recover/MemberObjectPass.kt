@@ -23,7 +23,9 @@ import ghistabs.toClass
  * on `this` + k, k past 0, is the constructor of the member there, and what a destructor calls last there its
  * destructor, where neither stores a vptr, as [FoundStructors.roles]' do. The structors one class's structors
  * call at one offset build and destroy one class, and so does any sharing one of them: the class one of them is
- * named in already, else `Klass_<address>` after its first constructor. Its struct is sized and filled off what
+ * named in already, else `Klass_<address>` after its first constructor: the address is that function's, not a
+ * vtable's, as it has none, unlike the `Klass_<address>` classes [GenericVftableFinder] seeds off their tables.
+ * Its struct says so in its description. It is sized and filled off what
  * its constructors store, and laid in each class holding it at its offset. Its own members follow, down to
  * [MAX_DEPTH].
  *
@@ -60,6 +62,9 @@ class MemberObjectPass(
         val dtors = mutableSetOf<Function>()
         var stores: Map<Int, DataType> = emptyMap()
         var cls: PlainClass? = null
+
+        /** The structor this pass named [cls] after, and its role, where nothing named it already. */
+        var namedAfter: Pair<Function, StructorRole>? = null
         val functions get() = ctors + dtors
     }
 
@@ -83,6 +88,7 @@ class MemberObjectPass(
             val size = sizes[m] ?: 0
             runCatching { program.sizeClassStruct(ns, size) }
                 .onFailure { warn("member-struct-unsized", "${ns.getName(true)} -> $size: $it") }
+            m.namedAfter?.let { (f, role) -> describe(ns, f, role) }
         }
         monitor.setMessage("Filling member object class structs")
         ClassStructFiller(program, PlainVtables, this)
@@ -203,13 +209,14 @@ class MemberObjectPass(
 
     /**
      * The class [m] builds: the one a structor of it is named in already, by a user or an analysis, else
-     * `Klass_<address>` after its first constructor, or destructor.
+     * `Klass_<address>` after its first constructor, or destructor: that function's address, as it has no vtable.
      */
     private fun classFor(m: NonPolymorphicClass): PlainClass? {
         val named = m.functions.firstNotNullOfOrNull { f ->
             (f.parentNamespace as? GhidraClass)?.takeIf { f.symbol.source != SourceType.DEFAULT }
         }
         val first = m.ctors.minByOrNull { it.entryPoint } ?: m.dtors.minByOrNull { it.entryPoint } ?: return null
+        if (named == null) m.namedAfter = first to if (first in m.ctors) CONSTRUCTOR else DESTRUCTOR
         val ns = named ?: program.symbolTable.buildClassNamespaces(
             listOf("${GenericVftableFinder.SEEDED_CLASS_PREFIX}${first.entryPoint}"),
             GenericVftableFinder.SEEDED,
@@ -233,6 +240,16 @@ class MemberObjectPass(
             }
         }
         return size
+    }
+
+    /**
+     * Says in the description of [ns]'s struct, where it has none, that its name is [structor]'s address, not a
+     * vtable's.
+     */
+    private fun describe(ns: GhidraClass, structor: Function, role: StructorRole) {
+        val struct = program.classStruct(ns)?.takeIf { it.description.isNullOrEmpty() } ?: return
+        val what = if (role == CONSTRUCTOR) "constructor" else "destructor"
+        struct.description = "No vtable: named after its first $what, at ${structor.entryPoint}"
     }
 
     /** Names [func] [ns]'s constructor or destructor and moves it there, where nothing named it. */
