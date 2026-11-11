@@ -356,7 +356,11 @@
     holds. Slots of functions still named <CODE>FUN_</CODE> keep their names.
     <B>Rename Virtual Slot</B>, on one such function, renames the function, every function that
     overrides the same slot or that it overrides, and the slot's field, with its function definition,
-    in every vftable that has it. A slot is the one at the same place in the vftable of the base a
+    in every vftable that has it. A name starting with <CODE>~</CODE> names a destructor slot instead:
+    each class's function there is named after its own class, <CODE>~Foo</CODE> (Itanium, whose two
+    destructor slots, complete and deleting, are named together, and gcc 2.x) or
+    <CODE>`scalar_deleting_destructor'</CODE> (MSVC), and so is each table's field; a destructor slot
+    takes no other name. A slot is the one at the same place in the vftable of the base a
     table is for (<CODE>D_vftable_for_B</CODE>), else of the class's primary base.
     A function's offers <B>Go to Overridden</B>, which goes to the base class's virtual function it
     overrides (greyed out when it overrides none), and every member's the Symbol Tree's
