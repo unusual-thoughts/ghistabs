@@ -5,6 +5,7 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassEdits
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.CxxAbi
+import ghicpp.abi.PlainVtables
 import ghicpp.abi.gcc2.Gcc2
 import ghicpp.abi.isPrimaryVftable
 import ghicpp.abi.itanium.*
@@ -478,9 +479,23 @@ private fun Program.vftablesOf(ns: Namespace): Sequence<Address> = symbolTable.g
     .filter { ClassNaming.isClassVftableLabel(it.name) }
     .map { it.address }
 
-/** The ABI of the vtable labelled at [vftable], by its label; Itanium when that doesn't say. */
-private fun Program.vtableAbi(vftable: Address): CxxAbi =
-    symbolTable.getSymbols(vftable).firstNotNullOfOrNull { CxxAbi.ofVtableSymbol(it.name) } ?: Itanium
+/**
+ * The ABI of the table whose address point is [vftable], by its record's symbols. A gcc 2.x or MSVC record
+ * starts at its address point, so its vtable symbol (`_vt.3Foo`, `??_7Foo@@6B@`) is there, or for MSVC the
+ * `meta` pointer to its locator just before. An Itanium record starts at its header, laid just before and
+ * labelled `_ZTV…` or `vtable`. A table no record names, such as one seeded off a pointer table, is
+ * [PlainVtables], which knows every ABI's pure virtual stub.
+ */
+private fun Program.vtableAbi(vftable: Address): CxxAbi {
+    symbolTable.getSymbols(vftable).firstNotNullOfOrNull { CxxAbi.ofVtableSymbol(it.name) }?.let { return it }
+    val meta = runCatching { vftable.subtract(defaultPointerSize.toLong()) }.getOrNull()
+    if (meta != null && symbolTable.getSymbols(meta).any { it.name == Msvc.VFTABLE_META_PTR }) return Msvc
+    val header = listing.getDataBefore(vftable)?.takeIf { it.maxAddress.next() == vftable }
+    val isItaniumHeader = header != null && symbolTable.getSymbols(header.address).any {
+        Itanium.looksLikeVtable(it.name) || it.name.endsWith(ClassNaming.VTABLE)
+    }
+    return if (isItaniumHeader) Itanium else PlainVtables
+}
 
 /**
  * Read off memory by the ABI's slot geometry rather than the laid struct's components: a gcc
