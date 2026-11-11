@@ -241,7 +241,7 @@ private fun Structure.fillData(store: Map<Int, DataType>, ns: GhidraClass) {
 fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor) {
     val struct = classStruct(ns) ?: return
     struct.fillData(
-        mergedStores(StructorAnalysis(this, emptyList(), DummySink).thisFields(methods, monitor).values),
+        mergedStores(StructorInspector(this, emptyList(), DummySink).thisFields(methods, monitor).values),
         ns,
     )
 }

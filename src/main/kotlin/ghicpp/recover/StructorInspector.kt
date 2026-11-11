@@ -37,7 +37,7 @@ data class VptrStores(
 )
 
 /**
- * What [StructorAnalysis.find] found: each structor's class and role ([roles]), each constructor a linker folded
+ * What [StructorInspector.find] found: each structor's class and role ([roles]), each constructor a linker folded
  * into another class's that builds [folded] classes too, and the fields each function read stores through
  * `this`.
  */
@@ -77,7 +77,7 @@ internal fun mergedStores(stores: Iterable<Map<Int, DataType>>): Map<Int, DataTy
  * destructors apart ([find]). With [fillArrays], a field one fills in a counted loop or with `memset` is read as
  * an array ([thisFills]).
  */
-class StructorAnalysis(
+class StructorInspector(
     private val program: Program,
     classes: Collection<ClassDecl>,
     sink: DiagnosticSink,

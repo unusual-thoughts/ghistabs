@@ -35,7 +35,7 @@ import ghistabs.toClass
 class MemberObjectPass(
     private val program: Program,
     sink: DiagnosticSink,
-    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorAnalysis]). */
+    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorInspector]). */
     private val fillArrays: Boolean = true,
 ) : DiagnosticSink by sink {
     private val dtm = program.dataTypeManager
@@ -112,7 +112,7 @@ class MemberObjectPass(
      * down to [MAX_DEPTH].
      */
     private fun collect(found: FoundStructors, monitor: TaskMonitor): Map<Slot, Member> {
-        val analysis = StructorAnalysis(program, emptyList(), this, fillArrays)
+        val inspector = StructorInspector(program, emptyList(), this, fillArrays)
         val held = linkedMapOf<Slot, Member>()
         known.clear()
         var structors: Map<Function, Pair<Holder, StructorRole>> =
@@ -130,7 +130,7 @@ class MemberObjectPass(
                 }
             }
             if (fresh.isEmpty()) break
-            val uses = analysis.readCalls(fresh.flatMap { it.functions }, monitor)
+            val uses = inspector.readCalls(fresh.flatMap { it.functions }, monitor)
             for (m in fresh) m.stores = mergedStores(m.ctors.map { uses.thisStores[it].orEmpty() })
             structors = fresh.flatMap { m ->
                 m.ctors.map { it to (m to CONSTRUCTOR) } + m.dtors.map { it to (m to DESTRUCTOR) }
