@@ -6,6 +6,7 @@ import docking.widgets.textfield.IntegerTextField
 import ghicpp.Access
 import ghicpp.MemberAttrs
 import ghicpp.MemberAttrs.Companion.writeMember
+import ghicpp.MemberSource
 import ghicpp.VirtKind
 import ghicpp.hierarchy.*
 import ghicpp.hierarchy.ClassHierarchy.*
@@ -221,6 +222,8 @@ private fun askMemberAttrs(
                 virt = if (function) virtBox.selectedItem as? VirtKind else VirtKind.STATIC,
                 isConst = function && constBox.isSelected,
                 isVolatile = function && volatileBox.isSelected,
+                source = MemberSource.USER,
+                structor = old.structor,
             )
             result = attrs to forRest.isSelected
             close()

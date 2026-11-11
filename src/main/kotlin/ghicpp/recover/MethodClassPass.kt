@@ -2,6 +2,9 @@ package ghicpp.recover
 
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
+import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
+import ghicpp.MemberAttrs.Companion.memberAttrs
+import ghicpp.abi.StructorRole
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.data.Structure
 import ghidra.program.model.lang.CompilerSpec
@@ -75,7 +78,7 @@ fun Function.hasKnownClass() = symbol.source == SourceType.IMPORTED || symbol.so
  * convention takes `this` (`__thiscall`, or `__fastcall`, whose first argument comes in the same register),
  * off its callers' decompiled calls, against the classes [ClassHierarchyRecords] holds, their methods, the
  * objects their constructors build, and the member objects and bases their structs lay at an offset. Only a
- * method whose class is known counts ([hasKnownClass]), or one a class pass tagged ([ClassPassTags]), so
+ * method whose class is known counts ([hasKnownClass]), or one a class pass placed ([isPlacedByClassPass]), so
  * neither another guess nor `RecoverClassesFromRTTIScript`'s placements are evidence.
  * Each guess moves the function into its class, its convention then a method's ([fixMethodConvention]: a
  * `__fastcall` that takes nothing in EDX becomes a `__thiscall`), and leaves an Analysis bookmark saying where
@@ -104,8 +107,10 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
         val candidates = functions.filterTo(mutableSetOf()) { it.isCandidate() }
         if (candidates.isEmpty()) return 0
         val byId = bases.keys.associateBy { it.id }
-        val recorded = functions.filterTo(mutableSetOf()) { it.isTagged(ClassPassTags.METHOD) }
-        val recordedCtors = recorded.filterTo(mutableSetOf()) { it.isTagged(ClassPassTags.CONSTRUCTOR) }
+        val recorded = functions.filterTo(mutableSetOf()) { program.isPlacedByClassPass(it) }
+        val recordedCtors = recorded.filterTo(mutableSetOf()) {
+            program.memberAttrs(it.entryPoint)?.structor == StructorRole.CONSTRUCTOR
+        }
         val methods = functions.filter { it.hasKnownClass() || it in recorded }
             .mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
         // A constructor the debug info names goes by its class's name.
@@ -130,8 +135,6 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
             place(f, guess)
         }
     }
-
-    private fun Function.isTagged(tag: String) = tags.any { it.name == tag }
 
     /** An unnamed global function whose first argument comes in where `this` does ([takesThisAt]). */
     private fun Function.isCandidate() = parentNamespace.isGlobal && symbol.source == SourceType.DEFAULT &&

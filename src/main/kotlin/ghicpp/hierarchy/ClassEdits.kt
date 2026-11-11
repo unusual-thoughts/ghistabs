@@ -6,6 +6,7 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassEdit
 import ghicpp.ClassNaming
 import ghicpp.MemberAttrs.Companion.memberAttrs
+import ghicpp.MemberSource
 import ghicpp.hierarchy.ClassHierarchy.*
 import ghicpp.recover.updateFieldTypes
 import ghidra.program.model.data.*
@@ -107,7 +108,7 @@ internal fun ClassView.solidSource(): String? =
 internal fun Program.memberSource(member: Member): String? {
     val at = addressFactory.getAddress(member.address)
     return when {
-        at != null && memberAttrs(at) != null -> "the stabs"
+        at != null && memberAttrs(at)?.source == MemberSource.STABS -> "the stabs"
 
         at != null && symbolTable.getSymbols(at).any { it.name.startsWith("_Z") || it.name.startsWith("?") } ->
             "its mangled name"

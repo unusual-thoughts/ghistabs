@@ -350,7 +350,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                             kind,
                             fn.getPrototypeString(false, false),
                             fn.params,
-                            attrs = program.memberAttrs(sym.address) ?: fn.derivedAttrs(virtuals),
+                            attrs = program.memberAttrs(sym.address)?.takeIf { it.source != MemberSource.CLASS_PASS }
+                                ?: fn.derivedAttrs(virtuals),
                             variants = symtab.getSymbols(sym.address).mapNotNull { ItaniumStructor.of(it.name) }
                                 .distinct().sorted(),
                             msvcStructor = symtab.msvcStructorOf(sym, ns, isMsvc),

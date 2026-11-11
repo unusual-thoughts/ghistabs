@@ -1,5 +1,6 @@
 package ghicpp
 
+import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.program.model.listing.Function
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -49,7 +50,7 @@ class MethodConventionProbe : AbstractGhidraHeadlessIntegrationTest() {
                 (edx == null || parameters.none { it.register?.baseRegister == edx })
             fun Function.autoThis() =
                 parameters.firstOrNull()?.let { it.isAutoParameter && it.name == Function.THIS_PARAM_NAME } == true
-            val placed = methods.filter { f -> f.tags.any { it.name.startsWith("GHICPP_CLASS") } }
+            val placed = methods.filter { f -> program.isPlacedByClassPass(f) }
             val out = File("build/test-output/method-conventions/${file.name}.txt")
             out.parentFile.mkdirs()
             out.bufferedWriter().use { w ->
