@@ -1,6 +1,7 @@
 package ghicpp.hierarchy
 
 import ghicpp.*
+import ghicpp.ClassHierarchyRecords.Companion.readClassEdits
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.CxxAbi
@@ -26,35 +27,45 @@ import kotlinx.serialization.Serializable
  *
  * Two sources of bases, never mixed for one class: the stabs import's [ghicpp.ClassHierarchyRecords],
  * exact down to virtuality and access, gcc 2.x included; and, for a class the stabs never described,
- * its Itanium typeinfo, when the program has one. Every other class namespace (the vtable sweep's, the
- * demangler's, DWARF's) is still listed, as a root.
+ * its Itanium typeinfo, when the program has one. Bases set by hand in the window
+ * ([ghicpp.ClassHierarchyRecords.EDITS]) stand over both. Every other class namespace (the
+ * vtable sweep's, the demangler's, DWARF's) is still listed, as a root.
  *
  * Plain data, so it serializes: classes name each other by namespace id ([get] resolves one), and the
  * program's objects are kept as what finds them again, an address's text and a datatype id.
  */
 @Serializable
 data class ClassHierarchy(val classes: List<ClassView>) {
-    enum class Origin(val desc: String) {
+    enum class Origin(val desc: String, val baseSource: SourceType) {
+        /** Its bases set by hand, in this window: over whatever else describes it. */
+        EDITED("edited by hand", SourceType.USER_DEFINED),
+
         /** Described by the stabs: the import recorded its bases. */
-        STABS("from stabs"),
+        STABS("from stabs", SourceType.IMPORTED),
 
         /** Laid by Ghidra's RTTI analyzer, bases off its MSVC Class Hierarchy Descriptor ([MsvcRttiParser]). */
-        MSVC_RTTI("from MSVC RTTI"),
+        MSVC_RTTI("from MSVC RTTI", SourceType.IMPORTED),
 
         /** Recorded off its Itanium typeinfo by the class pass ([ItaniumRttiParser]), on a binary with no stabs. */
-        ITANIUM_RTTI("from Itanium RTTI"),
+        ITANIUM_RTTI("from Itanium RTTI", SourceType.IMPORTED),
+
+        /**
+         * Recorded by the class pass with no stabs nor RTTI to go by: its bases are guesses, off what its
+         * constructors call and the slots its vftables share with others'.
+         */
+        INFERRED("with inferred bases", SourceType.ANALYSIS),
 
         /** Laid by the vtable sweep, bases read off its `_ZTI` typeinfo. */
-        SWEPT_RTTI("from typeinfo"),
+        SWEPT_RTTI("from typeinfo", SourceType.IMPORTED),
 
         /** Laid by the vtable sweep with no typeinfo to read: bases unknown. */
-        SWEPT("from vtables"),
+        SWEPT("from vtables", SourceType.DEFAULT),
 
         /** A class namespace and nothing else (the demangler's, DWARF's): bases unknown. */
-        NAMESPACE("from namespaces alone"),
+        NAMESPACE("from namespaces alone", SourceType.DEFAULT),
 
         /** Only a library's: its namespace under an external library, which holds what the program imports. */
-        IMPORTED("only imported"),
+        LIBRARY("only imported", SourceType.DEFAULT),
     }
 
     /**
@@ -97,6 +108,10 @@ data class ClassHierarchy(val classes: List<ClassView>) {
     ) {
         val label: String get() = (if (isOverloaded && parameters != null) name + parameters else name) +
             variants.takeIf { it.isNotEmpty() }?.joinToString(", ", " [", "]") { it.label }.orEmpty()
+
+        /** The program's own function or label: a vtable, typeinfo or import stays where its name files it. */
+        val isMovable: Boolean get() =
+            symbolId != null && library == null && kind != MemberKind.VTABLE && kind != MemberKind.ABI
     }
 
     enum class MemberKind {
@@ -217,6 +232,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val symtab: SymbolTable = program.symbolTable
         val record = program.readClassRecord().orEmpty()
         val rtti = TypeinfoReader(program)
+        val edits = program.readClassEdits()
 
         // `_ZTI` objects by the class they describe, off the mangled label or, once Ghidra's demangler
         // ran, its `typeinfo` label in the class's namespace.
@@ -257,12 +273,14 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                     id = ns.id,
                     path = path,
                     origin = when {
+                        ns.id in edits -> Origin.EDITED
                         typeDescriptor != null && ns.id in record -> Origin.MSVC_RTTI
                         typeinfo != null && ns.id in record && !hasStabs -> Origin.ITANIUM_RTTI
-                        ns.id in record -> Origin.STABS
+                        ns.id in record && hasStabs -> Origin.STABS
+                        ns.id in record -> Origin.INFERRED
                         typeinfo != null -> Origin.SWEPT_RTTI
                         vftable != null -> Origin.SWEPT
-                        ns.isExternal -> Origin.IMPORTED
+                        ns.isExternal -> Origin.LIBRARY
                         else -> Origin.NAMESPACE
                     },
                     vftable = vftable?.toString(),
@@ -288,7 +306,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         }
 
         fun basesOf(ns: GhidraClass, typeinfo: Address?, classIds: Map<Long, Long>, idOf: (List<String>) -> Long?) =
-            record[ns.id]?.bases?.map { base ->
+            (edits[ns.id] ?: record[ns.id])?.bases?.map { base ->
                 val target = base.namespaceId?.let(classIds::get)
                 val name = base.namespaceId?.let { (symtab.getSymbol(it)?.`object` as? Namespace)?.getName(true) }
                     ?: base.name ?: "?"
@@ -308,7 +326,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         // By the id the import recorded: typedef shortening may have renamed it, or it sits under a CU's
         // category (crypto_mi's `/dll.cpp/multi/ECP`), and Ghidra's lookup goes by name and scope.
         fun structOf(ns: GhidraClass): Structure? =
-            record[ns.id]?.structId?.let(program.dataTypeManager::getDataType) as? Structure
+            (record[ns.id] ?: edits[ns.id])?.structId?.let(program.dataTypeManager::getDataType) as? Structure
                 ?: VariableUtilities.findExistingClassStruct(ns, program.dataTypeManager)
 
         // Renamed once the class has several, so found off its label rather than by `<Class>_vftable`.
@@ -512,6 +530,3 @@ private fun List<Symbol>.withoutRepeats(isMember: (Symbol) -> Boolean): Pair<Lis
     }.toSet()
     return filterNot { it in repeats } to repeats.groupBy({ it.address }, { it.name })
 }
-
-/** [cls]'s namespace in this program, if it still has it. */
-fun Program.resolve(cls: ClassHierarchy.ClassView) = symbolTable.getSymbol(cls.id)?.`object` as? GhidraClass

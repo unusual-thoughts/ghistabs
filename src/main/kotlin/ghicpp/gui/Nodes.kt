@@ -8,8 +8,10 @@ import generic.theme.GIcon
 import ghicpp.Access
 import ghicpp.MemberAttrs
 import ghicpp.VirtKind
+import ghicpp.gui.Hues.*
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghidra.program.model.symbol.SourceType
 import java.awt.*
 import java.awt.image.BufferedImage
 import java.util.concurrent.ConcurrentHashMap
@@ -19,8 +21,8 @@ import javax.swing.JTree
 
 internal val CLASS_ICON: Icon = GIcon("icon.plugin.symboltree.node.class")
 
-// Greyed: nothing records their bases, only a vtable or a namespace shows the class.
-private val BASES_UNKNOWN = setOf(Origin.SWEPT, Origin.NAMESPACE)
+// Green: bases the binary states (stabs, RTTI) or set by hand. Grey: guessed by analysis, or none known.
+private val SOLID_BASES = setOf(SourceType.IMPORTED, SourceType.USER_DEFINED)
 
 private val NAMESPACE_ICON: Icon = GIcon("icon.plugin.symboltree.node.namespace")
 private val ROOT_ICON: Icon = GIcon("icon.plugin.symboltree.node.category.classes.closed")
@@ -163,13 +165,13 @@ class ClassNode private constructor(
     /** Set on a class filed under the class it's declared in. */
     internal var isNested = false
 
-    // BASES_UNKNOWN only for a class the program has: a base with no class at all stays a plain class.
+    // UNSOURCED only for a class the program has: a base with no class at all stays a plain class.
     private val kind get() = when {
         isNested -> Kind.NESTED
         edge?.isVirtual == true -> if (info?.isAbstract == true) Kind.VIRTUAL_ABSTRACT else Kind.VIRTUAL
         info?.isAbstract == true -> Kind.ABSTRACT
-        info?.origin in BASES_UNKNOWN -> Kind.BASES_UNKNOWN
-        info?.origin == Origin.IMPORTED -> Kind.IMPORTED
+        info?.origin == Origin.LIBRARY -> Kind.LIBRARY
+        info != null && info.origin.baseSource !in SOLID_BASES -> Kind.UNSOURCED
         else -> Kind.NORMAL
     }
 
@@ -181,17 +183,19 @@ class ClassNode private constructor(
         // The typedef shortening pass renamed its struct; the namespace keeps the long spelling.
         info?.structName?.takeIf { it != info.name }?.let { append("<br>shortened: ").append(escape(it)) }
         val origin = when (info?.origin) {
+            Origin.EDITED -> "bases set by hand"
             Origin.STABS -> "from the stabs"
             Origin.MSVC_RTTI -> "from its MSVC RTTI"
             Origin.ITANIUM_RTTI -> "from its Itanium RTTI"
             Origin.SWEPT_RTTI -> "from its typeinfo"
+            Origin.INFERRED -> "bases inferred from its constructors and vftables"
             Origin.SWEPT -> "from its vtable: bases unknown"
             Origin.NAMESPACE -> "from its namespace alone: bases unknown"
-            Origin.IMPORTED -> "only imported: bases unknown"
+            Origin.LIBRARY -> "only imported: bases unknown"
             null -> "no class built for it: a plain struct, or only declared"
         }
         append("<br>").append(origin)
-        if (kind != Kind.NORMAL && kind != Kind.BASES_UNKNOWN && kind != Kind.IMPORTED) {
+        if (kind !in setOf(Kind.NORMAL, Kind.UNSOURCED, Kind.LIBRARY)) {
             append("<br>").append(if (inverted) kind.derivedLabel else kind.label)
         }
         // Inverted, the clause is the derived class's: where that one holds the class above.
@@ -267,43 +271,53 @@ internal val GTreeNode.namespacePath: List<String>? get() = when (this) {
     else -> null
 }
 
+enum class Hues(val hue: Float) {
+    RED(0f),
+    ORANGE(1f / 12),
+    YELLOW(1f / 6),
+    GREEN(1f / 3),
+    CYAN(1f / 2),
+    TEAL(7f / 12),
+    BLUE(2f / 3),
+    MAGENTA(5f / 6),
+}
+
 // The Symbol Tree's own icons, but for the ABI's objects: a table for a vtable, an info sign for the rest.
-private val MEMBER_ICONS: Map<MemberKind, Icon> = mapOf(
-    MemberKind.VTABLE to GIcon("icon.table"),
-    MemberKind.ABI to GIcon("icon.information"),
-    MemberKind.FUNCTION to GIcon("icon.plugin.symboltree.node.function"),
-    MemberKind.THUNK to GIcon("icon.plugin.symboltree.node.function.thunk"),
-    MemberKind.LABEL to GIcon("icon.plugin.symboltree.node.code"),
+// Each with the hue, in degrees, it is drawn in, which a tint turns from.
+private val MEMBER_ICONS: Map<MemberKind, Pair<Icon, Float>> = mapOf(
+    MemberKind.VTABLE to (GIcon("icon.table") to TEAL.hue),
+    MemberKind.ABI to (GIcon("icon.information") to TEAL.hue),
+    MemberKind.FUNCTION to (GIcon("icon.plugin.symboltree.node.function") to MAGENTA.hue),
+    MemberKind.THUNK to (GIcon("icon.plugin.symboltree.node.function.thunk") to MAGENTA.hue),
+    MemberKind.LABEL to (GIcon("icon.plugin.symboltree.node.code") to GREEN.hue),
 )
 
 /**
- * Upstream's icon per kind of class: its green class icon with two colour channels swapped, so the
- * shape stays and the hue says the kind. A class whose bases nothing records, with nothing more to
+ * Upstream's icon per kind of class: its green class icon turned to the kind's hue, so the shape and
+ * shading stay and the hue says the kind. A class whose bases nothing records, with nothing more to
  * say, is the same in grey.
  */
 private enum class Kind(
     val label: String,
     /** The same, said of a class derived from the one above it in the inverted tree. */
     val derivedLabel: String,
-    private val recolor: (Int, Int, Int) -> Triple<Int, Int, Int>,
+    /** The hue, in degrees, the class icon's green turns to; grey when null. */
+    private val hue: Float?,
 ) {
-    NORMAL("class", "class", { r, g, b -> Triple(r, g, b) }),
-    ABSTRACT("abstract class", "abstract class", { r, g, b -> Triple(g, r, b) }),
-    VIRTUAL("virtual base class", "derives virtually", { r, g, b -> Triple(r, b, g) }),
-    VIRTUAL_ABSTRACT("virtual abstract base class", "abstract, derives virtually", { r, g, _ -> Triple(g, r, g) }),
-    NESTED("nested class", "nested class", { _, g, b -> Triple(g, g, b) }),
-    BASES_UNKNOWN("class, bases unknown", "class, bases unknown", ::greyscale),
+    NORMAL("class", "class", GREEN.hue),
+    ABSTRACT("abstract class", "abstract class", RED.hue),
+    VIRTUAL("virtual base class", "derives virtually", BLUE.hue),
+    VIRTUAL_ABSTRACT("virtual abstract base class", "abstract, derives virtually", MAGENTA.hue),
+    NESTED("nested class", "nested class", YELLOW.hue),
+    UNSOURCED("class, bases from analysis or unknown", "class, bases from analysis or unknown", null),
 
-    // Orange, as its imported members.
-    IMPORTED("imported class", "imported class", { _, g, b -> Triple(g, g * 3 / 5, b / 2) }),
+    // As its imported members.
+    LIBRARY("imported class", "imported class", ORANGE.hue),
     ;
 
     // Lazy: painting a themed icon needs the theme up, which a headless test that never draws skips.
-    val icon: Icon by lazy { if (this == NORMAL) CLASS_ICON else CLASS_ICON.recolored(recolor) }
+    val icon: Icon by lazy { if (this == NORMAL) CLASS_ICON else CLASS_ICON.hueShifted(GREEN.hue, hue) }
 }
-
-/** Rec. 601 luma, as a grey. */
-private fun greyscale(r: Int, g: Int, b: Int) = ((299 * r + 587 * g + 114 * b) / 1000).let { Triple(it, it, it) }
 
 /** [this] icon with [recolor] applied to every pixel's colour channels, alpha kept. */
 private fun Icon.recolored(recolor: (Int, Int, Int) -> Triple<Int, Int, Int>): Icon {
@@ -333,23 +347,26 @@ private val memberIcons = ConcurrentHashMap<Triple<MemberKind, MemberAttrs?, Boo
  */
 private fun memberIcon(kind: MemberKind, attrs: MemberAttrs?, imported: Boolean): Icon =
     memberIcons.getOrPut(Triple(kind, attrs?.copy(), imported)) {
-        val icon = MEMBER_ICONS.getValue(kind).centered()
+        val (base, from) = MEMBER_ICONS.getValue(kind)
+        val icon = base.centered()
         if (attrs == null && !imported) return@getOrPut icon
         val hue = if (imported) IMPORTED_COLOR else attrs?.virt?.let(VIRT_COLORS::get)
-        val tinted = icon.tinted(hue, attrs?.access)
+        val to = hue?.let { Color.RGBtoHSB(it.red, it.green, it.blue, null)[0] }
+        val tinted = icon.hueShifted(from, to, attrs?.access)
         val badge = "c".takeIf { attrs?.isConst == true }.orEmpty() + "v".takeIf { attrs?.isVolatile == true }.orEmpty()
         if (badge.isEmpty()) tinted else tinted.badged(badge)
     }
 
 /**
- * [this] icon with every pixel's hue turned to [hue]'s (greyed when null), its saturation and brightness
- * kept, then darkened for [Access.PRIVATE] or paled for [Access.PROTECTED]. Grey pixels stay grey.
+ * [this] icon, drawn in hue [from], turned to hue [to] (degrees), greyed when [to] is null: every pixel's
+ * hue rotates by the same angle, so shading in other hues rotates with it, and its saturation and
+ * brightness stay. Then darkened for [Access.PRIVATE] or paled for [Access.PROTECTED]. Grey pixels stay grey.
  */
-private fun Icon.tinted(hue: Color?, access: Access?): Icon {
-    val target = hue?.let { Color.RGBtoHSB(it.red, it.green, it.blue, null)[0] }
+private fun Icon.hueShifted(from: Float, to: Float?, access: Access? = null): Icon {
+    val shift = ((to ?: from) - from)
     return recolored { r, g, b ->
-        val (_, sat, bright) = Color.RGBtoHSB(r, g, b, null)
-        var s = if (target == null) 0f else sat
+        val (hue, sat, bright) = Color.RGBtoHSB(r, g, b, null)
+        var s = if (to == null) 0f else sat
         var v = bright
         when (access) {
             Access.PRIVATE -> v *= (1 - PRIVATE_SHADE).toFloat()
@@ -361,7 +378,8 @@ private fun Icon.tinted(hue: Color?, access: Access?): Icon {
 
             else -> {}
         }
-        val rgb = Color.HSBtoRGB(target ?: 0f, s, v)
+        // HSBtoRGB takes the hue's fractional part: a turn past red wraps.
+        val rgb = Color.HSBtoRGB(hue + shift, s, v)
         Triple(rgb shr 16 and 0xff, rgb shr 8 and 0xff, rgb and 0xff)
     }
 }

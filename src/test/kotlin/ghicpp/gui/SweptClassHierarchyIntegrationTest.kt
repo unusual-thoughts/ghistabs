@@ -154,7 +154,7 @@ class SweptClassHierarchyIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         qux.origin mustBe Origin.SWEPT
         qux.members.filter { it.library != null }.map { it.name to it.library } mustBe listOf("g" to "LIBQUX.SO")
         val ext = hierarchy.classes.single { it.qualifiedName == "Ext" }
-        ext.origin mustBe Origin.IMPORTED
+        ext.origin mustBe Origin.LIBRARY
         ext.members.map { it.name to it.library } mustBe listOf("g" to "LIBQUX.SO")
     }
 }
