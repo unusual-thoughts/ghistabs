@@ -48,7 +48,7 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         calls: Map<String, Map<Long, Set<String>>> = emptyMap(),
         slots: Map<String, List<String?>> = emptyMap(),
     ): Map<String, List<Pair<String, Long?>>> {
-        val reading = StructorFinder.Reading(
+        val uses = StructorInspector.ThisUses(
             stores.entries.associate { (f, cs) -> fn(f) to VptrStores(cs.mapTo(mutableSetOf(), ::cls)) },
             calls.entries.associate { (f, byOffset) ->
                 fn(f) to byOffset.mapValues { (_, called) -> called.mapTo(mutableSetOf(), ::fn) }
@@ -56,7 +56,7 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
         val tables: Map<ClassDecl, List<Function?>> =
             slots.entries.associate { (c, fs) -> cls(c) to fs.map { it?.let(::fn) } }
-        BaseCandidates(tables).inferBases(classes.values, reading)
+        BaseCandidates(tables).inferBases(classes.values, uses)
         return classes.values.filter { it.bases.isNotEmpty() }
             .associate { c -> c.name to c.bases.map { it.cls.name to it.offset } }
     }

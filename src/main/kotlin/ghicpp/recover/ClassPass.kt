@@ -23,7 +23,7 @@ import ghistabs.toClass
 /**
  * What a class pass does once an ABI's records have given it the classes ([RttiParser], [ClassPassInput]): each virtual
  * function moved into the class that introduced it ([introducingClass]) and marked virtual, each constructor
- * and destructor ([StructorFinder]) moved there and named, each class sized off its allocations and layout
+ * and destructor ([StructorInspector]) moved there and named, each class sized off its allocations and layout
  * ([sizeBounds]), and the classes written to [ClassHierarchyRecords]. [vfptrModel] says whether a class
  * struct splits a base around the vptr it takes over ([ClassStructFiller]).
  */
@@ -36,7 +36,7 @@ class ClassPass(
     DiagnosticSink by sink {
     val vfptrModel: VfptrModel by VfptrModel.OPTION
 
-    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorFinder]). */
+    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorInspector]). */
     var fillArrays: Boolean by FILL_ARRAYS
 
     init {
@@ -51,7 +51,11 @@ class ClassPass(
         val structors: Int,
         val sized: Int,
         val filled: Int,
-    )
+    ) {
+        /** The constructors and destructors the pass found, and what they call, for a later pass to read. */
+        var found: FoundStructors? = null
+            internal set
+    }
 
     private val abi = parser.abi
 
@@ -60,8 +64,8 @@ class ClassPass(
         val read = parser.parse(monitor)
         stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
-        val finder = StructorFinder(program, read.classes, this, fillArrays)
-        val found = finder.find(read.holders, abi, monitor)
+        val inspector = StructorInspector(program, read.classes, this, fillArrays)
+        val found = inspector.find(read.holders, abi, monitor)
         val structors = found.roles
         var moved = 0
         monitor.initialize(owners.size.toLong(), "Moving virtual functions into their classes")
@@ -99,6 +103,7 @@ class ClassPass(
         for (func in ctors.keys) func.addTag(ClassPassTags.CONSTRUCTOR)
         writeRecords(read.recorded)
         return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size, filled)
+            .also { it.found = found }
     }
 
     /**
@@ -204,16 +209,7 @@ class ClassPass(
             val ns = cls.ns?.toClass() ?: continue
             val length = size.first.toInt()
             runCatching {
-                when (val struct = program.classStruct(ns)) {
-                    null -> program.dataTypeManager.addDataType(
-                        StructureDataType(ClassNaming.vftableCategory(ns), ns.name, length),
-                        DataTypeConflictHandler.KEEP_HANDLER,
-                    )
-
-                    else if struct.isZeroLength -> struct.growStructure(length)
-
-                    else if struct.length < length -> struct.growStructure(length - struct.length)
-                }
+                program.sizeClassStruct(ns, length)
             }.onFailure { warn("class-struct-unsized", "${ns.getName(true)} -> $length: $it") }
         }
         return sized

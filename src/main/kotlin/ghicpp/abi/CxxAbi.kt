@@ -152,7 +152,7 @@ interface Structor {
     fun displayName(className: String): String
 }
 
-/** How an ABI's constructors and destructors behave, for `StructorFinder` and `AllocationSizeFinder`. */
+/** How an ABI's constructors and destructors behave, for `StructorInspector` and `AllocationSizeFinder`. */
 interface StructorConvention {
     /** The variant [func] is, given its [role]; null where that doesn't say. */
     fun structorFor(role: StructorRole, func: Function): Structor? = null

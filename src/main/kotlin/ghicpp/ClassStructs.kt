@@ -2,7 +2,9 @@ package ghicpp
 
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeComponent
+import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -80,3 +82,34 @@ internal fun DiagnosticSink.placeBase(
 /** The class's struct where `RecoverClassesFromRTTIScript` files it. */
 fun Program.classStruct(ns: GhidraClass) =
     dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
+
+/**
+ * Gives [ns] a [classStruct] of [size] bytes, or grows its own to them. Where its last field is one of its own
+ * `<Class>_data` structs, that grows with it, so the fields its constructors store past the old end are refilled
+ * there. A base's `_fields` part keeps its size: it is the base's, which grew none.
+ */
+fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
+    if (size <= 0) return
+    when (val struct = classStruct(ns)) {
+        null -> dataTypeManager.addDataType(
+            StructureDataType(ClassNaming.vftableCategory(ns), ns.name, size),
+            DataTypeConflictHandler.KEEP_HANDLER,
+        )
+
+        else if struct.isZeroLength -> struct.growStructure(size)
+
+        else if struct.length < size -> {
+            val last = struct.definedComponents.lastOrNull()?.takeIf { it.endOffset == struct.length - 1 }
+            val data = (last?.dataType as? Structure)?.takeIf { it.isDataOf(ns, struct) }
+            struct.growStructure(size - struct.length)
+            if (last != null && data != null) {
+                data.growStructure(size - last.offset - data.length)
+                struct.replaceAtOffset(last.offset, data, data.length, last.fieldName, last.comment)
+            }
+        }
+    }
+}
+
+/** Whether this is one of [ns]'s own `<Class>_data` structs, filed beside its [struct]. */
+private fun Structure.isDataOf(ns: GhidraClass, struct: Structure) =
+    categoryPath == struct.categoryPath && name.startsWith(ns.name + ClassNaming.DATA)

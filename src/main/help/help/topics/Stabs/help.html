@@ -572,7 +572,9 @@
           <TD><B>Method classes from this</B></TD>
           <TD>Moves each unnamed global function whose first argument comes in where
           <CODE>this</CODE> does into the class of the objects its callers pass it, using only the
-          classes the class record already holds as evidence. Where callers pass several classes it
+          classes the class record already holds as evidence: a method's own <CODE>this</CODE>, the
+          member object or base its class's struct lays at an offset into it, or an object built with
+          a recorded constructor. Where callers pass several classes it
           goes to the one they all lead to through bases at offset 0, and nowhere if none does. Runs
           after the class passes and leaves an Analysis bookmark on each guess.</TD>
         </TR>
@@ -586,9 +588,67 @@
           of a class <CODE>Klass_&lt;address&gt;</CODE> and goes through the class pass, as the RTTI
           class analyzers' classes do. A class's base is inferred from the vtable a structor's call
           on <CODE>this</CODE> stores, or from the slots its table shares with others; bases at an
-          offset are not. It also has the <I>Virtual function pointer model</I> and <I>Arrays from fill loops</I> options. Run it once most of the
+          offset are not. Its <I>Classes of member objects</I> option, on by default, gives a
+          class to each member a constructor builds at an offset into <CODE>this</CODE> with a
+          function that stores no vptr, sized off that function's stores and laid in the holding
+          class. It has no vtable, so it is named <CODE>NPKlass_&lt;address&gt;</CODE> after its
+          first constructor's address, not a table's, as its struct's description says. It also has the <I>Virtual function pointer model</I> and <I>Arrays from fill loops</I> options. Run it once most of the
           program is disassembled and its references marked, and again after: a rerun finds more,
           and cuts a table it seeded where code now refers into it.</TD>
+        </TR>
+      </TABLE>
+    </BLOCKQUOTE>
+
+    <H3><A name="Stabs_Runtime_Labels"></A>Runtime functions worth labelling</H3>
+
+    <P>The class analyzers (<I>MSVC RTTI classes</I>, <I>Itanium RTTI classes</I> and <I>Vftables
+    from pointer tables</I>), and the Class Hierarchy window, know a few runtime functions by name.
+    An import or a symbol names them already. In a stripped program with the runtime linked in,
+    they are unnamed <CODE>FUN_&hellip;</CODE>, so label them before running the analyzers, or
+    rerun the analyzers once they are labelled. A call through a thunk counts as a call to the
+    function.</P>
+
+    <BLOCKQUOTE>
+      <TABLE border="1" width="100%">
+        <TR>
+          <TH width="20%">Function</TH>
+          <TH>What it gives, and what is lost unlabelled</TH>
+        </TR>
+
+        <TR>
+          <TD><CODE>operator new</CODE><BR>(<CODE>operator_new</CODE>, <CODE>operator new</CODE>,
+          or its mangled name)</TD>
+          <TD>The class pass, which every class analyzer runs, sizes a class at least
+          <CODE>size</CODE> where its constructor is called on what <CODE>new(size)</CODE>
+          returned. Unlabelled, classes are sized only off the furthest field their constructors
+          store, and fall short of any trailing field those leave unset.</TD>
+        </TR>
+
+        <TR>
+          <TD><CODE>operator delete</CODE><BR>(<CODE>operator_delete</CODE>,
+          <CODE>operator delete</CODE>, or its mangled name)</TD>
+          <TD>The class pass takes a vtable slot that frees <CODE>this</CODE> with it for a
+          deleting destructor, and finds the destructor it calls. Unlabelled, each deleting
+          destructor is named a plain destructor, and the destructor it calls is not found.</TD>
+        </TR>
+
+        <TR>
+          <TD>The pure virtual stub<BR>(<CODE>_purecall</CODE>, <CODE>__cxa_pure_virtual</CODE>,
+          <CODE>__cxa_deleted_virtual</CODE>, <CODE>__pure_virtual</CODE>)</TD>
+          <TD>The class analyzers leave a slot holding it out: it is not a virtual method of the
+          class, nor a slot two tables share. The Class Hierarchy window shows a class abstract by
+          it, and the slots' override chains skip it. Unlabelled, the stub is taken for a virtual
+          method, and moved into the base the classes holding it share, if they have one.
+          <I>Vftables from pointer tables</I> takes the tables holding it in the same slot for a
+          base's and its derived classes', and infers wrong bases off it. No class shows
+          abstract.</TD>
+        </TR>
+
+        <TR>
+          <TD><CODE>memset</CODE><BR>(<CODE>memset</CODE>, <CODE>_memset</CODE>)</TD>
+          <TD>With <I>Arrays from fill loops</I>, a constructor's <CODE>memset(this + k, c,
+          n)</CODE>, <CODE>n</CODE> a constant, lays an array at k. Unlabelled, only inline fills
+          (<CODE>REP STOSD</CODE>, or a store loop) are seen.</TD>
         </TR>
       </TABLE>
     </BLOCKQUOTE>
