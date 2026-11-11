@@ -1,7 +1,7 @@
 package ghicpp.analyzers
 
+import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.fixMethodConvention
-import ghicpp.recover.ClassPassTags
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -15,7 +15,7 @@ import ghistabs.isMethod
 /**
  * Each method's calling convention as `this` makes it ([fixMethodConvention]): an x86 `__fastcall` that takes
  * nothing in EDX becomes the `__thiscall` it is, and a method Ghidra's "Decompiler Parameter ID" committed in
- * custom storage gets its auto-`this` back. One a class pass placed ([ClassPassTags.METHOD]) is known to take
+ * custom storage gets its auto-`this` back. One a class pass placed ([isPlacedByClassPass]) is known to take
  * `this`, so a default convention becomes `__thiscall` too, as the pass makes it.
  *
  * On the functions already in a class when they are added: the debug info's, the demangler's. The class passes,
@@ -44,7 +44,7 @@ class MethodConventionAnalyzer :
         monitor.initialize(methods.size.toLong(), "Fixing method conventions")
         val fixed = methods.count { f ->
             monitor.increment()
-            runCatching { f.fixMethodConvention(takesThis = f.tags.any { it.name == ClassPassTags.METHOD }) }
+            runCatching { f.fixMethodConvention(takesThis = program.isPlacedByClassPass(f)) }
                 .onFailure { log.appendMsg(NAME, "failed on ${f.name} @${f.entryPoint}: ${it.message}") }
                 .getOrDefault(false)
         }

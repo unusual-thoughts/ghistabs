@@ -1,7 +1,7 @@
 package ghicpp
 
+import ghicpp.MemberAttrs.Companion.recordPlaced
 import ghicpp.analyzers.MethodConventionAnalyzer
-import ghicpp.recover.ClassPassTags
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataType
@@ -90,12 +90,12 @@ class MethodConventionIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
     @Test
     fun `the analyzer rerun makes one a class pass placed a __thiscall`() {
         val placed = method("0x401050", "__stdcall")
-        val untagged = method("0x401060", "__stdcall")
+        val unplaced = method("0x401060", "__stdcall")
         program.runTransaction {
-            placed.addTag(ClassPassTags.METHOD)
+            program.recordPlaced(placed, structor = null, virtual = false)
             MethodConventionAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog())
         }
         placed.callingConventionName mustBe "__thiscall"
-        untagged.callingConventionName mustBe "__stdcall"
+        unplaced.callingConventionName mustBe "__stdcall"
     }
 }
