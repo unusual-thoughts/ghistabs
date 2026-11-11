@@ -8,9 +8,12 @@ import docking.action.ToolBarData
 import docking.widgets.dialogs.InputDialog
 import generic.theme.GIcon
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghicpp.hierarchy.applySignatureToSlots
+import ghicpp.hierarchy.functionOf
 import ghicpp.hierarchy.relocateNamespace
 import ghicpp.hierarchy.renameClass
 import ghicpp.hierarchy.resolve
+import ghicpp.hierarchy.slotDefinitionsOf
 import ghicpp.hierarchy.updateFieldTypes
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.app.context.ProgramSymbolActionContext
@@ -21,6 +24,7 @@ import ghidra.app.services.CodeViewerService
 import ghidra.app.services.DataTypeManagerService
 import ghidra.app.util.AddEditDialog
 import ghidra.program.model.data.DataTypeConflictHandler
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolType
@@ -111,14 +115,30 @@ private fun ClassTree.addMemberActions() {
     addLocalAction(
         object : DockingAction("Update Field Types from Method", owner) {
             override fun actionPerformed(context: ActionContext?) {
-                updateFieldTypes(selectedMembers.groupBy({ it.second }, { it.first }).toList())
+                updateFieldTypes(selectedMethods().groupBy({ it.second }, { it.first }).toList())
             }
         }.apply {
             popupMenuData = MenuData(arrayOf("Update Field Types"), STRUCT_ICON)
             popupWhen {
-                selectedMembers.let { sel ->
-                    sel.isNotEmpty() &&
-                        sel.all { (m, cls) -> m.kind == MemberKind.FUNCTION && cls.structId != null }
+                selectedMethods().let { sel -> sel.isNotEmpty() && sel.all { (_, cls) -> cls.structId != null } }
+            }
+        },
+    )
+    addLocalAction(
+        object : DockingAction("Apply Signature to Vftables", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                val p = program ?: return
+                val funcs = selectedMethods().map { it.first }
+                val changed = p.runTransaction("Apply signature to vftables") {
+                    funcs.sumOf { p.applySignatureToSlots(it) }
+                }
+                tool.setStatusInfo("Applied ${funcs.size} signature(s) to $changed vftable slot definition(s)")
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Apply Signature to Vftables"), VTABLE_ICON)
+            popupWhen {
+                selectedMethods().let { sel ->
+                    sel.isNotEmpty() && sel.all { (f, _) -> program?.slotDefinitionsOf(f)?.isNotEmpty() == true }
                 }
             }
         },
@@ -221,7 +241,7 @@ private fun memberSymbols(context: ActionContext): List<Symbol> =
  * Retypes each class's fields off the methods paired with it, or off all its own when null, decompiling
  * them in a task that can be cancelled: what it retyped before then stays.
  */
-private fun ClassTree.updateFieldTypes(targets: List<Pair<ClassView, List<Member>?>>) {
+private fun ClassTree.updateFieldTypes(targets: List<Pair<ClassView, List<Function>?>>) {
     val p = program ?: return
     TaskLauncher.launchModal(
         "Update Field Types",
@@ -233,6 +253,12 @@ private fun ClassTree.updateFieldTypes(targets: List<Pair<ClassView, List<Member
             }
         },
     )
+}
+
+/** The selected members' functions with their classes, when they are all functions; empty otherwise. */
+private fun ClassTree.selectedMethods(): List<Pair<Function, ClassView>> {
+    val p = program ?: return emptyList()
+    return selectedMembers.map { (m, cls) -> (p.functionOf(m) ?: return emptyList()) to cls }
 }
 
 /** A struct for [cls], which has none, where Ghidra files a class's; its datatype id. */
