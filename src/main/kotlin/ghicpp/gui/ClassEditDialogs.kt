@@ -102,12 +102,13 @@ private fun Component.confirmSolid(edits: List<BaseEdit>): Boolean = edits.all {
 
 /**
  * Where [addition] places its base as [clause] spells it, once whatever that overwrites is confirmed: none
- * for no offset, or for an edited clause that keeps its offset and virtuality. Null when declined.
+ * for no offset, or for an edited clause that keeps its offset, which [respellBase] renames in place
+ * instead. Null when declined.
  */
 private fun Program.placement(addition: BaseEdit?, clause: BaseRef?, component: Component): Placement? {
     val base = addition?.added ?: return Placement(null)
     val old = addition.removed
-    val unmoved = addition.isReclause && clause?.offset == old?.offset && clause?.isVirtual == old?.isVirtual
+    val unmoved = addition.isReclause && clause?.offset == old?.offset
     val offset = clause?.offset?.toInt()?.takeUnless { unmoved } ?: return Placement(null)
     val hit = overwrittenBy(addition.of, base, offset)
     val list = hit.joinToString("\n") { "  +0x%x %s".format(it.offset, it.fieldName ?: it.defaultFieldName) }
@@ -127,9 +128,12 @@ fun Program.applyEdits(edits: List<BaseEdit>, tool: PluginTool, component: Compo
     runCatching {
         runTransaction("Edit class hierarchy") {
             for (edit in edits) setBases(edit.of, edit.bases(clause.takeIf { edit.added != null }))
-            place?.let { (base, offset) ->
-                placeBase(addition!!.of, base, offset, clause!!.isVirtual, addition.bases(clause).size)
+            val count = addition?.bases(clause)?.size ?: 0
+            val revirtualized = addition?.takeIf { it.isReclause && clause?.isVirtual != it.removed?.isVirtual }
+            if (place == null && revirtualized != null) {
+                respellBase(revirtualized.of, revirtualized.added!!, clause!!.isVirtual, count)
             }
+            place?.let { (base, offset) -> placeBase(addition!!.of, base, offset, clause!!.isVirtual, count) }
         }
     }.onFailure {
         Msg.showError(this, component, "Edit Class Hierarchy", it.message, it)

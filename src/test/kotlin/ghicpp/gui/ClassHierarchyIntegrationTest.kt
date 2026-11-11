@@ -146,8 +146,12 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         node.children.filterIsInstance<MemberNode>().map { it.member } mustBe circle
         // Under a base, a class shows only its own bases.
         node.children.first().children.none { it is MemberNode }.mustBeTrue()
-        ClassTreeRoot(program.name, hierarchy, showMembers = false).children.single { it.name == "Circle" }
+        ClassTreeRoot(program.name, hierarchy, memberKinds = emptySet()).children.single { it.name == "Circle" }
             .children.none { it is MemberNode }.mustBeTrue()
+        // Only the kinds shown: here its vtable and typeinfo, not its functions.
+        ClassTreeRoot(program.name, hierarchy, memberKinds = setOf(MemberKind.VTABLE, MemberKind.ABI))
+            .children.single { it.name == "Circle" }.children.filterIsInstance<MemberNode>()
+            .map { it.member } mustBe circle.filter { it.kind == MemberKind.VTABLE || it.kind == MemberKind.ABI }
     }
 
     @ParameterizedTest
@@ -437,7 +441,7 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
     fun `inverted, a basal class expands into the classes derived from it, each under every base`(fixture: String) {
         load(fixture)
         val root =
-            ClassTreeRoot(program.name, ClassHierarchy.of(program), showMembers = false, inverted = true)
+            ClassTreeRoot(program.name, ClassHierarchy.of(program), memberKinds = emptySet(), inverted = true)
         root.children.none {
             it.name == "Circle" || it.name == "Diamond"
         }.mustBeTrue("${root.children.map { it.name }}")
