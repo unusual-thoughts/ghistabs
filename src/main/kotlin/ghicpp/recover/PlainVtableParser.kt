@@ -11,6 +11,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghidra.util.task.TaskMonitor
+import ghistabs.components
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.minus
@@ -187,8 +188,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
     private fun slotsOf(record: VtableRecord, keepNulls: Boolean = false): List<Address> {
         val laid = program.listing.getDataAt(record.addressPoint)
         if (laid == null || laid.numComponents == 0 || !laid.isStructure) return record.slots(program)
-        return (0 until laid.numComponents).mapNotNull { laid.getComponent(it).value as? Address }
-            .filter { keepNulls || it.offset != 0L }
+        return laid.components.mapNotNull { it.value as? Address }.filter { keepNulls || it.offset != 0L }
     }
 
     private companion object {

@@ -232,6 +232,7 @@ class MemberNode(val member: Member) : GTreeNode() {
     override fun getToolTip(): String = buildString {
         append("<html>").append(escape(member.signature ?: member.name))
         member.attrs?.describe()?.takeIf { it.isNotEmpty() }?.let { append("<br>").append(it) }
+        member.slot?.let { append("<br>").append(escape(it.toString())) }
         member.library?.let { append("<br>imported from ").append(escape(it)) }
         member.aliases.forEach { append("<br>also ").append(escape(it)) }
         append("<br>at ").append(member.address)

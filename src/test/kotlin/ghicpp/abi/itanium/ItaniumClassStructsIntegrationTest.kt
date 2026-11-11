@@ -152,6 +152,18 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
         }
     }
 
+    @Test
+    fun `the window lists a class's virtual functions by slot, then the rest by name`() {
+        val rect = ClassHierarchy.of(program, hasStabs = false).classes.single { it.qualifiedName == "Rect" }
+        val functions = rect.members.filter { it.kind == ClassHierarchy.MemberKind.FUNCTION }
+        // Its destructors, `area`, `name` (`Shape`'s, so not its own) and `perim`: slots 0, 1, 2 and 4.
+        functions.mapNotNull { it.slot?.toString() } mustBe listOf("slot 0", "slot 1", "slot 2", "slot 4")
+        functions.dropWhile { it.slot != null }.let { rest ->
+            rest.none { it.slot != null }.mustBeTrue()
+            rest.map { it.name } mustBe rest.map { it.name }.sorted()
+        }
+    }
+
     private fun Program.methods(cls: String) = functionManager.getFunctions(true).filter {
         it.parentNamespace.name == cls
     }
