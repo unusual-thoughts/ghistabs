@@ -69,8 +69,10 @@ class HullDisassemblyAnalyzer :
         val executable = program.memory.executeSet
 
         val recover = mutableMapOf<AddressRange, String>()
-        for (fn in program.functionManager.getFunctions(set, true)) {
-            monitor.checkCancelled()
+        val functions = program.functionManager.getFunctions(set, true).toList()
+        monitor.initialize(functions.size.toLong(), "Finding code in function hulls")
+        for (fn in functions) {
+            monitor.increment()
             if (fn.isExternal || fn.isThunk) continue
             val hull = AddressSet(fn.entryPoint, fn.body.maxAddress).intersect(executable)
             for (range in program.listing.getUndefinedRanges(hull, false, monitor)) {

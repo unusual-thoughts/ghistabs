@@ -109,7 +109,7 @@ class StructorFinder(
                 }
             }
             roles += found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
-            val more = decompile(found.keys, emptyMap(), monitor)
+            val more = decompile(found.keys, emptyMap(), monitor, "Decompiling base constructors")
             subobjectCalls += more.subobjectCalls
             thisStores += more.thisStores
             built = found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
@@ -119,7 +119,7 @@ class StructorFinder(
 
     /** The fields each of [funcs] loads or stores through `this`, decompiled, by offset into it, typed off how. */
     fun thisFields(funcs: Collection<Function>, monitor: TaskMonitor) =
-        decompile(funcs, emptyMap(), monitor, storedOnly = false).thisStores
+        decompile(funcs, emptyMap(), monitor, "Decompiling methods for their fields", storedOnly = false).thisStores
 
     /**
      * The constructor of each base of [ctors]' classes that has no vtable, so stores none: the one function
@@ -264,6 +264,7 @@ class StructorFinder(
      * member objects; a call, only with `this` first, which leaves out a local built and destroyed.
      */
     private fun read(others: Collection<Function>, monitor: TaskMonitor): Reading {
+        monitor.setMessage("Finding vptr stores")
         val writes = buildMap {
             for ((table, served) in tables) {
                 for (ref in program.referenceManager.getReferencesTo(table)) {
@@ -283,6 +284,7 @@ class StructorFinder(
         funcs: Collection<Function>,
         writes: Map<Function, Map<Address, List<Pair<ClassDecl, Long>>>>,
         monitor: TaskMonitor,
+        message: String = "Decompiling constructors and destructors",
         storedOnly: Boolean = true,
     ): Reading {
         val stores = mutableMapOf<Function, VptrStores>()
@@ -290,8 +292,10 @@ class StructorFinder(
         val thisStores = mutableMapOf<Function, Map<Int, DataType>>()
         if (thisStorage != null) {
             val fill = FillOutStructureHelper(program, monitor)
+            monitor.initialize(funcs.size.toLong(), message)
             DecompInterface().useWith(program) { decomp ->
                 for (func in funcs) {
+                    monitor.incrementProgress()
                     val high = decomp.decompiled(func, monitor) ?: continue
                     val calls = high.subobjectCalls()
                     val filled = fill.fillThis(high)

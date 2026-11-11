@@ -68,7 +68,7 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: O
         if (!program.isStabsDone) {
             return err("Run the Stabs importer first (auto-analysis, or Tools > Stabs > Re-import).")
         }
-        val records = StabReader.fromProgram(program)?.readAll()?.records
+        val records = StabReader.fromProgram(program)?.readAll(monitor)?.records
             ?: return err("No stabs found in this program.")
         val ctx = ImportContext(program, monitor, sink)
         val harvest = ctx.harvester().harvest(records)

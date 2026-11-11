@@ -46,7 +46,9 @@ class ItaniumRttiParser(private val program: Program, private val sink: Diagnost
 
     /** The classes [labelled] reaches, with their vtables' slots. */
     override fun parse(monitor: TaskMonitor): ClassPassInput {
+        monitor.setMessage("Reading Itanium typeinfo")
         val labelled = labelled()
+        monitor.setMessage("Reading Itanium vtables")
         return ClassPassInput(classes.values.toList(), labelled, readVtables(labelled))
     }
 

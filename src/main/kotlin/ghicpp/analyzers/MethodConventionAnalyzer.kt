@@ -39,8 +39,9 @@ class MethodConventionAnalyzer :
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val methods = program.functionManager.getFunctions(set, true).filter { it.isMethod }
-        monitor.checkCancelled()
+        monitor.initialize(methods.size.toLong(), "Fixing method conventions")
         val fixed = methods.count { f ->
+            monitor.increment()
             runCatching { f.fixMethodConvention() }
                 .onFailure { log.appendMsg(NAME, "failed on ${f.name} @${f.entryPoint}: ${it.message}") }
                 .getOrDefault(false)
