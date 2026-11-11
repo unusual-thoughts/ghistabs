@@ -22,6 +22,7 @@ tasks.named<Zip>("buildExtension") {
         "Module.manifest",
         "README.md",
         "lib/**",
+        "data/**",
         "ghidra_scripts/**",
         "${project.name}.jar",
         "${project.name}-src.zip",

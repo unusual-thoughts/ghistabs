@@ -1,5 +1,6 @@
 package ghicpp.analyzers
 
+import ghicpp.ClassRecordSource
 import ghicpp.VfptrModel
 import ghicpp.abi.itanium.ItaniumRttiParser
 import ghicpp.recover.ClassPass
@@ -17,13 +18,12 @@ import ghistabs.analyzerOptions
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.diagnose.report
-import ghistabs.parse.StabReader
 import ghistabs.register
 
 /**
  * Class records and virtual members off the Itanium RTTI ([ItaniumRttiParser]), what [MsvcClassAnalyzer] does
  * for MSVC: on a gcc 3+ binary with no stabs, a stripped one included once [RttiSymbolAnalyzer] has put
- * its RTTI labels back. A binary with stabs gets its classes from them.
+ * its RTTI labels back. A binary another [ClassRecordSource] describes (one with stabs) gets its classes from it.
  *
  * After [VtableSweepAnalyzer], whose `vtable` labels it reads.
  */
@@ -40,7 +40,8 @@ class ItaniumClassAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun canAnalyze(program: Program) = GnuDemangler().canDemangle(program) && !StabReader.hasStabs(program)
+    override fun canAnalyze(program: Program) =
+        GnuDemangler().canDemangle(program) && !ClassRecordSource.describedElsewhere(program)
 
     override fun registerOptions(options: Options, program: Program) = options.register(VfptrModel.OPTION, FILL_ARRAYS)
 
