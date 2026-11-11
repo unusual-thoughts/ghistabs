@@ -5,9 +5,11 @@ import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DoubleDataType
 import ghidra.program.model.data.Float10DataType
 import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.VoidDataType
 import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.lang.PrototypeModel
 import ghidra.program.model.listing.Function
+import ghidra.program.model.listing.Parameter
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.ReturnParameterImpl
@@ -109,14 +111,15 @@ fun Function.restoreThisParam(): Boolean {
 }
 
 /**
- * Gives a function that takes `this` but no convention saying so the `__thiscall` that does, where that only
- * names its first argument: its convention unknown, the default or the compiler's default, set by an analysis,
- * and `__thiscall` taking `this` where that convention takes the first argument, its return where it is
+ * Gives a function that takes `this` but no convention saying so the `__thiscall` that does: its convention
+ * unknown, the default or the compiler's default, set by an analysis, and its return where `__thiscall` puts it
  * ([returnTypeUnder]). Under x86 gcc, whose `__thiscall` takes `this` on the stack as `__cdecl` takes its
- * first argument; not under MSVC, whose takes it in ECX ([fastcallToThiscall] covers that). Only for a
- * function known to take `this`: a static member function sits in its class too. Whether it changed anything.
+ * first argument, that argument becomes `this`. Under MSVC, whose `__thiscall` takes `this` in ECX, a
+ * `__stdcall` becomes it with its stack arguments where they are, both popping them: what Ghidra makes of a
+ * method that never reads `this` ([fastcallToThiscall] covers one that does). Only for a function known to
+ * take `this`: a static member function sits in its class too. Whether it changed anything.
  */
-fun Function.thiscallFromFirstArgument(): Boolean {
+fun Function.thiscallFromDefaultConvention(): Boolean {
     val fm = program.functionManager
     val thiscall = fm.getCallingConvention(THISCALL) ?: return false
     val defaultModel = program.compilerSpec.defaultCallingConvention
@@ -128,10 +131,16 @@ fun Function.thiscallFromFirstArgument(): Boolean {
     if (signatureSource.isHigherPriorityThan(SourceType.ANALYSIS)) return false
     val pointer = PointerDataType(program.dataTypeManager)
     val thisAt = thiscall.getArgLocation(0, null, pointer, program)
-    if (current.getArgLocation(0, null, pointer, program) != thisAt) return false
-    val returned = returnTypeUnder(thiscall) ?: return false
     val params = parameters.filterNot { it.isAutoParameter }
-    val rest = if (params.firstOrNull()?.variableStorage == thisAt) params.drop(1) else params
+    val rest = when {
+        current.getArgLocation(0, null, pointer, program) == thisAt ->
+            if (params.firstOrNull()?.variableStorage == thisAt) params.drop(1) else params
+
+        current.name == STDCALL && thisAt.isRegisterStorage && params.keepStorageUnder(thiscall, program) -> params
+
+        else -> return false
+    }
+    val returned = returnTypeUnder(thiscall) ?: return false
     return runCatching {
         updateFunction(
             THISCALL,
@@ -144,17 +153,26 @@ fun Function.thiscallFromFirstArgument(): Boolean {
     }.isSuccess
 }
 
+/** Whether these parameters, after a `this`, sit where [model] puts them, as a `__stdcall`'s stack ones do. */
+private fun List<Parameter>.keepStorageUnder(model: PrototypeModel, program: Program): Boolean {
+    val types = arrayOf<DataType>(VoidDataType.dataType, PointerDataType(program.dataTypeManager)) +
+        map { it.dataType }
+    val storage = model.getStorageLocations(program, types, false).drop(2)
+    return zip(storage).all { (param, at) -> param.variableStorage == at }
+}
+
 /**
  * A method's convention as `this` makes it: [fastcallToThiscall], then [restoreThisParam], and where the
  * caller knows it [takesThis] (a class pass placed it: a virtual function, a structor, a method guessed off its
- * callers), [thiscallFromFirstArgument]. What every function that lands in a class goes through, from the
+ * callers), [thiscallFromDefaultConvention]. What every function that lands in a class goes through, from the
  * analyzer ([ghicpp.analyzers.MethodConventionAnalyzer]) or a class pass placing it. Whether it changed
  * anything; throws where Ghidra refuses the signature.
  */
 fun Function.fixMethodConvention(takesThis: Boolean = false): Boolean =
-    fastcallToThiscall() or (takesThis && thiscallFromFirstArgument()) or restoreThisParam()
+    fastcallToThiscall() or (takesThis && thiscallFromDefaultConvention()) or restoreThisParam()
 
 private const val FASTCALL = CompilerSpec.CALLING_CONVENTION_fastcall
+private const val STDCALL = CompilerSpec.CALLING_CONVENTION_stdcall
 private const val THISCALL = CompilerSpec.CALLING_CONVENTION_thiscall
 private const val MSVC = "windows"
 
