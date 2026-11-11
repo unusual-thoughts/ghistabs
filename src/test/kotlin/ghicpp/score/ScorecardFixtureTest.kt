@@ -35,6 +35,8 @@ import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import java.io.File
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 /**
  * How a subject binary's classes are recovered: off its RTTI, the default analysis, or as if it had none,
@@ -79,7 +81,7 @@ data class TruthFile(val snapshot: Snapshot, val runtime: Map<String, Long> = em
  * The C++ class recovery's integration entrypoint: scores what it makes of each of [cases] against ground
  * truth, and holds every score to its baseline.
  *
- * The truth is committed, one file per truth binary under `src/test/resources/ghicpp/scorecard/truth/`: the
+ * The truth is committed, one gzipped JSON per truth binary under `src/test/resources/ghicpp/scorecard/truth/`: the
  * class view a stabs import, or a binary's own symbols, gives its twin. So scoring needs nothing but the
  * subject binaries and this package; `-PregenerateTruth=true` rebuilds the files from the truth binaries,
  * which takes the stabs importer. Review their diff as you would a fixture's.
@@ -155,9 +157,11 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         val name = binary.substringBefore('.') + if (recovered) "-rtti" else ""
         val compiler = if (asSource) "gcc" else case.twinCompiler
         return truths.getOrPut(name) {
-            val file = File(TRUTH_DIR, "$name.json")
+            // Gzipped: a Crypto++ build's truth is megabytes of JSON.
+            val file = File(TRUTH_DIR, "$name.json.gz")
             if (file.isFile && System.getProperty("regenerateTruth") != "true") {
-                return@getOrPut COMPACT.decodeFromString(TruthFile.serializer(), file.readText())
+                val text = GZIPInputStream(file.inputStream()).bufferedReader().use { it.readText() }
+                return@getOrPut COMPACT.decodeFromString(TruthFile.serializer(), text)
             }
             val bin = File(case.dir, binary)
             assumeTrue(bin.isFile, "$binary is not on disk, and no truth is committed for it")
@@ -165,7 +169,9 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
             val snapshot = snapshotOf(bin, compiler) { runtime = runtimeFunctions() }
             TruthFile(snapshot, runtime).also {
                 file.parentFile.mkdirs()
-                file.writeText(COMPACT.encodeToString(TruthFile.serializer(), it) + "\n")
+                GZIPOutputStream(file.outputStream()).bufferedWriter().use { w ->
+                    w.write(COMPACT.encodeToString(TruthFile.serializer(), it) + "\n")
+                }
             }
         }
     }

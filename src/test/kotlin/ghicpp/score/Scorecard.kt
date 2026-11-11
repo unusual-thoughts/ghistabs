@@ -107,6 +107,8 @@ private fun ClassView.functions() = members.filter { it.kind == MemberKind.FUNCT
 
 private fun address(text: String) = text.substringAfter(':').toLong(16)
 
+private fun ghicpp.Access.publicness() = if (this == ghicpp.Access.PUBLIC) "public" else "non-public"
+
 /** Where a class's name comes from the binary: its RTTI or a symbol's namespace. */
 private val NAMED = setOf(Origin.MSVC_RTTI, Origin.ITANIUM_RTTI, Origin.SWEPT_RTTI, Origin.NAMESPACE)
 
@@ -181,8 +183,9 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         if (truth.sameBinary) tallies["vftables"] = vftables()
         tallies["abstract"] = abstract()
         if (truth.membersKnown) {
-            tallies["methods"] = methods("method") { true }
-            tallies["virtual-methods"] = methods("virtual method") { it.attrs?.virt == VirtKind.VIRTUAL }
+            tallies["methods"] = methods("method", { _, _ -> true }) { true }
+            tallies["virtual-methods"] =
+                methods("virtual method", ::isTrulyVirtual) { it.attrs?.virt == VirtKind.VIRTUAL }
             tallies["structors"] = structors()
         }
         if (truth.sameLayout) {
@@ -249,11 +252,11 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
             for (key in claimed.keys intersect actual.keys) {
                 val a = actual.getValue(key)
                 val c = claimed.getValue(key)
-                if (a.access !=
-                    null
-                ) {
-                    access +=
-                        attribute(c.access, a.access) { "access of base `${a.name}` of `${tc.qualifiedName}`" }
+                // Neither ABI's RTTI tells a protected base from a private one: only whether it is public.
+                if (a.access != null) {
+                    access += attribute(c.access?.publicness(), a.access.publicness()) {
+                        "access of base `${a.name}` of `${tc.qualifiedName}`"
+                    }
                 }
                 if (truth.sameLayout && !a.isVirtual && a.offset != null) {
                     offsets += attribute(c.offset, a.offset) { "offset of base `${a.name}` of `${tc.qualifiedName}`" }
@@ -309,11 +312,15 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
      * The functions each class claims that [pick] keeps, by address, against the truth's. A function an
      * unmatched or duplicate class claims is false too: it belongs to no class the recovery found.
      */
-    private fun methods(label: String, pick: (ClassHierarchy.Member) -> Boolean): Tally {
+    private fun methods(
+        label: String,
+        actualPick: (ClassView, ClassHierarchy.Member) -> Boolean,
+        pick: (ClassHierarchy.Member) -> Boolean,
+    ): Tally {
         var total = Tally()
         for ((tc, sc) in scoredPairs) {
             val claimed = sc.functions().filter(pick).map { address(it.address) }.filter { it !in truthThunks }
-            val actual = tc.functions().filter(pick).associateBy { address(it.address) }
+            val actual = tc.functions().filter { actualPick(tc, it) }.associateBy { address(it.address) }
             total += Tally.of(claimed, actual.keys)
             for (at in claimed.toSet() - actual.keys) {
                 val owner = truthFunctionOwner[at]?.let { t[it]?.qualifiedName }
@@ -331,8 +338,19 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         return total + Tally(fp = strays)
     }
 
+    /**
+     * A truth member that is virtual. The stabs mark only the deleting variant of a virtual destructor so; the
+     * complete one, which an Itanium vtable holds too, comes out plain.
+     */
+    private fun isTrulyVirtual(cls: ClassView, m: ClassHierarchy.Member) = m.attrs?.virt == VirtKind.VIRTUAL ||
+        (m.name.startsWith("~") && cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL })
+
+    /** A constructor's or destructor's name: the class's own, less a template's arguments, which g++ leaves off. */
+    private fun ClassView.isStructorName(member: String) = member.removePrefix("~").substringBefore('<') ==
+        name.substringBefore('<')
+
     private fun ClassView.isStructor(m: ClassHierarchy.Member) =
-        m.name == name || m.name == "~$name" || m.variants.isNotEmpty() || m.msvcStructor != null
+        isStructorName(m.name) || m.variants.isNotEmpty() || m.msvcStructor != null
 
     private fun structors(): Tally = scoredPairs.fold(Tally()) { acc, (tc, sc) ->
         val claimed = sc.functions().filter { sc.isStructor(it) }.map { address(it.address) }.filter {
