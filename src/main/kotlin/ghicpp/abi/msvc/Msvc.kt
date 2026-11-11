@@ -115,22 +115,33 @@ object Msvc : CxxAbi {
  */
 enum class MsvcStructor(
     val code: String,
+    /** What the Class Hierarchy window calls it. */
+    val label: String,
     override val isDestructor: Boolean,
     override val isDeleting: Boolean = false,
     private val demangled: String? = null,
 ) : Structor {
-    CONSTRUCTOR("??0", false),
+    CONSTRUCTOR("??0", "constructor", false),
 
     /** Destroys all but the virtual bases. */
-    DESTRUCTOR("??1", true),
-    VBASE_DESTRUCTOR("??_D", true, demangled = "`vbase_destructor'"),
+    DESTRUCTOR("??1", "destructor", true),
+    VBASE_DESTRUCTOR("??_D", "vbase destructor", true, demangled = "`vbase_destructor'"),
 
     /** The vftable slot that destroys and frees one object. */
-    SCALAR_DELETING_DESTRUCTOR("??_G", true, true, "`scalar_deleting_destructor'"),
+    SCALAR_DELETING_DESTRUCTOR("??_G", "scalar deleting destructor", true, true, "`scalar_deleting_destructor'"),
 
     /** The vftable slot that destroys and frees an array instead when its flags have bit 2 set. */
-    VECTOR_DELETING_DESTRUCTOR("??_E", true, true, "`vector_deleting_destructor'"),
+    VECTOR_DELETING_DESTRUCTOR("??_E", "vector deleting destructor", true, true, "`vector_deleting_destructor'"),
     ;
+
+    companion object {
+        /** The variant a mangled name says, `??1Foo@@QAE@XZ` a destructor. */
+        fun ofMangled(name: String): MsvcStructor? = entries.firstOrNull { name.startsWith(it.code) }
+
+        /** The variant [name] is in the class [className], as the class pass names one: `Foo`, `~Foo`. */
+        fun ofName(name: String, className: String): MsvcStructor? =
+            entries.firstOrNull { it.displayName(className) == name }
+    }
 
     /** The source's name, or for a compiler-made function the one Ghidra's demangler gives it. */
     override fun displayName(className: String) =

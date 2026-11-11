@@ -4,6 +4,7 @@ import ghicpp.ClassNaming
 import ghicpp.ClassStructsFixtureTest
 import ghicpp.analyzers.ItaniumClassAnalyzer
 import ghicpp.hierarchy.ClassHierarchy
+import ghicpp.hierarchy.functionOf
 import ghicpp.hierarchy.methodsOf
 import ghicpp.hierarchy.resolve
 import ghicpp.hierarchy.updateFieldTypes
@@ -124,7 +125,9 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
     fun `the window updates a class's field types from a method selected`() {
         val label = ClassHierarchy.of(program, hasStabs = false).classes.single { it.qualifiedName == "Label" }
         val area = label.members.single { it.name == "vfunction3_for_Rect" }
-        program.runTransaction { program.updateFieldTypes(label, listOf(area), TaskMonitor.DUMMY) }
+        program.runTransaction {
+            program.updateFieldTypes(label, listOf(program.functionOf(area)!!), TaskMonitor.DUMMY)
+        }
         program.data("Label") mustBe listOf(0 to "field_0x24: int")
     }
 
