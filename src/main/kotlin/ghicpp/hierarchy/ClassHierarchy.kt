@@ -294,13 +294,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                     structId = struct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
                     structName = struct?.name,
                     isAbstract = program.vftablesOf(ns).any {
-                        hasPureVirtualSlot(
-                            it,
-                            Msvc.takeIf {
-                                typeDescriptor !=
-                                    null
-                            },
-                        )
+                        val rttiAbi = Msvc.takeIf { typeDescriptor != null } ?: Itanium.takeIf { typeinfo != null }
+                        hasPureVirtualSlot(it, rttiAbi)
                     },
                     members = membersOf(ns, group - ns),
                     bases = basesOf(ns, typeinfo, idOf) { path -> byPath[path]?.id },
@@ -453,7 +448,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
             }
         }
 
-        // An MSVC table's `vftable` label doesn't name its ABI: the class's type descriptor does.
+        // A class's RTTI names its tables' ABI before their labels do: an MSVC type descriptor, an Itanium typeinfo.
         fun hasPureVirtualSlot(vftable: Address, known: CxxAbi? = null): Boolean {
             val abi = known ?: program.vtableAbi(vftable)
             return program.slotTargets(vftable).any { target ->
