@@ -108,6 +108,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val library: String? = null,
         /** The other labels at it that name it again, left out of the tree: a mangled name, a second label. */
         val aliases: List<String> = emptyList(),
+        /** For a virtual function the class's own vftables hold, its first slot there: the table and the index. */
+        val slot: Slot? = null,
     ) {
         val label: String get() = (if (isOverloaded && parameters != null) name + parameters else name) +
             (variants.map { it.label } + listOfNotNull(msvcStructor?.label))
@@ -116,6 +118,15 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         /** The program's own function or label: a vtable, typeinfo or import stays where its name files it. */
         val isMovable: Boolean get() =
             symbolId != null && library == null && kind != MemberKind.VTABLE && kind != MemberKind.ABI
+    }
+
+    /** A slot of a class's vftable: [table], its label, null for the primary one, and its [index] there. */
+    @Serializable
+    data class Slot(val table: String?, val index: Int) : Comparable<Slot> {
+        override fun compareTo(other: Slot) =
+            compareValuesBy(this, other, { it.table != null }, { it.table }, { it.index })
+
+        override fun toString() = "slot $index" + table?.let { " of $it" }.orEmpty()
     }
 
     enum class MemberKind {
@@ -342,7 +353,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
 
         /** [ns]'s members, and its [imports]: the same class's namespaces under the libraries it's imported from. */
         fun membersOf(ns: Namespace, imports: List<Namespace> = emptyList()): List<Member> {
-            val virtuals by lazy { program.virtualsOf(ns) }
+            val slots by lazy { program.slotsOf(ns) }
+            val virtuals by lazy { slots.keys }
             val (symbols, aliases) = (listOf(ns) + imports).flatMap { symtab.getSymbols(it) }
                 .withoutRepeats { it.labelKind() == MemberKind.LABEL }
             val members = symbols.mapNotNull { sym ->
@@ -362,6 +374,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                             symbolId = sym.id,
                             library = sym.library,
                             aliases = aliases[sym.address].orEmpty(),
+                            slot = slots[sym.address],
                         )
                     }
 
@@ -465,11 +478,18 @@ data class ClassHierarchy(val classes: List<ClassView>) {
     }
 }
 
-/** Every function [ns]'s vtables hold, a thunk's target with it. */
-private fun Program.virtualsOf(ns: Namespace): Set<Address> = buildSet {
-    for (target in vftablesOf(ns).flatMap(::slotTargets)) {
-        add(target)
-        functionManager.getFunctionAt(target)?.getThunkedFunction(true)?.let { add(it.entryPoint) }
+/** Every function [ns]'s vtables hold, a thunk's target with it, by its first slot, the primary table's first. */
+private fun Program.slotsOf(ns: Namespace): Map<Address, ClassHierarchy.Slot> = buildMap {
+    val tables = vftablesOf(ns).map { at ->
+        at to symbolTable.getSymbols(at).firstOrNull { ClassNaming.isClassVftableLabel(it.name) }?.name
+    }
+    val slots = tables.flatMap { (at, label) ->
+        val table = label.takeUnless { it == ClassNaming.VFTABLE }
+        slotTargets(at).mapIndexed { i, target -> target to ClassHierarchy.Slot(table, i) }.toList()
+    }.sortedBy { it.second }
+    for ((target, slot) in slots) {
+        putIfAbsent(target, slot)
+        functionManager.getFunctionAt(target)?.getThunkedFunction(true)?.let { putIfAbsent(it.entryPoint, slot) }
     }
 }
 
@@ -504,15 +524,18 @@ private fun SymbolTable.msvcStructorOf(sym: Symbol, ns: Namespace, isMsvc: Boole
     getSymbols(sym.address).firstNotNullOfOrNull { MsvcStructor.ofMangled(it.name) }
         ?: MsvcStructor.ofName(sym.name, ns.name).takeIf { isMsvc }
 
-// Vtables, then the other ABI objects, then functions and labels mixed by name, as the Symbol Tree.
+// Vtables, then the other ABI objects, then the virtual functions by slot, then the rest, functions and labels
+// mixed, by name, as the Symbol Tree.
 private val MEMBER_ORDER = compareBy<ClassHierarchy.Member>(
     { minOf(it.kind, ClassHierarchy.MemberKind.FUNCTION) },
-    { it.name },
-    { it.parameters },
-    { it.variants.firstOrNull() },
-    { it.label },
-    { it.address },
-)
+    // Virtual by the stabs with no slot found: after those with one.
+    { it.slot == null && it.attrs?.virt != VirtKind.VIRTUAL },
+).thenBy(nullsLast()) { it.slot }
+    .thenBy { it.name }
+    .thenBy { it.parameters }
+    .thenBy { it.variants.firstOrNull() }
+    .thenBy { it.label }
+    .thenBy { it.address }
 
 // The demangler's labels for Itanium special names, for when only those are left (the mangled names go
 // through [Itanium.specialName]). A static data member (`_ZN…E`)
