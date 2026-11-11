@@ -820,7 +820,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun hullGapsAreDisassembled() {
         assumeTrue(mode == Mode.CONCURRENT, "Skipping: only CONCURRENT runs auto-analysis over the import's functions")
-        val code = ghidra.app.util.PseudoDisassembler(program).instructions
+        val code = ghidra.app.util.PseudoDisassembler(program)
         val executable = program.memory.executeSet
         val left = program.functionManager.functionsIterable.filterNot { it.isThunk }.flatMap { fn ->
             program.listing.getUndefinedRanges(

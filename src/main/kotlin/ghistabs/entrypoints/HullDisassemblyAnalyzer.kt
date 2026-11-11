@@ -65,7 +65,6 @@ class HullDisassemblyAnalyzer :
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val pseudo = PseudoDisassembler(program)
-        val code = pseudo.instructions
         val executable = program.memory.executeSet
 
         val recover = mutableMapOf<AddressRange, String>()
@@ -76,7 +75,7 @@ class HullDisassemblyAnalyzer :
             if (fn.isExternal || fn.isThunk) continue
             val hull = AddressSet(fn.entryPoint, fn.body.maxAddress).intersect(executable)
             for (range in program.listing.getUndefinedRanges(hull, false, monitor)) {
-                if (code.tiles(range)) code.codeRuns(range).forEach { recover[it] = "inside $fn 's hull" }
+                if (pseudo.tiles(range)) pseudo.codeRuns(range).forEach { recover[it] = "inside $fn 's hull" }
             }
             for (tail in program.deadTails(fn, pseudo)) {
                 for (range in tail) recover[range] = "dead return path after a call in $fn"
@@ -102,7 +101,7 @@ class HullDisassemblyAnalyzer :
  * [range] without its alignment fill — NOP-equivalents and jump-over-fill idioms — as the runs of
  * code left between them. [range] must already tile.
  */
-private fun Instructions.codeRuns(range: AddressRange): AddressSetView = AddressSet().apply {
+private fun PseudoDisassembler.codeRuns(range: AddressRange): AddressSetView = AddressSet().apply {
     val limit = range.maxAddress.next() ?: return@apply
     var start: Address? = null
     var cur = range.minAddress
@@ -111,7 +110,7 @@ private fun Instructions.codeRuns(range: AddressRange): AddressSetView = Address
         start = null
     }
     while (cur < limit) {
-        val insn = at(cur) ?: break
+        val insn = instructionAt(cur) ?: break
         // The idiom may run past the gap: a stray reference can disassemble a NOP of its fill.
         val fill = nopRunLength(cur, limit) ?: fillJumpLength(insn, cur.add(MAX_FILL))
         if (fill == null) start = start ?: cur else nextRun()
