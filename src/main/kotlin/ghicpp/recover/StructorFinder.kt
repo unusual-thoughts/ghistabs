@@ -109,7 +109,7 @@ class StructorFinder(
                 }
             }
             roles += found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
-            val more = decompile(found.keys, emptyMap(), monitor, "Decompiling the constructors of bases with no vtable")
+            val more = decompile(found.keys, emptyMap(), monitor, "Decompiling base constructors")
             subobjectCalls += more.subobjectCalls
             thisStores += more.thisStores
             built = found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
