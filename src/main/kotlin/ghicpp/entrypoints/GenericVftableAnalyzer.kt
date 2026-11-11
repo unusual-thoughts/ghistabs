@@ -2,6 +2,7 @@ package ghicpp.entrypoints
 
 import ghicpp.VfptrModel
 import ghicpp.recover.ClassPass
+import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
 import ghicpp.recover.GenericVftableFinder
 import ghicpp.recover.MethodClassPass
 import ghicpp.recover.PlainVtableParser
@@ -45,7 +46,7 @@ class GenericVftableAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun registerOptions(options: Options, program: Program) = options.register(VfptrModel.OPTION)
+    override fun registerOptions(options: Options, program: Program) = options.register(VfptrModel.OPTION, FILL_ARRAYS)
 
     override fun canAnalyze(program: Program) = program.compilerSpec.callingConventions.any { it.hasThisPointer() }
 
