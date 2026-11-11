@@ -45,7 +45,7 @@ class MemberObjectPass(
      */
     private val known = linkedMapOf<Subobject, ClassDecl>()
 
-    /** The class a subobject is in: one the class pass found, or a [VtablelessClass] this pass drafts. */
+    /** The class a subobject is in: one the class pass found, or a [NonPolymorphicClass] this pass drafts. */
     private sealed interface ContainingClass {
         /** A class the class pass found. */
         data class Existing(val cls: ClassDecl) : ContainingClass
@@ -55,7 +55,7 @@ class MemberObjectPass(
      * A class with no vtable, known only from its structors: those a found class's structors call on `this` + k,
      * what its constructors store, and the class it's given.
      */
-    private class VtablelessClass : ContainingClass {
+    private class NonPolymorphicClass : ContainingClass {
         val ctors = mutableSetOf<Function>()
         val dtors = mutableSetOf<Function>()
         var stores: Map<Int, DataType> = emptyMap()
@@ -89,10 +89,10 @@ class MemberObjectPass(
             .fillAll(classes.mapNotNull { it.cls }, classes.associate { it.cls!! to it.stores })
         // The deepest members first, so a class embeds its members whole.
         val order = held.keys.sortedByDescending { sub ->
-            (sub.container as? VtablelessClass)?.let { held.values.indexOf(it) } ?: -1
+            (sub.container as? NonPolymorphicClass)?.let { held.values.indexOf(it) } ?: -1
         }
         fun containerOf(sub: Subobject) = when (val h = sub.container) {
-            is VtablelessClass -> root[h]?.cls
+            is NonPolymorphicClass -> root[h]?.cls
             is ContainingClass.Existing -> h.cls
         }?.let(::structOf)
         monitor.initialize((order.size + known.size).toLong(), "Laying member objects in their classes")
@@ -114,21 +114,21 @@ class MemberObjectPass(
      * The members [found]'s structors build and destroy, by where they are, then those members' own, decompiled,
      * down to [MAX_DEPTH].
      */
-    private fun collect(found: FoundStructors, monitor: TaskMonitor): Map<Subobject, VtablelessClass> {
+    private fun collect(found: FoundStructors, monitor: TaskMonitor): Map<Subobject, NonPolymorphicClass> {
         val inspector = StructorInspector(program, emptyList(), this, fillArrays)
-        val held = linkedMapOf<Subobject, VtablelessClass>()
+        val held = linkedMapOf<Subobject, NonPolymorphicClass>()
         known.clear()
         var structors: Map<Function, Pair<ContainingClass, StructorRole>> =
             found.roles.mapValues { (_, by) -> ContainingClass.Existing(by.first) to by.second }
         var calls = found.subobjectCalls
         for (depth in 1..MAX_DEPTH) {
             if (monitor.isCancelled) break
-            val fresh = linkedSetOf<VtablelessClass>()
+            val fresh = linkedSetOf<NonPolymorphicClass>()
             for ((f, by) in structors) {
                 for ((offset, called) in calls[f].orEmpty()) {
                     val sub = Subobject(by.first, offset)
                     val structor = memberStructor(f, sub, by.second, called, found) ?: continue
-                    val member = held.getOrPut(sub) { VtablelessClass().also(fresh::add) }
+                    val member = held.getOrPut(sub) { NonPolymorphicClass().also(fresh::add) }
                     (if (by.second == CONSTRUCTOR) member.ctors else member.dtors) += structor
                 }
             }
@@ -174,15 +174,15 @@ class MemberObjectPass(
      * Each of [members] mapped to the one it's merged into with those it shares a structor with. A function that
      * both builds one and destroys one is neither's.
      */
-    private fun merge(members: List<VtablelessClass>): Map<VtablelessClass, VtablelessClass> {
+    private fun merge(members: List<NonPolymorphicClass>): Map<NonPolymorphicClass, NonPolymorphicClass> {
         val into = members.associateWith { it }.toMutableMap()
-        fun find(m: VtablelessClass): VtablelessClass {
+        fun find(m: NonPolymorphicClass): NonPolymorphicClass {
             var r = m
             while (into.getValue(r) != r) r = into.getValue(r)
             into[m] = r
             return r
         }
-        val byFunction = mutableMapOf<Function, VtablelessClass>()
+        val byFunction = mutableMapOf<Function, NonPolymorphicClass>()
         for (m in members) {
             for (f in m.functions) {
                 val (a, b) = find(byFunction.getOrPut(f) { m }) to find(m)
@@ -205,7 +205,7 @@ class MemberObjectPass(
      * The class [m] builds: the one a structor of it is named in already, by a user or an analysis, else
      * `Klass_<address>` after its first constructor, or destructor.
      */
-    private fun classFor(m: VtablelessClass): PlainClass? {
+    private fun classFor(m: NonPolymorphicClass): PlainClass? {
         val named = m.functions.firstNotNullOfOrNull { f ->
             (f.parentNamespace as? GhidraClass)?.takeIf { f.symbol.source != SourceType.DEFAULT }
         }
@@ -219,15 +219,15 @@ class MemberObjectPass(
 
     /** Each member object class's size: how far its constructors store or its own members reach, the further. */
     private fun sizes(
-        classes: List<VtablelessClass>,
-        held: Map<Subobject, VtablelessClass>,
-        root: Map<VtablelessClass, VtablelessClass>,
-    ): Map<VtablelessClass, Int> {
+        classes: List<NonPolymorphicClass>,
+        held: Map<Subobject, NonPolymorphicClass>,
+        root: Map<NonPolymorphicClass, NonPolymorphicClass>,
+    ): Map<NonPolymorphicClass, Int> {
         val size = classes.associateWith { m -> m.stores.maxOfOrNull { (at, dt) -> at + dt.length } ?: 0 }
             .toMutableMap()
         repeat(MAX_DEPTH) {
             for ((sub, m) in held) {
-                val container = (sub.container as? VtablelessClass)?.let(root::getValue) ?: continue
+                val container = (sub.container as? NonPolymorphicClass)?.let(root::getValue) ?: continue
                 val end = sub.offset.toInt() + (size[m] ?: 0)
                 if (end > (size[container] ?: 0)) size[container] = end
             }
