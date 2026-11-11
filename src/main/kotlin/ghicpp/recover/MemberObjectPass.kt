@@ -45,17 +45,17 @@ class MemberObjectPass(
      */
     private val known = linkedMapOf<Subobject, ClassDecl>()
 
-    /** A class holding subobjects: one the class pass found, or a [VtablelessClass] this pass drafts. */
-    private sealed interface SubobjectClass {
+    /** The class a subobject is in: one the class pass found, or a [VtablelessClass] this pass drafts. */
+    private sealed interface ContainingClass {
         /** A class the class pass found. */
-        data class Existing(val cls: ClassDecl) : SubobjectClass
+        data class Existing(val cls: ClassDecl) : ContainingClass
     }
 
     /**
      * A class with no vtable, known only from its structors: those a found class's structors call on `this` + k,
      * what its constructors store, and the class it's given.
      */
-    private class VtablelessClass : SubobjectClass {
+    private class VtablelessClass : ContainingClass {
         val ctors = mutableSetOf<Function>()
         val dtors = mutableSetOf<Function>()
         var stores: Map<Int, DataType> = emptyMap()
@@ -64,7 +64,7 @@ class MemberObjectPass(
     }
 
     /** The subobject at [offset] in [container]. */
-    private data class Subobject(val container: SubobjectClass, val offset: Long)
+    private data class Subobject(val container: ContainingClass, val offset: Long)
 
     /** Recovers the classes of the member objects of [found]'s classes, and returns how many it made or found again. */
     fun run(found: FoundStructors, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
@@ -93,7 +93,7 @@ class MemberObjectPass(
         }
         fun containerOf(sub: Subobject) = when (val h = sub.container) {
             is VtablelessClass -> root[h]?.cls
-            is SubobjectClass.Existing -> h.cls
+            is ContainingClass.Existing -> h.cls
         }?.let(::structOf)
         monitor.initialize((order.size + known.size).toLong(), "Laying member objects in their classes")
         for (sub in order) {
@@ -118,8 +118,8 @@ class MemberObjectPass(
         val inspector = StructorInspector(program, emptyList(), this, fillArrays)
         val held = linkedMapOf<Subobject, VtablelessClass>()
         known.clear()
-        var structors: Map<Function, Pair<SubobjectClass, StructorRole>> =
-            found.roles.mapValues { (_, by) -> SubobjectClass.Existing(by.first) to by.second }
+        var structors: Map<Function, Pair<ContainingClass, StructorRole>> =
+            found.roles.mapValues { (_, by) -> ContainingClass.Existing(by.first) to by.second }
         var calls = found.subobjectCalls
         for (depth in 1..MAX_DEPTH) {
             if (monitor.isCancelled) break
@@ -163,7 +163,7 @@ class MemberObjectPass(
         if (sub.offset <= 0L || structor == f || !structor.takesThis()) return null
         val built = found.roles[structor] ?: return structor
         if (role == CONSTRUCTOR && built.second == CONSTRUCTOR &&
-            SubobjectClass.Existing(built.first) != sub.container
+            ContainingClass.Existing(built.first) != sub.container
         ) {
             known.putIfAbsent(sub, built.first)
         }
