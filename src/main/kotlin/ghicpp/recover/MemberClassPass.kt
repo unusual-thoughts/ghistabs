@@ -71,12 +71,15 @@ class MemberClassPass(
         for (m in members) m.cls = classFor(m)
         val classes = members.filter { it.cls != null }
         val sizes = sizes(classes, held.mapValues { (_, m) -> root.getValue(m) }, root)
+        monitor.initialize(classes.size.toLong(), "Naming member classes' constructors and destructors")
         for (m in classes) {
+            monitor.increment()
             val ns = m.cls?.ns?.toClass() ?: continue
             m.ctors.forEach { name(it, ns, CONSTRUCTOR) }
             m.dtors.forEach { name(it, ns, DESTRUCTOR) }
             sizeStruct(ns, sizes[m] ?: 0)
         }
+        monitor.setMessage("Filling member class structs")
         ClassStructFiller(program, PlainVtables, this)
             .fillAll(classes.mapNotNull { it.cls }, classes.associate { it.cls!! to it.stores })
         // The deepest members first, so a class embeds its members whole.
@@ -87,11 +90,14 @@ class MemberClassPass(
             is Member -> root[h]?.cls
             else -> h as ClassDecl
         }?.let(::structOf)
+        monitor.initialize((order.size + known.size).toLong(), "Laying members in their holders")
         for (slot in order) {
+            monitor.increment()
             val member = root.getValue(held.getValue(slot)).cls?.let(::structOf)?.takeUnless { it.isZeroLength }
             if (member != null) holderOf(slot)?.placeMember(slot.offset.toInt(), member)
         }
         for ((slot, cls) in known) {
+            monitor.increment()
             val member = structOf(cls)?.takeUnless { it.isZeroLength } ?: continue
             holderOf(slot)?.placeMember(slot.offset.toInt(), member)
         }
