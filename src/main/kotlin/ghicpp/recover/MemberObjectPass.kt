@@ -130,12 +130,12 @@ class MemberObjectPass(
                 }
             }
             if (fresh.isEmpty()) break
-            val reading = finder.readCalls(fresh.flatMap { it.functions }, monitor)
-            for (m in fresh) m.stores = mergedStores(m.ctors.map { reading.thisStores[it].orEmpty() })
+            val uses = finder.readCalls(fresh.flatMap { it.functions }, monitor)
+            for (m in fresh) m.stores = mergedStores(m.ctors.map { uses.thisStores[it].orEmpty() })
             structors = fresh.flatMap { m ->
                 m.ctors.map { it to (m to CONSTRUCTOR) } + m.dtors.map { it to (m to DESTRUCTOR) }
             }.toMap()
-            calls = reading.subobjectCalls
+            calls = uses.subobjectCalls
         }
         return held
     }

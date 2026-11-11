@@ -51,7 +51,7 @@ class StructorFinderIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         storers: Map<String, VptrStores>,
         holders: Map<String, Set<ClassDecl>>,
         calls: Map<String, Set<String>> = emptyMap(),
-    ) = StructorFinder.Reading(
+    ) = StructorFinder.ThisUses(
         storers.mapKeys { fn(it.key) },
         calls.entries.associate { (f, called) -> fn(f) to mapOf(0L to called.mapTo(mutableSetOf(), ::fn)) },
     ).roles(holders.mapKeys { fn(it.key) }, object : StructorConvention {}).mapKeys { it.key.name }

@@ -95,10 +95,10 @@ class StructorFinder(
         convention: StructorConvention,
         monitor: TaskMonitor,
     ): FoundStructors {
-        val reading = read(slots.keys, monitor)
-        val roles = reading.roles(slots, convention).toMutableMap()
-        val subobjectCalls = reading.subobjectCalls.toMutableMap()
-        val thisStores = reading.thisStores.toMutableMap()
+        val uses = read(slots.keys, monitor)
+        val roles = uses.roles(slots, convention).toMutableMap()
+        val subobjectCalls = uses.subobjectCalls.toMutableMap()
+        val thisStores = uses.thisStores.toMutableMap()
         val folded = mutableMapOf<Function, MutableSet<ClassDecl>>()
         var built = roles.filterValues { (_, role) -> role == CONSTRUCTOR }
         while (built.isNotEmpty() && !monitor.isCancelled) {
@@ -120,7 +120,7 @@ class StructorFinder(
     }
 
     /** What [funcs] store and call through `this`, decompiled, whatever vptrs they store. */
-    fun readCalls(funcs: Collection<Function>, monitor: TaskMonitor): Reading = decompile(funcs, emptyMap(), monitor)
+    fun readCalls(funcs: Collection<Function>, monitor: TaskMonitor): ThisUses = decompile(funcs, emptyMap(), monitor)
 
     /** The fields each of [funcs] loads or stores through `this`, decompiled, by offset into it, typed off how. */
     fun thisFields(funcs: Collection<Function>, monitor: TaskMonitor) =
@@ -145,10 +145,11 @@ class StructorFinder(
     }
 
     /**
-     * The vptrs each function stores ([stores]), the functions each calls on `this` or a subobject of it, by
-     * offset into it ([subobjectCalls]), and the fields each stores through `this`, by offset ([thisStores]).
+     * What each decompiled function does with `this`: the vptrs it stores ([stores]), the functions it calls on
+     * `this` or a subobject of it, by offset into it ([subobjectCalls]), and the fields it stores through `this`, by
+     * offset ([thisStores]).
      */
-    class Reading(
+    class ThisUses(
         val stores: Map<Function, VptrStores>,
         val subobjectCalls: Map<Function, Map<Long, Set<Function>>>,
         val thisStores: Map<Function, Map<Int, DataType>> = emptyMap(),
@@ -261,14 +262,14 @@ class StructorFinder(
     }
 
     /** What the functions storing the classes' vptrs store and call through `this`, decompiled. */
-    fun readStorers(monitor: TaskMonitor): Reading = read(emptyList(), monitor)
+    fun readStorers(monitor: TaskMonitor): ThisUses = read(emptyList(), monitor)
 
     /**
      * The stores of each function writing one of [tables], and what those and [others] call on `this`. A
      * store counts only through `this` at the table's own offset, which leaves out locals built inline and
      * member objects; a call, only with `this` first, which leaves out a local built and destroyed.
      */
-    private fun read(others: Collection<Function>, monitor: TaskMonitor): Reading {
+    private fun read(others: Collection<Function>, monitor: TaskMonitor): ThisUses {
         monitor.setMessage("Finding vptr stores")
         val writes = buildMap {
             for ((table, served) in tables) {
@@ -280,7 +281,7 @@ class StructorFinder(
                 }
             }
         }
-        if (writes.isEmpty()) return Reading(emptyMap(), emptyMap())
+        if (writes.isEmpty()) return ThisUses(emptyMap(), emptyMap())
         return decompile(writes.keys + others, writes, monitor)
     }
 
@@ -291,7 +292,7 @@ class StructorFinder(
         monitor: TaskMonitor,
         message: String = "Decompiling constructors and destructors",
         storedOnly: Boolean = true,
-    ): Reading {
+    ): ThisUses {
         val stores = mutableMapOf<Function, VptrStores>()
         val subobjectCalls = mutableMapOf<Function, Map<Long, Set<Function>>>()
         val thisStores = mutableMapOf<Function, Map<Int, DataType>>()
@@ -312,7 +313,7 @@ class StructorFinder(
                 }
             }
         }
-        return Reading(stores, subobjectCalls, thisStores)
+        return ThisUses(stores, subobjectCalls, thisStores)
     }
 
     private fun DecompInterface.decompiled(func: Function, monitor: TaskMonitor): HighFunction? {
