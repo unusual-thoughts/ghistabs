@@ -194,6 +194,22 @@ internal fun Program.placeBase(
     return null
 }
 
+/**
+ * Renames the field of [cls]'s struct holding [base] for its new virtuality, leaving the layout as it is:
+ * the field the base's struct or self-base takes, or, split around the class's own vfptr, its
+ * `<Base>_fields_…` run. False when no field holds it.
+ */
+internal fun Program.respellBase(cls: ClassView, base: ClassView, isVirtual: Boolean, baseCount: Int): Boolean {
+    val struct = structOf(cls) ?: return false
+    val part = embeddingOf(base)
+    val runs = base.name + ClassNaming.FIELDS + "_"
+    val field = struct.definedComponents.firstOrNull {
+        (part != null && it.dataType.isEquivalent(part)) || it.dataType.name.startsWith(runs)
+    } ?: return false
+    field.fieldName = ClassNaming.baseFieldName(isVirtual, base.name, baseCount)
+    return true
+}
+
 /** Moves [member]'s symbol into [target]'s namespace. Throws what Ghidra does (a name taken there). */
 internal fun Program.moveMember(member: Member, target: ClassView) {
     val ns = resolve(target) ?: error("no namespace for ${target.qualifiedName}")

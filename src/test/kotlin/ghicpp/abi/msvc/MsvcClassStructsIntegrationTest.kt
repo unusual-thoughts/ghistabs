@@ -2,10 +2,7 @@ package ghicpp.abi.msvc
 
 import ghicpp.ClassStructsFixtureTest
 import ghicpp.analyzers.MsvcClassAnalyzer
-import ghicpp.hierarchy.ClassHierarchy
-import ghicpp.hierarchy.VirtualSlots
-import ghicpp.hierarchy.applySignatureToSlots
-import ghicpp.hierarchy.renameClass
+import ghicpp.hierarchy.*
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.FunctionDefinition
 import ghidra.program.model.data.IntegerDataType
@@ -16,7 +13,9 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.runTransaction
-import ghistabs.test.*
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeNull
+import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -209,6 +208,17 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
         val h = ClassHierarchy.of(program, hasStabs = false)
         program.renameClass(h, h.classes.single { it.qualifiedName == "Label" }, "Tag") mustBe emptyList()
         program.layout("Tag").last() mustBe (36 to "Tag_data: Tag_data")
+    }
+
+    @Test
+    fun `making a split base virtual and back renames its field and keeps the layout`() = program.rolledBack {
+        val h = ClassHierarchy.of(program, hasStabs = false)
+        val (label, rect) = listOf("Label", "Rect").map { n -> h.classes.single { it.qualifiedName == n } }
+        val before = program.layout("Label")
+        program.respellBase(label, rect, isVirtual = true, baseCount = 2).mustBeTrue()
+        program.layout("Label") mustBe before.map { (at, f) -> at to f.replace("_base_Rect:", "_vbase_Rect:") }
+        program.respellBase(label, rect, isVirtual = false, baseCount = 2).mustBeTrue()
+        program.layout("Label") mustBe before
     }
 
     /** Runs [edit] in a transaction it then rolls back, so the other tests see the program as analysed. */
