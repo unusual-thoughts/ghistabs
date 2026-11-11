@@ -4,7 +4,6 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghidra.app.decompiler.DecompInterface
-import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.BookmarkType
@@ -135,17 +134,9 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
 
     private fun Function.isTagged(tag: String) = tags.any { it.name == tag }
 
-    /**
-     * An unnamed global function whose first argument comes in where `this` does: under `__thiscall` or
-     * `__fastcall` with MSVC, and under `__cdecl` too with MinGW gcc before 4.7, which passes `this` on the stack.
-     */
+    /** An unnamed global function whose first argument comes in where `this` does ([takesThisAt]). */
     private fun Function.isCandidate() = parentNamespace.isGlobal && symbol.source == SourceType.DEFAULT &&
-        !isThunk && !isExternal && firstArgument() == thisStorage
-
-    private fun Function.firstArgument() = argumentAt(0)
-
-    private fun Function.argumentAt(i: Int) = (callingConvention ?: program.compilerSpec.defaultCallingConvention)
-        .getArgLocation(i, null, PointerDataType(program.dataTypeManager), program).firstVarnode?.address
+        !isThunk && takesThisAt(thisStorage)
 
     /**
      * Which of its arguments is `this`: the second where a `__cdecl` function pops one word, which is gcc's

@@ -32,6 +32,17 @@ fun Program.thisStorage(): Address? {
     return model.getArgLocation(0, null, PointerDataType(dataTypeManager), this).firstVarnode?.address
 }
 
+/** Where [this]'s [i]th argument comes in, a pointer, under its calling convention or the program's default. */
+fun Function.argumentAt(i: Int): Address? = (callingConvention ?: program.compilerSpec.defaultCallingConvention)
+    .getArgLocation(i, null, PointerDataType(program.dataTypeManager), program).firstVarnode?.address
+
+/**
+ * Whether [this]'s first argument comes in at [thisStorage], where a method's `this` does: not a `cdecl`
+ * function's, which `strcpy(this->name, ...)` is passed. Under `__thiscall` or `__fastcall` with MSVC, and under
+ * `__cdecl` too with MinGW gcc before 4.7, which passes `this` on the stack.
+ */
+fun Function.takesThisAt(thisStorage: Address?) = !isExternal && thisStorage != null && argumentAt(0) == thisStorage
+
 /**
  * Turns a method's x86 `__fastcall` with nothing in EDX into the `__thiscall` it really is, the ECX
  * parameter becoming `this`. Ghidra picks `__fastcall` when `this` is the only register argument.

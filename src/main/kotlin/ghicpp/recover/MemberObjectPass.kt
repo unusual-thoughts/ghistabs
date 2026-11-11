@@ -247,12 +247,10 @@ class MemberObjectPass(
     }
 
     /**
-     * Whether [this] takes `this` where a method does, so a pointer into an object passed first is its object:
-     * not a `cdecl` function's first argument, which `strcpy(this->name, ...)` passes. Unknown where it has no
-     * parameters yet.
+     * Whether [this] takes `this` where a method does ([takesThisAt]), so a pointer into an object passed first is
+     * its object. Unknown, so taken, where it has no parameters yet.
      */
-    private fun Function.takesThis() = !isExternal &&
-        (parameterCount == 0 || getParameter(0).variableStorage.firstVarnode?.address == thisStorage)
+    private fun Function.takesThis() = takesThisAt(thisStorage) || (!isExternal && parameterCount == 0)
 
     private fun structOf(cls: ClassDecl): Structure? = cls.ns?.toClass()?.let(program::classStruct)
 
