@@ -1,9 +1,9 @@
 package ghistabs.entrypoints
 
-import ghicpp.entrypoints.SjljContextAnalyzer
-import ghicpp.entrypoints.TypeinfoLayoutAnalyzer
-import ghicpp.entrypoints.VirtualBaseAnalyzer
-import ghicpp.entrypoints.VtableSweepAnalyzer
+import ghicpp.analyzers.SjljContextAnalyzer
+import ghicpp.analyzers.TypeinfoLayoutAnalyzer
+import ghicpp.analyzers.VirtualBaseAnalyzer
+import ghicpp.analyzers.VtableSweepAnalyzer
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.listing.Program

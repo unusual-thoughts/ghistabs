@@ -1,7 +1,7 @@
 package ghistabs.integration
 
 import ghicpp.ClassNaming
-import ghicpp.entrypoints.VtableSweepAnalyzer
+import ghicpp.analyzers.VtableSweepAnalyzer
 import ghicpp.recover.VtableSweepPass
 import ghicpp.recover.VtableSweepPass.Companion.isVtablesSwept
 import ghidra.app.util.NamespaceUtils

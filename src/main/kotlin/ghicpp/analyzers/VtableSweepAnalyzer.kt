@@ -1,4 +1,4 @@
-package ghicpp.entrypoints
+package ghicpp.analyzers
 
 import ghicpp.recover.VtableSweepPass
 import ghicpp.recover.VtableSweepPass.Companion.isVtablesSwept

@@ -1,7 +1,7 @@
 package ghicpp.abi.msvc
 
 import ghicpp.ClassStructsFixtureTest
-import ghicpp.entrypoints.MsvcClassAnalyzer
+import ghicpp.analyzers.MsvcClassAnalyzer
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure

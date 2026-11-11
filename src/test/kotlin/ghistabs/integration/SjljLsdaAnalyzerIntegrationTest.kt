@@ -1,8 +1,8 @@
 package ghistabs.integration
 
+import ghicpp.analyzers.SjljLsdaAnalyzer
 import ghicpp.eh.MIN_UNNAMED_PERSONALITY
 import ghicpp.eh.SjljLsdaPass
-import ghicpp.entrypoints.SjljLsdaAnalyzer
 import ghidra.app.plugin.exceptionhandlers.gcc.datatype.DwarfEncodingModeDataType
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
