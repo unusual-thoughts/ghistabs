@@ -22,6 +22,7 @@ import ghidra.program.model.symbol.RefType
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.util.CodeUnitInsertionException
 import ghidra.util.task.TaskMonitor
+import ghistabs.cancelOnly
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.forceCreateData
 import ghistabs.minus
@@ -41,7 +42,12 @@ class SjljLsdaPass(val program: Program, sink: DiagnosticSink) : DiagnosticSink 
     /** Finds the registrations in [set], lays their receivers, then their LSDAs; returns how many LSDAs. */
     fun run(set: AddressSetView, monitor: TaskMonitor): Int {
         val stored = SjljRegistrationFinder(program).lsdas(set, monitor)
-        stored.values.flatMap { it.registrations }.forEach { layReceiver(it, monitor) }
+        val regs = stored.values.flatMap { it.registrations }
+        monitor.initialize(regs.size.toLong(), "Laying SJLJ receivers")
+        for (reg in regs) {
+            monitor.increment()
+            layReceiver(reg, monitor.cancelOnly)
+        }
         return layAll(stored, monitor)
     }
 
@@ -109,8 +115,9 @@ class SjljLsdaPass(val program: Program, sink: DiagnosticSink) : DiagnosticSink 
     /** Lays every parsed LSDA in [stored], then the unreferenced ones between them; returns how many. */
     private fun layAll(stored: Map<Address, StoredLsda>, monitor: TaskMonitor): Int {
         val laid = sortedMapOf<Address, Long>()
+        monitor.initialize(stored.size.toLong(), "Laying SJLJ LSDAs")
         for ((at, found) in stored) {
-            monitor.checkCancelled()
+            monitor.increment()
             val lsda = found.lsda ?: run {
                 warn("lsda-unparsed", "no SJLJ LSDA where ${found.registrations.first().store} stores one", at)
                 continue
@@ -131,8 +138,9 @@ class SjljLsdaPass(val program: Program, sink: DiagnosticSink) : DiagnosticSink 
         fun isZero(at: Address) = runCatching { program.memory.getByte(at).toInt() == 0 }.getOrDefault(false)
         val starts = laid.keys.toList()
         var count = 0
+        monitor.initialize(starts.size.toLong(), "Laying unreferenced SJLJ LSDAs")
         for ((i, start) in starts.withIndex()) {
-            monitor.checkCancelled()
+            monitor.increment()
             val limit = starts.getOrNull(i + 1)
             var at = start + laid.getValue(start)
             while (limit == null || at < limit) {

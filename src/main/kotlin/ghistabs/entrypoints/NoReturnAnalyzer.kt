@@ -130,17 +130,21 @@ fun markNoReturn(program: Program, set: AddressSetView, monitor: TaskMonitor = T
     }
 
     val todo = ArrayDeque(funMgr.getFunctions(set, true).toList())
+    monitor.initialize(todo.size.toLong(), "Finding functions that never return")
     return buildList {
         for (import in program.mingwNoReturnImports()) {
             import.setNoReturn(true)
             add(import)
         }
         while (todo.isNotEmpty()) {
+            monitor.increment()
             val func = todo.removeFirst()
             if (func.hasNoReturn() || func.isThunk || func.isExternal || !cannotReturn(func)) continue
             func.setNoReturn(true)
             add(func)
-            func.getCallingFunctions(monitor).toCollection(todo)
+            val callers = func.getCallingFunctions(monitor)
+            todo += callers
+            monitor.maximum += callers.size
         }
     }
 }

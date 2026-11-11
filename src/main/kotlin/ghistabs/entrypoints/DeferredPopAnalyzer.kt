@@ -79,17 +79,20 @@ class DeferredPopAnalyzer :
         val stdcall = program.fixImportPurges()
         if (stdcall > 0) report("set the purge of $stdcall stdcall import(s)")
 
-        val plans = program.functionManager.getFunctions(set, true)
-            .filterNot { it.isThunk || it.isExternal }
+        val functions = program.functionManager.getFunctions(set, true).filterNot { it.isThunk || it.isExternal }
+        monitor.initialize(functions.size.toLong(), "Walking stack pointers")
+        val plans = functions
             .mapNotNull { f ->
-                monitor.checkCancelled()
+                monitor.increment()
                 EspWalk(program, f).plan()?.let { f to it }
             }
         plans.forEach { (_, plan) -> plan.unfixed.forEach { (merge, into) -> program.bookmarkUnfixed(merge, into) } }
         val fixable = plans.filter { it.second.pops.isNotEmpty() }
         return fixable.isEmpty() || DecompInterface().useWith(program) { decomp ->
             var refused = 0
+            monitor.initialize(fixable.size.toLong(), "Popping deferred arguments")
             val kept = fixable.count { (f, plan) ->
+                monitor.increment()
                 program.applyExtraPops(decomp, f, plan.pops, monitor) { refused++ }
             }
             if (kept > 0) report("popped deferred arguments in $kept function(s)")

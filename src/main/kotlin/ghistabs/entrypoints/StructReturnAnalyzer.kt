@@ -89,8 +89,10 @@ class StructReturnAnalyzer :
     }
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
-        val work = program.functionManager.getFunctions(set, true).mapNotNull { f ->
-            monitor.checkCancelled()
+        val functions = program.functionManager.getFunctions(set, true).toList()
+        monitor.initialize(functions.size.toLong(), "Finding struct returns")
+        val work = functions.mapNotNull { f ->
+            monitor.increment()
             correctionFor(program, f)?.let { Triple(f, f.callingConventionName, it) }
         }
         if (work.isEmpty()) return true

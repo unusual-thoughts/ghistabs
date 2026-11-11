@@ -302,7 +302,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         // autoanalysis hasn't reached need a manual disassemble first.
         if (listing.getInstructionAt(addr) == null) {
             val disasm = DisassembleCommand(addr, null, true)
-            if (disasm.applyTo(ctx.program, ctx.monitor) && disasm.disassembledAddressSet.numAddresses > 0) {
+            if (disasm.applyTo(ctx.program, ctx.monitor.cancelOnly) && disasm.disassembledAddressSet.numAddresses > 0) {
                 debug("function-create-disassembled-first")
             } else {
                 warn(
@@ -315,7 +315,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         }
 
         val cmd = CreateFunctionCmd(open.name, addr, null, SourceType.IMPORTED)
-        if (!cmd.applyTo(ctx.program, ctx.monitor)) {
+        if (!cmd.applyTo(ctx.program, ctx.monitor.cancelOnly)) {
             warn(
                 "function-create-cmd-failed",
                 "CreateFunctionCmd failed at $addr for ${open.name}: ${cmd.statusMsg}",

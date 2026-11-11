@@ -136,8 +136,10 @@ class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
     override val abi get() = Msvc
 
     override fun parse(monitor: TaskMonitor): ClassPassInput {
+        monitor.setMessage("Reading MSVC class hierarchy descriptors")
         val hierarchies = readHierarchies().toMap()
         classes += hierarchies
+        monitor.setMessage("Reading MSVC vftables")
         val holders = readVftables()
         readVbtables(hierarchies.values, monitor)
         return ClassPassInput(classes.values, hierarchies.values, holders)

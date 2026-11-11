@@ -111,16 +111,25 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
             .mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
         // A constructor the debug info names goes by its class's name.
         val ctors = methods.filter { (f, cls) -> f in recordedCtors || (f.hasKnownClass() && f.name == cls.name) }
+        monitor.setMessage("Finding constructors' callers")
+        val evidence = methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }
+        monitor.initialize(evidence.size.toLong(), "Decompiling methods and constructors' callers")
         val calls = buildList {
             DecompInterface().useWith(program) { decomp ->
-                for (f in methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }) {
+                for (f in evidence) {
                     if (monitor.isCancelled) break
+                    monitor.incrementProgress()
                     val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
                     addAll(thisCalls(f, high, ctors).filter { it.callee in candidates })
                 }
             }
         }
-        return MethodClassGuesser(bases, recorded).guess(calls).count { (f, guess) -> place(f, guess) }
+        val guesses = MethodClassGuesser(bases, recorded).guess(calls)
+        monitor.initialize(guesses.size.toLong(), "Moving methods into their guessed classes")
+        return guesses.count { (f, guess) ->
+            monitor.increment()
+            place(f, guess)
+        }
     }
 
     private fun Function.isTagged(tag: String) = tags.any { it.name == tag }

@@ -29,8 +29,10 @@ class VbtableFinder(private val program: Program, classes: Collection<ClassDecl>
                 .flatMap { table -> program.referenceManager.getReferencesTo(table).map { it.fromAddress } }
                 .filter { program.listing.getInstructionAt(it) != null }
                 .mapNotNullTo(mutableSetOf(), program.functionManager::getFunctionContaining)
+            monitor.initialize(builders.size.toLong(), "Decompiling functions storing vbtables")
             for (func in builders) {
                 if (monitor.isCancelled) break
+                monitor.incrementProgress()
                 val high = decomp.decompileFunction(func, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: run {
                     debug("vbtable-undecompiled", func.name, func.entryPoint)
                     continue

@@ -18,6 +18,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.util.exception.DuplicateNameException
 import ghidra.util.exception.InvalidInputException
 import ghidra.util.task.TaskMonitor
+import ghistabs.cancelOnly
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.frameBias
 import ghistabs.minus
@@ -44,8 +45,16 @@ class SjljContextPass(val program: Program, private val sink: DiagnosticSink) : 
         val regs = all.filter { set.contains(it.store) }
         // Again after the import, which can recreate a function and with it drop the labels in it.
         val receivers = SjljLsdaPass(program, sink)
-        regs.forEach { receivers.layReceiver(it, monitor) }
-        regs.forEach { reg -> stored[reg.lsda]?.lsda?.let { reg.commentCallSites(it, monitor) } }
+        monitor.initialize(regs.size.toLong(), "Laying SJLJ receivers")
+        for (reg in regs) {
+            monitor.increment()
+            receivers.layReceiver(reg, monitor.cancelOnly)
+        }
+        monitor.initialize(regs.size.toLong(), "Commenting SJLJ call sites")
+        for (reg in regs) {
+            monitor.increment()
+            stored[reg.lsda]?.lsda?.let { reg.commentCallSites(it, monitor) }
+        }
         val types = SjljTypes(program.dataTypeManager)
         return typeContexts(regs, types, monitor) to typeEntryPoints(all, types, monitor) { set.contains(it) }
     }
@@ -110,8 +119,10 @@ class SjljContextPass(val program: Program, private val sink: DiagnosticSink) : 
             return 0
         }
         var typed = 0
-        for (reg in regs.distinctBy { it.store }) {
-            monitor.checkCancelled()
+        val stores = regs.distinctBy { it.store }
+        monitor.initialize(stores.size.toLong(), "Typing SJLJ function contexts")
+        for (reg in stores) {
+            monitor.increment()
             val fn = fm.getFunctionContaining(reg.store) ?: continue
             val offset = reg.lsdaDisplacement.toInt() - SjljTypes.LSDA_OFFSET - fn.frameBias(monitor)
             if (fn.commitContext(offset, dt)) typed += 1
@@ -155,8 +166,9 @@ class SjljContextPass(val program: Program, private val sink: DiagnosticSink) : 
         covers: (Address) -> Boolean = { true },
     ): Int {
         val byName = mutableMapOf<Function, String>()
+        monitor.initialize(fm.functionCount.toLong(), "Finding gcc EH entry points")
         for (fn in fm.getFunctions(true).iterator().asSequence() + fm.externalFunctions.iterator().asSequence()) {
-            monitor.checkCancelled()
+            monitor.increment()
             byName[fn] = fn.name.takeIf { types.signature(it) != null }
                 ?: fn.name.removePrefix("_").takeIf { types.signature(it) != null }
                 ?: continue
@@ -168,8 +180,9 @@ class SjljContextPass(val program: Program, private val sink: DiagnosticSink) : 
         registerCallee(regs)?.let { unnamed(fm.getFunctionAt(it), SjljTypes.REGISTER) }
 
         var typed = 0
+        monitor.initialize(byName.size.toLong(), "Typing gcc EH entry points")
         for ((fn, name) in byName) {
-            monitor.checkCancelled()
+            monitor.increment()
             if (!covers(fn.entryPoint)) continue
             val sig = types.signature(name) ?: continue
             if (fn.typeEntryPoint(name, sig)) typed += 1
