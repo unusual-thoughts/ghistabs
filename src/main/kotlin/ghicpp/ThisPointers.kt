@@ -115,8 +115,10 @@ fun Function.restoreThisParam(): Boolean {
  * unknown, the default or the compiler's default, set by an analysis, and its return where `__thiscall` puts it
  * ([returnTypeUnder]). Under x86 gcc, whose `__thiscall` takes `this` on the stack as `__cdecl` takes its
  * first argument, that argument becomes `this`. Under MSVC, whose `__thiscall` takes `this` in ECX, a
- * `__stdcall` becomes it with its stack arguments where they are, both popping them: what Ghidra makes of a
- * method that never reads `this` ([fastcallToThiscall] covers one that does). Only for a function known to
+ * `__stdcall` an analysis committed becomes it with its stack arguments where they are, both popping them:
+ * what Ghidra makes of a method that never reads `this` ([fastcallToThiscall] covers one that does). Not one
+ * with no signature yet, as a class pass makes a slot's target: Decompiler Parameter ID may find it reads ECX
+ * and EDX, and [ghicpp.analyzers.MethodConventionAnalyzer] takes it from there. Only for a function known to
  * take `this`: a static member function sits in its class too. Whether it changed anything.
  */
 fun Function.thiscallFromDefaultConvention(): Boolean {
@@ -136,7 +138,9 @@ fun Function.thiscallFromDefaultConvention(): Boolean {
         current.getArgLocation(0, null, pointer, program) == thisAt ->
             if (params.firstOrNull()?.variableStorage == thisAt) params.drop(1) else params
 
-        current.name == STDCALL && thisAt.isRegisterStorage && params.keepStorageUnder(thiscall, program) -> params
+        // An analysis's signature only: a function just made has none yet, and its registers may yet show EDX.
+        current.name == STDCALL && thisAt.isRegisterStorage && signatureSource == SourceType.ANALYSIS &&
+            params.keepStorageUnder(thiscall, program) -> params
 
         else -> return false
     }

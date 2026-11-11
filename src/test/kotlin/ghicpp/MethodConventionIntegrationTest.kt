@@ -80,10 +80,11 @@ class MethodConventionIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
     }
 
     @Test
-    fun `nor where it isn't known to take this, or its signature is the user's, or it is __cdecl`() {
+    fun `nor where it isn't known to take this, its signature isn't an analysis's, or it is __cdecl`() {
         method("0x401020", "__stdcall").fix(takesThis = false).mustBeFalse()
         method("0x401030", "__stdcall", source = SourceType.USER_DEFINED).fix().mustBeFalse()
         method("0x401040", "__cdecl").fix().mustBeFalse()
+        method("0x401070", "__stdcall", source = SourceType.DEFAULT).fix().mustBeFalse()
     }
 
     @Test
