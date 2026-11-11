@@ -64,7 +64,9 @@ class ClassPass(
         val found = finder.find(read.holders, abi, monitor)
         val structors = found.roles
         var moved = 0
+        monitor.initialize(owners.size.toLong(), "Moving virtual functions into their classes")
         for ((func, owner) in owners) {
+            monitor.increment()
             val holders = read.holders.getValue(func)
             val name = if (func in structors) null else owner?.let { slotName(func, it, holders) }
             if (owner != null && attach(func, owner, name)) moved++
@@ -73,7 +75,9 @@ class ClassPass(
         if (shared > 0) {
             debug("class-vfunction-shared", "$shared held by no one class", count = shared.toLong())
         }
+        monitor.initialize(structors.size.toLong(), "Naming constructors and destructors")
         val named = structors.count { (func, structor) ->
+            monitor.increment()
             val cls = structor.first.ns?.toClass() ?: return@count false
             nameStructor(func, cls, structor.second)
         }
@@ -86,9 +90,11 @@ class ClassPass(
             (end + align - 1) / align * align
         }
         val sizes = sizeClasses(read.classes, AllocationSizeFinder(program, abi, this).read(ctors, monitor), reached)
+        monitor.setMessage("Filling class structs")
         val filled = ClassStructFiller(program, abi, this, vfptrModel).fillAll(read.recorded, stores)
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
             structors.map { (f, structor) -> f to structor.first }
+        monitor.setMessage("Recording classes")
         for ((func, _) in placed) func.addTag(ClassPassTags.METHOD)
         for (func in ctors.keys) func.addTag(ClassPassTags.CONSTRUCTOR)
         writeRecords(read.recorded)

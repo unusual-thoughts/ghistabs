@@ -80,7 +80,9 @@ class SjljRegistrationFinder(private val program: Program) {
 
         val stores = StoreSearcher(program).apply { search(program, set, monitor) }.stores.sortedBy { it.at }
         val disassembler = PseudoDisassembler(program)
+        monitor.initialize(stores.size.toLong(), "Reading SJLJ registrations")
         return stores.withIndex().mapNotNull { (k, first) ->
+            monitor.increment()
             val personality = address(first.immediate) ?: return@mapNotNull null
             val after = first.at + first.length.toLong()
             val second = stores.drop(k + 1).asSequence()

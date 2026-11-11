@@ -54,6 +54,7 @@ class VtableSweepPass(
      * and no class struct is made. Returns how many primary vtables it laid, and marks the program swept.
      */
     fun run(monitor: TaskMonitor): Int {
+        monitor.setMessage("Finding vtables no class claimed")
         val unclaimed = symtab.symbolIterator
             .mapNotNull { sym ->
                 primaryVtableOf(sym)?.let { (cls, abi) ->
@@ -93,6 +94,7 @@ class VtableSweepPass(
             // Itanium's secondaries follow the primary; gcc 2.x's have symbols of their own, laid below.
             if (record.header != null) builder.laySecondaries(record, vftable, leaf, ns, SWEPT)
         }
+        monitor.setMessage("Laying secondary and construction vtables, and VTTs")
         // gcc 2.x secondaries of classes without stabs, untagged: there is no class struct to find a vptr in.
         for (cls in builder.gcc2SecondaryVtables.keys) {
             builder.layGcc2Secondaries(

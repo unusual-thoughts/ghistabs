@@ -27,6 +27,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.ascii.AsciiCharSetRecognizer
 import ghidra.util.ascii.CharSetRecognizer
+import ghidra.util.task.CancelOnlyWrappingTaskMonitor
 import ghidra.util.task.TaskMonitor
 import java.io.File
 import java.nio.charset.Charset
@@ -87,6 +88,16 @@ fun Iterable<AddressRange>.gapsIn(range: AddressRange, action: (AddressRange) ->
 fun Iterable<AddressRange>.monitoredGapsIn(range: AddressRange, monitor: TaskMonitor? = null) = gapsIn(range) {
     monitor?.progress = it.minAddress - range.minAddress
 }
+
+/**
+ * [this] passing on cancellation alone, for a Ghidra command run once per item of a loop [this] shows the
+ * progress of: `DisassembleCommand` and `CreateFunctionCmd` set a monitor's maximum, progress and message.
+ */
+val TaskMonitor.cancelOnly: TaskMonitor get() = CancelOnlyWrappingTaskMonitor(this)
+
+/** The addresses of [this] below [at]: how far through [this] a walk in address order is at [at]. */
+fun AddressSetView.addressesBefore(at: Address): Long =
+    if (at <= minAddress) 0 else intersectRange(minAddress, at.previous()).numAddresses
 
 /** Undefined runs in [range] — the gaps between instructions and defined data, as `getUndefinedRanges` walks them. */
 fun Listing.undefinedRangesIn(range: AddressRange, monitor: TaskMonitor? = null) = getCodeUnits(AddressSet(range), true)

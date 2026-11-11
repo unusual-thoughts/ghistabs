@@ -85,11 +85,14 @@ private const val MAX_DEPTH = 64
 class AllocationSizeFinder(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
     DiagnosticSink by sink {
     fun read(ctors: Map<Function, ClassDecl>, monitor: TaskMonitor): Map<ClassDecl, Long> {
+        monitor.setMessage("Finding constructors' callers")
         val callers = ctors.keys.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
         val sizes = mutableMapOf<ClassDecl, MutableSet<Long>>()
+        monitor.initialize(callers.size.toLong(), "Decompiling constructors' callers for allocation sizes")
         DecompInterface().useWith(program) { decomp ->
             for (f in callers) {
                 if (monitor.isCancelled) break
+                monitor.incrementProgress()
                 val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
                 for (op in high.pcodeOps.asSequence()) {
                     val cls = op.callee()?.let(ctors::get) ?: continue
