@@ -1,6 +1,7 @@
 package ghicpp.gui
 
 import ghicpp.Access
+import ghicpp.ClassNaming
 import ghicpp.MemberAttrs
 import ghicpp.VirtKind
 import ghicpp.analyzers.VtableSweepAnalyzer
@@ -8,6 +9,8 @@ import ghicpp.hierarchy.*
 import ghicpp.hierarchy.ClassHierarchy.Origin
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
+import ghidra.program.model.data.ArrayDataType
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.VoidDataType
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
@@ -110,6 +113,28 @@ class SweptClassHierarchyIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
         cls("Plain").origin mustBe Origin.NAMESPACE
         hierarchy.isEmpty(cls("Plain")).mustBeTrue("Plain has nothing but its name")
+    }
+
+    @Test
+    fun `a plain vtable's class is abstract when a slot holds any ABI's pure virtual stub`() {
+        program.runTransaction("seed") {
+            // As GenericVftableFinder seeds them: a `vftable` label in the class's namespace on a table of
+            // code pointers, with no vtable symbol of any ABI's, so the stub's name alone says.
+            val stubs = listOf("__pure_virtual" to 0x402060, "_purecall" to 0x402070, "_ZN3Bar1fEv" to 0x402010)
+            for ((stub, at) in stubs.take(2)) builder.createEmptyFunction(stub, hex(at), 1, VoidDataType.dataType)
+            for ((i, stub) in stubs.withIndex()) {
+                val table = 0x401300 + i * 0x10
+                builder.setBytes(hex(table), le(0x402010) + le(stub.second))
+                val ns = program.symbolTable.createClass(program.globalNamespace, "P$i", SourceType.ANALYSIS)
+                program.symbolTable.createLabel(builder.addr(hex(table)), ClassNaming.VFTABLE, ns, SourceType.ANALYSIS)
+                builder.applyDataType(hex(table), ArrayDataType(PointerDataType.dataType, 2, 4))
+            }
+        }
+        val hierarchy = ClassHierarchy.of(program)
+        fun cls(name: String) = hierarchy.classes.single { it.qualifiedName == name }
+        cls("P0").isAbstract.mustBeTrue("P0's second slot is gcc 2.x's __pure_virtual")
+        cls("P1").isAbstract.mustBeTrue("P1's second slot is MSVC's _purecall")
+        cls("P2").isAbstract.mustBeFalse()
     }
 
     @Test

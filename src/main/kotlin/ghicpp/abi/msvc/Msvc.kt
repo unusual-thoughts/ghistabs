@@ -47,6 +47,13 @@ object Msvc : CxxAbi {
     /** `??_7` labels the address point; the meta pointer in front is no part of the record. */
     override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 
+    /** Its `??_7` symbol at the address point, else the [VFTABLE_META_PTR] to its locator just before. */
+    override fun ownsVftable(program: Program, vftable: Address): Boolean {
+        if (super.ownsVftable(program, vftable)) return true
+        val meta = runCatching { vftable.subtract(program.defaultPointerSize.toLong()) }.getOrNull() ?: return false
+        return program.symbolTable.getSymbols(meta).any { it.name == VFTABLE_META_PTR }
+    }
+
     /** The offset of the subobject the record serves, by its complete object locator. */
     override fun vfptrOffsetOf(record: VtableRecord, program: Program) =
         program.msvcSubobjectOffset(record.address)?.toLong()
