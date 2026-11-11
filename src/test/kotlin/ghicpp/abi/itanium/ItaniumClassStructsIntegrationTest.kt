@@ -4,6 +4,7 @@ import ghicpp.ClassNaming
 import ghicpp.ClassStructsFixtureTest
 import ghicpp.analyzers.ItaniumClassAnalyzer
 import ghicpp.hierarchy.ClassHierarchy
+import ghicpp.hierarchy.VirtualSlots
 import ghicpp.hierarchy.functionOf
 import ghicpp.hierarchy.methodsOf
 import ghicpp.hierarchy.resolve
@@ -129,6 +130,26 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
             program.updateFieldTypes(label, listOf(program.functionOf(area)!!), TaskMonitor.DUMMY)
         }
         program.data("Label") mustBe listOf(0 to "field_0x24: int")
+    }
+
+    @Test
+    fun `renaming a virtual slot renames every override of it, through a table for a base`() {
+        val tx = program.startTransaction("rolled back")
+        try {
+            val h = ClassHierarchy.of(program, hasStabs = false)
+            val slots = VirtualSlots(program, h)
+            // `Rect::area`, after the two destructor slots: `Shape`'s pure one, `Circle`'s, and `Label`'s,
+            // in its table for `Rect`.
+            val area = slots.target(slots.slotsOf(h.classes.single { it.qualifiedName == "Rect" })[2])!!
+            slots.rename(area, "area").functions mustBe 3
+            for (cls in listOf("Circle", "Rect", "Label")) {
+                slots.target(slots.slotsOf(h.classes.single { it.qualifiedName == cls })[2])!!.name mustBe "area"
+            }
+            val shape = program.dataTypeManager.getDataType("/ClassDataTypes/Shape/Shape_vftable") as Structure
+            shape.getComponent(2).fieldName mustBe "area"
+        } finally {
+            program.endTransaction(tx, false)
+        }
     }
 
     private fun Program.methods(cls: String) = functionManager.getFunctions(true).filter {
