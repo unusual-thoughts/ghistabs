@@ -11,6 +11,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.SourceType
+import ghidra.util.task.TaskMonitor
 import ghistabs.cpp.*
 import ghistabs.cpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghistabs.cpp.ClassHierarchyRecords.Companion.writeClassRecord
@@ -84,7 +86,8 @@ fun <K, F> virtualOwners(holders: Map<F, Set<K>>, ancestors: (K) -> Set<K>, hasV
  * Class records and members for a binary whose only C++ information is the MSVC RTTI that Ghidra's
  * `Windows x86 PE RTTI Analyzer` has laid and labelled: each class's direct bases off its Class Hierarchy
  * Descriptor, written to [ClassHierarchyRecords], and each virtual function off the vftables, moved into
- * the class it belongs to ([virtualOwners]) and marked virtual for the Class Hierarchy window.
+ * the class it belongs to ([virtualOwners]) and marked virtual for the Class Hierarchy window, and each
+ * constructor and destructor, found by the vptrs it stores ([StructorFinder]), moved there and named.
  *
  * Classes are keyed by their type descriptor's address, which every RTTI record names a class by.
  */
@@ -106,9 +109,12 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         val directBases by lazy { directBases(bases) }
     }
 
-    data class Result(val classes: Int, val owned: Int, val moved: Int, val shared: Int)
+    // Each vftable, by the class it serves and where in that class's object its vptr sits.
+    private val tables = mutableMapOf<Address, Pair<Address, Long>>()
 
-    fun recover(): Result {
+    data class Result(val classes: Int, val owned: Int, val moved: Int, val shared: Int, val structors: Int)
+
+    fun recover(monitor: TaskMonitor = TaskMonitor.DUMMY): Result {
         val classes = readHierarchies().associateBy { it.descriptor }
         val holders = readVftables()
         val owners = virtualOwners(holders, { classes[it]?.ancestors.orEmpty() }, { it in tableClasses })
@@ -121,8 +127,14 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         if (shared > 0) {
             debug("msvc-vfunction-shared", "$shared held by no one class", count = shared.toLong())
         }
+        val structors = StructorFinder(program, tables, this)
+            .find(holders, { classes[it]?.ancestors.orEmpty() }, Msvc.constructorsReturnThis, monitor)
+        val named = structors.count { (func, structor) ->
+            val cls = classes[structor.first]?.ns?.toClass() ?: return@count false
+            nameStructor(func, cls, structor.second)
+        }
         writeRecords(classes)
-        return Result(classes.size, owners.size - shared, moved, shared)
+        return Result(classes.size, owners.size - shared, moved, shared, named)
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }
@@ -146,6 +158,7 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
             val table = runCatching { VfTableModel(program, at, options) }.getOrNull() ?: continue
             val cls = runCatching { table.rtti0Model.address }.getOrNull() ?: continue
             tableClasses += cls
+            program.msvcSubobjectOffset(at)?.let { tables[at] = cls to it.toLong() }
             for (i in 0 until table.elementCount) {
                 val func = slotFunction(table.getVirtualFunctionPointer(i), at) ?: continue
                 getOrPut(func) { mutableSetOf() } += cls
@@ -176,6 +189,21 @@ class MsvcClasses(private val program: Program, sink: DiagnosticSink) : Diagnost
         return func.parentNamespace.isGlobal && runCatching { func.parentNamespace = ns }
             .onFailure { warn("msvc-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
             .isSuccess
+    }
+
+    private fun nameStructor(func: Function, cls: GhidraClass, role: StructorRole): Boolean {
+        val name = Msvc.structorFor(role, func).displayName(cls.name)
+        return runCatching {
+            val moves = func.parentNamespace.isGlobal
+            if (moves) func.parentNamespace = cls
+            val renames = func.parentNamespace == cls && func.symbol.source == SourceType.DEFAULT
+            if (renames) func.setName(name, SourceType.ANALYSIS)
+            val retyped = func.parentNamespace == cls && func.fastcallToThiscall()
+            moves || renames || retyped
+        }.onFailure {
+            warn("msvc-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)
+        }
+            .getOrDefault(false)
     }
 
     /**
