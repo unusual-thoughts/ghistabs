@@ -23,7 +23,7 @@ import ghistabs.toClass
 /**
  * What a class pass does once an ABI's records have given it the classes ([RttiParser], [ClassPassInput]): each virtual
  * function moved into the class that introduced it ([introducingClass]) and marked virtual, each constructor
- * and destructor ([StructorFinder]) moved there and named, each class sized off its allocations and layout
+ * and destructor ([StructorAnalysis]) moved there and named, each class sized off its allocations and layout
  * ([sizeBounds]), and the classes written to [ClassHierarchyRecords]. [vfptrModel] says whether a class
  * struct splits a base around the vptr it takes over ([ClassStructFiller]).
  */
@@ -36,7 +36,7 @@ class ClassPass(
     DiagnosticSink by sink {
     val vfptrModel: VfptrModel by VfptrModel.OPTION
 
-    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorFinder]). */
+    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorAnalysis]). */
     var fillArrays: Boolean by FILL_ARRAYS
 
     init {
@@ -64,8 +64,8 @@ class ClassPass(
         val read = parser.parse(monitor)
         stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
-        val finder = StructorFinder(program, read.classes, this, fillArrays)
-        val found = finder.find(read.holders, abi, monitor)
+        val analysis = StructorAnalysis(program, read.classes, this, fillArrays)
+        val found = analysis.find(read.holders, abi, monitor)
         val structors = found.roles
         var moved = 0
         monitor.initialize(owners.size.toLong(), "Moving virtual functions into their classes")

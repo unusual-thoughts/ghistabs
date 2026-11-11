@@ -32,7 +32,7 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
     }
 
     /** Off the calls of each structor on `this`, and the vptrs it stores together. */
-    fun addStructors(uses: StructorFinder.ThisUses) {
+    fun addStructors(uses: StructorAnalysis.ThisUses) {
         for ((f, stores) in uses.stores) {
             val own = stores.classes
             val callees = uses.subobjectCalls[f].orEmpty()[0L].orEmpty()
@@ -80,7 +80,7 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
      * would derive from each other. A call on `this` + k is no evidence: it builds a member as well as a base, and
      * only a store of D's own table at k, which [PlainVtables] doesn't place, would tell them apart.
      */
-    fun inferBases(classes: Collection<PlainClass>, uses: StructorFinder.ThisUses) {
+    fun inferBases(classes: Collection<PlainClass>, uses: StructorAnalysis.ThisUses) {
         addStructors(uses)
         addSharedSlots()
         val direct = byClass.mapValues { (_, cs) -> cs.mostDerived(byClass) }
@@ -145,7 +145,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             .values.map { labels ->
                 PlainClass(labels.first().parentNamespace, labels.map { PlainVtables.recordAt(program, it.address) })
             }
-        val uses = StructorFinder(program, classes, sink).readStorers(monitor)
+        val uses = StructorAnalysis(program, classes, sink).readStorers(monitor)
         val slots = classes.associateWith { c ->
             c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
                 // An unnamed pure virtual stub never returns: it aborts.

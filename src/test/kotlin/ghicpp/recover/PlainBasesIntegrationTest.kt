@@ -48,7 +48,7 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         calls: Map<String, Map<Long, Set<String>>> = emptyMap(),
         slots: Map<String, List<String?>> = emptyMap(),
     ): Map<String, List<Pair<String, Long?>>> {
-        val uses = StructorFinder.ThisUses(
+        val uses = StructorAnalysis.ThisUses(
             stores.entries.associate { (f, cs) -> fn(f) to VptrStores(cs.mapTo(mutableSetOf(), ::cls)) },
             calls.entries.associate { (f, byOffset) ->
                 fn(f) to byOffset.mapValues { (_, called) -> called.mapTo(mutableSetOf(), ::fn) }
