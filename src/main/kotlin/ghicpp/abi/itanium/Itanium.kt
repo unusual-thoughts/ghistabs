@@ -23,8 +23,14 @@ import ghistabs.namespaces
 /** The Itanium C++ ABI, as gcc >= 3 emits it: its special names, typeinfo classes and vtable header. */
 @Suppress("TooManyFunctions")
 object Itanium : CxxAbi {
-    /** `__cxa_pure_virtual` (ABI §3.2.5), or `__cxa_deleted_virtual` for a deleted one (§3.2.6). */
-    override fun isPureVirtualStub(name: String) = name == "__cxa_pure_virtual" || name == "__cxa_deleted_virtual"
+    /**
+     * `__cxa_pure_virtual` (ABI §3.2.5), or `__cxa_deleted_virtual` for a deleted one (§3.2.6). A PE's COFF
+     * symbol spells either with the C prefix's extra `_`: MinGW's `___cxa_pure_virtual`.
+     */
+    override fun isPureVirtualStub(name: String) = name.removePrefix("_").let { it in PURE_VIRTUAL_STUBS } ||
+        name in PURE_VIRTUAL_STUBS
+
+    private val PURE_VIRTUAL_STUBS = setOf("__cxa_pure_virtual", "__cxa_deleted_virtual")
 
     // Special-name prefixes (ABI §5.1.4). Cygwin's PE loader prepends another `_`: `__ZTV…`.
 
