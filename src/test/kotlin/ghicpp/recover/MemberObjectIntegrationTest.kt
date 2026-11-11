@@ -2,7 +2,6 @@ package ghicpp.recover
 
 import ghicpp.MemberAttrs
 import ghicpp.MemberAttrs.Companion.memberAttrs
-import ghicpp.MemberSource
 import ghicpp.abi.StructorRole
 import ghicpp.classStruct
 import ghidra.program.database.ProgramBuilder
@@ -93,7 +92,7 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         structOf(member).length mustBe 8
         structOf(member).description mustBe "No vtable: named after its first constructor, at 00401080"
         program.memberAttrs(addr(MEMBER_CTOR)) mustBe
-            MemberAttrs(source = MemberSource.CLASS_PASS, structor = StructorRole.CONSTRUCTOR)
+            MemberAttrs(source = SourceType.ANALYSIS, structor = StructorRole.CONSTRUCTOR)
 
         val holder = structOf("${GenericVftableFinder.SEEDED_CLASS_PREFIX}00402010")
         holder.getComponentAt(8).dataType.name mustBe member

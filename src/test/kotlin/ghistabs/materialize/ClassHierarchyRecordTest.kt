@@ -5,10 +5,10 @@ import ghicpp.ClassHierarchyRecords
 import ghicpp.ClassHierarchyRecords.Base
 import ghicpp.ClassHierarchyRecords.Entry
 import ghicpp.MemberAttrs
-import ghicpp.MemberSource
 import ghicpp.VirtKind
 import ghicpp.abi.StructorRole
 import ghidra.framework.options.GProperties
+import ghidra.program.model.symbol.SourceType
 import ghidra.util.Saveable
 import ghidra.util.datastruct.DataTable
 import ghidra.util.map.ObjectStorageAdapter
@@ -46,7 +46,7 @@ class ClassHierarchyRecordTest {
         attrs.roundTrip(MemberAttrs()) mustBe attrs
         // What a swept member can't know stays unknown.
         MemberAttrs(virt = VirtKind.VIRTUAL, isConst = true).let { it.roundTrip(MemberAttrs()) mustBe it }
-        MemberAttrs(source = MemberSource.CLASS_PASS, structor = StructorRole.CONSTRUCTOR)
+        MemberAttrs(source = SourceType.ANALYSIS, structor = StructorRole.CONSTRUCTOR)
             .let { it.roundTrip(MemberAttrs()) mustBe it }
     }
 
@@ -68,7 +68,7 @@ class ClassHierarchyRecordTest {
     fun `version 1 attributes upgrade, from the stabs where they state an access`() {
         MemberAttrs().isUpgradeable(1) mustBe true
         upgraded(Access.PUBLIC, VirtKind.NORMAL) mustBe
-            MemberAttrs(Access.PUBLIC, VirtKind.NORMAL, isConst = true, source = MemberSource.STABS)
+            MemberAttrs(Access.PUBLIC, VirtKind.NORMAL, isConst = true, source = SourceType.IMPORTED)
         upgraded(null, VirtKind.VIRTUAL) mustBe MemberAttrs(virt = VirtKind.VIRTUAL, isConst = true)
     }
 }
