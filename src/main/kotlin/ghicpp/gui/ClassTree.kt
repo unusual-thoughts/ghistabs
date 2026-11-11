@@ -49,9 +49,9 @@ import javax.swing.SwingUtilities
  *
  * [hasStabs] tells the stabs import's class record from the class pass's, as the stabs stages know.
  *
- * Its toolbar ([addToolbarActions]) and popup actions ([addSelectionActions]) are in ClassActions.kt.
- * Below it here: going to and selecting nodes ([select], [openSelected]), carrying paths over a rebuild
- * ([replaceRoot]) and the status line ([statusLine]).
+ * Its toolbar ([addToolbarActions]) and popup actions ([addSelectionActions]) are in ClassActions.kt,
+ * drag and drop in [ClassDnDHandler]. Below it here: going to and selecting nodes ([select], [openSelected]),
+ * carrying paths over a rebuild ([replaceRoot]) and the status line ([statusLine]).
  */
 class ClassTree(plugin: Plugin, private val hasStabs: (Program) -> Boolean) :
     ComponentProviderAdapter(plugin.tool, NAME, plugin.name),
@@ -63,6 +63,7 @@ class ClassTree(plugin: Plugin, private val hasStabs: (Program) -> Boolean) :
     internal val tree = GTree(placeholder("No program")).apply {
         isRootVisible = true
         cellRenderer = ClassTreeRenderer()
+        dragNDropHandler = ClassDnDHandler(this@ClassTree)
         addGTreeSelectionListener { e ->
             // Not when Navigate on Incoming selected it: that's where the listing already is.
             if (e.eventOrigin == EventOrigin.USER_GENERATED && navigateOutgoing.isSelected) openSelected()
@@ -95,6 +96,8 @@ class ClassTree(plugin: Plugin, private val hasStabs: (Program) -> Boolean) :
     internal var program: Program? = null
         private set
 
+    // The status line's class counts, shown again once a drag's "can't drop" note is done with.
+    private var counts = " "
     internal var shown: ClassHierarchy? = null
         private set
     internal var showMembers = true
@@ -105,6 +108,9 @@ class ClassTree(plugin: Plugin, private val hasStabs: (Program) -> Boolean) :
     internal lateinit var navigateOutgoing: ToggleDockingAction
     internal var lastLocation: ProgramLocation? = null
 
+    /** The node a drop landed on, by its [steps], and the names of what was dropped, to show on the next rebuild. */
+    private data class Reveal(val dest: List<Pair<String, Int>>, val names: List<String>)
+    private var reveal: Reveal? = null
     private val builder = Executors.newSingleThreadExecutor {
         Thread(it, "Stabs class hierarchy").apply {
             isDaemon = true
@@ -174,7 +180,8 @@ class ClassTree(plugin: Plugin, private val hasStabs: (Program) -> Boolean) :
     private fun show(p: Program, hierarchy: ClassHierarchy) {
         shown = hierarchy
         reshow()
-        status.text = p.statusLine(hierarchy, hasStabs(p))
+        counts = p.statusLine(hierarchy, hasStabs(p))
+        status.text = counts
     }
 
     /** The shown hierarchy again, as the toolbar toggles now want it. */
@@ -184,6 +191,22 @@ class ClassTree(plugin: Plugin, private val hasStabs: (Program) -> Boolean) :
         val root = ClassTreeRoot(p.name, h, showMembers, inverted, showEmpty)
         tree.replaceRoot(root)
         if (expandAll) tree.expandAll()
+        reveal?.let { (steps, names) ->
+            reveal = null
+            val dest = root.find(steps) ?: return
+            tree.expandPath(dest)
+            dest.children.filter { it.name in names }.takeIf { it.isNotEmpty() }?.let(tree::setSelectedNodes)
+        }
+    }
+
+    /** The status line during a drag: why the drop is refused, else the class counts again. */
+    internal fun dropNote(refusal: String?) {
+        status.text = refusal?.let { "Can't drop: $it" } ?: counts
+    }
+
+    /** Once the rebuild after a drop shows it, open [dest], the node dropped on, and select [names] in it. */
+    internal fun revealAfterRebuild(dest: GTreeNode, names: List<String>) {
+        reveal = Reveal(steps(dest), names)
     }
 
     /** The tool's location moved: with Navigate on Incoming on, select what the tree shows for it. */
@@ -197,6 +220,13 @@ class ClassTree(plugin: Plugin, private val hasStabs: (Program) -> Boolean) :
     internal val selectedClass get() = (tree.selectionPath?.lastPathComponent as? ClassNode)?.info
 
     internal val selectedMember get() = (tree.selectionPath?.lastPathComponent as? MemberNode)?.member
+
+    /** The selected members, each with the class listing it. */
+    internal val selectedMembers: List<Pair<Member, ClassView>> get() =
+        tree.selectionPaths.orEmpty().mapNotNull { path ->
+            val member = (path.lastPathComponent as? MemberNode)?.member ?: return@mapNotNull null
+            (path.parentPath?.lastPathComponent as? ClassNode)?.info?.let { member to it }
+        }
 
     /** The base function the selected member overrides, under the class listing it. */
     internal val selectedOverridden: Member? get() {

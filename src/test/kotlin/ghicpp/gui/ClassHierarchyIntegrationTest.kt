@@ -3,6 +3,7 @@ package ghicpp.gui
 import docking.widgets.tree.GTreeNode
 import docking.widgets.tree.support.GTreeFilter
 import ghicpp.Access
+import ghicpp.ClassNaming
 import ghicpp.MemberAttrs
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.VirtKind
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.awt.dnd.DnDConstants
 
 /**
  * The Class Hierarchy window's model over `features/hello.cc`, on every compiler that built it:
@@ -172,6 +174,189 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
                 .firstOrNull { it.variants.any(dtor.variants::contains) }
             if (sameVariant != null) base mustBe sameVariant
         }
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `renaming a class renames its structors, structs and what derived classes name after it`(fixture: String) {
+        load(fixture)
+        val before = ClassHierarchy.of(program)
+        val dtm = program.dataTypeManager
+        val shape = before.cls("Shape")
+        val selfBases = dtm.allDataTypes.asSequence().count {
+            it.name == "Shape" && "!internal" in it.categoryPath.path
+        }
+        val vftables = dtm.allDataTypes.asSequence().filter { it.name.startsWith("Shape_vftable") }.count()
+        val runs = dtm.allDataTypes.asSequence().count { it.name.startsWith("Shape_fields_") }
+        val left = before.cls("Left")
+        val diamondStruct = { program.dataTypeManager.getDataType(before.cls("Diamond").structId!!) as Structure }
+        val leftField = diamondStruct().definedComponents.any { it.fieldName == "_base_Left" }
+
+        program.runTransaction("rename") {
+            program.renameClass(before, shape, "Figure") mustBe emptyList()
+            program.renameClass(before, left, "Port") mustBe emptyList()
+        }
+
+        val after = ClassHierarchy.of(program)
+        val figure = after.cls("Figure")
+        figure.id mustBe shape.id
+        figure.origin mustBe Origin.STABS
+        figure.members.filter { it.kind == MemberKind.FUNCTION }.map { it.name }.toSet()
+            .containsAll(setOf("Figure", "~Figure")).mustBeTrue("${figure.members.map { it.name }}")
+        figure.members.none { it.name == "Shape" || it.name == "~Shape" }.mustBeTrue()
+        dtm.getDataType(figure.structId!!).name mustBe "Figure"
+        dtm.allDataTypes.asSequence().count { it.name.startsWith("Figure_vftable") } mustBe vftables
+        dtm.allDataTypes.asSequence().none { it.name.startsWith("Shape_vftable") }.mustBeTrue()
+        dtm.allDataTypes.asSequence().none { it.name.startsWith("Shape_fields_") }.mustBeTrue()
+        dtm.allDataTypes.asSequence().count { it.name.startsWith("Figure_fields_") } mustBe runs
+        dtm.allDataTypes.asSequence().none { it.name == "Shape" && "!internal" in it.categoryPath.path }.mustBeTrue()
+        dtm.allDataTypes.asSequence().count { it.name == "Figure" && "!internal" in it.categoryPath.path } mustBe
+            selfBases
+        after.cls("Circle").baseSpelling() mustBe listOf("public Figure")
+        // Diamond's base field and vftable label for Left follow it.
+        val fields = diamondStruct().definedComponents.map { it.fieldName }
+        ("_base_Left" in fields).mustBeFalse()
+        ("_base_Port" in fields) mustBe leftField
+        after.cls("Diamond").members.none { it.name == "vftable_for_Left" }.mustBeTrue()
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a dropped class becomes the child of the class it is dropped on, never its own base`(fixture: String) {
+        load(fixture)
+        val h = ClassHierarchy.of(program)
+        val (shape, circle, named) = listOf("Shape", "Circle", "Named").map { h.cls(it) }
+        val (left, diamond) = listOf("Left", "Diamond").map { h.cls(it) }
+        val shapeClause = circle.bases.single()
+        fun refusal(plan: () -> Drop) = plan().error
+
+        // Bases below: Circle dropped on Shape would make Shape derive from what derives from it.
+        refusal { h.planDrop(owner = shape, base = circle, removedFrom = null, edge = null) } mustBe
+            "Circle derives from Shape: drop it on the root or a common base first"
+        refusal { h.planDrop(owner = circle, base = shape, removedFrom = null, edge = null) } mustBe
+            "Circle already derives from Shape"
+        // Left moved from under Diamond to under Circle: Diamond loses it, Circle gains it.
+        val leftClause = diamond.bases.first { it.targetId == left.id }
+        h.planDrop(owner = circle, base = left, removedFrom = diamond, edge = leftClause).edits mustBe listOf(
+            BaseEdit(diamond, leftClause, null),
+            BaseEdit(circle, null, left),
+        )
+
+        // Derived below: Circle moved from under Shape to under Named swaps its base in place; copied, adds one.
+        h.planDrop(owner = circle, base = named, removedFrom = circle, edge = shapeClause).edits mustBe
+            listOf(BaseEdit(circle, shapeClause, named))
+        h.planDrop(owner = circle, base = named, removedFrom = null, edge = shapeClause).edits mustBe
+            listOf(BaseEdit(circle, null, named))
+        // On the root, it only leaves.
+        h.planDrop(owner = circle, base = null, removedFrom = circle, edge = shapeClause).edits mustBe
+            listOf(BaseEdit(circle, shapeClause, null))
+        refusal { h.planDrop(owner = shape, base = null, removedFrom = null, edge = null) } mustBe
+            "Shape has no base here to remove"
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `bases set by hand stand over the stabs', placed in the struct at their offset`(fixture: String) {
+        load(fixture)
+        val h = ClassHierarchy.of(program)
+        val (circle, named) = listOf("Circle", "Named").map { h.cls(it) }
+        val edit = h.planDrop(owner = circle, base = named, removedFrom = null, edge = null).edits.single()
+        val clause = ClassHierarchy.BaseRef("Named", named.id, false, Access.PROTECTED, null)
+        val struct = { program.dataTypeManager.getDataType(circle.structId!!) as Structure }
+        val end = struct().length
+
+        program.overwrittenBy(circle, named, 0).isNotEmpty().mustBeTrue("Circle's own fields start at 0")
+        program.overwrittenBy(circle, named, end) mustBe emptyList()
+        program.runTransaction("edit") {
+            program.setBases(circle, edit.bases(clause))
+            program.placeBase(circle, named, end, isVirtual = false, baseCount = 2) mustBe null
+        }
+
+        val after = ClassHierarchy.of(program).cls("Circle")
+        after.origin mustBe Origin.EDITED
+        after.baseSpelling() mustBe listOf("public Shape", "protected Named")
+        val field = struct().getComponentContaining(end)
+        field.offset mustBe end
+        field.fieldName mustBe "_base_Named"
+        field.dataType.isEquivalent(program.embeddingOf(named)).mustBeTrue("${field.dataType}")
+        // The lone base field it had takes its base's name, now there are two.
+        struct().definedComponents.none { it.fieldName == "_base_" }.mustBeTrue()
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a member dropped on a class moves into its namespace`(fixture: String) {
+        load(fixture)
+        val h = ClassHierarchy.of(program)
+        val (circle, named) = listOf("Circle", "Named").map { h.cls(it) }
+        val area = circle.members.single { it.name == "area" && it.kind == MemberKind.FUNCTION }
+
+        program.memberSource(area) mustBe "the stabs"
+        area.isMovable.mustBeTrue()
+        // A vtable's or typeinfo's label names its class, so it doesn't drag.
+        circle.members.filter { it.kind == MemberKind.VTABLE || it.kind == MemberKind.ABI }.none { it.isMovable }
+            .mustBeTrue()
+        program.runTransaction("move") { program.moveMember(area, named) }
+
+        val after = ClassHierarchy.of(program)
+        after.cls("Named").members.any { it.name == "area" && it.address == area.address }.mustBeTrue()
+        after.cls("Circle").members.none { it.name == "area" }.mustBeTrue()
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a class moved into a namespace takes its vftables, categories and struct along`(fixture: String) {
+        load(fixture)
+        val h = ClassHierarchy.of(program)
+        val circle = h.cls("Circle")
+        val dtm = program.dataTypeManager
+        fun tablesAt(path: List<String>) =
+            dtm.getCategory(ClassNaming.vftableCategory(path))?.dataTypes.orEmpty().map { it.name }.toSet()
+        val vftables = tablesAt(listOf("Circle"))
+        val shapeTables = dtm.getCategory(ClassNaming.vftableCategory(listOf("Shape")))?.dataTypes.orEmpty().size
+        val ns = { program.symbolTable.getSymbol(circle.id).`object` as GhidraClass }
+        fun foundStruct() = VariableUtilities.findExistingClassStruct(ns(), dtm)?.let(dtm::getID)
+
+        checkNamespaceMove(listOf("Circle"), emptyList()) mustBe "Circle is already there"
+        checkNamespaceMove(listOf("geo"), listOf("geo", "inner")) mustBe "a namespace can't move into itself"
+        checkNamespaceMove(listOf("Circle"), listOf("geo")) mustBe null
+
+        val geo = program.runTransaction("namespace") {
+            program.symbolTable.createNameSpace(null, "geo", SourceType.USER_DEFINED)
+        }
+        program.runTransaction("move") { program.relocateNamespace(ns(), geo) } mustBe emptyList()
+        fun check(path: List<String>) {
+            val moved = ClassHierarchy.of(program)[circle.id]!!
+            moved.path mustBe path
+            moved.structId mustBe circle.structId
+            foundStruct() mustBe circle.structId
+            tablesAt(path) mustBe vftables
+            if (vftables.isNotEmpty()) tablesAt(listOf("Circle")) mustBe emptySet()
+            dtm.getCategory(ClassNaming.vftableCategory(listOf("Shape")))?.dataTypes.orEmpty().size mustBe shapeTables
+        }
+        check(listOf("geo", "Circle"))
+
+        // In the tree, a class filed under its namespace and the namespace itself drop on the root.
+        val moved = ClassHierarchy.of(program)
+        val root = ClassTreeRoot(program.name, moved)
+        val geoNode = root.children.single { it is NamespaceNode && it.name == "geo" }
+        val circleNode = geoNode.children.single { it is ClassNode && it.name == "Circle" }
+        moved.dropRefusal(circleNode, root, DnDConstants.ACTION_MOVE) mustBe null
+        moved.dropRefusal(geoNode, root, DnDConstants.ACTION_MOVE) mustBe "geo is already there"
+        moved.dropRefusal(circleNode, geoNode, DnDConstants.ACTION_MOVE) mustBe "geo::Circle is already there"
+        // Onto another class, it becomes its base; a namespace can't go there.
+        val namedNode = root.children.single { it is ClassNode && it.name == "Named" }
+        moved.dropRefusal(circleNode, namedNode, DnDConstants.ACTION_MOVE) mustBe null
+        moved.dropRefusal(geoNode, namedNode, DnDConstants.ACTION_MOVE) mustBe
+            "a namespace only drops on another namespace or the root"
+
+        program.runTransaction("rename") { program.relocateNamespace(geo, geo.parentNamespace, "shapes") } mustBe
+            emptyList()
+        check(listOf("shapes", "Circle"))
+
+        program.runTransaction("back") { program.relocateNamespace(ns(), program.globalNamespace) } mustBe emptyList()
+        ClassHierarchy.of(program)[circle.id]!!.path mustBe listOf("Circle")
+        foundStruct() mustBe circle.structId
     }
 
     /** A function's mangled label, or a static member's second one, isn't a member of its own. */
