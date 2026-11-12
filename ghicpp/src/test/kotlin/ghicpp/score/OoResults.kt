@@ -15,9 +15,14 @@ import ghicpp.hierarchy.ClassHierarchy.Origin
  * name its vftable carries; its methods are functions, a constructor named after the class, a destructor
  * `~` it, as the scorer tells structors; `finalInheritance` gives its bases, `finalMember` its own fields,
  * laid out with its bases' and embedded objects' at their offsets as a struct would be. A class whose vftable
- * holds one of [purecalls] is abstract.
+ * holds one of [purecalls] is abstract. An RTTI name is the class [demangled] says it spells.
  */
-class OoResults(text: String, private val purecalls: Set<Long> = emptySet()) {
+class OoResults(
+    text: String,
+    private val purecalls: Set<Long> = emptySet(),
+    /** The class each RTTI type name (`.?AVShape@@`) spells, as the facts' `rTTITypeDescriptor` gave it. */
+    private val demangled: Map<String, String> = emptyMap(),
+) {
     val terms: List<Pair<String, List<Any>>> = text.lineSequence().map { it.trim() }
         .filter { it.isNotEmpty() && !it.startsWith("%") }
         .map { PrologTerm(it).fact() }.toList()
@@ -27,7 +32,7 @@ class OoResults(text: String, private val purecalls: Set<Long> = emptySet()) {
     fun snapshot(fixture: String): Snapshot {
         val vftNames = all("finalVFTable").associate {
             (it[0] as Long) to
-                (it[4] as? String)?.takeIf { n -> n.isNotEmpty() }
+                (it[4] as? String)?.takeIf { n -> n.isNotEmpty() }?.let { n -> demangled[n] ?: n }
         }
         val entries = all("finalVFTableEntry").groupBy({ it[0] as Long }, { it[2] as Long })
         val props = all("finalMethodProperty").groupBy({ it[0] as Long }, { it[1] as String })
