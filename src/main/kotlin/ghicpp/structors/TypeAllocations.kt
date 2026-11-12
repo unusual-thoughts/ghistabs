@@ -1,4 +1,4 @@
-package ghicpp.recover
+package ghicpp.structors
 
 import ghicpp.DECOMPILE_TIMEOUT_SECONDS
 import ghicpp.classStruct

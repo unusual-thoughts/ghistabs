@@ -1,6 +1,8 @@
 package ghicpp.recover
 
 import ghicpp.ClassDecl
+import ghicpp.structors.StructorInspector
+import ghicpp.structors.VptrStores
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataType
 import ghidra.program.model.listing.Function

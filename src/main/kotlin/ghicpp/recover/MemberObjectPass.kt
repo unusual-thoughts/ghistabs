@@ -8,6 +8,10 @@ import ghicpp.abi.PlainVtables
 import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
 import ghicpp.abi.StructorRole.DESTRUCTOR
+import ghicpp.recover.MemberObjectPass.Companion.MAX_DEPTH
+import ghicpp.structors.FoundStructors
+import ghicpp.structors.StructorInspector
+import ghicpp.structors.mergedStores
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
@@ -22,7 +26,7 @@ import ghistabs.toClass
 /**
  * The classes with no vtable that the classes a class pass found hold as members. What a constructor calls first
  * on `this` + k, k past 0, is the constructor of the member there, and what a destructor calls last there its
- * destructor, where neither stores a vptr, as [FoundStructors.roles]' do. The structors one class's structors
+ * destructor, where neither stores a vptr, as [ghicpp.structors.FoundStructors.roles]' do. The structors one class's structors
  * call at one offset build and destroy one class, and so does any sharing one of them: the class one of them is
  * named in already, else `NPKlass_<address>` ([NON_POLYMORPHIC_PREFIX]) after its first constructor: the address
  * is that function's, as it has no vtable, where a `Klass_<address>` [GenericVftableFinder] seeds is its table's.
@@ -36,7 +40,7 @@ import ghistabs.toClass
 class MemberObjectPass(
     private val program: Program,
     sink: DiagnosticSink,
-    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorInspector]). */
+    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([ghicpp.structors.StructorInspector]). */
     private val fillArrays: Boolean = true,
 ) : DiagnosticSink by sink {
     private val dtm = program.dataTypeManager
@@ -129,37 +133,36 @@ class MemberObjectPass(
      * down to [MAX_DEPTH].
      */
     private fun collect(found: FoundStructors, monitor: TaskMonitor): Map<Subobject, NonPolymorphicClass> {
-        val inspector = StructorInspector(program, emptyList(), this, fillArrays)
-        val held = linkedMapOf<Subobject, NonPolymorphicClass>()
         known.clear()
         // The constructors inlined after `operator new` are their classes' constructors too, with no function.
-        var structors: List<Structor> =
-            found.roles.map { (f, by) ->
-                Structor(f, ContainingClass.Existing(by.first), by.second, found.subobjectCalls[f])
-            } +
-                found.inlined.flatMap { built ->
-                    built.parts.map { Structor(null, ContainingClass.Existing(it.cls), CONSTRUCTOR, it.calls) }
+        var structors: List<Structor> = found.roles.map { (f, by) ->
+            Structor(f, ContainingClass.Existing(by.first), by.second, found.subobjectCalls[f])
+        } + found.inlined.flatMap { built ->
+            built.parts.map { Structor(null, ContainingClass.Existing(it.cls), CONSTRUCTOR, it.calls) }
+        }
+        return StructorInspector(program, emptyList(), this, fillArrays).run {
+            buildMap {
+                for (depth in 1..MAX_DEPTH) {
+                    if (monitor.isCancelled) break
+                    val fresh = linkedSetOf<NonPolymorphicClass>()
+                    for ((f, container, role, calls) in structors) {
+                        for ((offset, called) in calls.orEmpty()) {
+                            val sub = Subobject(container, offset)
+                            val structor = memberStructor(f, sub, role, called, found) ?: continue
+                            val member = getOrPut(sub) { NonPolymorphicClass().also(fresh::add) }
+                            (if (role == CONSTRUCTOR) member.ctors else member.dtors) += structor
+                        }
+                    }
+                    if (fresh.isEmpty()) break
+                    val uses = readCalls(fresh.flatMap { it.functions }, monitor)
+                    for (m in fresh) m.stores = mergedStores(m.ctors.map { uses.thisStores[it].orEmpty() })
+                    structors = fresh.flatMap { m ->
+                        m.ctors.map { Structor(it, m, CONSTRUCTOR, uses.subobjectCalls[it]) } +
+                            m.dtors.map { Structor(it, m, DESTRUCTOR, uses.subobjectCalls[it]) }
+                    }
                 }
-        for (depth in 1..MAX_DEPTH) {
-            if (monitor.isCancelled) break
-            val fresh = linkedSetOf<NonPolymorphicClass>()
-            for ((f, container, role, calls) in structors) {
-                for ((offset, called) in calls.orEmpty()) {
-                    val sub = Subobject(container, offset)
-                    val structor = memberStructor(f, sub, role, called, found) ?: continue
-                    val member = held.getOrPut(sub) { NonPolymorphicClass().also(fresh::add) }
-                    (if (role == CONSTRUCTOR) member.ctors else member.dtors) += structor
-                }
-            }
-            if (fresh.isEmpty()) break
-            val uses = inspector.readCalls(fresh.flatMap { it.functions }, monitor)
-            for (m in fresh) m.stores = mergedStores(m.ctors.map { uses.thisStores[it].orEmpty() })
-            structors = fresh.flatMap { m ->
-                m.ctors.map { Structor(it, m, CONSTRUCTOR, uses.subobjectCalls[it]) } +
-                    m.dtors.map { Structor(it, m, DESTRUCTOR, uses.subobjectCalls[it]) }
             }
         }
-        return held
     }
 
     /**
@@ -180,11 +183,9 @@ class MemberObjectPass(
             else -> return null
         }
         if (sub.offset <= 0L || structor == f || !structor.takesThis()) return null
-        val built = found.roles[structor] ?: return structor
-        if (role == CONSTRUCTOR && built.second == CONSTRUCTOR &&
-            ContainingClass.Existing(built.first) != sub.container
-        ) {
-            known.putIfAbsent(sub, built.first)
+        val (cls, builtRole) = found.roles[structor] ?: return structor
+        if (role == CONSTRUCTOR && builtRole == CONSTRUCTOR && sub.container != ContainingClass.Existing(cls)) {
+            known.putIfAbsent(sub, cls)
         }
         return null
     }

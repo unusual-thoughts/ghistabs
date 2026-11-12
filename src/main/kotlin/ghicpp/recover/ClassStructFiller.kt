@@ -5,10 +5,10 @@ import ghicpp.abi.CxxAbi
 import ghicpp.abi.SlotDefinitions
 import ghicpp.abi.VftableBuilder
 import ghicpp.abi.VtableRecord
-import ghidra.program.model.address.Address
+import ghicpp.structors.StructorInspector
+import ghicpp.structors.mergedStores
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
-import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -51,7 +51,7 @@ class ClassStructFiller(
 
     /**
      * Fills [classes]' empty structs, a base before the classes deriving from it, each with the fields its
-     * constructors [stores] ([FoundStructors.constructorStores]); returns how many it filled.
+     * constructors [stores] ([ghicpp.structors.FoundStructors.constructorStores]); returns how many it filled.
      */
     fun fillAll(classes: Collection<ClassDecl>, stores: Map<ClassDecl, Map<Int, DataType>>): Int =
         classes.sortedBy { it.ancestors.size }.count { it.fillStruct(stores[it].orEmpty()) }
