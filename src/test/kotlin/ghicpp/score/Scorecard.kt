@@ -1,6 +1,7 @@
 package ghicpp.score
 
 import ghicpp.VirtKind
+import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.ClassView
 import ghicpp.hierarchy.ClassHierarchy.MemberKind
@@ -339,11 +340,14 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     }
 
     /**
-     * A truth member that is virtual. The stabs mark only the deleting variant of a virtual destructor so; the
-     * complete one, which an Itanium vtable holds too, comes out plain.
+     * A truth member that is virtual. Some stabs mark only the deleting variant of a virtual destructor so; the
+     * complete one, which an Itanium vtable holds too, comes out plain. The base-object one no vtable holds.
      */
     private fun isTrulyVirtual(cls: ClassView, m: ClassHierarchy.Member) = m.attrs?.virt == VirtKind.VIRTUAL ||
-        (m.name.startsWith("~") && cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL })
+        (
+            m.name.startsWith("~") && m.variants.any { it != ItaniumStructor.BASE_DTOR } &&
+                cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL }
+            )
 
     /** A constructor's or destructor's name: the class's own, less a template's arguments, which g++ leaves off. */
     private fun ClassView.isStructorName(member: String) = member.removePrefix("~").substringBefore('<') ==
