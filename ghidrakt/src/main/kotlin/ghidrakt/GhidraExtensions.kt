@@ -74,36 +74,32 @@ fun Data.getScalar(name: String): Scalar? = valueOf(name)
 /** Whether the one-bit field [name] is set. */
 fun Data.flag(name: String) = getScalar(name)?.unsignedValue == 1L
 
-fun Iterable<AddressRange>.gapsIn(range: AddressRange, action: (AddressRange) -> Unit = { }) = sequence {
-    var start = range.minAddress
+fun Iterable<AddressRange>.gapsIn(set: AddressSetView, action: (AddressRange) -> Unit = { }) = sequence {
+    var start = set.minAddress
     for (r in this@gapsIn) {
         action(r)
         (start..<r.minAddress).takeIf { it.length > 0 }?.let { yield((it)) }
-        if (r.maxAddress >= range.maxAddress) return@sequence
+        if (r.maxAddress >= set.maxAddress) return@sequence
         start = r.maxAddress.next()
     }
-    (start..range.maxAddress).takeIf { it.length > 0 }?.let { yield((it)) }
+    (start..set.maxAddress).takeIf { it.length > 0 }?.let { yield((it)) }
 }
 
-fun Iterable<AddressRange>.monitoredGapsIn(range: AddressRange, monitor: TaskMonitor? = null) = gapsIn(range) {
-    monitor?.progress = it.minAddress - range.minAddress
+fun Iterable<AddressRange>.monitoredGapsIn(set: AddressSetView, monitor: TaskMonitor? = null) = gapsIn(set) {
+    monitor?.progress = it.minAddress - set.minAddress
 }
+
+/** Undefined runs in [range] - the gaps between instructions and defined data, as `getUndefinedRanges` walks them. */
+fun Listing.undefinedRangesIn(set: AddressSetView, monitor: TaskMonitor? = null) = getCodeUnits(set, true)
+    .filter { (it as? Data)?.isDefined != false } // instructions + defined data
+    .map { it.range }
+    .monitoredGapsIn(set, monitor)
 
 /**
  * [this] passing on cancellation alone, for a Ghidra command run once per item of a loop [this] shows the
  * progress of: `DisassembleCommand` and `CreateFunctionCmd` set a monitor's maximum, progress and message.
  */
 val TaskMonitor.cancelOnly: TaskMonitor get() = CancelOnlyWrappingTaskMonitor(this)
-
-/** The addresses of [this] below [at]: how far through [this] a walk in address order is at [at]. */
-fun AddressSetView.addressesBefore(at: Address): Long =
-    if (at <= minAddress) 0 else intersectRange(minAddress, at.previous()).numAddresses
-
-/** Undefined runs in [range] — the gaps between instructions and defined data, as `getUndefinedRanges` walks them. */
-fun Listing.undefinedRangesIn(range: AddressRange, monitor: TaskMonitor? = null) = getCodeUnits(AddressSet(range), true)
-    .filter { (it as? Data)?.isDefined != false } // instructions + defined data
-    .map { it.range }
-    .monitoredGapsIn(range, monitor)
 
 /** The two [ghidra.program.model.listing.AutoParameterType] display names. */
 private val INJECTED_PARAM_NAMES = setOf(Function.THIS_PARAM_NAME, Function.RETURN_PTR_PARAM_NAME)

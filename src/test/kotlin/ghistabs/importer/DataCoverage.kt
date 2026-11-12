@@ -2,6 +2,7 @@ package ghistabs.importer
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
+import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryBlock
 import ghidrakt.inHull
@@ -38,7 +39,7 @@ fun ImportContext<*>.analyzeDataCoverage() {
             continue
         }
         monitor.initialize(block.size, "Stabs: analysing data in ${block.name}")
-        val undefined = program.listing.undefinedRangesIn(block.addressRange, monitor)
+        val undefined = program.listing.undefinedRangesIn(AddressSet(block.addressRange), monitor)
         if (block.isExecute) {
             undefined.forEach { reportTextRun(it, cuStarts) }
         } else {
