@@ -216,7 +216,7 @@ private fun Structure.fillData(store: Map<Int, DataType>) {
         for ((at, dt) in merged.iterator()) {
             val old = data.getComponentAt(at.toInt())
             if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
-            val name = old?.fieldName ?: "field_0x${(part.offset + at).toString(16)}"
+            val name = old?.fieldName ?: ClassNaming.fieldName(part.offset + at.toInt())
             data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
         }
     }

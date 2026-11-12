@@ -11,7 +11,11 @@ import ghidra.program.model.listing.Program
 import ghistabs.componentsOverlapping
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.holds
+import ghistabs.includes
+import ghistabs.lay
+import ghistabs.range
 import ghistabs.stretch
+import ghistabs.withLength
 
 /**
  * Describes this struct as [owner]'s [table], led by the offset tag Ghidra 12.1's `ClassUtils.isVTable`
@@ -108,6 +112,62 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
         }
     }
 }
+
+/**
+ * Lays [member] at [at] in [owner], a class struct, as a member object, and reports how that went. It goes down
+ * through the struct holding all of it, a base subobject or, the base split around a deriving class's vptr
+ * ([VfptrModel.SPLIT_BASE]), the `_fields` run the class's own fields moved into, to the class's own
+ * `<Class>_data` struct, where it goes over the plain fields there. That struct [stretch]es to hold it where it
+ * starts before or ends past it, and [owner] grows where it ends past the end. Anywhere else it goes only over
+ * undefined bytes: a vptr, another class's fields or another member in the way leaves it unplaced, with a warning.
+ */
+internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Structure) {
+    if (member == owner) return
+    val field = ClassNaming.fieldName(at)
+    fun unplaced(into: Structure, why: List<DataTypeComponent>) = degradation(
+        "member-unplaced",
+        "${owner.name}::$field",
+        "${member.name} overlaps ${why.joinToString { it.describe() }}" +
+            " in ${into.name}".takeIf { into != owner }.orEmpty(),
+    )
+    var into = owner
+    var offset = at
+    var ownData = false
+    while (!ownData) {
+        val range = offset.withLength(member.length)
+        val inWay = into.componentsOverlapping(range).filterNot { it.isAt(offset, member) }
+        val part = inWay.singleOrNull()?.takeIf { it.dataType is Structure }
+        when {
+            inWay.isEmpty() -> break
+
+            part != null && part.range.includes(range) -> {
+                ownData = owner.isOwnData(part)
+                offset -= part.offset
+                into = part.dataType as Structure
+            }
+
+            part != null && into == owner && owner.isOwnData(part) -> {
+                val start = minOf(part.offset, offset)
+                into = owner.stretch(part, range)
+                offset -= start
+                ownData = true
+            }
+
+            else -> return unplaced(into, inWay)
+        }
+    }
+    val clash = into.componentsOverlapping(offset, member.length)
+        .filter { it.dataType is Structure && !it.isAt(offset, member) }
+    if (clash.isNotEmpty()) return unplaced(into, clash)
+    runCatching { into.lay(offset, member, field, "member or base") }
+        .onSuccess { debug("member-placed", "${member.name} at +$at in ${owner.name}") }
+        .onFailure { degradation("member-unplaced", "${owner.name}::$field", it.message) }
+}
+
+/** Whether this is [member] laid at [at] already. */
+private fun DataTypeComponent.isAt(at: Int, member: Structure) = dataType == member && offset == at
+
+private fun DataTypeComponent.describe() = "${fieldName ?: dataType.name} at +0x${offset.toString(16)}"
 
 /** Whether [part] holds one of this class struct's own `<Class>_data` structs, filed beside it. */
 fun Structure.isOwnData(part: DataTypeComponent) = (part.dataType as? Structure)?.let {

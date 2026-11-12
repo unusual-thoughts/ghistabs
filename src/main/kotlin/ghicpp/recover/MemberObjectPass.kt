@@ -9,7 +9,6 @@ import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
 import ghicpp.abi.StructorRole.DESTRUCTOR
 import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -17,14 +16,8 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.buildClassNamespaces
-import ghistabs.componentsOverlapping
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.includes
-import ghistabs.lay
-import ghistabs.range
-import ghistabs.stretch
 import ghistabs.toClass
-import ghistabs.withLength
 
 /**
  * The classes with no vtable that the classes a class pass found hold as members. What a constructor calls first
@@ -109,16 +102,12 @@ class MemberObjectPass(
             is NonPolymorphicClass -> root[h]?.cls
             is ContainingClass.Existing -> h.cls
         }?.let(::structOf)
-        monitor.initialize((order.size + known.size).toLong(), "Laying member objects in their classes")
-        for (sub in order) {
+        val laid = order.map { it to root.getValue(held.getValue(it)).cls } + known.toList()
+        monitor.initialize(laid.size.toLong(), "Laying member objects in their classes")
+        for ((sub, cls) in laid) {
             monitor.increment()
-            val member = root.getValue(held.getValue(sub)).cls?.let(::structOf)?.takeUnless { it.isZeroLength }
-            if (member != null) containerOf(sub)?.placeMember(sub.offset.toInt(), member)
-        }
-        for ((sub, cls) in known) {
-            monitor.increment()
-            val member = structOf(cls)?.takeUnless { it.isZeroLength } ?: continue
-            containerOf(sub)?.placeMember(sub.offset.toInt(), member)
+            val member = cls?.let(::structOf)?.takeUnless { it.isZeroLength } ?: continue
+            containerOf(sub)?.let { placeMember(it, sub.offset.toInt(), member) }
         }
         writeRecords(classes.mapNotNull { it.cls })
         return classes.size
@@ -277,56 +266,6 @@ class MemberObjectPass(
     private fun Function.takesThis() = takesThisAt(thisStorage) || (!isExternal && parameterCount == 0)
 
     private fun structOf(cls: ClassDecl): Structure? = cls.ns?.toClass()?.let(program::classStruct)
-
-    /**
-     * Lays [member] at [at] in this. Where it overlaps this class's own `<Class>_data` struct, it goes in there
-     * over the plain fields there, and that struct [stretch]es to hold it where the member starts before or ends
-     * past it. In a base's struct holding all of it, it goes only over undefined bytes. Anything else in the way,
-     * a vptr, a base, another member, leaves it unplaced, with a warning.
-     */
-    private fun Structure.placeMember(at: Int, member: Structure) {
-        if (member == this) return
-        val range = at.withLength(member.length)
-        val field = "field_0x${at.toString(16)}"
-        val inWay = componentsOverlapping(range).filterNot { it.isAt(at, member) }
-        val (own, others) = inWay.partition { isOwnData(it) }
-        val base = others.singleOrNull()?.takeIf { it.dataType is Structure && it.range.includes(range) }
-        val (into, offset) = when {
-            base != null -> (base.dataType as Structure).let { inner ->
-                val within = at - base.offset
-                if (inner.getComponentAt(within)?.isAt(within, member) == true) return
-                inner.layoutProblem(within, member)?.let { return unplaced(field, member, it) }
-                inner to within
-            }
-
-            others.isNotEmpty() || own.size > 1 ->
-                return unplaced(field, member, "overlaps ${(others + own.drop(1)).joinToString { it.describe() }}")
-
-            own.isEmpty() -> this to at
-
-            else -> {
-                val data = own.single()
-                val start = minOf(data.offset, at)
-                stretch(data, range) to at - start
-            }
-        }
-        val clash = into.componentsOverlapping(offset, member.length)
-            .filter { it.dataType is Structure && !it.isAt(offset, member) }
-        if (clash.isNotEmpty()) {
-            return unplaced(field, member, "overlaps ${clash.joinToString { it.describe() }} in ${into.name}")
-        }
-        runCatching { into.lay(offset, member, field, "member or base") }
-            .onSuccess { debug("member-placed", "${member.name} at +$at in $name") }
-            .onFailure { degradation("member-unplaced", "$name::$field", it.message) }
-    }
-
-    private fun Structure.unplaced(field: String, member: Structure, why: String) =
-        degradation("member-unplaced", "$name::$field", "${member.name} $why")
-
-    /** Whether this is [member] laid at [at] already. */
-    private fun DataTypeComponent.isAt(at: Int, member: Structure) = dataType == member && offset == at
-
-    private fun DataTypeComponent.describe() = "${fieldName ?: dataType.name} at +0x${offset.toString(16)}"
 
     private fun writeRecords(classes: Collection<ClassDecl>) {
         val entries = classes.mapNotNull { cls ->
