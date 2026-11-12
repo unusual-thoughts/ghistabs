@@ -129,7 +129,7 @@ class MemberObjectPass(
      * down to [MAX_DEPTH].
      */
     private fun collect(found: FoundStructors, monitor: TaskMonitor): Map<Subobject, NonPolymorphicClass> {
-        val dissector = ThisFunctionDissector(program, emptyList(), this, fillArrays)
+        val dissector = ThisFunctionDissector(program, emptyList(), this, Dissection(fillArrays))
         val held = linkedMapOf<Subobject, NonPolymorphicClass>()
         known.clear()
         // The constructors inlined after `operator new` are their classes' constructors too, with no function.

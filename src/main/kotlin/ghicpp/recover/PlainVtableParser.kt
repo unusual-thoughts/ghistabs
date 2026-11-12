@@ -4,7 +4,7 @@ import ghicpp.*
 import ghicpp.abi.*
 import ghicpp.abi.msvc.Msvc
 import ghicpp.dissect.DissectingParser
-import ghicpp.dissect.DissectionCache
+import ghicpp.dissect.Dissection
 import ghicpp.dissect.ThisFunctionDissector
 import ghicpp.dissect.ThisUses
 import ghidra.program.model.address.Address
@@ -147,16 +147,11 @@ private fun Set<ClassDecl>.mostDerived(candidates: Map<ClassDecl, Set<ClassDecl>
  * an ABI's vtable symbol nor the stabs import's, read as [PlainVtables]. A class with RTTI goes to its ABI's
  * parser, which knows its bases; these get theirs off their structors ([BaseCandidates.inferBases]).
  */
-class PlainVtableParser(
-    private val program: Program,
-    private val sink: DiagnosticSink = DummySink,
-    /** Whether a constructor inlined after `operator new` orders the bases it builds ([BaseCandidates]). */
-    private val inlinedConstructors: Boolean = true,
-    /** Whether a field a constructor fills in a counted loop or with `memset` is an array, as the class pass reads. */
-    private val fillArrays: Boolean = true,
-) : RttiParser,
+class PlainVtableParser(private val program: Program, private val sink: DiagnosticSink = DummySink) :
+    RttiParser,
     DissectingParser {
-    override val dissected = DissectionCache()
+    /** How it reads the storers: a constructor inlined after `operator new` orders the bases it builds, if read. */
+    override var dissection = Dissection()
 
     override val abi get() = PlainVtables
 
@@ -171,8 +166,7 @@ class PlainVtableParser(
             .values.map { labels ->
                 PlainClass(labels.first().parentNamespace, labels.map { PlainVtables.recordAt(program, it.address) })
             }
-        val newNames = if (inlinedConstructors) abi.operatorNewNames else emptySet()
-        val uses = ThisFunctionDissector(program, classes, sink, fillArrays, newNames, dissected).readStorers(monitor)
+        val uses = ThisFunctionDissector(program, classes, sink, dissection).readStorers(monitor)
         val slots = classes.associateWith { c ->
             c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
                 // An unnamed pure virtual stub never returns: it aborts.

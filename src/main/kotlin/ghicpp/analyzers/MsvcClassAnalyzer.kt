@@ -18,7 +18,6 @@ import ghistabs.analyzerOptions
 import ghistabs.diagnose.AnalysisProbe
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.diagnose.report
-import ghistabs.get
 import ghistabs.register
 
 /**
@@ -49,9 +48,7 @@ class MsvcClassAnalyzer :
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val options = program.analyzerOptions(NAME)
-        val parser = MsvcRttiParser(program, sink, options[FILL_ARRAYS], options[INLINED_CONSTRUCTORS])
-        val pass = ClassPass(program, parser, sink, options)
+        val pass = ClassPass(program, MsvcRttiParser(program, sink), sink, program.analyzerOptions(NAME))
         val result = pass.run(monitor)
         if (result.classes > 0) {
             report(
