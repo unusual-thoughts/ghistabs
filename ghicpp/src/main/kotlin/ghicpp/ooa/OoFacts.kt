@@ -12,9 +12,11 @@ import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighFunction
+import ghidra.program.model.pcode.HighFunctionDBUtil
 import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
+import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghidrakt.useWith
 import java.io.Writer
@@ -142,6 +144,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                 val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
                 FunctionFacts(f, high).run {
                     read()
+                    if (thisVar != null && !returnsValue) returnsSelfOnceTyped(decomp, f, high)
                     vftables += stored
                     calls += thisCalls
                     if (thisVar != null) methods += f.entryPoint
@@ -207,14 +210,18 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                     }
                 }
             }
+            returnsValue = returns.isNotEmpty()
             if (returns.isNotEmpty() && returns.all { it }) add("returnsSelf", f.entryPoint)
         }
+
+        /** Whether the decompiler gave the function a return value at all, so that [read] could test it. */
+        var returnsValue = false
 
         /** `funcParameter/3` for each input the decompiler found it reading, and the conventions they allow. */
         private fun params() {
             val inputs = high.pcodeOps.asSequence().flatMap { it.inputs.asSequence() }
                 .filter { it.isInput && it.high != null }.distinctBy { it.address to it.size }.toList()
-            val positions = inputs.mapNotNull { vn -> position(vn)?.let { it to vn } }
+            val positions = inputs.mapNotNull { vn -> positionOf(vn)?.let { it to vn } }
             for ((pos, vn) in positions) {
                 add("funcParameter", f.entryPoint, pos, Term(sv(vn.high)))
                 if (pos == abi.thisParam) thisVar = vn.high
@@ -241,16 +248,6 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
             conventions.forEach { add("callingConvention", f.entryPoint, it) }
         }
 
-        /** Where [vn] comes in, as the rules spell it: a register's name, or the stack argument's index. */
-        private fun position(vn: Varnode): Any? = when {
-            vn.isRegister -> program.getRegister(vn)?.baseRegister?.name?.lowercase()?.let(::Term)
-            vn.address.isStackAddress -> stackIndex(vn.address.offset)
-            else -> null
-        }
-
-        private fun stackIndex(offset: Long): Long? = (offset - ptrSize).takeIf { it >= 0 && it % ptrSize == 0L }
-            ?.div(ptrSize)
-
         private fun call(op: PcodeOp) {
             val at = op.seqnum.target
             val target = op.getInput(0).address
@@ -266,9 +263,9 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                 add("callParameter", at, f.entryPoint, pos, Term(term))
                 if (pos == abi.thisParam) thisArg = term
             }
-            val name = real?.name
+            val names = real?.let(::namesOf).orEmpty()
             when {
-                name in OPERATOR_NEW -> {
+                names.any { it in OPERATOR_NEW } -> {
                     val out = op.output?.high?.let { sv(it) }
                     add("insnCallsNew", at, f.entryPoint, Term(out ?: "invalid"))
                     val size = args.firstOrNull()?.takeIf { it.isConstant }?.offset
@@ -280,7 +277,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                     thisCalls += ThisCall(at, f.entryPoint, real?.entryPoint, out, ThisCall.Kind.NEW)
                 }
 
-                name in OPERATOR_DELETE -> {
+                names.any { it in OPERATOR_DELETE } -> {
                     val freed = args.firstOrNull()?.pointer()?.let(::sv)
                     add("insnCallsDelete", at, f.entryPoint, Term(freed ?: "invalid"))
                     thisCalls += ThisCall(at, f.entryPoint, real?.entryPoint, freed, ThisCall.Kind.DELETE)
@@ -334,6 +331,59 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
             if (p.root != thisRoot || p.offset < 0 || size == null) return
             add("methodMemberAccess", op.seqnum.target, f.entryPoint, p.offset, size)
         }
+    }
+
+    /**
+     * `returnsSelf/1` for a method the decompiler gave no return value: Pharos tests what the return register
+     * holds whatever the signature says, and an Itanium constructor, `void`, often leaves `this` there. So the
+     * method is decompiled again as returning a pointer, in a transaction rolled back after.
+     */
+    private fun returnsSelfOnceTyped(decomp: DecompInterface, f: Function, first: HighFunction) {
+        if (f.hasCustomVariableStorage()) return
+        val tx = program.startTransaction("Decompile as returning a pointer")
+        try {
+            // A default signature is not a locked one, so the decompiler would ignore the return type: lock the
+            // parameters it found first, so `this` stays where it was.
+            if (f.signatureSource == SourceType.DEFAULT) {
+                HighFunctionDBUtil.commitParamsToDatabase(
+                    first,
+                    true,
+                    HighFunctionDBUtil.ReturnCommitOption.NO_COMMIT,
+                    SourceType.ANALYSIS,
+                )
+            }
+            f.setReturnType(PointerDataType(program.dataTypeManager), f.signatureSource)
+            val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: return
+            val thisVar = high.pcodeOps.asSequence().flatMap { it.inputs.asSequence() }
+                .firstOrNull { it.isInput && it.high != null && positionOf(it) == abi.thisParam }?.high ?: return
+            val returns = high.pcodeOps.asSequence().filter { it.opcode == PcodeOp.RETURN && it.numInputs > 1 }
+                .map { r -> r.getInput(1).pointer()?.let { it.root == thisVar && it.offset == 0L } == true }.toList()
+            if (returns.isNotEmpty() && returns.all { it }) add("returnsSelf", f.entryPoint)
+        } finally {
+            program.endTransaction(tx, false)
+        }
+    }
+
+    /** Where [vn] comes in, as the rules spell it: a register's name, or the stack argument's index. */
+    private fun positionOf(vn: Varnode): Any? = when {
+        vn.isRegister -> program.getRegister(vn)?.baseRegister?.name?.lowercase()?.let(::Term)
+        vn.address.isStackAddress -> stackIndex(vn.address.offset)
+        else -> null
+    }
+
+    private fun stackIndex(offset: Long): Long? = (offset - ptrSize).takeIf { it >= 0 && it % ptrSize == 0L }
+        ?.div(ptrSize)
+
+    /**
+     * What [f] is called, to tell `operator new` and `delete` by: its name, any other label at it, and for an
+     * import the name it is imported by, mangled, which the demangler renamed (`_ZdlPv` to `operator.delete`).
+     */
+    private fun namesOf(f: Function): Set<String> = buildSet {
+        add(f.name)
+        add(f.name.replace('.', ' '))
+        f.externalLocation?.originalImportedName?.let(::add)
+        f.externalLocation?.label?.let(::add)
+        program.symbolTable.getSymbols(f.entryPoint).forEach { add(it.name) }
     }
 
     // --- across functions ----------------------------------------------------------------------------------

@@ -104,6 +104,8 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     systemProperty("regenerateTruth", props.gradleProperty("regenerateTruth").getOrElse(""))
     // -Pooprolog=<dir> runs OOAnalyzer's Prolog rules (Pharos' share/prolog) over each scorecard case's facts.
     systemProperty("ooprolog", props.gradleProperty("ooprolog").getOrElse(""))
+    // -PpharosResults=<dir> scores a Pharos ooanalyzer run's <subject>.results beside each scorecard case.
+    systemProperty("pharosResults", props.gradleProperty("pharosResults").getOrElse(""))
     jvmArgs(project.headlessJvmArgs)
     // -Pjfr[=<file>]. Read recordings with the jdk.jfr.consumer API — `jfr print` crashes on Kotlin
     // synthetic frames.
