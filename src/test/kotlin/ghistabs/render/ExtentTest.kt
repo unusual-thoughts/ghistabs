@@ -1,9 +1,9 @@
 package ghistabs.render
 
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustNot
 import ghistabs.render.FileRenderer.Companion.believedLength
-import ghistabs.test.must
-import ghistabs.test.mustBe
-import ghistabs.test.mustNot
 import org.junit.jupiter.api.Test
 
 /** What a file's real length is allowed to decide, and what disqualifies it. */

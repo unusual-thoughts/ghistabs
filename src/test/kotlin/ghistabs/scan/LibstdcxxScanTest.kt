@@ -2,7 +2,7 @@ package ghistabs.scan
 
 import ghidrakt.ECHOES_DROPPED_LINES
 import ghidrakt.diagnose.CapturingSink
-import ghistabs.test.mustBe
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

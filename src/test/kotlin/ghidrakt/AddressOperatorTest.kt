@@ -1,8 +1,8 @@
 package ghidrakt
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustNot
 import ghistabs.test.GenericAddressResolver
-import ghistabs.test.must
-import ghistabs.test.mustBe
-import ghistabs.test.mustNot
 import org.junit.jupiter.api.Test
 
 /**

@@ -1,0 +1,67 @@
+# Hello fixtures
+
+`hello.cc` built by every compiler that still emits stabs, plus stripped, no-RTTI and MSVC-ABI builds of it.
+The C++ tests run on these; the stabs tests in the root project read them here too (`TestBinaries.HELLOS`).
+
+| Fixture | Compiler | Built in | Test |
+|---|---|---|---|
+| `hello_elf_gcc272` | gcc 2.7.2.3, i386, static | `debian/eol:slink`, its `g++272`, `libg++272-dev` and `libc6-dev` debs unpacked with `dpkg-deb -x` (slink's dpkg fails in a container), `-static -fhandle-exceptions` | — |
+| `hello_elf_gcc295` | gcc 2.95.2, i386 | `debian/eol:potato` (`g++`) | — |
+| `hello_elf_gcc32` | gcc 3.2.3, i386 | chroot of sarge's `libc6`, `libc6-dev`, `binutils` and `dash` plus Debian's `gcc-3.2`/`g++-3.2` 3.2.3-9 debs (snapshot.debian.org; sarge dropped 3.2), `g++-3.2` run from `/out` | — |
+| `hello_elf_gcc33`, `_gcc34` | gcc 3.3.5 / 3.4.4, i386 | `docker run --platform linux/386 debian/eol:sarge` (`g++`, `g++-3.4`) | — |
+| `hello_elf_gcc41` … `_gcc8` | gcc 4.1.2 / 4.3.2 / 4.4.5 / 4.7.2 / 4.9.2 / 6.3.0 / 8.3.0, i386 | `debian/eol:` etch / lenny / squeeze / wheezy / jessie / stretch / buster | — |
+| `hello_elf_gcc10`, `_gcc12` | gcc 10.2.1 / 12.2.0, i386 PIE | `debian/eol:bullseye` (security via its snapshot.debian.org line), `debian:bookworm` | — |
+| `hello_elf_gcc12_stripped` | gcc 12.2.0, i386 PIE, no stabs, no symbols | `hello_elf_gcc12` through `strip --strip-all -R .stab -R .stabstr -R .comment` | `ItaniumClassStructsIntegrationTest` |
+| `hello_elf64_gcc13_nortti` | gcc 13.3.0, x86-64 PIE, no RTTI, no stabs, symbols | Ubuntu 24.04 `g++ -O0 -fno-rtti hello.cc`: the build `hello_elf64_gcc13_nortti_stripped` was stripped from, byte for byte | `HelloScorecardIntegrationTest` |
+| `hello_elf64_gcc13_nortti_stripped` | gcc 13.3.0, x86-64 PIE, no RTTI, no symbols | Ubuntu 24.04 `g++ -O0 -fno-rtti hello.cc`, then `strip --strip-all -R .comment` | `GenericVftableFixtureIntegrationTest` |
+| `hello_gcc345.exe`, `hello_gcc421.exe` | MinGW gcc 3.4.5 / 4.2.1, PE32 | `debian/eol:etch` / `lenny`, package `mingw32`, `-static`; 4.2.1 then `objcopy --remove-section='.debug_*'` | — |
+| `hello_gcc421_stripped.exe` | MinGW gcc 4.2.1, PE32, no stabs, no symbols | `hello_gcc421.exe` through `strip --strip-all -R .stab -R .stabstr -R .comment` | `MingwClassStructsIntegrationTest` |
+| `hello_gcc323_fullstabs.exe` | MinGW gcc 3.2.3, PE32, SJLJ | the MinGW-3.1.0-1 bundle rebuilt from its own sources in a sarge i386 chroot, every target library with stabs: `build_mingw323.sh`, then `mingw32-g++ -gstabs+ -O0 -static` | — |
+| `hello_msvc.exe` | MSVC 19.44 (Visual Studio 2022 17.14), x86, `/Od`, `/MD`, stripped | `cl /c /Od /MD /EHsc /GR /Brepro`, then `link /subsystem:console /Brepro`, both run under Wine; the toolchain is the one [msvc-wine](https://github.com/mstorsjo/msvc-wine)'s `vsdownload.py --major 17` fetches, its CRT, SDK and libraries those `xwin splat --arch x86` fetched | `MsvcClassStructsIntegrationTest` |
+| `hello_msvc_clang.exe` | clang 18, i686-pc-windows-msvc, `-O0`, `/MD`, stripped | `clang-cl --target=i686-pc-windows-msvc /c /Od /MD /EHsc /GR -Wno-c++11-narrowing -Wno-deprecated-register` with `-imsvc` the CRT and SDK headers `xwin splat --arch x86` fetched, then `lld-link /subsystem:console /brepro` against its libraries | `MsvcClassStructsIntegrationTest` |
+
+The `hello_*` set is one source, `hello.cc`, built with `g++ -gstabs+ -O0 hello.cc -o <fixture>` across every
+gcc generation that still emits stabs, all i386 so only the compiler varies. It packs most stab forms into one
+screen: typedefs, enums, bitfields, unions, multi-dim arrays, function/data/method pointers, access specifiers,
+static/const/virtual/pure members, single + multiple + virtual inheritance, templates with nested types, a
+union class (constructor, const methods, a private member),
+by-value struct return, varargs, register/static locals, nested scopes and a throw/catch. `Quals` adds
+const, volatile and const volatile fields, pointers and method overloads, a reference and a `mutable`
+member, static members and methods, default arguments, overloads, conversion, subscript and assignment
+operators, a friend, a nested struct and typedef, an anonymous union holding an anonymous struct, an enum
+bitfield and an empty base; `Secret` has private and protected bases, `Builtins` every builtin type, and
+`extras` a local class, a function returning a function pointer and an `extern "C"` function, next to a global
+constructor. Namespaces, a member template, an explicit specialisation and `mutable`/`explicit` sit behind
+`MODERN`, off for gcc 2.7, which has none of them. `Rect`, `Label` and `Core`/`Up`/`Down`/`Both` are the
+MSVC ABI's layouts: `Label`'s second vptr splits its bases, `Down` overrides its virtual base's `f` and so
+gets a vtordisp, and adds no virtual of its own, so its only vftable is `Core`'s. Every build prints the same
+line and exits 9. The try/catch lives in its own function because gcc 2.7.2.3 ICEs
+(`unrecognizable insn`) on EH inside `main` next to a `register` local.
+
+gcc 3.1 to 3.3 open every CU with an N_BINCL of the main file, spelled as given on the command line (`hello.cc`): `c-lex.c` calls the `start_source_file` debug hook for the primary file before parsing. gcc 3.4 dropped that call, so `hello_elf_gcc32` and `_gcc33` have it and no other build does.
+
+`hello_gcc323_fullstabs.exe` is the one PE build whose runtime carries stabs too, not just `hello.cc`. It is built with
+the MinGW-3.1.0-1 bundle, i.e. gcc-3.2.3-20030504-1 (MinGW-patched), binutils 2.13.90-20030111-1, mingw-runtime 3.1 and
+w32api 2.4, the toolchain behind real-world MinGW 3.2.3 binaries.
+`build_mingw323.sh` rebuilds that bundle from the sources on mingw.org's SourceForge `OldFiles` as a Linux cross, following
+MinGW's own `gcc-3.2.3-build.sh`, with `-gstabs+` added to libgcc (`LIBGCC2_DEBUG_CFLAGS`, so the SJLJ unwinder in
+`unwind-sjlj.c` is described), libsupc++/libstdc++ and the runtime. Optimisation is left at what MinGW shipped, so the code
+is MinGW's: against the bundle's own libraries every function in libgcc (135), libsupc++ (220), libstdc++ (1874, all but
+`stl-inst.o`'s, which embed an `__FILE__` string), libmingwex (453), libmoldname and `crt2.o` comes out instruction-for-instruction
+identical, modulo `(%a,%b,1)` operand order and anonymous-namespace hash suffixes.
+Getting there took three things the bundle's scripts don't say:
+
+- mingw-runtime 3.1 was compiled `-O2 -mcpu=i686`: `isascii`'s `push/mov/xor/test/pop/sete` schedule is gcc 3.2.3
+  `-mcpu=i686` and nothing else (3.3.1 is `push/xor/mov`, plain 3.2.3 is `sete; and $0xff`).
+- libstdc++ was configured natively; a cross configure turns off `HAVE_MODFF`, `HAVE_EXPF`, `HAVE___BUILTIN_*` etc. and
+  adds libmath stubs, so the script turns the binary release's installed `bits/c++config.h` back into the `config.h` it
+  was generated from. (The installed header's `_GLIBCPP_USE_C99 (__MINGW32_MAJOR_VERSION >= 3)` is a
+  hand edit after the build, with a `c++config.h.$$$` backup beside it.)
+- the gcc tree must be called `gcc`, because anonymous-namespace symbols embed the source path.
+
+Header paths in the stabs read `/mingw/include/c++/3.2.3/...` where a native install's read `c:/mingw/include/c++/3.2.3/...`.
+msvcrt.dll itself is imported, so the C library proper has no source to describe. `_chkstk` comes from `cygwin.asm` run through
+the assembler, which leaves an `SO /tmp/cc….s` with line records. No DWARF; under wine it prints the same line as
+`hello_gcc345.exe` and exits 9.
+
+`hello_msvc.exe` and `hello_msvc_clang.exe` are `hello.cc` under the MSVC ABI, compiled by cl and by clang-cl, linked against the real CRT (`vcruntime140.dll` and the UCRT, imported). The headers need C++11, which both default to. The two lay the classes alike and place the functions differently.

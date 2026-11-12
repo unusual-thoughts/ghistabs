@@ -8,7 +8,7 @@ import ghicpp.nameSegments
 import ghicpp.outermostTemplate
 import ghicpp.templateLeaf
 import ghicpp.templateName
-import ghistabs.test.mustBe
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
 class NamesTest {

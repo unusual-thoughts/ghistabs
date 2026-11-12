@@ -32,6 +32,7 @@ import ghidrakt.*
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.diagnose.dumpJson
 import ghidrakt.diagnose.writeRegistryDump
+import ghidrakt.test.*
 import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.Observations

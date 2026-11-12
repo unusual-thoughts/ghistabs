@@ -1,11 +1,11 @@
 package ghistabs.integration
 
 import ghidra.program.model.data.Composite
+import ghidrakt.test.mustBe
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.import
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource

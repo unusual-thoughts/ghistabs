@@ -1,5 +1,8 @@
 package ghistabs.index
 
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeEmpty
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
@@ -9,9 +12,6 @@ import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
 import ghistabs.test.harvestOf
-import ghistabs.test.must
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 
 /**

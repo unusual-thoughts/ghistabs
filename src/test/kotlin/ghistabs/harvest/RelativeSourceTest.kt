@@ -1,7 +1,7 @@
 package ghistabs.harvest
 
+import ghidrakt.test.mustBe
 import ghistabs.parse.resolveAgainstDirectory
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 class RelativeSourceTest {

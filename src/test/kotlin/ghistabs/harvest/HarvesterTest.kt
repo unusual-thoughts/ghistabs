@@ -1,12 +1,12 @@
 package ghistabs.harvest
 
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeA
 import ghistabs.parse.SourceFile
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.test.dummyHarvester
-import ghistabs.test.must
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeA
 import org.junit.jupiter.api.Test
 
 /**

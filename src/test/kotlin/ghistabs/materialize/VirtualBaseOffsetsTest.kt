@@ -1,6 +1,6 @@
 package ghistabs.materialize
 
-import ghistabs.test.mustBe
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
 /**

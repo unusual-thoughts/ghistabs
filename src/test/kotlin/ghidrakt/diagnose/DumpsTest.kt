@@ -1,5 +1,6 @@
 package ghidrakt.diagnose
 
+import ghidrakt.test.*
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.Parser
 import ghistabs.parse.SymbolDecl

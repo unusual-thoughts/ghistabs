@@ -2,7 +2,7 @@ package ghistabs.integration
 
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.Demangler
-import ghistabs.test.mustBe
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 

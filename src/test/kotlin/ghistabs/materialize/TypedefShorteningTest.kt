@@ -1,8 +1,8 @@
 package ghistabs.materialize
 
 import ghicpp.canonTemplateName
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeEmpty
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 
 /**

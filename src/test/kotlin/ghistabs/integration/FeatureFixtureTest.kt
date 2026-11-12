@@ -3,6 +3,7 @@ package ghistabs.integration
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.LoadedProgram
 import ghidrakt.loadProgram
+import ghidrakt.test.TestBinaries
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportOptions
 import ghistabs.test.defaultContext
@@ -19,7 +20,7 @@ abstract class FeatureFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
 
     protected fun load(fixture: String, options: ImportOptions.() -> Unit = {}) {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
-        loaded = loadProgram(File(FEATURES, fixture))
+        loaded = loadProgram(feature(fixture))
         val ctx = program.defaultContext().apply { this.options.options() }
         artifacts = checkNotNull(ctx.importAndAnalyze().artifacts) { "$fixture carries no stabs" }
     }
@@ -32,8 +33,11 @@ abstract class FeatureFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
     companion object {
         val FEATURES = File("src/test/resources/binaries/features")
 
+        /** [name] in [FEATURES], or in ghicpp's when it is a build of `hello.cc`. */
+        fun feature(name: String) = TestBinaries.file("features/$name")
+
         /** The builds of `features/hello.cc` that carry stabs: all but the MSVC, the stripped and the no-RTTI ones. */
-        fun stabsHellos() = FEATURES.list().orEmpty()
+        fun stabsHellos() = TestBinaries.HELLOS.list().orEmpty()
             .filter { it.startsWith("hello_") && "_msvc" !in it && "_stripped" !in it && "_nortti" !in it }
             .sorted()
     }

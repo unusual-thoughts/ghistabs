@@ -1,6 +1,6 @@
 package ghistabs.parse
 
-import ghistabs.test.mustBe
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

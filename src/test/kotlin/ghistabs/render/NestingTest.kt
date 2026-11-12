@@ -1,5 +1,7 @@
 package ghistabs.render
 
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeEmpty
 import ghistabs.harvest.Func
 import ghistabs.harvest.LineEntry
 import ghistabs.harvest.Origin
@@ -9,8 +11,6 @@ import ghistabs.parse.SourceFile
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
 import ghistabs.test.GenericAddressResolver
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 
 /**

@@ -12,13 +12,13 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.runTransaction
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeEmpty
+import ghidrakt.test.mustNot
 import ghistabs.entrypoints.Correction
 import ghistabs.entrypoints.STRUCT_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StructReturnAnalyzer
-import ghistabs.test.must
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeEmpty
-import ghistabs.test.mustNot
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

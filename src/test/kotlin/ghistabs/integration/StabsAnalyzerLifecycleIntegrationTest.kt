@@ -2,11 +2,11 @@ package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghidrakt.test.must
+import ghidrakt.test.mustNot
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
-import ghistabs.test.must
-import ghistabs.test.mustNot
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

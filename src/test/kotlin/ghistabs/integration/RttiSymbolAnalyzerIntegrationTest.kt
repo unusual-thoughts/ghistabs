@@ -11,9 +11,9 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 import ghidrakt.diagnose.DummySink
+import ghidrakt.test.mustBe
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
