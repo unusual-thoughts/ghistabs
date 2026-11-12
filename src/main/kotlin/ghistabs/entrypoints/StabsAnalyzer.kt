@@ -10,13 +10,15 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.BookmarkSink
 import ghidrakt.diagnose.MessageLogSink
-import ghidrakt.diagnose.StabsDiagnostics
 import ghidrakt.diagnose.TeeSink
-import ghidrakt.runTransaction
-import ghistabs.importer.*
+import ghistabs.StabsDiagnostics
+import ghistabs.importer.ImportContext
+import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.ImportOptions.Companion.registerStabs
 import ghistabs.importer.ImportOptions.Companion.stabsOptions
+import ghistabs.importer.ImportProbe
+import ghistabs.importer.import
 import ghistabs.parse.StabReader
 
 /**
@@ -44,10 +46,7 @@ class StabsAnalyzer :
 
     override fun getDefaultEnablement(program: Program): Boolean = true
 
-    override fun canAnalyze(program: Program): Boolean {
-        if (program.isStabsDone) return false
-        return StabReader.hasStabs(program)
-    }
+    override fun canAnalyze(program: Program): Boolean = !program.isStabsDone && StabReader.hasStabs(program)
 
     override fun registerOptions(options: Options, program: Program) = options.registerStabs()
 

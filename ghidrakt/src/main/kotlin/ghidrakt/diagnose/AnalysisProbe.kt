@@ -7,10 +7,10 @@ import java.util.*
 /**
  * Test↔analyzer rendezvous under `@Execution(CONCURRENT)`. An analyzer builds its own sink (the
  * Bookmark/MessageLog terminal), so a test that wants to read what the analyzers reported pre-installs a
- * probe on the program, and each analyzer reports into its [diagnostics] and [terminal] too ([sinkFor]).
+ * probe on the program, and each analyzer reports into its [terminals] too ([sinkFor]).
  * The stabs import's own probe adds what it materialized ([ghistabs.importer.ImportProbe]).
  */
-open class AnalysisProbe(val diagnostics: StabsDiagnostics, val terminal: DiagnosticSink) {
+open class AnalysisProbe(vararg val terminals: DiagnosticSink) {
     companion object {
         private val map = WeakHashMap<Program, AnalysisProbe>()
 
@@ -32,6 +32,6 @@ open class AnalysisProbe(val diagnostics: StabsDiagnostics, val terminal: Diagno
          * same counters and log the test reads.
          */
         fun sinkFor(program: Program, sink: DiagnosticSink): DiagnosticSink =
-            get(program)?.let { TeeSink(sink, it.diagnostics, it.terminal) } ?: sink
+            get(program)?.let { TeeSink(sink, *it.terminals) } ?: sink
     }
 }

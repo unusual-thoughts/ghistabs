@@ -6,8 +6,8 @@ import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.AnalysisProbe
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.diagnose.StabsDiagnostics
 import ghidrakt.diagnose.TeeSink
+import ghistabs.StabsDiagnostics
 import ghistabs.harvest.AddressResolver
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
@@ -95,7 +95,8 @@ data class ImportArtifacts(val registry: DataTypeRegistry, val records: List<Sta
  * The stabs import's [AnalysisProbe]: the analyzer owns its own [ImportContext], so a test that wants what
  * the import materialized installs this one ([install]) and the analyzer hands back [artifacts].
  */
-class ImportProbe(diagnostics: StabsDiagnostics, terminal: DiagnosticSink) : AnalysisProbe(diagnostics, terminal) {
+class ImportProbe(val diagnostics: StabsDiagnostics, val terminal: DiagnosticSink) :
+    AnalysisProbe(diagnostics, terminal) {
     @get:TestOnly
     var artifacts: ImportArtifacts? = null
         internal set
@@ -103,7 +104,7 @@ class ImportProbe(diagnostics: StabsDiagnostics, terminal: DiagnosticSink) : Ana
     companion object {
         @TestOnly
         internal fun install(ctx: ImportContext<*>): ImportProbe =
-            AnalysisProbe.install(ctx.program, ImportProbe(ctx.diagnostics, ctx.terminal))
+            install(ctx.program, ImportProbe(ctx.diagnostics, ctx.terminal))
 
         @TestOnly
         internal fun clear(program: Program) = AnalysisProbe.clear(program)
