@@ -20,7 +20,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 
 /**
- * Decompiles functions for what they do with `this` ([ThisUses]): the vptrs they store, the fields they store and
+ * Decompiles functions for what they do with `this` ([Dissections]): the vptrs they store, the fields they store and
  * so the layout of the struct, and what they call on `this` + k. Off that, it tells [classes]' constructors and
  * destructors apart ([find]). With [fillArrays], a field one fills in a counted loop or with `memset` is read as
  * an array ([fills]).
@@ -30,10 +30,10 @@ class ThisFunctionDissector(
     classes: Collection<ClassDecl>,
     sink: DiagnosticSink,
     /** How it reads functions, and what the dissectors sharing it read already, which it doesn't decompile again. */
-    private val dissection: Dissection = Dissection(),
+    private val cache: DissectionCache = DissectionCache(),
 ) : DiagnosticSink by sink {
-    private val fillArrays get() = dissection.fillArrays
-    private val operatorNewNames get() = dissection.operatorNewNames
+    private val fillArrays get() = cache.fillArrays
+    private val operatorNewNames get() = cache.operatorNewNames
 
     private val thisStorage = program.thisStorage()
 
@@ -77,7 +77,8 @@ class ThisFunctionDissector(
     }
 
     /** What [funcs] store and call through `this`, decompiled, whatever vptrs they store. */
-    fun readCalls(funcs: Collection<Function>, monitor: TaskMonitor): ThisUses = decompile(funcs, emptyMap(), monitor)
+    fun readCalls(funcs: Collection<Function>, monitor: TaskMonitor): Dissections =
+        decompile(funcs, emptyMap(), monitor)
 
     /** The fields each of [funcs] loads or stores through `this`, decompiled, by offset into it, typed off how. */
     fun thisFields(funcs: Collection<Function>, monitor: TaskMonitor) =
@@ -103,9 +104,9 @@ class ThisFunctionDissector(
 
     /**
      * What the functions storing the classes' vptrs store and call through `this`, decompiled. [visit] sees each
-     * as decompiled, so it decompiles them all, read in [dissection] already or not.
+     * as decompiled, so it decompiles them all, read in [cache] already or not.
      */
-    fun readStorers(monitor: TaskMonitor, visit: ((Function, HighFunction) -> Unit)? = null): ThisUses =
+    fun readStorers(monitor: TaskMonitor, visit: ((Function, HighFunction) -> Unit)? = null): Dissections =
         read(emptyList(), monitor, visit)
 
     /**
@@ -118,16 +119,16 @@ class ThisFunctionDissector(
         others: Collection<Function>,
         monitor: TaskMonitor,
         visit: ((Function, HighFunction) -> Unit)? = null,
-    ): ThisUses {
+    ): Dissections {
         monitor.message = "Finding vptr stores"
         val writes = program.vptrWriters(tables)
-        if (writes.isEmpty()) return ThisUses(emptyMap(), emptyMap())
+        if (writes.isEmpty()) return Dissections()
         return decompile(writes.keys + others, writes, monitor, visit = visit)
     }
 
     /**
      * What [funcs] store and call through `this`, decompiled, and which of [writes]' vptrs each stores; what
-     * [dissection] holds read the same way already isn't decompiled again, unless [visit] is to see it.
+     * [cache] holds read the same way already isn't decompiled again, unless [visit] is to see it.
      */
     private fun decompile(
         funcs: Collection<Function>,
@@ -136,11 +137,11 @@ class ThisFunctionDissector(
         message: String = "Decompiling constructors and destructors",
         storedOnly: Boolean = true,
         visit: ((Function, HighFunction) -> Unit)? = null,
-    ): ThisUses {
-        if (thisStorage == null) return ThisUses(emptyMap(), emptyMap())
-        fun key(func: Function) = Dissection.Key(func, writes[func], storedOnly)
+    ): Dissections {
+        if (thisStorage == null) return Dissections()
+        fun key(func: Function) = DissectionCache.Key(func, writes[func], storedOnly)
         val fill = FillOutStructureHelper(program, monitor)
-        val fresh = if (visit != null) funcs else funcs.filter { key(it) !in dissection.reads }
+        val fresh = if (visit != null) funcs else funcs.filter { key(it) !in cache.reads }
         program.decompileEach(fresh, monitor, message, {
             debug("structor-undecompiled", it.name, it.entryPoint)
         }) { func, high ->
@@ -150,20 +151,14 @@ class ThisFunctionDissector(
             val filled = fill.fillThis(high)
             val stores = writes[func]?.let { filled.vptrStores(it, calls) }
             val fills = if (fillArrays) high.fills(intoThis).associate { it.second } else emptyMap()
-            dissection.reads[key(func)] = Dissection.Read(
+            cache.reads[key(func)] = DissectionCache.Dissection(
                 stores,
                 calls.groupBy({ it.offset }, { it.callee }).mapValues { (_, fs) -> fs.toSet() },
                 filled.thisStores(storedOnly).withFills(fills),
                 inlined,
             )
         }
-        val read = funcs.mapNotNull { f -> dissection.reads[key(f)]?.let { f to it } }
-        return ThisUses(
-            read.mapNotNull { (f, r) -> r.stores?.let { f to it } }.toMap(),
-            read.associate { (f, r) -> f to r.subobjectCalls },
-            read.associate { (f, r) -> f to r.thisStores },
-            read.flatMap { (_, r) -> r.inlined },
-        )
+        return Dissections(funcs.mapNotNull { f -> cache.reads[key(f)]?.let { f to it } }.toMap())
     }
 
     /**
@@ -369,7 +364,10 @@ class ThisFunctionDissector(
  * builds its object. And what the dissectors sharing it read of each function already, so that a parser that
  * dissects as it parses ([DissectingParser]) and the class pass after it decompile each function once.
  */
-class Dissection(val fillArrays: Boolean = true, val operatorNewNames: Set<String> = PlainVtables.operatorNewNames) {
+class DissectionCache(
+    val fillArrays: Boolean = true,
+    val operatorNewNames: Set<String> = PlainVtables.operatorNewNames,
+) {
     /** A function, read for these vptrs, for what it stores only or loads too. */
     internal data class Key(
         val func: Function,
@@ -377,21 +375,23 @@ class Dissection(val fillArrays: Boolean = true, val operatorNewNames: Set<Strin
         val storedOnly: Boolean,
     )
 
-    /** One function's share of [ThisUses]. */
-    internal class Read(
-        val stores: VptrStores?,
-        val subobjectCalls: Map<Long, Set<Function>>,
-        val thisStores: Stores,
-        val inlined: List<InlinedConstruction>,
+    /** One function's share of [Dissections]. */
+    internal class Dissection(
+        val stores: VptrStores? = null,
+        val subobjectCalls: Map<Long, Set<Function>> = emptyMap(),
+        val thisStores: Stores = emptyMap(),
+        val inlined: List<InlinedConstruction> = emptyList(),
     )
 
-    internal val reads = mutableMapOf<Key, Read>()
+    internal val reads = mutableMapOf<Key, Dissection>()
 }
 
+internal fun DissectionCache.Dissection?.orEmpty() = DissectionCache.Dissection()
+
 /**
- * A parser that dissects the vptr storers as it parses: in the [dissection] the class pass gives it before it
+ * A parser that dissects the vptr storers as it parses: in the [cache] the class pass gives it before it
  * parses, which reads them as the class pass does and so spares it decompiling them again.
  */
 interface DissectingParser {
-    var dissection: Dissection
+    var cache: DissectionCache
 }

@@ -137,7 +137,7 @@ class MemberObjectPass(
         } + found.inlined.flatMap { built ->
             built.parts.map { Structor(null, ContainingClass.Existing(it.cls), CONSTRUCTOR, it.calls) }
         }
-        val dissector = ThisFunctionDissector(program, emptyList(), this, Dissection(fillArrays))
+        val dissector = ThisFunctionDissector(program, emptyList(), this, DissectionCache(fillArrays))
         val held = linkedMapOf<Subobject, NonPolymorphicClass>()
         for (depth in 1..MAX_DEPTH) {
             if (monitor.isCancelled) break

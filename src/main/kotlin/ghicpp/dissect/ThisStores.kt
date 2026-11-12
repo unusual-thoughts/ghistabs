@@ -36,7 +36,7 @@ internal fun Stores.withFills(fills: Stores): Stores {
  * subobject of it [before] the first of those stores and [after] the last.
  */
 data class VptrStores(
-    val classes: Set<ClassDecl>,
+    val classes: Set<ClassDecl> = emptySet(),
     val before: Set<Function> = emptySet(),
     val after: Set<Function> = emptySet(),
 )
@@ -66,12 +66,12 @@ class InlinedConstruction(val function: Function, val at: Address, val size: Lon
  * `this` or a subobject of it, by offset into it ([subobjectCalls]), and the fields it stores through `this`, by
  * offset ([thisStores]), and the constructors inlined after an `operator new` ([inlined]).
  */
-class ThisUses(
-    val stores: Map<Function, VptrStores>,
-    val subobjectCalls: Map<Function, Map<Long, Set<Function>>>,
-    val thisStores: ThisStores = emptyMap(),
-    val inlined: List<InlinedConstruction> = emptyList(),
-) {
+class Dissections internal constructor(from: Map<Function, DissectionCache.Dissection> = emptyMap()) {
+    val stores: Map<Function, VptrStores> = from.mapNotNull { (f, r) -> r.stores?.let { f to it } }.toMap()
+    val subobjectCalls: Map<Function, Map<Long, Set<Function>>> = from.mapValues { (_, r) -> r.subobjectCalls }
+    val thisStores: ThisStores = from.mapValues { (_, r) -> r.thisStores }
+    val inlined: List<InlinedConstruction> = from.flatMap { (_, r) -> r.inlined }
+
     /** The functions each calls on `this` itself. */
     private val thisCalls = subobjectCalls.mapValues { (_, calls) -> calls[0L].orEmpty() }
 

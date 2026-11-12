@@ -47,9 +47,13 @@ class ThisFunctionDissectorIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         storers: Map<String, VptrStores>,
         holders: Map<String, Set<ClassDecl>>,
         calls: Map<String, Set<String>> = emptyMap(),
-    ) = ThisUses(
-        storers.mapKeys { fn(it.key) },
-        calls.entries.associate { (f, called) -> fn(f) to mapOf(0L to called.mapTo(mutableSetOf(), ::fn)) },
+    ) = Dissections(
+        (storers.keys + calls.keys).associate {
+            fn(it) to DissectionCache.Dissection(
+                storers[it],
+                calls[it]?.let { called -> mapOf(0L to called.mapTo(mutableSetOf(), ::fn)) }.orEmpty(),
+            )
+        },
     ).roles(holders.mapKeys { fn(it.key) }, object : StructorConvention {}).mapKeys { it.key.name }
 
     @Test

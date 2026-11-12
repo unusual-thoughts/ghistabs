@@ -70,14 +70,14 @@ class ClassPass(
     private val abi = parser.abi
 
     /** Runs the pass over the classes [parser] reads. */
-    fun run(monitor: TaskMonitor = TaskMonitor.DUMMY): Result {
-        val dissection = Dissection(fillArrays, if (inlinedConstructors) abi.operatorNewNames else emptySet())
+    fun run(monitor: TaskMonitor = DUMMY): Result {
+        val cache = DissectionCache(fillArrays, abi.operatorNewNames.takeIf { inlinedConstructors }.orEmpty())
         // The parser dissecting the storers as it parses reads them so, and this reads them off it.
-        (parser as? DissectingParser)?.dissection = dissection
+        (parser as? DissectingParser)?.cache = cache
         val read = parser.parse(monitor)
         stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
-        val inspector = ThisFunctionDissector(program, read.classes, this, dissection)
+        val inspector = ThisFunctionDissector(program, read.classes, this, cache)
         val found = inspector.find(read.holders, abi, monitor)
         val structors = found.roles
         var moved = 0
