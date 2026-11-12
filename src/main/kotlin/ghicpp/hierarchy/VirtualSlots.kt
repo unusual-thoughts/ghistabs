@@ -1,3 +1,5 @@
+@file:UseSerializers(AddressSerializer::class)
+
 package ghicpp.hierarchy
 
 import ghicpp.ClassNaming
@@ -21,8 +23,10 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.components
+import ghistabs.harvest.AddressSerializer
 import ghistabs.pointerAt
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
 /** A slot of a class's vftable:
  *  - [table] where the table is,
