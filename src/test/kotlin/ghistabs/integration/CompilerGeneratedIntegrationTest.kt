@@ -1,5 +1,6 @@
 package ghistabs.integration
 
+import ghidrakt.test.*
 import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode
 import ghistabs.test.*

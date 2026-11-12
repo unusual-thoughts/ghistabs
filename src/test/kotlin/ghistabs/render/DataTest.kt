@@ -1,6 +1,6 @@
 package ghistabs.render
 
-import ghistabs.test.mustBe
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
 /** Pins [cStyleNumber]: Ghidra's `<hex>h` / zero-run listing format → C literals; other reprs pass through. */

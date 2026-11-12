@@ -1,8 +1,8 @@
 package ghistabs.parse
 
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeNull
 import ghistabs.test.longRange
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.Test
 import java.math.BigInteger
 

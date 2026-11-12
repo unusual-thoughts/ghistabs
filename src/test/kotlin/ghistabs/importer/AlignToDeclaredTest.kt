@@ -1,7 +1,7 @@
 package ghistabs.importer
 
 import ghidra.program.model.data.*
-import ghistabs.test.mustBe
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
 /** Pure unit tests for [alignToDeclared], on real Ghidra DataTypes as [DemanglerReplaceCoreTest] does. */

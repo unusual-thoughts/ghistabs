@@ -4,12 +4,12 @@ import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.LoadedProgram
 import ghidrakt.loadProgram
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeNull
+import ghidrakt.test.mustBeTrue
 import ghistabs.integration.Fixtures
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeNull
-import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag

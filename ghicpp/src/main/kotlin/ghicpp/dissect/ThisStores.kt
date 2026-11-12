@@ -66,7 +66,7 @@ class InlinedConstruction(val function: Function, val at: Address, val size: Lon
  * `this` or a subobject of it, by offset into it ([subobjectCalls]), and the fields it stores through `this`, by
  * offset ([thisStores]), and the constructors inlined after an `operator new` ([inlined]).
  */
-class Dissections(from: Map<Function, DissectionCache.Dissection> = emptyMap()) {
+class Dissections internal constructor(from: Map<Function, DissectionCache.Dissection> = emptyMap()) {
     val stores: Map<Function, VptrStores> = from.mapNotNull { (f, r) -> r.stores?.let { f to it } }.toMap()
     val subobjectCalls: Map<Function, Map<Long, Set<Function>>> = from.mapValues { (_, r) -> r.subobjectCalls }
     val thisStores: ThisStores = from.mapValues { (_, r) -> r.thisStores }

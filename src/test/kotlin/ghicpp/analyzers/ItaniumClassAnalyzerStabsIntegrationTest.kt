@@ -3,8 +3,8 @@ package ghicpp.analyzers
 import ghicpp.ClassRecordSource
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.loadProgram
+import ghidrakt.test.mustBe
 import ghistabs.integration.FeatureFixtureTest
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -16,7 +16,7 @@ import java.io.File
 @Tag("integration")
 class ItaniumClassAnalyzerStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private fun analyzes(fixture: String): Pair<Boolean, Boolean> =
-        loadProgram(File(FeatureFixtureTest.FEATURES, fixture), "gcc").use {
+        loadProgram(FeatureFixtureTest.feature(fixture), "gcc").use {
             ClassRecordSource.describedElsewhere(it.program) to ItaniumClassAnalyzer().canAnalyze(it.program)
         }
 

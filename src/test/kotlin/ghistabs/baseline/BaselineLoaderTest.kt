@@ -1,9 +1,9 @@
 package ghistabs.baseline
 
-import ghistabs.test.must
-import ghistabs.test.mustBe
-import ghistabs.test.mustNotBeEmpty
-import ghistabs.test.mustNotBeNull
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustNotBeEmpty
+import ghidrakt.test.mustNotBeNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File

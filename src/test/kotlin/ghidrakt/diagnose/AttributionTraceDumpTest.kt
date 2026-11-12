@@ -1,7 +1,7 @@
 package ghidrakt.diagnose
 
-import ghistabs.test.must
-import ghistabs.test.mustBe
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files

@@ -1,13 +1,13 @@
 package ghistabs.materialize
 
 import ghidra.program.model.data.*
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeA
 import ghistabs.index.resolveBuiltin
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
 import ghistabs.test.longRange
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeA
 import org.junit.jupiter.api.Test
 import java.math.BigInteger
 

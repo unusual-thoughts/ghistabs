@@ -30,7 +30,7 @@ class VftableBuilder(
     private val importedType: (DemangledDataType) -> DataType? = { null },
 ) : DiagnosticSink by sink {
     internal val symtab = program.symbolTable
-    internal val dtm = program.dataTypeManager
+    val dtm = program.dataTypeManager
 
     fun DemangledDataType.slotParameterType(category: String, degrades: String) = importedType(this)
         ?: parameterType(dtm)

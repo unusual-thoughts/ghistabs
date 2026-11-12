@@ -3,6 +3,7 @@ package ghistabs.parse
 import ghicpp.Access
 import ghicpp.isVptrFieldName
 import ghicpp.member
+import ghidrakt.test.*
 import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.test.*
 import org.junit.jupiter.api.Test

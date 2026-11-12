@@ -4,14 +4,14 @@ import ghicpp.Access
 import ghicpp.VirtKind
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustNotBe
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.test.longRange
-import ghistabs.test.mustBe
-import ghistabs.test.mustNotBe
 import org.junit.jupiter.api.Test
 
 open class TestContentIndex(val asts: Map<GlobalTypeId, Type>) :

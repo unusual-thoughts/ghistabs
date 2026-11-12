@@ -1,11 +1,11 @@
 package ghistabs.harvest
 
 import ghidrakt.diagnose.DummySink
+import ghidrakt.test.mustBeSameAs
+import ghidrakt.test.mustNotBe
+import ghidrakt.test.mustNotBeNull
 import ghistabs.parse.SourceFile
 import ghistabs.test.dummyHarvester
-import ghistabs.test.mustBeSameAs
-import ghistabs.test.mustNotBe
-import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.Test
 
 /**

@@ -13,6 +13,7 @@ plugins {
 
 dependencies {
     implementation(project(":ghicpp"))
+    testImplementation(testFixtures(project(":ghidrakt")))
     testImplementation(libs.bundles.junit) // jupiter + junit4, the latter for Ghidra's test harness
     testRuntimeOnly(libs.junit.platform.launcher)
     // Only the CLI and tests serialize, so `-json` isn't shipped. `-core` must be: the plugin caches

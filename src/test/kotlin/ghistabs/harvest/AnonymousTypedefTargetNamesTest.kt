@@ -1,8 +1,8 @@
 package ghistabs.harvest
 
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeEmpty
 import ghistabs.parse.*
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 
 class AnonymousTypedefTargetNamesTest {

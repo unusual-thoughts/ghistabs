@@ -8,6 +8,7 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.functionsIterable
 import ghidrakt.runTransaction
+import ghidrakt.test.*
 import ghidrakt.withProgram
 import ghistabs.entrypoints.Correction
 import ghistabs.test.*

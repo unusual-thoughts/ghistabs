@@ -1,7 +1,7 @@
 package ghistabs.importer
 
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeEmpty
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path

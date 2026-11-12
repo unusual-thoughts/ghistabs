@@ -7,14 +7,14 @@ import ghidra.util.task.TaskMonitor
 import ghidrakt.isConflict
 import ghidrakt.nameWithoutConflict
 import ghidrakt.runTransaction
+import ghidrakt.test.must
+import ghidrakt.test.mustBeEmpty
 import ghidrakt.withProgram
 import ghistabs.importer.ImportProbe
 import ghistabs.materialize.shortenTypedefs
 import ghistabs.materialize.typedefShorteningRenames
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
-import ghistabs.test.must
-import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest

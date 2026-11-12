@@ -1,8 +1,8 @@
 package ghicpp.abi.itanium
 
 import ghicpp.ClassNaming
+import ghidrakt.test.mustBe
 import ghistabs.integration.FeatureFixtureTest
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
@@ -68,6 +68,6 @@ class TypeinfoReaderIntegrationTest : FeatureFixtureTest() {
         val CLASSES = setOf("Base", "Named", "Shape", "Circle", "Left", "Right", "Diamond")
 
         @JvmStatic
-        fun hellos() = stabsHellos().map { File(FEATURES, it) }
+        fun hellos() = stabsHellos().map { feature(it) }
     }
 }

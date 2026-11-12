@@ -6,7 +6,7 @@ import ghidra.util.ascii.AsciiCharSetRecognizer
 import ghidra.util.ascii.CharSetRecognizer
 import ghidrakt.cBytesAt
 import ghidrakt.cStringAt
-import ghistabs.test.mustBe
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

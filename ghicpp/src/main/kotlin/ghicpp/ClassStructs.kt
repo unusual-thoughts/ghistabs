@@ -122,7 +122,7 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
  * starts before or ends past it, and [owner] grows where it ends past the end. Anywhere else it goes only over
  * undefined bytes: a vptr, another class's fields or another member in the way leaves it unplaced, with a warning.
  */
-fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Structure) {
+internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Structure) {
     if (member == owner) return
     val field = ClassNaming.fieldName(at)
     fun unplaced(into: Structure, why: List<DataTypeComponent>) = degradation(

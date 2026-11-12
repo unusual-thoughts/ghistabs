@@ -4,11 +4,11 @@ import ghicpp.Access
 import ghicpp.VirtKind
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghidrakt.test.mustBe
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
