@@ -8,14 +8,14 @@ import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
-import ghistabs.componentsOverlapping
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.holds
-import ghistabs.includes
-import ghistabs.lay
-import ghistabs.range
-import ghistabs.stretch
-import ghistabs.withLength
+import ghidrakt.componentsOverlapping
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.holds
+import ghidrakt.includes
+import ghidrakt.lay
+import ghidrakt.range
+import ghidrakt.stretch
+import ghidrakt.withLength
 
 /**
  * Describes this struct as [owner]'s [table], led by the offset tag Ghidra 12.1's `ClassUtils.isVTable`

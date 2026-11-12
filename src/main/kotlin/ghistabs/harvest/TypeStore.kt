@@ -7,9 +7,9 @@ import ghicpp.isVptrFieldName
 import ghicpp.nameSegments
 import ghicpp.qualifiedName
 import ghicpp.templateName
-import ghistabs.Demangler
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.Demangler
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Field

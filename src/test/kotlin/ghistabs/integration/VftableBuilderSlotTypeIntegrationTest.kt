@@ -5,9 +5,9 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.EnumDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.Demangler
-import ghistabs.formals
-import ghistabs.runTransaction
+import ghidrakt.Demangler
+import ghidrakt.formals
+import ghidrakt.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Tag

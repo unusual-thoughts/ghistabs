@@ -1,9 +1,9 @@
 package ghistabs.integration
 
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.Demangler
-import ghistabs.fullName
-import ghistabs.namespaces
+import ghidrakt.Demangler
+import ghidrakt.fullName
+import ghidrakt.namespaces
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeEmpty

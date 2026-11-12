@@ -8,16 +8,16 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.BookmarkSink
-import ghistabs.diagnose.MessageLogSink
-import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.diagnose.TeeSink
+import ghidrakt.diagnose.BookmarkSink
+import ghidrakt.diagnose.MessageLogSink
+import ghidrakt.diagnose.StabsDiagnostics
+import ghidrakt.diagnose.TeeSink
 import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.ImportOptions.Companion.registerStabs
 import ghistabs.importer.ImportOptions.Companion.stabsOptions
 import ghistabs.parse.StabReader
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
 
 /**
  * Imports STABS debug info (.stab/.stabstr) into Ghidra: types, function signatures,

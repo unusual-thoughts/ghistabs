@@ -5,8 +5,8 @@ import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.Typeinfo
 import ghicpp.abi.itanium.vtableOffsetField
 import ghidra.program.model.address.Address
-import ghistabs.get
-import ghistabs.getScalar
+import ghidrakt.get
+import ghidrakt.getScalar
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeTrue

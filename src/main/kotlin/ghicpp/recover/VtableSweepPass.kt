@@ -16,9 +16,9 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.*
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 
 /**
  * Lays the vtables no class claimed ([isVtableClaimed]), Itanium's and gcc 2.x's, typed off the functions

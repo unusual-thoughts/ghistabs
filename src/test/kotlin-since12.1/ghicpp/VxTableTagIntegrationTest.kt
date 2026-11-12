@@ -5,7 +5,7 @@ import ghidra.program.model.gclass.ClassUtils
 import ghistabs.index.vptrOffsetBytesOf
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.integration.Fixtures
-import ghistabs.loadProgram
+import ghidrakt.loadProgram
 import ghistabs.parse.TypeDecl
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze

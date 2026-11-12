@@ -1,7 +1,7 @@
 package ghistabs.harvest
 
-import ghistabs.diagnose.CapturingSink
-import ghistabs.diagnose.Level
+import ghidrakt.diagnose.CapturingSink
+import ghidrakt.diagnose.Level
 import ghistabs.parse.*
 import ghistabs.test.GenericAddressResolver
 import ghistabs.test.mustBe

@@ -16,9 +16,9 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
-import ghistabs.Demangler
-import ghistabs.getScalar
-import ghistabs.namespaces
+import ghidrakt.Demangler
+import ghidrakt.getScalar
+import ghidrakt.namespaces
 
 /** The Itanium C++ ABI, as gcc >= 3 emits it: its special names, typeinfo classes and vtable header. */
 @Suppress("TooManyFunctions")

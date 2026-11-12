@@ -17,10 +17,10 @@ import ghidra.program.model.symbol.RefType
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DummySink
-import ghistabs.runTransaction
+import ghidrakt.diagnose.DummySink
+import ghidrakt.runTransaction
 import ghistabs.test.mustBe
-import ghistabs.useWith
+import ghidrakt.useWith
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

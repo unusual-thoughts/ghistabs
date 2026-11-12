@@ -4,8 +4,8 @@ import ghicpp.abi.gcc2.Gcc2
 import ghicpp.abi.itanium.Itanium
 import ghicpp.isTemplated
 import ghicpp.qualifiedName
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 import ghistabs.harvest.*
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl

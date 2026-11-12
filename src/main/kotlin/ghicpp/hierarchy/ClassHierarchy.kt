@@ -20,10 +20,10 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.*
-import ghistabs.Demangler
-import ghistabs.isInjected
-import ghistabs.paramTypes
-import ghistabs.path
+import ghidrakt.Demangler
+import ghidrakt.isInjected
+import ghidrakt.paramTypes
+import ghidrakt.path
 import kotlinx.serialization.Serializable
 
 /**

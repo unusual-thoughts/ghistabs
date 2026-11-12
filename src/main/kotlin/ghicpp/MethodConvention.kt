@@ -16,8 +16,8 @@ import ghidra.program.model.listing.ReturnParameterImpl
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
-import ghistabs.isInjected
-import ghistabs.isMethod
+import ghidrakt.isInjected
+import ghidrakt.isMethod
 
 /** Where `this` comes in: ECX under x86 `__thiscall`, the first argument register elsewhere. */
 fun Program.thisStorage(): Address? {

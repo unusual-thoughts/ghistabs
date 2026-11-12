@@ -20,10 +20,10 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
-import ghistabs.*
-import ghistabs.diagnose.ApplyErrorBucket
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.Level
+import ghidrakt.*
+import ghidrakt.diagnose.ApplyErrorBucket
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.Level
 import ghistabs.harvest.*
 import ghistabs.materialize.*
 import ghistabs.parse.*

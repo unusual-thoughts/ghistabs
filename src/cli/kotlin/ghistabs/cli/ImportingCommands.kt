@@ -14,7 +14,7 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
 import ghidra.program.util.GhidraProgramUtilities
-import ghistabs.diagnose.writeDump
+import ghidrakt.diagnose.writeDump
 import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.analyzeAfterImport
@@ -29,7 +29,7 @@ import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.import
 import ghistabs.parse.StabReader
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
 import java.io.File
 
 /** Runs the whole import, and so is the only thing the import's own options mean anything to. */

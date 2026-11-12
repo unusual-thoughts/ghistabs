@@ -4,8 +4,8 @@ import ghicpp.canonTemplateName
 import ghicpp.isTemplated
 import ghicpp.member
 import ghicpp.outermostTemplate
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 import ghistabs.harvest.*
 import ghistabs.parse.*
 

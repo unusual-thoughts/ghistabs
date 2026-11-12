@@ -6,10 +6,10 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.importer.ImportProbe
 import ghistabs.materialize.resolveRef
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
-import ghistabs.withProgram
+import ghidrakt.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest

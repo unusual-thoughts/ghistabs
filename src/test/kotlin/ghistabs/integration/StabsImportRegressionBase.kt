@@ -28,13 +28,13 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
+import ghidrakt.*
 import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.Observations
-import ghistabs.diagnose.CapturingSink
-import ghistabs.diagnose.dumpJson
-import ghistabs.diagnose.writeRegistryDump
+import ghidrakt.diagnose.CapturingSink
+import ghidrakt.diagnose.dumpJson
+import ghidrakt.diagnose.writeRegistryDump
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.harvest.Type
 import ghistabs.importer.*
@@ -2445,7 +2445,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         ?.let { program.memory.getBlock(it)?.isExecute } == true
 
     /**
-     * The function-relative address heuristic ([ghistabs.GenericAddressResolver.stabAddress]):
+     * The function-relative address heuristic ([ghidrakt.GenericAddressResolver.stabAddress]):
      * every `N_SLINE`/`N_LBRAC`/`N_RBRAC` record, resolved against its enclosing `N_FUN`, must
      * land in executable memory. A value left
      * un-rebased resolves to a tiny address in no code block. Not asserted against the *enclosing*

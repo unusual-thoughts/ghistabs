@@ -22,11 +22,11 @@ import ghidra.program.model.symbol.RefType
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.util.CodeUnitInsertionException
 import ghidra.util.task.TaskMonitor
-import ghistabs.cancelOnly
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.forceCreateData
-import ghistabs.minus
-import ghistabs.plus
+import ghidrakt.cancelOnly
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.forceCreateData
+import ghidrakt.minus
+import ghidrakt.plus
 import java.util.*
 import kotlin.math.abs
 

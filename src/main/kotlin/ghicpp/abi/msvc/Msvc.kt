@@ -13,7 +13,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
-import ghistabs.namespaces
+import ghidrakt.namespaces
 
 /**
  * The Microsoft Visual C++ ABI: its `??` special names, and the labels Ghidra's RTTI analyzer puts on the

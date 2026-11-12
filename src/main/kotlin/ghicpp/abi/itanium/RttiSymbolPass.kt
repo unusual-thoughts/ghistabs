@@ -5,14 +5,14 @@ import ghicpp.recover.findPointers
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
-import ghistabs.BoolOption
-import ghistabs.Demangler
-import ghistabs.cStringAt
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.get
-import ghistabs.isData
-import ghistabs.pointerAt
-import ghistabs.set
+import ghidrakt.BoolOption
+import ghidrakt.Demangler
+import ghidrakt.cStringAt
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.get
+import ghidrakt.isData
+import ghidrakt.pointerAt
+import ghidrakt.set
 import kotlin.ranges.rangeTo
 
 /**

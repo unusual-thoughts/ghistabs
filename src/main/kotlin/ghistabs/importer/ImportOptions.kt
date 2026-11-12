@@ -3,8 +3,8 @@ package ghistabs.importer
 import ghicpp.VfptrModel
 import ghidra.framework.options.Options
 import ghidra.program.model.listing.Program
-import ghistabs.*
-import ghistabs.diagnose.Level
+import ghidrakt.*
+import ghidrakt.diagnose.Level
 
 class ImportOptions() : OptionContainer() {
     var applyPlateComments: Boolean by PLATE_COMMENTS

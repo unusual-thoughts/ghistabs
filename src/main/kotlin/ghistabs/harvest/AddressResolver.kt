@@ -9,11 +9,11 @@ import ghidra.app.util.opinion.PeLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
-import ghistabs.baseStackParamOffset
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.baseStackParamOffset
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 import ghistabs.parse.*
-import ghistabs.plus
+import ghidrakt.plus
 
 /**
  * Turns the numbers a stab carries into program addresses. One resolver serves the whole run, so the
