@@ -2,6 +2,7 @@ package ghistabs.importer
 
 import ghicpp.abi.itanium.Itanium
 import ghidra.program.model.address.AddressOutOfBoundsException
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.harvest.LineEntry
 import ghistabs.index.SourceIndex
