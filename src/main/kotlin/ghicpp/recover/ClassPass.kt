@@ -3,8 +3,7 @@ package ghicpp.recover
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
-import ghicpp.MemberAttrs.Companion.memberAttrs
-import ghicpp.MemberAttrs.Companion.writeMember
+import ghicpp.MemberAttrs.Companion.recordPlaced
 import ghicpp.abi.RttiParser
 import ghicpp.abi.StructorRole
 import ghidra.framework.options.Options
@@ -99,21 +98,19 @@ class ClassPass(
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
             structors.map { (f, structor) -> f to structor.first }
         monitor.message = "Recording classes"
-        for ((func, _) in placed) func.addTag(ClassPassTags.METHOD)
-        for (func in ctors.keys) func.addTag(ClassPassTags.CONSTRUCTOR)
+        for ((func, _) in placed) program.recordPlaced(func, structors[func]?.second, virtual = func in owners)
         writeRecords(read.recorded)
         return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size, filled)
             .also { it.found = found }
     }
 
     /**
-     * Moves the virtual function [func] into [cls]'s namespace, renamed to [name] if one is given, and marks it
-     * virtual unless its member attributes already say otherwise. Once it is in the class, its calling convention
-     * is fixed to take `this` ([fixMethodConvention]). Returns whether it was moved.
+     * Moves the virtual function [func] into [cls]'s namespace, renamed to [name] if one is given. Once it is in
+     * the class, its calling convention is fixed to take `this` ([fixMethodConvention]); [run] records it virtual
+     * ([recordPlaced]). Returns whether it was moved.
      */
     private fun attach(func: Function, cls: ClassDecl, name: String?): Boolean {
         val entry = func.entryPoint
-        if (program.memberAttrs(entry) == null) program.writeMember(entry, MemberAttrs(virt = VirtKind.VIRTUAL))
         val ns = cls.ns?.toClass() ?: return false
         val moved = runCatching { claim(func, ns, name).first }
             .onFailure { warn("class-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
@@ -250,17 +247,4 @@ class ClassPass(
             true,
         )
     }
-}
-
-/**
- * The function tags a class pass puts on what it places: its own conclusions, which their names, ANALYSIS
- * as `RecoverClassesFromRTTIScript`'s and [ghicpp.recover.MethodClassPass]' guesses are, can't tell
- * apart.
- */
-object ClassPassTags {
-    /** On each virtual function, constructor and destructor a class pass moved into its class. */
-    const val METHOD = "GHICPP_CLASS_METHOD"
-
-    /** On each constructor among them. */
-    const val CONSTRUCTOR = "GHICPP_CLASS_CONSTRUCTOR"
 }

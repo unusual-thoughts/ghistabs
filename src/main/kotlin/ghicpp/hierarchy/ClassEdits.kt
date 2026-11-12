@@ -107,7 +107,7 @@ internal fun ClassView.solidSource(): String? =
 internal fun Program.memberSource(member: Member): String? {
     val at = addressFactory.getAddress(member.address)
     return when {
-        at != null && memberAttrs(at) != null -> "the stabs"
+        at != null && memberAttrs(at)?.source == SourceType.IMPORTED -> "the stabs"
 
         at != null && symbolTable.getSymbols(at).any { it.name.startsWith("_Z") || it.name.startsWith("?") } ->
             "its mangled name"

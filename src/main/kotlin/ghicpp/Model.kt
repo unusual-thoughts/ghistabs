@@ -1,5 +1,6 @@
 package ghicpp
 
+import ghicpp.abi.StructorRole
 import ghicpp.abi.VtableRecord
 import ghidra.framework.options.CustomOption
 import ghidra.framework.options.GProperties
@@ -8,6 +9,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.SourceType
 import ghidra.util.ObjectStorage
 import ghidra.util.Saveable
 import ghistabs.GPropertiesFormat
@@ -157,8 +159,10 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
 }
 
 /**
- * A member function's or static data member's access, virtuality and cv-qualifiers. Stabs give all of
- * them; otherwise cv comes from the mangled name, virtuality from the vtables, and access stays null.
+ * A member function's or static data member's access, virtuality and cv-qualifiers, who stated them
+ * ([source]: [SourceType.IMPORTED] the stabs, [SourceType.ANALYSIS] a class pass, [SourceType.USER_DEFINED] the
+ * user), and the constructor or destructor it is where a class pass found it one ([structor]). Stabs give
+ * all of the first; otherwise cv comes from the mangled name, virtuality from the vtables, and access stays null.
  */
 @Serializable
 data class MemberAttrs(
@@ -166,17 +170,21 @@ data class MemberAttrs(
     var virt: VirtKind? = null,
     var isConst: Boolean = false,
     var isVolatile: Boolean = false,
+    var source: SourceType? = null,
+    var structor: StructorRole? = null,
 ) : Saveable {
     constructor(method: MemberDecl) :
-        this(method.access, method.virt, method.isConst, method.isVolatile)
+        this(method.access, method.virt, method.isConst, method.isVolatile, SourceType.IMPORTED)
 
-    override fun getObjectStorageFields(): Array<Class<*>> = arrayOf(INT, INT, BOOLEAN, BOOLEAN)
+    override fun getObjectStorageFields(): Array<Class<*>> = arrayOf(INT, INT, BOOLEAN, BOOLEAN, STRING, INT)
 
     override fun save(objStorage: ObjectStorage) {
         objStorage.putInt(access?.ordinal ?: -1)
         objStorage.putInt(virt?.ordinal ?: -1)
         objStorage.putBoolean(isConst)
         objStorage.putBoolean(isVolatile)
+        objStorage.putString(source?.name.orEmpty())
+        objStorage.putInt(structor?.ordinal ?: -1)
     }
 
     override fun restore(objStorage: ObjectStorage) {
@@ -184,11 +192,34 @@ data class MemberAttrs(
         virt = VirtKind.entries.getOrNull(objStorage.int)
         isConst = objStorage.boolean
         isVolatile = objStorage.boolean
+        source = objStorage.string.let { name -> SourceType.entries.firstOrNull { it.name == name } }
+        structor = StructorRole.entries.getOrNull(objStorage.int)
     }
 
-    override fun getSchemaVersion() = 1
-    override fun isUpgradeable(oldSchemaVersion: Int) = false
-    override fun upgrade(oldObjStorage: ObjectStorage, oldSchemaVersion: Int, currentObjStorage: ObjectStorage) = false
+    override fun getSchemaVersion() = 2
+    override fun isUpgradeable(oldSchemaVersion: Int) = oldSchemaVersion == 1
+
+    /**
+     * Version 1 had no [source] nor [structor]. The stabs give a member its access, so one with an access came
+     * from them; one without may have been a class pass's virtual function, whose class pass tags a rerun of
+     * the pass turns into these.
+     */
+    override fun upgrade(
+        oldObjStorage: ObjectStorage,
+        oldSchemaVersion: Int,
+        currentObjStorage: ObjectStorage,
+    ): Boolean {
+        if (oldSchemaVersion != 1) return false
+        val access = oldObjStorage.int
+        currentObjStorage.putInt(access)
+        currentObjStorage.putInt(oldObjStorage.int)
+        currentObjStorage.putBoolean(oldObjStorage.boolean)
+        currentObjStorage.putBoolean(oldObjStorage.boolean)
+        currentObjStorage.putString(if (access >= 0) SourceType.IMPORTED.name else "")
+        currentObjStorage.putInt(-1)
+        return true
+    }
+
     override fun isPrivate() = false
     companion object {
         const val MEMBERS = "Stabs Member Attributes"
@@ -197,14 +228,32 @@ data class MemberAttrs(
         fun Program.writeMember(at: Address, attrs: MemberAttrs) =
             listing.getCodeUnitAt(at)?.setProperty(MEMBERS, attrs)
 
-        /** The attributes the stabs gave the member at an address, if any. */
+        /** The attributes stated for the member at an address, if any: by the stabs, a class pass or the user. */
         fun Program.memberAttrs(at: Address): MemberAttrs? =
             listing.getCodeUnitAt(at)?.getObjectProperty(MEMBERS) as? MemberAttrs
+
+        /**
+         * Records that a class pass moved [func] into its class, a [structor] where it found it one, and [virtual]
+         * where a vtable holds it, unless the stabs or the user stated its attributes already.
+         */
+        fun Program.recordPlaced(func: Function, structor: StructorRole?, virtual: Boolean) {
+            val old = memberAttrs(func.entryPoint)
+            if (old?.source == SourceType.IMPORTED || old?.source == SourceType.USER_DEFINED) return
+            val virt = VirtKind.VIRTUAL.takeIf { virtual } ?: old?.virt
+            writeMember(
+                func.entryPoint,
+                MemberAttrs(virt = virt, source = SourceType.ANALYSIS, structor = structor ?: old?.structor),
+            )
+        }
+
+        /** Whether a class pass moved [func] into its class ([recordPlaced]). */
+        fun Program.isPlacedByClassPass(func: Function) = memberAttrs(func.entryPoint)?.source == SourceType.ANALYSIS
     }
 }
 
 private val INT = Int::class.javaObjectType
 private val BOOLEAN = Boolean::class.javaObjectType
+private val STRING = String::class.java
 
 /**
  * The class a virtual function belongs to: the lowest common ancestor of the classes whose vftables

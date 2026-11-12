@@ -3,6 +3,7 @@ package ghicpp.recover
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
+import ghicpp.MemberAttrs.Companion.recordPlaced
 import ghicpp.abi.PlainVtables
 import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
@@ -258,8 +259,7 @@ class MemberObjectPass(
         runCatching {
             func.parentNamespace = ns
             func.setName(if (role == CONSTRUCTOR) ns.name else "~${ns.name}", SourceType.ANALYSIS)
-            func.addTag(ClassPassTags.METHOD)
-            if (role == CONSTRUCTOR) func.addTag(ClassPassTags.CONSTRUCTOR)
+            program.recordPlaced(func, role, virtual = false)
         }.onFailure { warn("member-structor-unnamed", "${func.name} -> ${ns.getName(true)}: $it", func.entryPoint) }
     }
 
