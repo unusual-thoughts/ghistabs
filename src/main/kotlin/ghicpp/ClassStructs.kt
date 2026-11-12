@@ -8,7 +8,10 @@ import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghistabs.componentsOverlapping
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.holds
+import ghistabs.stretch
 
 /**
  * Describes this struct as [owner]'s [table], led by the offset tag Ghidra 12.1's `ClassUtils.isVTable`
@@ -100,16 +103,35 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
 
         else if struct.length < size -> {
             val last = struct.definedComponents.lastOrNull()?.takeIf { it.endOffset == struct.length - 1 }
-            val data = (last?.dataType as? Structure)?.takeIf { it.isDataOf(ns, struct) }
             struct.growStructure(size - struct.length)
-            if (last != null && data != null) {
-                data.growStructure(size - last.offset - data.length)
-                struct.replaceAtOffset(last.offset, data, data.length, last.fieldName, last.comment)
-            }
+            if (last != null && struct.isOwnData(last)) struct.stretch(last, last.offset..<size)
         }
     }
 }
 
-/** Whether this is one of [ns]'s own `<Class>_data` structs, filed beside its [struct]. */
-private fun Structure.isDataOf(ns: GhidraClass, struct: Structure) =
-    categoryPath == struct.categoryPath && name.startsWith(ns.name + ClassNaming.DATA)
+/** Whether [part] holds one of this class struct's own `<Class>_data` structs, filed beside it. */
+fun Structure.isOwnData(part: DataTypeComponent) = (part.dataType as? Structure)?.let {
+    it.categoryPath == categoryPath && it.name.startsWith(name + ClassNaming.DATA)
+} == true
+
+/** Why [dt] can't go at [at] in this over undefined bytes alone, or null where it can. */
+fun Structure.layoutProblem(at: Int, dt: DataType): String? = when {
+    at + dt.length > length -> "${dt.name} (${dt.length}b) at +$at overruns $length"
+    componentsOverlapping(at, dt.length).isNotEmpty() -> "${dt.name} at +$at covers existing fields"
+    else -> null
+}
+
+/**
+ * Fills this, a class's self-base ([ClassUtils.getBaseClassDataTypePath]), with the fields of [cls] it holds
+ * whole but the virtual bases, in place of any it has; [onFailure] hears of a field that wouldn't go.
+ */
+fun Structure.copyNonVirtualPart(cls: Structure, onFailure: (DataTypeComponent, Throwable) -> Unit = { _, _ -> }) {
+    definedComponents.map { it.offset }.forEach(::clearAtOffset)
+    cls.definedComponents.filter { (0..<length).holds(it) && !it.isVirtualBaseField() }.forEach {
+        runCatching { replaceAtOffset(it.offset, it.dataType, it.length, it.fieldName, it.comment) }
+            .onFailure { e -> onFailure(it, e) }
+    }
+}
+
+/** Whether this is a virtual base's field. */
+fun DataTypeComponent.isVirtualBaseField() = fieldName.orEmpty().startsWith(ClassNaming.VBASE_PREFIX)

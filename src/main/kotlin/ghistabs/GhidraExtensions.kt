@@ -220,6 +220,34 @@ fun Structure.componentsOverlapping(range: IntRange) = definedComponents.filter 
 /** The defined components sharing a byte with the [length] bytes at [offset]. */
 fun Structure.componentsOverlapping(offset: Int, length: Int) = componentsOverlapping(offset.withLength(length))
 
+/**
+ * Lays [dt] at [at] over whatever fields are there, growing this to hold it. The fields go first, as
+ * [Structure.replaceAtOffset] takes only the one at [at] and the undefined bytes after it.
+ */
+fun Structure.lay(at: Int, dt: DataType, name: String?, comment: String?): DataTypeComponent {
+    val range = at.withLength(dt.length)
+    if (range.last >= length) growStructure(range.last + 1 - length)
+    componentsOverlapping(range).sortedByDescending { it.offset }.forEach { clearAtOffset(it.offset) }
+    return replaceAtOffset(at, dt, dt.length, name, comment)
+}
+
+/**
+ * Stretches the struct [part] holds back and on to cover [range] too, over the undefined bytes around it, and
+ * lays it again there, keeping its name and comment; returns that struct. Its fields keep their bytes.
+ */
+fun Structure.stretch(part: DataTypeComponent, range: IntRange): Structure {
+    val inner = part.dataType as Structure
+    if (part.range.includes(range)) return inner
+    val (offset, name, comment) = Triple(part.offset, part.fieldName, part.comment)
+    val start = minOf(offset, range.first)
+    val end = maxOf(offset + inner.length, range.last + 1)
+    clearAtOffset(offset)
+    repeat(offset - start) { inner.insertAtOffset(0, DataType.DEFAULT, 1) }
+    if (end - start > inner.length) inner.growStructure(end - start - inner.length)
+    lay(start, inner, name, comment)
+    return inner
+}
+
 /** Instructions decoded from the bytes, whatever the listing has made of them. */
 fun PseudoDisassembler.instructionAt(addr: Address): Instruction? =
     runCatching { disassemble(addr) }.getOrNull()?.takeIf { it.length > 0 }

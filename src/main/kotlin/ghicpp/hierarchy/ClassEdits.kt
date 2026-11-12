@@ -158,8 +158,7 @@ internal fun Program.structOf(cls: ClassView): Structure? =
 internal fun Program.overwrittenBy(cls: ClassView, base: ClassView, offset: Int): List<DataTypeComponent> {
     val struct = structOf(cls) ?: return emptyList()
     val part = embeddingOf(base) ?: return emptyList()
-    val end = offset + part.length
-    return struct.definedComponents.filter { it.offset < end && it.offset + it.length > offset }
+    return struct.componentsOverlapping(offset, part.length)
         .filterNot { it.offset == offset && it.dataType.isEquivalent(part) }
 }
 
@@ -184,13 +183,9 @@ internal fun Program.placeBase(
             it.fieldName == ClassNaming.BASE_PREFIX || it.fieldName == ClassNaming.VBASE_PREFIX
         }.forEach { it.fieldName += it.dataType.name.substringBefore(ClassNaming.FIELDS + "_") }
     }
-    val end = offset + part.length
-    if (end > struct.length) struct.growStructure(end - struct.length)
-    struct.definedComponents.filter { it.offset < end && it.offset + it.length > offset }
-        .sortedByDescending { it.offset }.forEach { struct.clearAtOffset(it.offset) }
     val name = ClassNaming.baseFieldName(isVirtual, base.name, baseCount)
     val comment = (if (isVirtual) "virtual " else "") + "base, placed by hand"
-    struct.replaceAtOffset(offset, part, part.length, name, comment)
+    struct.lay(offset, part, name, comment)
     return null
 }
 
