@@ -119,6 +119,9 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         facts += OoFact.of(predicate, *args)
     }
 
+    /** The entry points of the pure virtual stubs, [isPureVirtual]. */
+    private var purecalls: Set<Long> = emptySet()
+
     /** Every fact, in the order they were found: functions by address, each one's in its p-code's order. */
     fun export(): List<OoFact> {
         facts.clear()
@@ -127,8 +130,9 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         val calls = mutableListOf<ThisCall>()
         val methods = mutableSetOf<Address>()
         val all = (functions.getFunctions(true) as Iterable<Function>).filter { !it.isExternal }
+        purecalls = all.filter(::isPureVirtual).map { it.entryPoint.offset }.toSet()
         for (f in all) {
-            if (isPureVirtual(f)) add("purecall", f.entryPoint)
+            if (f.entryPoint.offset in purecalls) add("purecall", f.entryPoint)
             if (f.isThunk) {
                 f.getThunkedFunction(false)?.takeIf {
                     !it.isExternal
@@ -413,13 +417,18 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         }
     }
 
-    /** `initialMemory/2` for each slot of the table at [start], up to the first word that is not code. */
+    /**
+     * `initialMemory/2` for each slot of the table at [start], up to the first word that is not code. Its first
+     * [MAX_NULL_SLOTS] may be null: an abstract Itanium class's table leaves its destructors' slots so.
+     */
     private fun vftableEntries(start: Long) {
         var at = address(start) ?: return
-        repeat(MAX_SLOTS) {
+        repeat(MAX_SLOTS) { slot ->
             val value = readPointer(at) ?: return
-            if (!isCode(value)) return
-            if (!facts.add(OoFact.of("initialMemory", at, value))) return
+            if (value != 0L || slot >= MAX_NULL_SLOTS) {
+                if (!isCode(value)) return
+                if (!facts.add(OoFact.of("initialMemory", at, value))) return
+            }
             at = at.add(ptrSize.toLong())
         }
     }
@@ -430,10 +439,17 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         val block = memory.getBlock(at) ?: return false
         if (!block.isInitialized || (block.isExecute && !block.isRead)) return false
         if (block.isExecute && functions.getFunctionContaining(at) != null) return false
-        return readPointer(at)?.let(::isCode) == true
+        val first = (0 until MAX_NULL_SLOTS + 1).map { readPointer(at.add(it * ptrSize.toLong())) ?: return false }
+        return first.firstOrNull { it != 0L }?.let(::isCode) == true
     }
 
+    /**
+     * Whether [value] can be a slot of a vftable: it points at code, or at a pure virtual stub. A slot an
+     * import's relocation fills, `__cxa_pure_virtual`'s in an ELF, points at the import's thunk outside any
+     * code block, and without it an abstract class's table has no slot at all.
+     */
     private fun isCode(value: Long): Boolean {
+        if (value in purecalls) return true
         val at = address(value) ?: return false
         return memory.getBlock(at)?.let { it.isExecute && it.isInitialized } == true
     }
@@ -544,6 +560,9 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
 
     private companion object {
         const val MAX_SLOTS = 1024
+
+        /** The null slots a table may start with: an abstract Itanium class's complete and deleting destructors. */
+        const val MAX_NULL_SLOTS = 2
         const val MAX_NAME = 512
         const val MAX_BASES = 256L
         val ABIS = listOf(Itanium, Msvc, Gcc2Thunks)
