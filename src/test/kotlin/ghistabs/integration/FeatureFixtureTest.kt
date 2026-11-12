@@ -32,9 +32,9 @@ abstract class FeatureFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
     companion object {
         val FEATURES = File("src/test/resources/binaries/features")
 
-        /** The builds of `features/hello.cc` that carry stabs, all but the MSVC ones and the stripped ones. */
+        /** The builds of `features/hello.cc` that carry stabs: all but the MSVC, the stripped and the no-RTTI ones. */
         fun stabsHellos() = FEATURES.list().orEmpty()
-            .filter { it.startsWith("hello_") && "_msvc" !in it && "_stripped" !in it }
+            .filter { it.startsWith("hello_") && "_msvc" !in it && "_stripped" !in it && "_nortti" !in it }
             .sorted()
     }
 }

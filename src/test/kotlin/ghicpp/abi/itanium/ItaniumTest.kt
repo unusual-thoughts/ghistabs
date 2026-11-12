@@ -11,6 +11,14 @@ import org.junit.jupiter.api.Test
 
 class ItaniumTest {
     @Test
+    fun `the pure virtual stub is known by its ELF name and by MinGW's COFF one`() {
+        listOf("__cxa_pure_virtual", "___cxa_pure_virtual", "__cxa_deleted_virtual", "___cxa_deleted_virtual")
+            .map(Itanium::isPureVirtualStub) mustBe listOf(true, true, true, true)
+        listOf("_cxa_pure_virtual", "cxa_pure_virtual", "_purecall").map(Itanium::isPureVirtualStub) mustBe
+            listOf(false, false, false)
+    }
+
+    @Test
     fun testZtvCandidatesSimpleName() {
         Itanium.vtableCandidates("ThisStream") mustBe listOf(
             "_ZTV10ThisStream",

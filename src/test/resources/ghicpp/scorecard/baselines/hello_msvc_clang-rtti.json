@@ -1,0 +1,17 @@
+{
+    "abstract-fn": 0,
+    "abstract-fp": 0,
+    "abstract-tp": 1,
+    "base-access-fn": 0,
+    "base-access-fp": 1,
+    "base-access-tp": 14,
+    "bases-fn": 0,
+    "bases-fp": 0,
+    "bases-tp": 15,
+    "classes-fn": 6,
+    "classes-fp": 0,
+    "classes-tp": 14,
+    "polymorphic-classes-fn": 0,
+    "polymorphic-classes-fp": 0,
+    "polymorphic-classes-tp": 11
+}
