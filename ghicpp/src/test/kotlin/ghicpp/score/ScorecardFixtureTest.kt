@@ -148,6 +148,9 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
             facts.path,
             "--results",
             results.path,
+            // A case recovered as if it had no RTTI has the solver ignore the RTTI facts the memory still gives.
+            "--rtti",
+            (case.recovery == Recovery.RTTI).toString(),
         ).redirectErrorStream(true).redirectOutput(log).start()
         val done = process.waitFor(OOPROLOG_TIMEOUT_MINUTES, java.util.concurrent.TimeUnit.MINUTES)
         if (!done) process.destroyForcibly()
