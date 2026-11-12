@@ -100,6 +100,8 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     systemProperty("regenerateBaselines", props.gradleProperty("regenerateBaselines").getOrElse(""))
     // -PignoreBaselines=true reports drift without failing; drifted fixtures still write their counters.
     systemProperty("ignoreBaselines", props.gradleProperty("ignoreBaselines").getOrElse(""))
+    // -PregenerateTruth=true rebuilds the class scorecards' committed ground truth from the truth binaries.
+    systemProperty("regenerateTruth", props.gradleProperty("regenerateTruth").getOrElse(""))
     jvmArgs(project.headlessJvmArgs)
     // -Pjfr[=<file>]. Read recordings with the jdk.jfr.consumer API — `jfr print` crashes on Kotlin
     // synthetic frames.

@@ -1,0 +1,20 @@
+{
+    "abstract-fn": 1,
+    "abstract-fp": 0,
+    "abstract-tp": 0,
+    "base-access-fn": 0,
+    "base-access-fp": 1,
+    "base-access-tp": 3,
+    "bases-fn": 10,
+    "bases-fp": 2,
+    "bases-tp": 4,
+    "classes-fn": 1,
+    "classes-fp": 8,
+    "classes-tp": 13,
+    "polymorphic-classes-fn": 0,
+    "polymorphic-classes-fp": 7,
+    "polymorphic-classes-tp": 11,
+    "vftables-fn": 1,
+    "vftables-fp": 1,
+    "vftables-tp": 10
+}
