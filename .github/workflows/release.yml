@@ -48,7 +48,7 @@ jobs:
         run: | # Whichever matrix job gets here first creates the release; the rest race and lose harmlessly.
           gh release view "$TAG" >/dev/null 2>&1 ||
             gh release create "$TAG" --verify-tag --generate-notes || true
-          gh release upload "$TAG" dist/*.zip --clobber
+          gh release upload "$TAG" dist/*.zip ghicpp/dist/*.zip --clobber
 
       # workflow_dispatch creates artifacts even if there is no release tag
       - uses: ./.github/actions/upload-packages

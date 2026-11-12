@@ -29,12 +29,12 @@ import ghidra.program.model.symbol.Symbol
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.*
-import ghistabs.audit.DemanglerWhitelist
-import ghistabs.baseline.BaselineLoader
-import ghistabs.baseline.Observations
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.diagnose.dumpJson
 import ghidrakt.diagnose.writeRegistryDump
+import ghistabs.audit.DemanglerWhitelist
+import ghistabs.baseline.BaselineLoader
+import ghistabs.baseline.Observations
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.harvest.Type
 import ghistabs.importer.*

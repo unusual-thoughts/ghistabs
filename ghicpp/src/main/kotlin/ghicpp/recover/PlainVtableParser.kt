@@ -27,7 +27,7 @@ class PlainClass(override val ns: Namespace, override val vftables: List<VtableR
 }
 
 /** The candidate bases of each class, as [inferBases] finds them, off their tables' [slots]. */
-internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Function?>>) {
+class BaseCandidates(private val slots: Map<out ClassDecl, List<Function?>>) {
     val byClass = mutableMapOf<ClassDecl, MutableSet<ClassDecl>>()
 
     private fun length(c: ClassDecl) = slots[c]?.size ?: 0

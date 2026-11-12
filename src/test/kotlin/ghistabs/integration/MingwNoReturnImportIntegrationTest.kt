@@ -3,8 +3,8 @@ package ghistabs.integration
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.listing.Function
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.entrypoints.markNoReturn
 import ghidrakt.runTransaction
+import ghistabs.entrypoints.markNoReturn
 import ghistabs.test.must
 import ghistabs.test.mustNot
 import org.junit.jupiter.api.AfterEach

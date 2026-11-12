@@ -32,7 +32,7 @@ class VftableBuilder(
     internal val symtab = program.symbolTable
     internal val dtm = program.dataTypeManager
 
-    internal fun DemangledDataType.slotParameterType(category: String, degrades: String) = importedType(this)
+    fun DemangledDataType.slotParameterType(category: String, degrades: String) = importedType(this)
         ?: parameterType(dtm)
         ?: Undefined4DataType.dataType.also { degradation(category, degrades, "demangler gave no type for $this") }
 
@@ -57,7 +57,7 @@ class VftableBuilder(
      * named after the base whose vptr points into it, as Ghidra's `RTTIGccClassRecoverer` does
      * ([ClassNaming.vftableName]); a construction group's labels stay as they are.
      */
-    internal fun laySecondaries(
+    fun laySecondaries(
         primary: VtableRecord,
         primaryVftable: Structure?,
         leaf: String,
@@ -100,7 +100,7 @@ class VftableBuilder(
      * names: a re-import lays the primary afresh, and naming it again, as [laySecondaries] does an
      * Itanium group's, puts it in place of the table the earlier import laid.
      */
-    internal fun layGcc2Secondaries(
+    fun layGcc2Secondaries(
         className: String,
         leaf: String,
         ns: Namespace,
@@ -230,7 +230,7 @@ class VftableBuilder(
      * already, in another table, keeps its definition and its name, so an edit to it reaches every table.
      * Code at [target] with no function becomes one ([functionAtOrCreate]).
      */
-    internal fun addSlot(
+    fun addSlot(
         vftable: Structure,
         category: CategoryPath,
         target: Address,
@@ -275,7 +275,7 @@ class VftableBuilder(
  * Each slot target's definition, by the first vftable defining it, so every table pointing at a function
  * shares the one definition, as `RecoverClassesFromRTTIScript` shares an inherited slot's.
  */
-internal class SlotDefinitions(private val byTarget: MutableMap<Address, DataType> = mutableMapOf()) :
+class SlotDefinitions(private val byTarget: MutableMap<Address, DataType> = mutableMapOf()) :
     Map<Address, DataType> by byTarget {
 
     /** Keeps [definition] for [target] unless one came first. */

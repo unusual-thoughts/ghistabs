@@ -12,9 +12,9 @@ import ghidra.program.model.symbol.Symbol
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.LoadedProgram
-import ghistabs.integration.FeatureFixtureTest
 import ghidrakt.loadProgram
 import ghidrakt.runTransaction
+import ghistabs.integration.FeatureFixtureTest
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.*

@@ -10,18 +10,18 @@ import ghidra.program.model.address.GenericAddressSpace
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.*
+import ghidrakt.isAnalyzerEnabled
+import ghidrakt.runTransaction
 import ghistabs.entrypoints.analyzeAfterImport
 import ghistabs.harvest.*
 import ghistabs.importer.*
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
-import ghidrakt.isAnalyzerEnabled
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.IdInterface
 import ghistabs.parse.StabReader
 import ghistabs.parse.TypeDecl
-import ghidrakt.runTransaction
 import java.math.BigInteger
 
 /**

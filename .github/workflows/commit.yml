@@ -42,7 +42,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: detekt-report
-          path: build/reports/detekt/detekt.html
+          path: '**/build/reports/detekt/detekt.html'
 
       - name: Run unit tests
         run: ./gradlew test
@@ -83,8 +83,11 @@ jobs:
           name: shifted-baselines-${{ steps.commit_id.outputs.sha }}.zip
           path: build/test-output/shifted-baselines/
 
+      # ghicpp's on its own first: it must build without the stabs project.
       - name: Build zips
-        run: ./gradlew buildExtension packageCli
+        run: |
+          ./gradlew :ghicpp:buildExtension
+          ./gradlew buildExtension packageCli
 
       - uses: ./.github/actions/upload-packages
 

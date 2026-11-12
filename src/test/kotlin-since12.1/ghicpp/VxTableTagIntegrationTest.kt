@@ -2,10 +2,10 @@ package ghicpp
 
 import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
+import ghidrakt.loadProgram
 import ghistabs.index.vptrOffsetBytesOf
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.integration.Fixtures
-import ghidrakt.loadProgram
 import ghistabs.parse.TypeDecl
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze

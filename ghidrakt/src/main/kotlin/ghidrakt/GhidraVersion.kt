@@ -19,7 +19,7 @@ private fun hasClass(name: String) =
  * grammar gained in 11.3. Probed via a class from the same release, there being none of its own:
  * the echo is a grammar change, not an API one.
  */
-internal val ECHOES_DROPPED_LINES by lazy { hasClass("ghidra.program.database.sourcemap.SourceFileIdType") }
+val ECHOES_DROPPED_LINES by lazy { hasClass("ghidra.program.database.sourcemap.SourceFileIdType") }
 
 /** Whether a.out binaries can be loaded at all; Ghidra gained `UnixAoutLoader` in 11.4. */
 val LOADS_AOUT by lazy { hasClass("ghidra.app.util.opinion.UnixAoutLoader") }
