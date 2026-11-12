@@ -59,8 +59,8 @@ interface DiagnosticSink {
 
     /**
      * Record a materialization degradation: an ordinary [log] carrying a [degrades], which is what
-     * marks it. The [StabsDiagnostics] accumulator files every degrades-bearing event as a structured
-     * [DegradationRecord] for the per-fixture dumps.
+     * marks it. The stabs import's `StabsDiagnostics` accumulator files every degrades-bearing event as a
+     * structured `DegradationRecord` for the per-fixture dumps.
      *
      * A degradation is *an artifact that shipped in worse shape than its input allows* — a struct with
      * a field padded to `Undefined4`, a signature missing its `this`, a skeleton row that lost its
@@ -94,7 +94,7 @@ object DummySink : DiagnosticSink {
     ) = Unit
 }
 
-/** Fan-out sink — tees the [StabsDiagnostics] accumulator alongside a terminal (Bookmark/Capturing). */
+/** Fan-out sink — tees several sinks, such as an accumulator alongside a terminal (Bookmark/Capturing). */
 class TeeSink(private vararg val sinks: DiagnosticSink?) : DiagnosticSink {
     override fun log(
         category: String,
