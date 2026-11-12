@@ -3,6 +3,8 @@ package ghicpp.recover
 import ghicpp.*
 import ghicpp.abi.*
 import ghicpp.abi.msvc.Msvc
+import ghicpp.dissect.ThisFunctionDissector
+import ghicpp.dissect.ThisUses
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -33,7 +35,7 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
     }
 
     /** Off the calls of each structor on `this`, and the vptrs it stores together. */
-    fun addStructors(uses: StructorInspector.ThisUses) {
+    fun addStructors(uses: ThisUses) {
         for ((f, stores) in uses.stores) {
             val own = stores.classes
             val callees = uses.subobjectCalls[f].orEmpty()[0L].orEmpty()
@@ -92,7 +94,7 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
      * would derive from each other. A call on `this` + k is no evidence: it builds a member as well as a base, and
      * only a store of D's own table at k, which [PlainVtables] doesn't place, would tell them apart.
      */
-    fun inferBases(classes: Collection<PlainClass>, uses: StructorInspector.ThisUses) {
+    fun inferBases(classes: Collection<PlainClass>, uses: ThisUses) {
         addStructors(uses)
         addSharedSlots()
         val direct = byClass.mapValues { (_, cs) -> cs.mostDerived(byClass) }
@@ -163,7 +165,7 @@ class PlainVtableParser(
                 PlainClass(labels.first().parentNamespace, labels.map { PlainVtables.recordAt(program, it.address) })
             }
         val newNames = if (inlinedConstructors) abi.operatorNewNames else emptySet()
-        val uses = StructorInspector(program, classes, sink, operatorNewNames = newNames).readStorers(monitor)
+        val uses = ThisFunctionDissector(program, classes, sink, operatorNewNames = newNames).readStorers(monitor)
         val slots = classes.associateWith { c ->
             c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
                 // An unnamed pure virtual stub never returns: it aborts.

@@ -1,7 +1,7 @@
 package ghicpp.abi.msvc
 
-import ghicpp.*
 import ghicpp.ClassDecl
+import ghicpp.dissect.*
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program

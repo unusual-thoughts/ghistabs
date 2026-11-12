@@ -1,18 +1,12 @@
-package ghicpp
+package ghicpp.dissect
 
+import ghicpp.ClassDecl
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DoubleDataType
-import ghidra.program.model.data.Float10DataType
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.VoidDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.lang.PrototypeModel
+import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.Parameter
-import ghidra.program.model.listing.ParameterImpl
-import ghidra.program.model.listing.Program
-import ghidra.program.model.listing.ReturnParameterImpl
 import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
@@ -44,6 +38,17 @@ fun Function.argumentAt(i: Int): Address? = (callingConvention ?: program.compil
  * `__cdecl` too with MinGW gcc before 4.7, which passes `this` on the stack.
  */
 fun Function.takesThisAt(thisStorage: Address?) = !isExternal && thisStorage != null && argumentAt(0) == thisStorage
+
+/**
+ * Which of its arguments is `this`: the second where a `__cdecl` function pops one word, which is gcc's
+ * hidden pointer for a class returned in memory, and the first otherwise.
+ */
+fun Function.thisIndex() = if (callingConventionName == CDECL && stackPurgeSize == program.defaultPointerSize) 1 else 0
+
+/** The argument a call passes [callee] as its `this`. */
+fun PcodeOp.thisArgument(callee: Function): Varnode? = callee.thisIndex().let { i ->
+    if (numInputs > i + 1) getInput(i + 1) else null
+}
 
 /**
  * Turns a method's x86 `__fastcall` with nothing in EDX into the `__thiscall` it really is, the ECX
@@ -189,6 +194,7 @@ fun Function.fixMethodConvention(takesThis: Boolean = false): Boolean =
 private const val FASTCALL = CompilerSpec.CALLING_CONVENTION_fastcall
 private const val STDCALL = CompilerSpec.CALLING_CONVENTION_stdcall
 private const val THISCALL = CompilerSpec.CALLING_CONVENTION_thiscall
+private const val CDECL = CompilerSpec.CALLING_CONVENTION_cdecl
 private const val MSVC = "windows"
 
 /**

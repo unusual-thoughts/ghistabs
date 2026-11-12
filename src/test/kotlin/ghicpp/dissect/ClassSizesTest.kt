@@ -1,10 +1,6 @@
-package ghicpp.recover
+package ghicpp.dissect
 
-import ghicpp.Access
-import ghicpp.ClassBase
-import ghicpp.TestClass
-import ghicpp.at
-import ghicpp.virtualAt
+import ghicpp.*
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 

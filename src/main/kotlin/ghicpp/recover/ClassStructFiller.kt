@@ -5,10 +5,11 @@ import ghicpp.abi.CxxAbi
 import ghicpp.abi.SlotDefinitions
 import ghicpp.abi.VftableBuilder
 import ghicpp.abi.VtableRecord
-import ghidra.program.model.address.Address
+import ghicpp.dissect.Stores
+import ghicpp.dissect.ThisFunctionDissector
+import ghicpp.dissect.mergedStores
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
-import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -51,9 +52,9 @@ class ClassStructFiller(
 
     /**
      * Fills [classes]' empty structs, a base before the classes deriving from it, each with the fields its
-     * constructors [stores] ([FoundStructors.constructorStores]); returns how many it filled.
+     * constructors [stores] ([ghicpp.dissect.FoundStructors.constructorStores]); returns how many it filled.
      */
-    fun fillAll(classes: Collection<ClassDecl>, stores: Map<ClassDecl, Map<Int, DataType>>): Int =
+    fun fillAll(classes: Collection<ClassDecl>, stores: Map<ClassDecl, Stores>): Int =
         classes.sortedBy { it.ancestors.size }.count { it.fillStruct(stores[it].orEmpty()) }
 
     /**
@@ -61,7 +62,7 @@ class ClassStructFiller(
      * already only has its `<Class>_data` fields refilled, so that running the pass again once the reverser has
      * typed more of the constructors types more of the fields.
      */
-    private fun ClassDecl.fillStruct(store: Map<Int, DataType>): Boolean {
+    private fun ClassDecl.fillStruct(store: Stores): Boolean {
         val ns = ns?.toClass() ?: return false
         val struct = program.classStruct(ns) ?: return false
         // Any struct with fields is another's, the stabs import's, the script's, a PDB's, or an earlier pass's.
@@ -122,14 +123,14 @@ class ClassStructFiller(
      * per gap between what is, as `RecoverClassesFromRTTIScript` gathers them: the fields a gap holds are those
      * the same existing field, or none, comes after.
      */
-    private fun Structure.placeData(store: Map<Int, DataType>, ns: GhidraClass) {
+    private fun Structure.placeData(store: Stores, ns: GhidraClass) {
         val own = store.filter { (at, dt) -> at >= 0 && componentsOverlapping(at, dt.length).isEmpty() }
         own.toSortedMap().entries.groupBy { (at, _) -> getDefinedComponentAtOrAfterOffset(at)?.offset }
             .values.forEachIndexed { i, run -> placeDataRun(run.associate { it.toPair() }, ns, i) }
     }
 
     /** A `<Class>_data` struct, the [index]th of [ns]'s, of the [fields] in one gap, by offset into the class. */
-    private fun Structure.placeDataRun(fields: Map<Int, DataType>, ns: GhidraClass, index: Int) {
+    private fun Structure.placeDataRun(fields: Stores, ns: GhidraClass, index: Int) {
         val start = fields.keys.first()
         val end = fields.maxOf { (at, dt) -> at + dt.length }
         if (end > length) return
@@ -206,7 +207,7 @@ class ClassStructFiller(
  * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
  * specific type, and the field keeps its name
  */
-private fun Structure.fillData(store: Map<Int, DataType>) {
+private fun Structure.fillData(store: Stores) {
     for ((offset, data) in ownData()) {
         val inside = store.filter { (at, dt) -> offset.withLength(data.length).includes(at.withLength(dt.length)) }
         val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
@@ -226,5 +227,7 @@ private fun Structure.fillData(store: Map<Int, DataType>) {
  */
 fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor) {
     val struct = classStruct(ns) ?: return
-    struct.fillData(mergedStores(StructorInspector(this, emptyList(), DummySink).thisFields(methods, monitor).values))
+    struct.fillData(
+        ThisFunctionDissector(this, emptyList(), DummySink).thisFields(methods, monitor).values.mergedStores(),
+    )
 }

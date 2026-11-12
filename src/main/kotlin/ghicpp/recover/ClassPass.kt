@@ -6,6 +6,7 @@ import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.recordPlaced
 import ghicpp.abi.RttiParser
 import ghicpp.abi.StructorRole
+import ghicpp.dissect.*
 import ghidra.framework.options.Options
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.StructureDataType
@@ -22,8 +23,8 @@ import ghistabs.toClass
 /**
  * What a class pass does once an ABI's records have given it the classes ([RttiParser], [ClassPassInput]): each virtual
  * function moved into the class that introduced it ([introducingClass]) and marked virtual, each constructor
- * and destructor ([StructorInspector]) moved there and named, each class sized off its allocations and layout
- * ([sizeBounds]), what a constructor inlined after `operator new` builds typed as its class ([AllocationTyper]), and
+ * and destructor ([ThisFunctionDissector]) moved there and named, each class sized off its allocations and layout
+ * ([sizeBounds]), what a constructor inlined after `operator new` builds typed as its class ([typeAllocations]), and
  * the classes written to [ClassHierarchyRecords]. [vfptrModel] says whether a class
  * struct splits a base around the vptr it takes over ([ClassStructFiller]).
  */
@@ -36,7 +37,7 @@ class ClassPass(
     DiagnosticSink by sink {
     val vfptrModel: VfptrModel by VfptrModel.OPTION
 
-    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorInspector]). */
+    /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([ThisFunctionDissector]). */
     var fillArrays: Boolean by FILL_ARRAYS
 
     /** Whether a constructor inlined after `operator new` is read for its class's size, bases and fields. */
@@ -67,7 +68,7 @@ class ClassPass(
         val read = parser.parse(monitor)
         stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
-        val inspector = StructorInspector(
+        val inspector = ThisFunctionDissector(
             program,
             read.classes,
             this,

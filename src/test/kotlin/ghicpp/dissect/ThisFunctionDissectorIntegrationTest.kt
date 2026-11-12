@@ -1,13 +1,9 @@
-package ghicpp.recover
+package ghicpp.dissect
 
 import ghicpp.ClassDecl
 import ghicpp.TestClass
 import ghicpp.abi.StructorConvention
-import ghicpp.abi.StructorRole.CONSTRUCTOR
-import ghicpp.abi.StructorRole.DELETING_DESTRUCTOR
-import ghicpp.abi.StructorRole.DESTRUCTOR
-import ghicpp.abi.itanium.Itanium
-import ghicpp.storedClass
+import ghicpp.abi.StructorRole.*
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataType
 import ghidra.program.model.listing.Function
@@ -20,7 +16,7 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 @Tag("integration")
-class StructorInspectorIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+class ThisFunctionDissectorIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var builder: ProgramBuilder
     private val functions = mutableMapOf<String, Function>()
 
@@ -51,7 +47,7 @@ class StructorInspectorIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         storers: Map<String, VptrStores>,
         holders: Map<String, Set<ClassDecl>>,
         calls: Map<String, Set<String>> = emptyMap(),
-    ) = StructorInspector.ThisUses(
+    ) = ThisUses(
         storers.mapKeys { fn(it.key) },
         calls.entries.associate { (f, called) -> fn(f) to mapOf(0L to called.mapTo(mutableSetOf(), ::fn)) },
     ).roles(holders.mapKeys { fn(it.key) }, object : StructorConvention {}).mapKeys { it.key.name }
