@@ -10,6 +10,7 @@ import ghicpp.analyzers.VirtualBaseAnalyzer
 import ghicpp.analyzers.VtableSweepAnalyzer
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.MemberKind
+import ghicpp.ooa.OoFactExporter
 import ghicpp.score.Truth.Companion.withBasesOf
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.options.OptionType
@@ -110,10 +111,11 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         val truth = truthFor(case)
         val runtime = case.twin?.takeIf { case.labelled }?.let { truthOf(case, it).runtime }.orEmpty()
         assumeTrue(!case.labelled || runtime.isNotEmpty(), "the twin names no runtime function to label")
-        val subject = snapshotOf(subjectFile, case.compiler) { prepare(case.recovery, runtime) }
+        val out = File(OUTPUT_DIR, case.id).apply { mkdirs() }
+        val facts = File(out, "ooanalyzer.facts")
+        val subject = snapshotOf(subjectFile, case.compiler, facts) { prepare(case.recovery, runtime) }
         val card = Scorer(truth, subject).score()
 
-        val out = File(OUTPUT_DIR, case.id).apply { mkdirs() }
         val against = listOfNotNull(case.twin, case.source).joinToString(" + ")
         val labels = runtime.entries.joinToString("\n", "\n## Labelled before the analysis\n\n", "\n") {
             "- `${it.key}` at %x".format(it.value)
@@ -125,6 +127,38 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         File(out, "subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), subject))
         File(out, "truth.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), truth.snapshot))
         checkBaseline(case, card.counters())
+        System.getProperty("ooprolog").orEmpty().takeIf { it.isNotEmpty() }?.let { solve(case, truth, facts, File(it)) }
+    }
+
+    /**
+     * Runs OOAnalyzer's Prolog rules, from Pharos' `share/prolog` at [prolog], over the facts the subject's
+     * program gave, and scores the classes they recover as ours are, into `ooanalyzer-scorecard.md` beside
+     * ours. Not held to a baseline: what moves it is OOAnalyzer's rules and the facts' fidelity.
+     */
+    private fun solve(case: ScorecardCase, truth: Truth, facts: File, prolog: File) {
+        val out = facts.parentFile
+        val results = File(out, "ooanalyzer.results")
+        val log = File(out, "ooprolog.log")
+        val process = ProcessBuilder(
+            "swipl",
+            File(prolog, "oorules/ooprolog.pl").path,
+            "--oorulespath",
+            prolog.path,
+            "--facts",
+            facts.path,
+            "--results",
+            results.path,
+        ).redirectErrorStream(true).redirectOutput(log).start()
+        val done = process.waitFor(OOPROLOG_TIMEOUT_MINUTES, java.util.concurrent.TimeUnit.MINUTES)
+        if (!done) process.destroyForcibly()
+        assumeTrue(done && results.isFile, "ooprolog gave no results for ${case.id}: see $log")
+        val purecalls = PURECALL.findAll(facts.readText()).map { it.groupValues[1].toLong(16) }.toSet()
+        val solved = OoResults(results.readText(), purecalls).snapshot(case.subject)
+        val card = Scorer(truth, solved).score()
+        File(out, "ooanalyzer-scorecard.md").writeText(card.markdown("${case.id}: OOAnalyzer's rules over our facts"))
+        File(out, "ooanalyzer-subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), solved))
+        File(out, "ooanalyzer-counters.json")
+            .writeText(PRETTY.encodeToString(COUNTERS, card.counters().toSortedMap()) + "\n")
     }
 
     private fun truthFor(case: ScorecardCase): Truth {
@@ -177,7 +211,8 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
-    private fun snapshotOf(file: File, compiler: String, setup: Program.() -> Unit): Snapshot =
+    /** [file] analyzed after [setup], as a [Snapshot]; its OOAnalyzer facts written to [facts] too, if given. */
+    private fun snapshotOf(file: File, compiler: String, facts: File? = null, setup: Program.() -> Unit): Snapshot =
         loadProgram(file, compiler).use { loaded ->
             val program = loaded.program
             program.runTransaction("options") {
@@ -186,6 +221,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
             }
             program.setup()
             analyzeAll(program)
+            facts?.bufferedWriter()?.use { OoFactExporter(program).write(it) }
             program.snapshot(file.name)
         }
 
@@ -266,6 +302,8 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         private val PRETTY = Json { prettyPrint = true }
         private val COMPACT = Json { ignoreUnknownKeys = true }
         private val COUNTERS = MapSerializer(String.serializer(), Long.serializer())
+        private val PURECALL = Regex("""^purecall\(0x([0-9a-f]+)\)\.""", RegexOption.MULTILINE)
+        private const val OOPROLOG_TIMEOUT_MINUTES = 30L
 
         /** `-Pfixture=<subject>[,…]` narrows the cases to those subjects. */
         private fun accepts(subject: String) = System.getProperty("fixtureFilter").orEmpty()
