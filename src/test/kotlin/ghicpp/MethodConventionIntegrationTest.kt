@@ -2,7 +2,6 @@ package ghicpp
 
 import ghicpp.MemberAttrs.Companion.recordPlaced
 import ghicpp.analyzers.MethodConventionAnalyzer
-import ghicpp.dissect.fixMethodConvention
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataType

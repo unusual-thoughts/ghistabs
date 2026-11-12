@@ -5,8 +5,14 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.StructorRole
+import ghicpp.argumentAt
 import ghicpp.classStruct
 import ghicpp.dissect.*
+import ghicpp.fixMethodConvention
+import ghicpp.takesThisAt
+import ghicpp.thisArgument
+import ghicpp.thisIndex
+import ghicpp.thisStorage
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.BookmarkType

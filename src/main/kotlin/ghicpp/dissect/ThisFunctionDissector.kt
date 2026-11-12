@@ -5,6 +5,7 @@ import ghicpp.abi.PlainVtables
 import ghicpp.abi.StructorConvention
 import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
+import ghicpp.thisStorage
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.decompiler.util.FillOutStructureHelper
 import ghidra.program.model.address.Address
@@ -92,10 +93,10 @@ class ThisFunctionDissector(
     ): Map<ClassDecl, Function> = buildMap {
         for ((ctor, built) in ctors) {
             val calls = subobjectCalls[ctor].orEmpty()
-            for ((cls, isVirtual, _, offset) in built.first.bases) {
-                if (isVirtual || cls.vftables.isNotEmpty()) continue
-                val callee = offset?.let(calls::get)?.singleOrNull() ?: continue
-                putIfAbsent(cls, callee)
+            for (base in built.first.bases) {
+                if (base.isVirtual || base.cls.vftables.isNotEmpty()) continue
+                val callee = base.offset?.let(calls::get)?.singleOrNull() ?: continue
+                putIfAbsent(base.cls, callee)
             }
         }
     }

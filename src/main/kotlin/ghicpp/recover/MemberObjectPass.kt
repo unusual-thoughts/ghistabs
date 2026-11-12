@@ -9,7 +9,6 @@ import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
 import ghicpp.abi.StructorRole.DESTRUCTOR
 import ghicpp.dissect.*
-import ghicpp.recover.MemberObjectPass.Companion.MAX_DEPTH
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -130,6 +129,8 @@ class MemberObjectPass(
      * down to [MAX_DEPTH].
      */
     private fun collect(found: FoundStructors, monitor: TaskMonitor): Map<Subobject, NonPolymorphicClass> {
+        val dissector = ThisFunctionDissector(program, emptyList(), this, fillArrays)
+        val held = linkedMapOf<Subobject, NonPolymorphicClass>()
         known.clear()
         // The constructors inlined after `operator new` are their classes' constructors too, with no function.
         var structors: List<Structor> = found.roles.map { (f, by) ->
@@ -137,29 +138,26 @@ class MemberObjectPass(
         } + found.inlined.flatMap { built ->
             built.parts.map { Structor(null, ContainingClass.Existing(it.cls), CONSTRUCTOR, it.calls) }
         }
-        return ThisFunctionDissector(program, emptyList(), this, fillArrays).run {
-            buildMap {
-                for (depth in 1..MAX_DEPTH) {
-                    if (monitor.isCancelled) break
-                    val fresh = linkedSetOf<NonPolymorphicClass>()
-                    for ((f, container, role, calls) in structors) {
-                        for ((offset, called) in calls.orEmpty()) {
-                            val sub = Subobject(container, offset)
-                            val structor = memberStructor(f, sub, role, called, found) ?: continue
-                            val member = getOrPut(sub) { NonPolymorphicClass().also(fresh::add) }
-                            (if (role == CONSTRUCTOR) member.ctors else member.dtors) += structor
-                        }
-                    }
-                    if (fresh.isEmpty()) break
-                    val uses = readCalls(fresh.flatMap { it.functions }, monitor)
-                    for (m in fresh) m.stores = m.ctors.map { uses.thisStores[it].orEmpty() }.mergedStores()
-                    structors = fresh.flatMap { m ->
-                        m.ctors.map { Structor(it, m, CONSTRUCTOR, uses.subobjectCalls[it]) } +
-                            m.dtors.map { Structor(it, m, DESTRUCTOR, uses.subobjectCalls[it]) }
-                    }
+        for (depth in 1..MAX_DEPTH) {
+            if (monitor.isCancelled) break
+            val fresh = linkedSetOf<NonPolymorphicClass>()
+            for ((f, container, role, calls) in structors) {
+                for ((offset, called) in calls.orEmpty()) {
+                    val sub = Subobject(container, offset)
+                    val structor = memberStructor(f, sub, role, called, found) ?: continue
+                    val member = held.getOrPut(sub) { NonPolymorphicClass().also(fresh::add) }
+                    (if (role == CONSTRUCTOR) member.ctors else member.dtors) += structor
                 }
             }
+            if (fresh.isEmpty()) break
+            val uses = dissector.readCalls(fresh.flatMap { it.functions }, monitor)
+            for (m in fresh) m.stores = m.ctors.map { uses.thisStores[it].orEmpty() }.mergedStores()
+            structors = fresh.flatMap { m ->
+                m.ctors.map { Structor(it, m, CONSTRUCTOR, uses.subobjectCalls[it]) } +
+                    m.dtors.map { Structor(it, m, DESTRUCTOR, uses.subobjectCalls[it]) }
+            }
         }
+        return held
     }
 
     /**

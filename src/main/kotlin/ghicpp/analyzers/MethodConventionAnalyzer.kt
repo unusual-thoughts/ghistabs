@@ -1,7 +1,7 @@
 package ghicpp.analyzers
 
 import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
-import ghicpp.dissect.fixMethodConvention
+import ghicpp.fixMethodConvention
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
