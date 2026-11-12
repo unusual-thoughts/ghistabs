@@ -3,9 +3,9 @@ package ghicpp
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypePath
 import ghidra.program.model.symbol.Namespace
-import ghistabs.at
-import ghistabs.path
-import ghistabs.toCategoryPath
+import ghidrakt.at
+import ghidrakt.path
+import ghidrakt.toCategoryPath
 
 /**
  * The names Ghidra's class recovery looks for, the same for every ABI: `<Class>_vftable` under

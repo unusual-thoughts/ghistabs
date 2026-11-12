@@ -8,11 +8,11 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.HelpLocation
 import ghidra.util.task.TaskMonitor
-import ghistabs.BoolOption
-import ghistabs.DirectoryOption
-import ghistabs.OptionContainer
-import ghistabs.OptionDescriptor
-import ghistabs.diagnose.MessageLogSink
+import ghidrakt.BoolOption
+import ghidrakt.DirectoryOption
+import ghidrakt.OptionContainer
+import ghidrakt.OptionDescriptor
+import ghidrakt.diagnose.MessageLogSink
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.index.SourceHints

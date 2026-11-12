@@ -11,10 +11,10 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.LoadedProgram
+import ghidrakt.LoadedProgram
 import ghistabs.integration.FeatureFixtureTest
-import ghistabs.loadProgram
-import ghistabs.runTransaction
+import ghidrakt.loadProgram
+import ghidrakt.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.*

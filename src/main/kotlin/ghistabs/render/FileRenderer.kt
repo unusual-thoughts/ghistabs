@@ -7,9 +7,9 @@ import ghicpp.member
 import ghicpp.qualifiedName
 import ghicpp.templateLeaf
 import ghidra.program.model.address.Address
-import ghistabs.Demangler
-import ghistabs.chunkOf
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.Demangler
+import ghidrakt.chunkOf
+import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.StaticSymbol

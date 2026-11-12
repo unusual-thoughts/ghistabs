@@ -5,7 +5,7 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.Level
+import ghidrakt.diagnose.Level
 import ghistabs.importer.ImportOptions.Companion.LOG_LEVEL
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.SOURCE_ROOTS
@@ -13,12 +13,12 @@ import ghistabs.parse.StabReader
 import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode
 import ghistabs.render.Scorecard
-import ghistabs.runTransaction
-import ghistabs.set
+import ghidrakt.runTransaction
+import ghidrakt.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
 import ghistabs.test.hintsOf
-import ghistabs.withProgram
+import ghidrakt.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest

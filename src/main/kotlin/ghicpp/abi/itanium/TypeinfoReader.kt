@@ -15,7 +15,7 @@ import ghicpp.abi.itanium.Typeinfo.Kind
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
-import ghistabs.*
+import ghidrakt.*
 
 /**
  * Reads a class's bases off its typeinfo object (ABI §2.9.5), typed or not. Its vptr says which of the

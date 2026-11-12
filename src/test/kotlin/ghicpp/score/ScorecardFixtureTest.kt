@@ -22,8 +22,8 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.loadProgram
-import ghistabs.runTransaction
+import ghidrakt.loadProgram
+import ghidrakt.runTransaction
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer

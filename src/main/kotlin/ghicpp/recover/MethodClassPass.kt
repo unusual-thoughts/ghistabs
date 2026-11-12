@@ -22,7 +22,7 @@ import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DiagnosticSink
 
 /**
  * A call passing an object as [callee]'s `this`: [caller]'s own, or one of class [built], which [caller] built

@@ -17,8 +17,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
-import ghistabs.diagnose.report
+import ghidrakt.*
+import ghidrakt.diagnose.report
 
 /**
  * Recovers code Ghidra left undisassembled *inside* a function's extent — hot/cold split holes and

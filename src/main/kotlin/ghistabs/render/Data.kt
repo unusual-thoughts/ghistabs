@@ -5,7 +5,7 @@ import ghidra.program.model.data.LongDoubleDataType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
-import ghistabs.components
+import ghidrakt.components
 import ghistabs.importer.resolvePointee
 
 fun Address.hexLiteral() = "0x" + offset.toString(16).padStart(8, '0')

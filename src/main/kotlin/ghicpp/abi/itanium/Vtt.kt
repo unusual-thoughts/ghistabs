@@ -5,9 +5,9 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
-import ghistabs.Demangler
-import ghistabs.pointerAt
-import ghistabs.valueAt
+import ghidrakt.Demangler
+import ghidrakt.pointerAt
+import ghidrakt.valueAt
 
 /**
  * A VTT word at [address]: a [comment] saying which vtable it points into, and for a sub-VTT's first, that

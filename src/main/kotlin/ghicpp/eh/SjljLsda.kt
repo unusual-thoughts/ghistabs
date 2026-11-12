@@ -8,7 +8,7 @@ import ghidra.program.model.data.SignedLeb128DataType
 import ghidra.program.model.data.UnsignedLeb128DataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
-import ghistabs.*
+import ghidrakt.*
 
 /**
  * One gcc SJLJ LSDA (`.gcc_except_table` entry), parsed as `__gxx_personality_sj0` reads it:

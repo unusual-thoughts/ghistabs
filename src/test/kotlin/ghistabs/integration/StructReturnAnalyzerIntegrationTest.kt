@@ -14,7 +14,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.entrypoints.Correction
 import ghistabs.entrypoints.STRUCT_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StructReturnAnalyzer
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeEmpty

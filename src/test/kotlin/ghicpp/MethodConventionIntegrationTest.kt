@@ -13,7 +13,7 @@ import ghidra.program.model.listing.ReturnParameterImpl
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeFalse
 import ghistabs.test.mustBeTrue

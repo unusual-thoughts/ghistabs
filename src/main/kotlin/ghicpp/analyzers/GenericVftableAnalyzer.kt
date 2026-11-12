@@ -12,13 +12,13 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.BoolOption
-import ghistabs.analyzerOptions
-import ghistabs.diagnose.AnalysisProbe
-import ghistabs.diagnose.MessageLogSink
-import ghistabs.diagnose.report
-import ghistabs.get
-import ghistabs.register
+import ghidrakt.BoolOption
+import ghidrakt.analyzerOptions
+import ghidrakt.diagnose.AnalysisProbe
+import ghidrakt.diagnose.MessageLogSink
+import ghidrakt.diagnose.report
+import ghidrakt.get
+import ghidrakt.register
 
 /**
  * Seed vftables where no RTTI says where they are, absent or in a format no analyzer reads, off the tables of

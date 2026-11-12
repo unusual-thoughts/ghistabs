@@ -4,10 +4,10 @@ import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.AnalysisProbe
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.diagnose.TeeSink
+import ghidrakt.diagnose.AnalysisProbe
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.StabsDiagnostics
+import ghidrakt.diagnose.TeeSink
 import ghistabs.harvest.AddressResolver
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester

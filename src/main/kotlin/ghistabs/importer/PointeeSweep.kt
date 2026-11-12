@@ -4,9 +4,9 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
-import ghistabs.cStringAt
-import ghistabs.components
-import ghistabs.forceCreateData
+import ghidrakt.cStringAt
+import ghidrakt.components
+import ghidrakt.forceCreateData
 
 /** Longest string a pointee is chased into, terminator included. */
 private const val MAX_POINTEE_STRING = 4096

@@ -15,11 +15,11 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.analyzerOptions
-import ghistabs.diagnose.AnalysisProbe
-import ghistabs.diagnose.MessageLogSink
-import ghistabs.diagnose.report
-import ghistabs.register
+import ghidrakt.analyzerOptions
+import ghidrakt.diagnose.AnalysisProbe
+import ghidrakt.diagnose.MessageLogSink
+import ghidrakt.diagnose.report
+import ghidrakt.register
 
 /**
  * Class records and virtual members off the Itanium RTTI ([ItaniumRttiParser]), what [MsvcClassAnalyzer] does
