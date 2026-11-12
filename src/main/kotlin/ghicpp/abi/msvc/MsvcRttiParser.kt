@@ -4,6 +4,9 @@ import ghicpp.*
 import ghicpp.abi.RttiParser
 import ghicpp.abi.VtableRecord
 import ghicpp.abi.slotFunction
+import ghicpp.dissect.DissectingParser
+import ghicpp.dissect.DissectionCache
+import ghicpp.dissect.ThisFunctionDissector
 import ghidra.app.cmd.data.rtti.Rtti1Model
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.cmd.data.rtti.Rtti4Model
@@ -78,7 +81,10 @@ fun directBases(array: List<BaseEntry>): List<BaseEntry> {
  */
 class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
     RttiParser,
+    DissectingParser,
     DiagnosticSink by sink {
+    override var cache = DissectionCache(operatorNewNames = Msvc.operatorNewNames)
+
     private val options = DataValidationOptions()
     private val symbols = program.symbolTable
 
@@ -148,9 +154,10 @@ class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
     private fun readVbtables(hierarchies: Collection<RttiClass>, monitor: TaskMonitor) {
         val vbptrs: Map<ClassDecl, Set<Long>> = hierarchies.associateWith { it.vbptrs }.filterValues { it.isNotEmpty() }
         if (vbptrs.isEmpty()) return
-        for ((cls, vbtables) in VbtableFinder(program, classes.values, this).read(vbptrs, monitor)) {
-            (cls as RttiClass).vbtables += vbtables
-        }
+        // Decompiled for the class pass too, which reads the storers the same way.
+        val finder = VbtableFinder(program, classes.values, vbptrs)
+        ThisFunctionDissector(program, classes.values, this, cache).readStorers(monitor) { _, high -> finder.add(high) }
+        for ((cls, vbtables) in finder.found) (cls as RttiClass).vbtables += vbtables
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }

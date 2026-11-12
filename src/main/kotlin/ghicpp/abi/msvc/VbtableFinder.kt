@@ -1,75 +1,62 @@
 package ghicpp.abi.msvc
 
-import ghicpp.*
 import ghicpp.ClassDecl
-import ghidra.app.decompiler.DecompInterface
+import ghicpp.dissect.*
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
-import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.useWith
 
 /**
  * Finds MSVC vbtables, which no RTTI points at: a function building a class, its constructor or one it
  * was inlined into, stores the class's vftables and vbtables into the object, so the address stored where
- * a vbptr sits, in an object [classes]' vftables say is of that class, is that class's vbtable there.
+ * a vbptr sits, in an object [classes]' vftables say is of that class, is that class's vbtable there. It reads
+ * the functions a [ThisFunctionDissector] decompiles for their vptr stores ([add]).
  */
-class VbtableFinder(private val program: Program, classes: Collection<ClassDecl>, sink: DiagnosticSink) :
-    DiagnosticSink by sink {
+class VbtableFinder(
+    private val program: Program,
+    classes: Collection<ClassDecl>,
+    /** Where each class with virtual bases has its vbptrs. */
+    private val vbptrs: Map<ClassDecl, Set<Long>>,
+) {
     private val tables = classes.vptrTables(program)
 
     /** Each of [vbptrs]' classes' vbtables, by where its vbptr sits in the class, where a function stores one. */
-    fun read(vbptrs: Map<ClassDecl, Set<Long>>, monitor: TaskMonitor) = buildMap {
-        DecompInterface().useWith(program) { decomp ->
-            val builders = tables.filterValues { (cls, _) -> cls in vbptrs }.keys
-                .flatMap { table -> program.referenceManager.getReferencesTo(table).map { it.fromAddress } }
-                .filter { program.listing.getInstructionAt(it) != null }
-                .mapNotNullTo(mutableSetOf(), program.functionManager::getFunctionContaining)
-            monitor.initialize(builders.size.toLong(), "Decompiling functions storing vbtables")
-            for (func in builders) {
-                if (monitor.isCancelled) break
-                monitor.incrementProgress()
-                val high = decomp.decompileFunction(func, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: run {
-                    debug("vbtable-undecompiled", func.name, func.entryPoint)
-                    continue
-                }
-                for ((cls, stored) in high.objectsBuilt()) {
-                    for (at in vbptrs[cls].orEmpty()) {
-                        val vbtable = stored[at]?.takeIf(::mayBeVbtable) ?: continue
-                        getOrPut(cls) { mutableMapOf() }.putIfAbsent(at, vbtable)
-                    }
-                }
+    val found: Map<ClassDecl, Map<Long, Address>> get() = vbtables
+
+    private val vbtables = mutableMapOf<ClassDecl, MutableMap<Long, Address>>()
+
+    /** Adds the vbtables [high] stores where [vbptrs] says its objects' classes have vbptrs. */
+    fun add(high: HighFunction) {
+        for ((cls, stored) in high.objectsBuilt()) {
+            for (at in vbptrs[cls].orEmpty()) {
+                val vbtable = stored[at]?.takeIf(::mayBeVbtable) ?: continue
+                vbtables.getOrPut(cls) { mutableMapOf() }.putIfAbsent(at, vbtable)
             }
         }
     }
 
     /**
      * Each object this function stores a vftable into where it belongs, by the class the vftables say it
-     * is ([storedClass]), with the address it stores at each offset into it.
+     * is ([storedClass]), with the address it stores at each offset into it ([constantStores]).
      */
-    private fun HighFunction.objectsBuilt(): Map<ClassDecl, Map<Long, Address>> = buildMap {
-        for (op in pcodeOps) {
-            if (op.opcode != PcodeOp.STORE) continue
-            val value = op.getInput(2).constant()?.let(::asAddress) ?: continue
-            val (root, offset) = op.getInput(1).pointerInto() ?: continue
-            getOrPut(root) { mutableMapOf() }[offset] = value
-        }
+    private fun HighFunction.objectsBuilt(): Map<ClassDecl, Map<Long, Address>> {
+        val objects = constantStores().toMutableMap()
         // A virtual base's vptr goes where the vbtable stored beside it puts the base: into that object.
-        for (root in keys.toList()) {
-            val (into, at) = root.throughVbtable(this) ?: continue
-            val moved = remove(root).orEmpty()
-            for ((offset, value) in moved) getOrPut(into) { mutableMapOf() }[at + offset] = value
+        for (root in objects.keys.toList()) {
+            val (into, at) = root.throughVbtable(objects) ?: continue
+            val moved = objects.remove(root).orEmpty()
+            objects[into] = objects[into].orEmpty() + moved.mapKeys { (offset, _) -> at + offset }
         }
-    }.values.mapNotNull { stored ->
-        val classes = stored.mapNotNullTo(mutableSetOf()) { (at, value) ->
-            tables[value]?.takeIf { (_, vptrAt) -> vptrAt == at }?.first
-        }
-        storedClass(classes)?.to(stored)
-    }.toMap()
+        return objects.values.mapNotNull { stored ->
+            val classes = stored.mapNotNullTo(mutableSetOf()) { (at, value) ->
+                tables[value]?.takeIf { (_, vptrAt) -> vptrAt == at }?.first
+            }
+            storedClass(classes)?.to(stored)
+        }.toMap()
+    }
 
     /**
      * Where [this] points as a constructor reaches a virtual base, into the object [stores] puts a vbtable
@@ -98,22 +85,6 @@ class VbtableFinder(private val program: Program, classes: Collection<ClassDecl>
         PcodeOp.LOAD -> def.getInput(1)
         else -> null
     }
-
-    /** The constant [this] is, the decompiler's `&DAT_…` (`PTRSUB 0, addr`) included. */
-    private fun Varnode.constant(): Long? = when {
-        isConstant -> offset
-
-        def?.opcode == PcodeOp.PTRSUB && def.getInput(0).let { it.isConstant && it.offset == 0L } ->
-            def.getInput(1).takeIf { it.isConstant }?.offset
-
-        def?.opcode == PcodeOp.COPY -> def.getInput(0).takeIf { it.isConstant }?.offset
-
-        else -> null
-    }
-
-    private fun asAddress(value: Long) =
-        runCatching { program.addressFactory.defaultAddressSpace.getAddress(value) }.getOrNull()
-            ?.takeIf(program.memory::contains)
 
     /** Whether [at] may be a vbtable: its first entry, from the vbptr back to its subobject, is not positive. */
     private fun mayBeVbtable(at: Address) = runCatching { program.memory.getInt(at) <= 0 }.getOrDefault(false)

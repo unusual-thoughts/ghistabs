@@ -1,24 +1,28 @@
 package ghicpp.recover
 
-import ghicpp.*
+import ghicpp.ClassHierarchyRecords
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.StructorRole
-import ghidra.app.decompiler.DecompInterface
+import ghicpp.argumentAt
+import ghicpp.classStruct
+import ghicpp.dissect.*
+import ghicpp.fixMethodConvention
+import ghicpp.takesThisAt
+import ghicpp.thisArgument
+import ghicpp.thisIndex
+import ghicpp.thisStorage
 import ghidra.program.model.data.Structure
-import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.PcodeOp
-import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.useWith
 
 /**
  * A call passing an object as [callee]'s `this`: [caller]'s own, or one of class [built], which [caller] built
@@ -117,15 +121,9 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
         val ctors = methods.filter { (f, cls) -> f in recordedCtors || (f.hasKnownClass() && f.name == cls.name) }
         monitor.message = "Finding constructors' callers"
         val evidence = methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }
-        monitor.initialize(evidence.size.toLong(), "Decompiling methods and constructors' callers")
         val calls = buildList {
-            DecompInterface().useWith(program) { decomp ->
-                for (f in evidence) {
-                    if (monitor.isCancelled) break
-                    monitor.incrementProgress()
-                    val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
-                    addAll(thisCalls(f, high, ctors, methods[f]).filter { it.callee in candidates })
-                }
+            program.decompileEach(evidence, monitor, "Decompiling methods and constructors' callers") { f, high ->
+                addAll(thisCalls(f, high, ctors, methods[f]).filter { it.callee in candidates })
             }
         }
         val guesses = MethodClassGuesser(bases, recorded).guess(calls)
@@ -139,18 +137,6 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
     /** An unnamed global function whose first argument comes in where `this` does ([takesThisAt]). */
     private fun Function.isCandidate() = parentNamespace.isGlobal && symbol.source == SourceType.DEFAULT &&
         !isThunk && takesThisAt(thisStorage)
-
-    /**
-     * Which of its arguments is `this`: the second where a `__cdecl` function pops one word, which is gcc's
-     * hidden pointer for a class returned in memory, and the first otherwise.
-     */
-    private fun Function.thisIndex() =
-        if (callingConventionName == CDECL && stackPurgeSize == program.defaultPointerSize) 1 else 0
-
-    /** The argument a call passes [callee] as its `this`. */
-    private fun PcodeOp.thisArgument(callee: Function): Varnode? = callee.thisIndex().let { i ->
-        if (numInputs > i + 1) getInput(i + 1) else null
-    }
 
     /**
      * The calls [f] makes on its own `this`, on objects it built with one of [ctors], and, where it's a method
@@ -230,7 +216,6 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
 
     companion object {
         const val BOOKMARK = "Method class guess"
-        private const val CDECL = CompilerSpec.CALLING_CONVENTION_cdecl
 
         /** How deep [classAt] looks into structs within structs. */
         private const val MAX_NESTING = 8

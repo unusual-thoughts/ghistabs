@@ -1,20 +1,17 @@
 package ghicpp.abi
 
 import ghicpp.*
-import ghicpp.abi.*
 import ghicpp.abi.gcc2.Gcc2
-import ghicpp.abi.itanium.*
+import ghicpp.abi.itanium.TypeinfoReader
+import ghicpp.abi.itanium.secondaryVtables
 import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
-import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Data
-import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
-import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink

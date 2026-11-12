@@ -1,6 +1,9 @@
 package ghicpp.recover
 
 import ghicpp.ClassDecl
+import ghicpp.dissect.DissectionCache
+import ghicpp.dissect.Dissections
+import ghicpp.dissect.VptrStores
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataType
 import ghidra.program.model.listing.Function
@@ -48,10 +51,14 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         calls: Map<String, Map<Long, Set<String>>> = emptyMap(),
         slots: Map<String, List<String?>> = emptyMap(),
     ): Map<String, List<Pair<String, Long?>>> {
-        val uses = StructorInspector.ThisUses(
-            stores.entries.associate { (f, cs) -> fn(f) to VptrStores(cs.mapTo(mutableSetOf(), ::cls)) },
-            calls.entries.associate { (f, byOffset) ->
-                fn(f) to byOffset.mapValues { (_, called) -> called.mapTo(mutableSetOf(), ::fn) }
+        val uses = Dissections(
+            (stores.keys + calls.keys).associate {
+                fn(it) to DissectionCache.Dissection(
+                    stores[it]?.let { cs -> VptrStores(cs.mapTo(mutableSetOf(), ::cls)) },
+                    calls[it]?.let { byOffset ->
+                        byOffset.mapValues { (_, called) -> called.mapTo(mutableSetOf(), ::fn) }
+                    }.orEmpty(),
+                )
             },
         )
         val tables: Map<ClassDecl, List<Function?>> =

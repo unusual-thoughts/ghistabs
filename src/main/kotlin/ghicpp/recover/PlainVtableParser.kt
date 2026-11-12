@@ -3,6 +3,10 @@ package ghicpp.recover
 import ghicpp.*
 import ghicpp.abi.*
 import ghicpp.abi.msvc.Msvc
+import ghicpp.dissect.DissectingParser
+import ghicpp.dissect.DissectionCache
+import ghicpp.dissect.Dissections
+import ghicpp.dissect.ThisFunctionDissector
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -33,7 +37,7 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
     }
 
     /** Off the calls of each structor on `this`, and the vptrs it stores together. */
-    fun addStructors(uses: StructorInspector.ThisUses) {
+    fun addStructors(uses: Dissections) {
         for ((f, stores) in uses.stores) {
             val own = stores.classes
             val callees = uses.subobjectCalls[f].orEmpty()[0L].orEmpty()
@@ -92,7 +96,7 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
      * would derive from each other. A call on `this` + k is no evidence: it builds a member as well as a base, and
      * only a store of D's own table at k, which [PlainVtables] doesn't place, would tell them apart.
      */
-    fun inferBases(classes: Collection<PlainClass>, uses: StructorInspector.ThisUses) {
+    fun inferBases(classes: Collection<PlainClass>, uses: Dissections) {
         addStructors(uses)
         addSharedSlots()
         val direct = byClass.mapValues { (_, cs) -> cs.mostDerived(byClass) }
@@ -143,12 +147,12 @@ private fun Set<ClassDecl>.mostDerived(candidates: Map<ClassDecl, Set<ClassDecl>
  * an ABI's vtable symbol nor the stabs import's, read as [PlainVtables]. A class with RTTI goes to its ABI's
  * parser, which knows its bases; these get theirs off their structors ([BaseCandidates.inferBases]).
  */
-class PlainVtableParser(
-    private val program: Program,
-    private val sink: DiagnosticSink = DummySink,
-    /** Whether a constructor inlined after `operator new` orders the bases it builds ([BaseCandidates]). */
-    private val inlinedConstructors: Boolean = true,
-) : RttiParser {
+class PlainVtableParser(private val program: Program, private val sink: DiagnosticSink = DummySink) :
+    RttiParser,
+    DissectingParser {
+    /** How it reads the storers: a constructor inlined after `operator new` orders the bases it builds, if read. */
+    override var cache = DissectionCache()
+
     override val abi get() = PlainVtables
 
     private val symbols = program.symbolTable
@@ -162,8 +166,7 @@ class PlainVtableParser(
             .values.map { labels ->
                 PlainClass(labels.first().parentNamespace, labels.map { PlainVtables.recordAt(program, it.address) })
             }
-        val newNames = if (inlinedConstructors) abi.operatorNewNames else emptySet()
-        val uses = StructorInspector(program, classes, sink, operatorNewNames = newNames).readStorers(monitor)
+        val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
         val slots = classes.associateWith { c ->
             c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
                 // An unnamed pure virtual stub never returns: it aborts.

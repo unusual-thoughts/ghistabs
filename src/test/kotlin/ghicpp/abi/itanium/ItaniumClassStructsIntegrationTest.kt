@@ -3,12 +3,7 @@ package ghicpp.abi.itanium
 import ghicpp.ClassNaming
 import ghicpp.ClassStructsFixtureTest
 import ghicpp.analyzers.ItaniumClassAnalyzer
-import ghicpp.hierarchy.ClassHierarchy
-import ghicpp.hierarchy.VirtualSlots
-import ghicpp.hierarchy.functionOf
-import ghicpp.hierarchy.methodsOf
-import ghicpp.hierarchy.resolve
-import ghicpp.hierarchy.updateFieldTypes
+import ghicpp.hierarchy.*
 import ghicpp.recover.updateFieldTypes
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.DoubleDataType

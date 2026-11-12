@@ -13,20 +13,11 @@ import ghidra.program.model.listing.Parameter
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.ReturnParameterImpl
-import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghistabs.isInjected
 import ghistabs.isMethod
-
-/** How long a class pass waits on the decompiler for one function. */
-const val DECOMPILE_TIMEOUT_SECONDS = 30
-
-/** Each of these classes' vtables, by its address point: the class it serves and where its vptr sits in it. */
-fun Collection<ClassDecl>.vptrTables(program: Program): Map<Address, Pair<ClassDecl, Long>> = flatMap { cls ->
-    cls.vftables.mapNotNull { r -> r.vfptrOffset(program)?.let { r.addressPoint to (cls to it) } }
-}.toMap()
 
 /** Where `this` comes in: ECX under x86 `__thiscall`, the first argument register elsewhere. */
 fun Program.thisStorage(): Address? {
@@ -44,6 +35,17 @@ fun Function.argumentAt(i: Int): Address? = (callingConvention ?: program.compil
  * `__cdecl` too with MinGW gcc before 4.7, which passes `this` on the stack.
  */
 fun Function.takesThisAt(thisStorage: Address?) = !isExternal && thisStorage != null && argumentAt(0) == thisStorage
+
+/**
+ * Which of its arguments is `this`: the second where a `__cdecl` function pops one word, which is gcc's
+ * hidden pointer for a class returned in memory, and the first otherwise.
+ */
+fun Function.thisIndex() = if (callingConventionName == CDECL && stackPurgeSize == program.defaultPointerSize) 1 else 0
+
+/** The argument a call passes [callee] as its `this`. */
+fun PcodeOp.thisArgument(callee: Function): Varnode? = callee.thisIndex().let { i ->
+    if (numInputs > i + 1) getInput(i + 1) else null
+}
 
 /**
  * Turns a method's x86 `__fastcall` with nothing in EDX into the `__thiscall` it really is, the ECX
@@ -189,40 +191,5 @@ fun Function.fixMethodConvention(takesThis: Boolean = false): Boolean =
 private const val FASTCALL = CompilerSpec.CALLING_CONVENTION_fastcall
 private const val STDCALL = CompilerSpec.CALLING_CONVENTION_stdcall
 private const val THISCALL = CompilerSpec.CALLING_CONVENTION_thiscall
+private const val CDECL = CompilerSpec.CALLING_CONVENTION_cdecl
 private const val MSVC = "windows"
-
-/**
- * A pointer as the variable it points into ([root]) and how far past it ([offset]). The decompiler merges a
- * variable's copies and phis into one [HighVariable], so [root] is the same however the pointer got there.
- */
-data class PointerInto(val root: HighVariable, val offset: Long) {
-    /** Whether [root] is the function's incoming `this`, which comes in at [thisStorage]. */
-    fun isThis(thisStorage: Address?) = root.instances.any { it.isInput && it.address == thisStorage }
-}
-
-/** Traces a decompiled pointer back through casts and constant adds to the variable it points into. */
-fun Varnode.pointerInto(offset: Long = 0, depth: Int = 0): PointerInto? = when (
-    (def?.opcode)?.takeIf { depth < MAX_TRACE }
-) {
-    PcodeOp.CAST -> def.getInput(0).pointerInto(offset, depth + 1)
-
-    PcodeOp.INT_ADD, PcodeOp.PTRSUB -> def.getInput(1).takeIf { it.isConstant }?.let { by ->
-        def.getInput(0).pointerInto(offset + by.offset, depth + 1)
-    }
-
-    PcodeOp.PTRADD -> {
-        val (index, size) = def.getInput(1) to def.getInput(2)
-        when {
-            !index.isConstant || !size.isConstant -> null
-            else -> def.getInput(0).pointerInto(offset + index.offset * size.offset, depth + 1)
-        }
-    }
-
-    else -> null
-} ?: high?.let { PointerInto(it, offset) }
-
-private const val MAX_TRACE = 16
-
-/** The class a function storing [classes]' vtables builds or destroys: the one the others are bases of, or null. */
-fun storedClass(classes: Set<ClassDecl>): ClassDecl? =
-    classes.singleOrNull { c -> classes.all { it == c || c.derivesFrom(it) } }

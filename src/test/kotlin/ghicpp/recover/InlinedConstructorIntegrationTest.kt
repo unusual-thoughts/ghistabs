@@ -132,7 +132,7 @@ class InlinedConstructorIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
     fun `with the option off, a constructor inlined after operator new is left alone`() {
         program.runTransaction("recover") {
             GenericVftableFinder(program).seed() mustBe 2
-            val pass = ClassPass(program, PlainVtableParser(program, inlinedConstructors = false), DummySink)
+            val pass = ClassPass(program, PlainVtableParser(program), DummySink)
             pass.inlinedConstructors = false
             pass.run(TaskMonitor.DUMMY).found!!.inlined mustBe emptyList()
         }
