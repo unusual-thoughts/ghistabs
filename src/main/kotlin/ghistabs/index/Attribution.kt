@@ -3,8 +3,8 @@ package ghistabs.index
 import ghicpp.abi.gcc2.Gcc2
 import ghidra.program.model.data.CategoryPath
 import ghidrakt.Demangler
-import ghidrakt.diagnose.StabsDiagnostics
 import ghidrakt.toCategoryPath
+import ghistabs.StabsDiagnostics
 import ghistabs.harvest.*
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile

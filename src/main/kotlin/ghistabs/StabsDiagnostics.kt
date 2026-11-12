@@ -1,6 +1,9 @@
-package ghidrakt.diagnose
+package ghistabs
 
 import ghidra.program.model.address.Address
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.Level
+import ghidrakt.diagnose.diagnosticText
 
 /** A gap between struct fields. `prev`/`next` are null at struct start/end. */
 data class GapRecord(val offsetBits: Long, val lengthBits: Long, val prevField: String?, val nextField: String?)
@@ -116,7 +119,7 @@ class StabsDiagnostics : DiagnosticSink {
 
     /**
      * Structured degradations, filed by [log] for every event carrying a `degrades`
-     * (see [DiagnosticSink.degradation]).
+     * (see [degradation]).
      */
     fun snapshotDegradations(): List<DegradationRecord> = degradations.toList()
 

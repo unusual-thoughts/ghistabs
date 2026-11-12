@@ -1,5 +1,6 @@
-package ghidrakt.diagnose
+package ghistabs
 
+import ghidrakt.diagnose.*
 import ghidrakt.test.must
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeIn

@@ -1,15 +1,11 @@
 package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
-import ghidrakt.diagnose.StabsDiagnostics
 import ghidrakt.test.mustBe
+import ghistabs.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
-import ghistabs.parse.AggrKind
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.HeaderFile
-import ghistabs.parse.SourceFile
-import ghistabs.parse.TypeDecl
+import ghistabs.parse.*
 import org.junit.jupiter.api.Test
 
 /**

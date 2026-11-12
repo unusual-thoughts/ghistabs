@@ -8,7 +8,7 @@ import ghidra.framework.model.DomainObject
  * the reference and the loaded object keeps its own until it is closed. This adds what the 12 call
  * takes for granted; a member wins over an extension, so 12+ uses Ghidra's own.
  *
- * In [ghistabs] rather than Ghidra's package because that is where the call site is: an extension is
+ * In [ghidrakt] rather than Ghidra's package because that is where the call site is: an extension is
  * only visible unqualified from the package that declares it.
  */
 internal fun <T : DomainObject> Loaded<T>.getDomainObject(consumer: Any): T =
