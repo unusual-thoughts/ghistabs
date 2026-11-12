@@ -109,7 +109,9 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         val runtime = case.twin?.takeIf { case.labelled }?.let { truthOf(case, it).runtime }.orEmpty()
         assumeTrue(!case.labelled || runtime.isNotEmpty(), "the twin names no runtime function to label")
         val out = File(OUTPUT_DIR, case.id).apply { mkdirs() }
-        val facts = File(out, "ooanalyzer.facts")
+        val prolog = System.getProperty("ooprolog").orEmpty().takeIf { it.isNotEmpty() }?.let(::File)
+        // Decompiles every function of the subject, so only on request: -PooFacts, or -Pooprolog to solve them.
+        val facts = File(out, "ooanalyzer.facts").takeIf { prolog != null || System.getProperty("ooFacts") == "true" }
         var slots: Set<Long>? = null
         val subject = snapshotOf(subjectFile, case.compiler, facts, { prepare(case.recovery, runtime) }) {
             if (truth.sameBinary) slots = slotTargets(truth.snapshot.vtables)
@@ -127,7 +129,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         File(out, "subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), subject))
         File(out, "truth.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), truth.snapshot))
         checkBaseline(case, card.counters() + (UNATTACHED to subject.unattachedVirtuals.toLong()), card.instanceLines())
-        System.getProperty("ooprolog").orEmpty().takeIf { it.isNotEmpty() }?.let { solve(case, truth, facts, File(it)) }
+        if (prolog != null && facts != null) solve(case, truth, facts, prolog)
         System.getProperty("pharosResults").orEmpty().takeIf { it.isNotEmpty() }?.let { dir ->
             // A no-RTTI case takes the results of the same facts solved with `--rtti false`, where there are some.
             val ran = listOfNotNull("no-rtti.".takeIf { case.recovery == Recovery.NO_RTTI }, "")
