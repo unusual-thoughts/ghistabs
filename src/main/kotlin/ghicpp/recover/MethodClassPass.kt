@@ -13,7 +13,6 @@ import ghicpp.takesThisAt
 import ghicpp.thisArgument
 import ghicpp.thisIndex
 import ghicpp.thisStorage
-import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
@@ -24,7 +23,6 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.useWith
 
 /**
  * A call passing an object as [callee]'s `this`: [caller]'s own, or one of class [built], which [caller] built
@@ -123,15 +121,9 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
         val ctors = methods.filter { (f, cls) -> f in recordedCtors || (f.hasKnownClass() && f.name == cls.name) }
         monitor.message = "Finding constructors' callers"
         val evidence = methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }
-        monitor.initialize(evidence.size.toLong(), "Decompiling methods and constructors' callers")
         val calls = buildList {
-            DecompInterface().useWith(program) { decomp ->
-                for (f in evidence) {
-                    if (monitor.isCancelled) break
-                    monitor.incrementProgress()
-                    val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
-                    addAll(thisCalls(f, high, ctors, methods[f]).filter { it.callee in candidates })
-                }
+            program.decompileEach(evidence, monitor, "Decompiling methods and constructors' callers") { f, high ->
+                addAll(thisCalls(f, high, ctors, methods[f]).filter { it.callee in candidates })
             }
         }
         val guesses = MethodClassGuesser(bases, recorded).guess(calls)

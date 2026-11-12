@@ -56,7 +56,8 @@ class GenericVftableAnalyzer :
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val seeded = GenericVftableFinder(program, sink = sink).seed(monitor)
         val options = program.analyzerOptions(NAME)
-        val pass = ClassPass(program, PlainVtableParser(program, sink, options[INLINED_CONSTRUCTORS]), sink, options)
+        val parser = PlainVtableParser(program, sink, options[INLINED_CONSTRUCTORS], options[FILL_ARRAYS])
+        val pass = ClassPass(program, parser, sink, options)
         val result = pass.run(monitor)
         val members = result.found?.takeIf { options[MEMBER_OBJECTS] }
             ?.let { MemberObjectPass(program, sink, pass.fillArrays).run(it, monitor) } ?: 0

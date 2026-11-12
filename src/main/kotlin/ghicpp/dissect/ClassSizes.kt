@@ -2,13 +2,11 @@ package ghicpp.dissect
 
 import ghicpp.ClassDecl
 import ghicpp.abi.CxxAbi
-import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.useWith
 
 /**
  * Each class's possible size range ([Long.MAX_VALUE] when unbounded above), from its non-virtual bases'
@@ -86,19 +84,13 @@ class AllocationSizeFinder(private val program: Program, private val abi: CxxAbi
         monitor.message = "Finding constructors' callers"
         val callers = ctors.keys.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
         val sizes = mutableMapOf<ClassDecl, MutableSet<Long>>()
-        monitor.initialize(callers.size.toLong(), "Decompiling constructors' callers for allocation sizes")
-        DecompInterface().useWith(program) { decomp ->
-            for (f in callers) {
-                if (monitor.isCancelled) break
-                monitor.incrementProgress()
-                val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
-                for (op in high.pcodeOps.asSequence()) {
-                    val cls = op.callee()?.let(ctors::get) ?: continue
-                    val obj = op.getInput(1).pointerInto()?.takeIf { it.offset == 0L } ?: continue
-                    val alloc = obj.root.instances.mapNotNull { it.def }.firstOrNull { it.isOperatorNew() }
-                    val size = alloc?.getInput(1)?.takeIf { it.isConstant }
-                    size?.let { sizes.getOrPut(cls) { mutableSetOf() } += it.offset }
-                }
+        program.decompileEach(callers, monitor, "Decompiling constructors' callers for allocation sizes") { _, high ->
+            for (op in high.pcodeOps.asSequence()) {
+                val cls = op.callee()?.let(ctors::get) ?: continue
+                val obj = op.getInput(1).pointerInto()?.takeIf { it.offset == 0L } ?: continue
+                val alloc = obj.root.instances.mapNotNull { it.def }.firstOrNull { it.isOperatorNew() }
+                val size = alloc?.getInput(1)?.takeIf { it.isConstant }
+                size?.let { sizes.getOrPut(cls) { mutableSetOf() } += it.offset }
             }
         }
         return sizes.mapValues { (cls, all) ->

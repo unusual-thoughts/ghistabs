@@ -4,6 +4,9 @@ import ghicpp.*
 import ghicpp.abi.RttiParser
 import ghicpp.abi.VtableRecord
 import ghicpp.abi.slotFunction
+import ghicpp.dissect.DissectingParser
+import ghicpp.dissect.DissectionCache
+import ghicpp.dissect.ThisFunctionDissector
 import ghidra.app.cmd.data.rtti.Rtti1Model
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.cmd.data.rtti.Rtti4Model
@@ -76,9 +79,18 @@ fun directBases(array: List<BaseEntry>): List<BaseEntry> {
  * Classes off the MSVC RTTI Ghidra's RTTI analyzer laid, for the class pass: their bases, off each Class
  * Hierarchy Descriptor's Base Class Array, and their vftables. Classes go by their type descriptor's address.
  */
-class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
-    RttiParser,
+class MsvcRttiParser(
+    private val program: Program,
+    sink: DiagnosticSink,
+    /** Whether a field a constructor fills in a counted loop or with `memset` is an array, as the class pass reads. */
+    private val fillArrays: Boolean = true,
+    /** Whether a constructor inlined after `operator new` is read, as the class pass reads. */
+    private val inlinedConstructors: Boolean = true,
+) : RttiParser,
+    DissectingParser,
     DiagnosticSink by sink {
+    override val dissected = DissectionCache()
+
     private val options = DataValidationOptions()
     private val symbols = program.symbolTable
 
@@ -148,9 +160,12 @@ class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
     private fun readVbtables(hierarchies: Collection<RttiClass>, monitor: TaskMonitor) {
         val vbptrs: Map<ClassDecl, Set<Long>> = hierarchies.associateWith { it.vbptrs }.filterValues { it.isNotEmpty() }
         if (vbptrs.isEmpty()) return
-        for ((cls, vbtables) in VbtableFinder(program, classes.values, this).read(vbptrs, monitor)) {
-            (cls as RttiClass).vbtables += vbtables
-        }
+        // Decompiled for the class pass too, which reads the storers the same way.
+        val finder = VbtableFinder(program, classes.values, vbptrs)
+        val newNames = if (inlinedConstructors) Msvc.operatorNewNames else emptySet()
+        ThisFunctionDissector(program, classes.values, this, fillArrays, newNames, dissected)
+            .readStorers(monitor) { _, high -> finder.add(high) }
+        for ((cls, vbtables) in finder.found) (cls as RttiClass).vbtables += vbtables
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }

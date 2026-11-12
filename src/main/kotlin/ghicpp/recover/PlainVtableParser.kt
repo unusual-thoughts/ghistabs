@@ -3,6 +3,8 @@ package ghicpp.recover
 import ghicpp.*
 import ghicpp.abi.*
 import ghicpp.abi.msvc.Msvc
+import ghicpp.dissect.DissectingParser
+import ghicpp.dissect.DissectionCache
 import ghicpp.dissect.ThisFunctionDissector
 import ghicpp.dissect.ThisUses
 import ghidra.program.model.address.Address
@@ -150,7 +152,12 @@ class PlainVtableParser(
     private val sink: DiagnosticSink = DummySink,
     /** Whether a constructor inlined after `operator new` orders the bases it builds ([BaseCandidates]). */
     private val inlinedConstructors: Boolean = true,
-) : RttiParser {
+    /** Whether a field a constructor fills in a counted loop or with `memset` is an array, as the class pass reads. */
+    private val fillArrays: Boolean = true,
+) : RttiParser,
+    DissectingParser {
+    override val dissected = DissectionCache()
+
     override val abi get() = PlainVtables
 
     private val symbols = program.symbolTable
@@ -165,7 +172,7 @@ class PlainVtableParser(
                 PlainClass(labels.first().parentNamespace, labels.map { PlainVtables.recordAt(program, it.address) })
             }
         val newNames = if (inlinedConstructors) abi.operatorNewNames else emptySet()
-        val uses = ThisFunctionDissector(program, classes, sink, operatorNewNames = newNames).readStorers(monitor)
+        val uses = ThisFunctionDissector(program, classes, sink, fillArrays, newNames, dissected).readStorers(monitor)
         val slots = classes.associateWith { c ->
             c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
                 // An unnamed pure virtual stub never returns: it aborts.

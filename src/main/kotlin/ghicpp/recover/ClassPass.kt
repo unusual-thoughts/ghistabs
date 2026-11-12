@@ -7,7 +7,6 @@ import ghicpp.MemberAttrs.Companion.recordPlaced
 import ghicpp.abi.RttiParser
 import ghicpp.abi.StructorRole
 import ghicpp.dissect.*
-import ghidra.app.decompiler.DecompInterface
 import ghidra.framework.options.Options
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.PointerDataType
@@ -26,7 +25,6 @@ import ghistabs.BoolOption
 import ghistabs.OptionContainer
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.toClass
-import ghistabs.useWith
 
 /**
  * What a class pass does once an ABI's records have given it the classes ([RttiParser], [ClassPassInput]): each virtual
@@ -82,6 +80,8 @@ class ClassPass(
             this,
             fillArrays,
             if (inlinedConstructors) abi.operatorNewNames else emptySet(),
+            // What the parser dissected as it parsed, read again only where it read it otherwise.
+            (parser as? DissectingParser)?.dissected ?: DissectionCache(),
         )
         val found = inspector.find(read.holders, abi, monitor)
         val structors = found.roles
@@ -287,25 +287,18 @@ class ClassPass(
  */
 fun Program.typeAllocations(found: FoundStructors, sink: DiagnosticSink, monitor: TaskMonitor = DUMMY): Int {
     var typed = 0
-    monitor.initialize(found.inlinedByFunction.size.toLong(), "Typing the objects constructors inlined after new build")
-    DecompInterface().useWith(this) { decomp ->
-        for ((func, built) in found.inlinedByFunction) {
-            if (monitor.isCancelled) break
-            monitor.incrementProgress()
-            val high = decomp.decompileFunction(func, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
-            val calls = high.pcodeOps.asSequence().filter { it.opcode == PcodeOp.CALL }.associateBy { it.seqnum.target }
-            for (construction in built) {
-                val struct = construction.built.ns?.toClass()?.let(::classStruct) ?: continue
-                val symbol = calls[construction.at]?.output?.namedVariable()?.symbol ?: continue
-                if (symbol.isTypeLocked) continue
-                val type = PointerDataType(struct, dataTypeManager)
-                if (symbol.dataType.isEquivalent(type)) continue
-                runCatching { HighFunctionDBUtil.updateDBVariable(symbol, null, type, SourceType.ANALYSIS) }
-                    .onSuccess { typed++ }
-                    .onFailure {
-                        sink.warn("allocation-untyped", "${func.name} -> ${struct.name} *: $it", construction.at)
-                    }
-            }
+    val inlined = found.inlinedByFunction
+    decompileEach(inlined.keys, monitor, "Typing the objects constructors inlined after new build") { func, high ->
+        val calls = high.pcodeOps.asSequence().filter { it.opcode == PcodeOp.CALL }.associateBy { it.seqnum.target }
+        for (construction in inlined.getValue(func)) {
+            val struct = construction.built.ns?.toClass()?.let(::classStruct) ?: continue
+            val symbol = calls[construction.at]?.output?.namedVariable()?.symbol ?: continue
+            if (symbol.isTypeLocked) continue
+            val type = PointerDataType(struct, dataTypeManager)
+            if (symbol.dataType.isEquivalent(type)) continue
+            runCatching { HighFunctionDBUtil.updateDBVariable(symbol, null, type, SourceType.ANALYSIS) }
+                .onSuccess { typed++ }
+                .onFailure { sink.warn("allocation-untyped", "${func.name} -> ${struct.name} *: $it", construction.at) }
         }
     }
     return typed

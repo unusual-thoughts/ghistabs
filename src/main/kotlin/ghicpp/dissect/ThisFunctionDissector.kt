@@ -6,7 +6,6 @@ import ghicpp.abi.StructorConvention
 import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
 import ghicpp.thisStorage
-import ghidra.app.decompiler.DecompInterface
 import ghidra.app.decompiler.util.FillOutStructureHelper
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.ArrayDataType
@@ -19,7 +18,6 @@ import ghidra.program.model.pcode.*
 import ghidra.program.model.scalar.Scalar
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.useWith
 
 /**
  * Decompiles functions for what they do with `this` ([ThisUses]): the vptrs they store, the fields they store and
@@ -34,6 +32,8 @@ class ThisFunctionDissector(
     private val fillArrays: Boolean = true,
     /** The names of `operator new(size)`, after whose call a constructor inlined builds its object ([inlined]). */
     private val operatorNewNames: Set<String> = PlainVtables.operatorNewNames,
+    /** What dissectors sharing it read already, which this one reads the same way doesn't decompile again. */
+    private val dissected: DissectionCache = DissectionCache(),
 ) : DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
 
@@ -101,8 +101,12 @@ class ThisFunctionDissector(
         }
     }
 
-    /** What the functions storing the classes' vptrs store and call through `this`, decompiled. */
-    fun readStorers(monitor: TaskMonitor): ThisUses = read(emptyList(), monitor)
+    /**
+     * What the functions storing the classes' vptrs store and call through `this`, decompiled. [visit] sees each
+     * as decompiled, so it decompiles them all, [dissected] or not.
+     */
+    fun readStorers(monitor: TaskMonitor, visit: ((Function, HighFunction) -> Unit)? = null): ThisUses =
+        read(emptyList(), monitor, visit)
 
     /**
      * The stores of each function writing one of [tables], and what those and [others] call on `this`. A
@@ -110,53 +114,56 @@ class ThisFunctionDissector(
      * member objects; a call, only with `this` first, which leaves out a local built and destroyed. A store into
      * what `operator new` just returned is a constructor inlined there ([inlined]).
      */
-    private fun read(others: Collection<Function>, monitor: TaskMonitor): ThisUses {
+    private fun read(
+        others: Collection<Function>,
+        monitor: TaskMonitor,
+        visit: ((Function, HighFunction) -> Unit)? = null,
+    ): ThisUses {
         monitor.message = "Finding vptr stores"
-        val writes = buildMap {
-            for ((table, served) in tables) {
-                for (ref in program.referenceManager.getReferencesTo(table)) {
-                    val at = ref.fromAddress
-                    if (program.listing.getInstructionAt(at) == null) continue
-                    val func = program.functionManager.getFunctionContaining(at) ?: continue
-                    getOrPut(func) { mutableMapOf() }.getOrPut(at) { mutableListOf() } += served
-                }
-            }
-        }
+        val writes = program.vptrWriters(tables)
         if (writes.isEmpty()) return ThisUses(emptyMap(), emptyMap())
-        return decompile(writes.keys + others, writes, monitor)
+        return decompile(writes.keys + others, writes, monitor, visit = visit)
     }
 
-    /** What [funcs] store and call through `this`, decompiled, and which of [writes]' vptrs each stores. */
+    /**
+     * What [funcs] store and call through `this`, decompiled, and which of [writes]' vptrs each stores; what
+     * [dissected] holds read the same way already isn't decompiled again, unless [visit] is to see it.
+     */
     private fun decompile(
         funcs: Collection<Function>,
         writes: Map<Function, Map<Address, List<Pair<ClassDecl, Long>>>>,
         monitor: TaskMonitor,
         message: String = "Decompiling constructors and destructors",
         storedOnly: Boolean = true,
+        visit: ((Function, HighFunction) -> Unit)? = null,
     ): ThisUses {
-        val stores = mutableMapOf<Function, VptrStores>()
-        val subobjectCalls = mutableMapOf<Function, Map<Long, Set<Function>>>()
-        val thisStores = mutableMapOf<Function, Stores>()
-        val inlined = mutableListOf<InlinedConstruction>()
-        if (thisStorage != null) {
-            val fill = FillOutStructureHelper(program, monitor)
-            monitor.initialize(funcs.size.toLong(), message)
-            DecompInterface().useWith(program) { decomp ->
-                for (func in funcs) {
-                    monitor.incrementProgress()
-                    val high = decomp.decompiled(func, monitor) ?: continue
-                    writes[func]?.let { inlined += fill.inlined(high, it) }
-                    val calls = high.subobjectCalls(intoThis)
-                    val filled = fill.fillThis(high)
-                    writes[func]?.let { stores[func] = filled.vptrStores(it, calls) }
-                    subobjectCalls[func] =
-                        calls.groupBy({ it.offset }, { it.callee }).mapValues { (_, fs) -> fs.toSet() }
-                    val fills = if (fillArrays) high.fills(intoThis).associate { it.second } else emptyMap()
-                    thisStores[func] = filled.thisStores(storedOnly).withFills(fills)
-                }
-            }
+        if (thisStorage == null) return ThisUses(emptyMap(), emptyMap())
+        fun key(func: Function) = DissectionCache.Key(func, writes[func], fillArrays, operatorNewNames, storedOnly)
+        val fill = FillOutStructureHelper(program, monitor)
+        val fresh = if (visit != null) funcs else funcs.filter { key(it) !in dissected.reads }
+        program.decompileEach(fresh, monitor, message, {
+            debug("structor-undecompiled", it.name, it.entryPoint)
+        }) { func, high ->
+            visit?.invoke(func, high)
+            val inlined = writes[func]?.let { fill.inlined(high, it) }.orEmpty()
+            val calls = high.subobjectCalls(intoThis)
+            val filled = fill.fillThis(high)
+            val stores = writes[func]?.let { filled.vptrStores(it, calls) }
+            val fills = if (fillArrays) high.fills(intoThis).associate { it.second } else emptyMap()
+            dissected.reads[key(func)] = DissectionCache.Read(
+                stores,
+                calls.groupBy({ it.offset }, { it.callee }).mapValues { (_, fs) -> fs.toSet() },
+                filled.thisStores(storedOnly).withFills(fills),
+                inlined,
+            )
         }
-        return ThisUses(stores, subobjectCalls, thisStores, inlined)
+        val read = funcs.mapNotNull { f -> dissected.reads[key(f)]?.let { f to it } }
+        return ThisUses(
+            read.mapNotNull { (f, r) -> r.stores?.let { f to it } }.toMap(),
+            read.associate { (f, r) -> f to r.subobjectCalls },
+            read.associate { (f, r) -> f to r.thisStores },
+            read.flatMap { (_, r) -> r.inlined },
+        )
     }
 
     /**
@@ -208,12 +215,6 @@ class ThisFunctionDissector(
         if (opcode != PcodeOp.CALL || numInputs < 2) return false
         val f = program.functionManager.getFunctionAt(getInput(0).address) ?: return false
         return (f.getThunkedFunction(true) ?: f).name in operatorNewNames
-    }
-
-    private fun DecompInterface.decompiled(func: Function, monitor: TaskMonitor): HighFunction? {
-        if (monitor.isCancelled) return null
-        return decompileFunction(func, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction
-            ?: null.also { debug("structor-undecompiled", func.name, func.entryPoint) }
     }
 
     /**
@@ -360,4 +361,34 @@ class ThisFunctionDissector(
 
         const val MAX_COPIES = 8
     }
+}
+
+/**
+ * What [ThisFunctionDissector]s sharing it have read of each function, so that a parser that dissects as it parses
+ * ([DissectingParser]) and the class pass after it decompile each function once. A read counts only for a
+ * dissector reading the function the same way: with the same vptrs to look for, fills and `operator new`.
+ */
+class DissectionCache {
+    internal data class Key(
+        val func: Function,
+        val writes: Map<Address, List<Pair<ClassDecl, Long>>>?,
+        val fillArrays: Boolean,
+        val operatorNewNames: Set<String>,
+        val storedOnly: Boolean,
+    )
+
+    /** One function's share of [ThisUses]. */
+    internal class Read(
+        val stores: VptrStores?,
+        val subobjectCalls: Map<Long, Set<Function>>,
+        val thisStores: Stores,
+        val inlined: List<InlinedConstruction>,
+    )
+
+    internal val reads = mutableMapOf<Key, Read>()
+}
+
+/** A parser that dissects the vptr storers as it parses, whose [dissected] reads the class pass after it reuses. */
+interface DissectingParser {
+    val dissected: DissectionCache
 }
