@@ -20,6 +20,7 @@ import ghidrakt.diagnose.*
 import ghidrakt.isPackedProgram
 import ghidrakt.loadPackedProgram
 import ghidrakt.loadProgram
+import ghistabs.StabsDiagnostics
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.StabCursor
 import ghistabs.harvest.Symbol
@@ -30,7 +31,6 @@ import ghistabs.importer.readStabs
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabRecord
 import ghistabs.parse.SymbolDecl
-import java.io.File
 
 fun main(args: Array<String>) = Ghistabs()
     .subcommands(

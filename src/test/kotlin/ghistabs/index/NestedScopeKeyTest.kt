@@ -2,17 +2,20 @@ package ghistabs.index
 
 import ghicpp.Access
 import ghicpp.VirtKind
-import ghicpp.member
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.diagnose.StabsDiagnostics
-import ghidrakt.test.*
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeIn
+import ghidrakt.test.mustNotBe
+import ghistabs.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import ghistabs.test.*
+import ghistabs.test.harvestOf
+import ghistabs.test.hintsOf
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 

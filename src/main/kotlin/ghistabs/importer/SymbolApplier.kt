@@ -21,7 +21,6 @@ import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghidrakt.*
-import ghidrakt.diagnose.ApplyErrorBucket
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.Level
 import ghistabs.harvest.*
@@ -48,6 +47,17 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     companion object {
         /** Distinguishes the `:r` register home of a `:p` parameter from the parameter itself. */
         private const val REGISTER_HOME_SUFFIX = "_reg"
+
+        fun errorBucket(throwable: Throwable): String {
+            val msg = throwable.message.orEmpty().lowercase()
+            return when {
+                "entrypoint" in msg || "not found" in msg -> "entrypoint-mismatch"
+                "parameter" in msg -> "parameter-mismatch"
+                throwable::class.qualifiedName == "ghidra.util.exception.InvalidInputException" -> "invalid-input"
+                throwable::class.qualifiedName == "ghidra.util.exception.DuplicateNameException" -> "duplicate-name"
+                else -> "other"
+            }
+        }
     }
 
     /**
@@ -175,7 +185,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
                 functions++
             } catch (t: Throwable) {
-                val bucket = ApplyErrorBucket.bucket(t)
+                val bucket = errorBucket(t)
                 err("apply-error-$bucket", "function ${open.name}: ${t.message}", address = open.addr)
                 degradation("function-partially-applied", open.name, bucket, open.addr)
             }

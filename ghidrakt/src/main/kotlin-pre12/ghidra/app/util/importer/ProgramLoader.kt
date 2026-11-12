@@ -36,7 +36,7 @@ object ProgramLoader {
          * Loaded with the builder as consumer, which is what 12's `load()` does — it delegates to
          * the consumer-taking form passing `this`. That is the whole of the ownership difference:
          * before 12 the consumer was named here, at import time, and the loaded programs were handed
-         * out carrying no reference of their own; see `Loaded.getDomainObject` in [ghistabs].
+         * out carrying no reference of their own; see `Loaded.getDomainObject` in [ghidrakt].
          */
         fun load(): LoadResults<Program> = AutoImporter.importFresh(
             file,

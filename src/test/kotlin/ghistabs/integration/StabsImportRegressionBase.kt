@@ -1,7 +1,6 @@
 package ghistabs.integration
 
 import ghicpp.*
-import ghicpp.VfptrModel
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.CxxAbi.Companion.prevailingAbi
 import ghicpp.abi.gcc2.Gcc2
@@ -46,9 +45,11 @@ import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
 import ghistabs.index.hasPolymorphicBaseSubobject
 import ghistabs.index.vptrOffsetBytesOf
+import ghistabs.isAllPadding
 import ghistabs.materialize.conflictCount
 import ghistabs.parse.*
 import ghistabs.test.*
+import ghistabs.tiles
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.encodeToStream
 import org.junit.jupiter.api.*
