@@ -404,8 +404,8 @@ private class ClassStructBuilder(val registry: DataTypeRegistry, val vfptrs: Vfp
                 description = "${cls.name} as a base subobject"
             }
         }.also { into ->
-            into.copyNonVirtualPart(cls) { it, e ->
-                degradation("self-base-field-dropped", "${into.name}.${it.fieldName}", e.message)
+            into.copyNonVirtualPart(cls) { field, e ->
+                degradation("self-base-field-dropped", "${into.name}.${field.fieldName}", e.message)
             }
         }
     }
