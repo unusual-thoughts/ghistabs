@@ -7,11 +7,11 @@ import java.util.function.Supplier
 
 /**
  * The `Supplier<PropertyEditor>` overload 11.1 introduced, resolved eagerly onto the one that takes
- * the editor itself. Declared once per calling package because an extension is only visible
- * unqualified where it is declared — and a member beats an extension, so the pre-11.1 overload taking
- * the editor directly would otherwise win the call and reject the supplier.
+ * the editor itself. Callers reach it through `import ghidrakt.*`. A member beats an extension, so
+ * the pre-11.1 overload taking the editor directly would otherwise win the call and reject the
+ * supplier.
  */
-internal fun Options.registerOption(
+fun Options.registerOption(
     name: String,
     type: OptionType,
     defaultValue: Any?,

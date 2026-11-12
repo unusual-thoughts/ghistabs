@@ -2,6 +2,7 @@ package ghistabs.importer
 
 import ghidra.program.database.sourcemap.UserDataPathTransformer
 import ghidra.program.model.listing.Program
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
 import ghistabs.harvest.GhidraSourceFile
