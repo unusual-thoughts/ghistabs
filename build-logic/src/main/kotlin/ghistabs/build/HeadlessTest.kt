@@ -102,7 +102,9 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     systemProperty("ignoreBaselines", props.gradleProperty("ignoreBaselines").getOrElse(""))
     // -PregenerateTruth=true rebuilds the class scorecards' committed ground truth from the truth binaries.
     systemProperty("regenerateTruth", props.gradleProperty("regenerateTruth").getOrElse(""))
-    // -Pooprolog=<dir> runs OOAnalyzer's Prolog rules (Pharos' share/prolog) over each scorecard case's facts.
+    // -PooFacts=true writes each scorecard case's OOAnalyzer facts, decompiling every function: off by default.
+    systemProperty("ooFacts", props.gradleProperty("ooFacts").getOrElse(""))
+    // -Pooprolog=<dir> writes them too, and runs OOAnalyzer's Prolog rules (Pharos' share/prolog) over each scorecard case's facts.
     systemProperty("ooprolog", props.gradleProperty("ooprolog").getOrElse(""))
     // -PpharosResults=<dir> scores a Pharos ooanalyzer run's <subject>.results beside each scorecard case.
     systemProperty("pharosResults", props.gradleProperty("pharosResults").getOrElse(""))
