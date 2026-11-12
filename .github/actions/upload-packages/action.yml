@@ -1,5 +1,5 @@
 name: Upload packages
-description: Upload the extension and CLI zips built into dist/ as artifacts.
+description: Upload the extension zips (dist/, ghicpp/dist/) and the CLI zip as artifacts.
 
 runs:
   using: composite
@@ -11,6 +11,12 @@ runs:
       uses: actions/upload-artifact@v7
       with:
         path: dist/ghidra_*.zip
+        archive: false
+
+    - name: Upload C++ extension zip
+      uses: actions/upload-artifact@v7
+      with:
+        path: ghicpp/dist/ghidra_*.zip
         archive: false
 
     - name: Upload CLI zip

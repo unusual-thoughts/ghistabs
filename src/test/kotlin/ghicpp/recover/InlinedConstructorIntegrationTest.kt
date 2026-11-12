@@ -19,8 +19,8 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.DummySink
 import ghidrakt.runTransaction
-import ghistabs.test.mustBe
 import ghidrakt.useWith
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

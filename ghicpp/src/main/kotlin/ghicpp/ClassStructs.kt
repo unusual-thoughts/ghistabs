@@ -22,7 +22,7 @@ import ghidrakt.withLength
  * matches: the [offset] of the `{vfptr}` that points at it. Without a known, non-negative offset there
  * is no tag, since a wrong one would misplace Ghidra's vxtable replacement.
  */
-internal fun Structure.describeVxTable(owner: String, table: String, offset: Long?) {
+fun Structure.describeVxTable(owner: String, table: String, offset: Long?) {
     val vfptrOffset = offset?.takeIf { it >= 0 }
     val text = "$owner's $table: what its {${ClassUtils.VFPTR}}" +
         vfptrOffset?.let { " at +$it" }.orEmpty() + " points at"
@@ -31,7 +31,7 @@ internal fun Structure.describeVxTable(owner: String, table: String, offset: Lon
 }
 
 /** Offset of the first `{vfptr}` in this struct, its own or one inherited through a base subobject. */
-internal fun Structure.vfptrOffset(): Int? = definedComponents.firstNotNullOfOrNull { c ->
+fun Structure.vfptrOffset(): Int? = definedComponents.firstNotNullOfOrNull { c ->
     when {
         c.fieldName == ClassUtils.VFPTR -> c.offset
         c.isBaseField() -> (c.dataType as? Structure)?.vfptrOffset()?.let { c.offset + it }
@@ -64,7 +64,7 @@ internal fun Structure.vfptrOffsetOfBase(base: String): Int? = definedComponents
 fun DataTypeComponent.isBaseField() = ClassNaming.isBaseField(fieldName.orEmpty())
 
 /** Lays [dt] at [offset] in [struct] as a base subobject, and reports how that went. */
-internal fun DiagnosticSink.placeBase(
+fun DiagnosticSink.placeBase(
     struct: Structure,
     offset: Int,
     dt: DataType,
@@ -122,7 +122,7 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
  * starts before or ends past it, and [owner] grows where it ends past the end. Anywhere else it goes only over
  * undefined bytes: a vptr, another class's fields or another member in the way leaves it unplaced, with a warning.
  */
-internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Structure) {
+fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Structure) {
     if (member == owner) return
     val field = ClassNaming.fieldName(at)
     fun unplaced(into: Structure, why: List<DataTypeComponent>) = degradation(

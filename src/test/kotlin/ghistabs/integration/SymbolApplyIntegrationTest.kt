@@ -4,12 +4,12 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghidrakt.runTransaction
 import ghistabs.importer.runOnRecords
 import ghistabs.importer.sweepPointees
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
-import ghidrakt.runTransaction
 import ghistabs.test.defaultContext
 import ghistabs.test.must
 import ghistabs.test.mustBe

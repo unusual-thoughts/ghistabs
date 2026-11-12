@@ -5,8 +5,8 @@ import ghidra.program.model.data.*
 import ghidrakt.DEMANGLER_CATEGORY
 import ghidrakt.conflictBase
 import ghidrakt.diagnose.GapRecord
-import ghistabs.harvest.Type
 import ghidrakt.isConflict
+import ghistabs.harvest.Type
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
 import ghidra.program.model.data.Array as GhidraArray

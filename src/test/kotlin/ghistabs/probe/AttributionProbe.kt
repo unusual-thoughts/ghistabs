@@ -6,6 +6,9 @@ import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.Level
+import ghidrakt.runTransaction
+import ghidrakt.set
+import ghidrakt.withProgram
 import ghistabs.importer.ImportOptions.Companion.LOG_LEVEL
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.SOURCE_ROOTS
@@ -13,12 +16,9 @@ import ghistabs.parse.StabReader
 import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode
 import ghistabs.render.Scorecard
-import ghidrakt.runTransaction
-import ghidrakt.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
 import ghistabs.test.hintsOf
-import ghidrakt.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest

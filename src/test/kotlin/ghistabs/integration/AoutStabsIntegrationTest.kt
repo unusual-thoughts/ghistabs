@@ -9,11 +9,11 @@ import ghidrakt.LOADS_AOUT
 import ghidrakt.LoadedProgram
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.diagnose.Level
+import ghidrakt.loadProgram
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.importer.import
 import ghistabs.integration.StaticMemberLabelIntegrationTest.Companion.mustHaveNoGcc2StaticMemberPrimary
-import ghidrakt.loadProgram
 import ghistabs.render.Renderer
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach

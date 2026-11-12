@@ -247,22 +247,6 @@ class SourceFileSerializer : KSerializer<GhidraSourceFile> {
         throw UnsupportedOperationException("SourceFileSerializer is serialize-only")
 }
 
-class AddressSerializer : KSerializer<Address> {
-    @Serializable
-    private data class AddressSurrogate(val space: String, val offset: Long) {
-        constructor(addr: Address) : this(addr.addressSpace.name, addr.offset)
-    }
-
-    override val descriptor =
-        SerialDescriptor("ghidra.program.model.address.Address", AddressSurrogate.serializer().descriptor)
-
-    override fun serialize(encoder: Encoder, value: Address) =
-        encoder.encodeSerializableValue(AddressSurrogate.serializer(), AddressSurrogate(value))
-
-    override fun deserialize(decoder: Decoder) =
-        throw UnsupportedOperationException("AddressSerializer is serialize-only")
-}
-
 /**
  * One function as the harvest holds it: its N_FUN, and everything the stream attributed to it before
  * the next one. [name] is the linkage name, mangled for C++, which [demangledName] and [scopePath]

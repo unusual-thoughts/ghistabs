@@ -308,13 +308,13 @@ private fun GTree.replaceRoot(root: GTreeNode) {
  * [node]'s path below the root by name, with each node's rank among same-named siblings (overloads, a
  * direct and an indirect `Base`) to tell those apart.
  */
-internal fun steps(node: GTreeNode): List<Pair<String, Int>> =
+fun steps(node: GTreeNode): List<Pair<String, Int>> =
     generateSequence(node) { it.parent }.takeWhile { it.parent != null }.toList().asReversed().map { n ->
         n.name to n.parent.children.filter { it.name == n.name }.indexOf(n)
     }
 
 /** The node at [steps] below this root, in a tree rebuilt since they were taken. */
-internal fun GTreeNode.find(steps: List<Pair<String, Int>>): GTreeNode? =
+fun GTreeNode.find(steps: List<Pair<String, Int>>): GTreeNode? =
     steps.fold(this as GTreeNode?) { node, (name, rank) -> node?.children?.filter { it.name == name }?.getOrNull(rank) }
 
 /** The status line under the tree: [hierarchy]'s classes counted by where they came from, then [staleNote]. */

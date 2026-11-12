@@ -254,8 +254,9 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
                 val a = actual.getValue(key)
                 val c = claimed.getValue(key)
                 // Neither ABI's RTTI tells a protected base from a private one: only whether it is public.
-                if (a.access != null) {
-                    access += attribute(c.access?.publicness(), a.access.publicness()) {
+                val actualAccess = a.access
+                if (actualAccess != null) {
+                    access += attribute(c.access?.publicness(), actualAccess.publicness()) {
                         "access of base `${a.name}` of `${tc.qualifiedName}`"
                     }
                 }
@@ -277,23 +278,25 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     }
 
     private fun vftables(): Tally = scoredPairs.fold(Tally()) { acc, (tc, sc) ->
+        val truthVftable = tc.vftable
+        val scoredVftable = sc.vftable
         acc + when {
-            tc.vftable == null && sc.vftable == null -> Tally()
+            truthVftable == null && scoredVftable == null -> Tally()
 
-            tc.vftable == null -> Tally(fp = 1).also {
+            truthVftable == null -> Tally(fp = 1).also {
                 findings +=
-                    "false vftable ${sc.vftable} of `${tc.qualifiedName}`"
+                    "false vftable $scoredVftable of `${tc.qualifiedName}`"
             }
 
-            sc.vftable == null -> Tally(fn = 1).also {
+            scoredVftable == null -> Tally(fn = 1).also {
                 findings +=
-                    "missed vftable ${tc.vftable} of `${tc.qualifiedName}`"
+                    "missed vftable $truthVftable of `${tc.qualifiedName}`"
             }
 
-            truth.sameBinary && address(sc.vftable) != address(tc.vftable) ->
+            truth.sameBinary && address(scoredVftable) != address(truthVftable) ->
                 Tally(fp = 1, fn = 1).also {
                     findings +=
-                        "wrong vftable ${sc.vftable} of `${tc.qualifiedName}`: is ${tc.vftable}"
+                        "wrong vftable $scoredVftable of `${tc.qualifiedName}`: is $truthVftable"
                 }
 
             else -> Tally(tp = 1)
