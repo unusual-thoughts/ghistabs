@@ -5,6 +5,7 @@ import ghicpp.VfptrModel
 import ghicpp.abi.itanium.ItaniumRttiParser
 import ghicpp.recover.ClassPass
 import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
+import ghicpp.recover.ClassPass.Companion.INLINED_CONSTRUCTORS
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -43,7 +44,8 @@ class ItaniumClassAnalyzer :
     override fun canAnalyze(program: Program) =
         GnuDemangler().canDemangle(program) && !ClassRecordSource.describedElsewhere(program)
 
-    override fun registerOptions(options: Options, program: Program) = options.register(VfptrModel.OPTION, FILL_ARRAYS)
+    override fun registerOptions(options: Options, program: Program) =
+        options.register(VfptrModel.OPTION, FILL_ARRAYS, INLINED_CONSTRUCTORS)
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))

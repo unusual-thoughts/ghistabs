@@ -69,6 +69,17 @@ class MemberObjectPass(
         val functions get() = ctors + dtors
     }
 
+    /**
+     * A constructor or destructor of [container], as [role], and what it [calls] on `this` + k by k: [function],
+     * or none for a constructor inlined after `operator new`.
+     */
+    private data class Structor(
+        val function: Function?,
+        val container: ContainingClass,
+        val role: StructorRole,
+        val calls: Map<Long, Set<Function>>?,
+    )
+
     /** The subobject at [offset] in [container]. */
     private data class Subobject(val container: ContainingClass, val offset: Long)
 
@@ -121,27 +132,32 @@ class MemberObjectPass(
         val inspector = StructorInspector(program, emptyList(), this, fillArrays)
         val held = linkedMapOf<Subobject, NonPolymorphicClass>()
         known.clear()
-        var structors: Map<Function, Pair<ContainingClass, StructorRole>> =
-            found.roles.mapValues { (_, by) -> ContainingClass.Existing(by.first) to by.second }
-        var calls = found.subobjectCalls
+        // The constructors inlined after `operator new` are their classes' constructors too, with no function.
+        var structors: List<Structor> =
+            found.roles.map { (f, by) ->
+                Structor(f, ContainingClass.Existing(by.first), by.second, found.subobjectCalls[f])
+            } +
+                found.inlined.flatMap { built ->
+                    built.parts.map { Structor(null, ContainingClass.Existing(it.cls), CONSTRUCTOR, it.calls) }
+                }
         for (depth in 1..MAX_DEPTH) {
             if (monitor.isCancelled) break
             val fresh = linkedSetOf<NonPolymorphicClass>()
-            for ((f, by) in structors) {
-                for ((offset, called) in calls[f].orEmpty()) {
-                    val sub = Subobject(by.first, offset)
-                    val structor = memberStructor(f, sub, by.second, called, found) ?: continue
+            for ((f, container, role, calls) in structors) {
+                for ((offset, called) in calls.orEmpty()) {
+                    val sub = Subobject(container, offset)
+                    val structor = memberStructor(f, sub, role, called, found) ?: continue
                     val member = held.getOrPut(sub) { NonPolymorphicClass().also(fresh::add) }
-                    (if (by.second == CONSTRUCTOR) member.ctors else member.dtors) += structor
+                    (if (role == CONSTRUCTOR) member.ctors else member.dtors) += structor
                 }
             }
             if (fresh.isEmpty()) break
             val uses = inspector.readCalls(fresh.flatMap { it.functions }, monitor)
             for (m in fresh) m.stores = mergedStores(m.ctors.map { uses.thisStores[it].orEmpty() })
             structors = fresh.flatMap { m ->
-                m.ctors.map { it to (m to CONSTRUCTOR) } + m.dtors.map { it to (m to DESTRUCTOR) }
-            }.toMap()
-            calls = uses.subobjectCalls
+                m.ctors.map { Structor(it, m, CONSTRUCTOR, uses.subobjectCalls[it]) } +
+                    m.dtors.map { Structor(it, m, DESTRUCTOR, uses.subobjectCalls[it]) }
+            }
         }
         return held
     }
@@ -152,7 +168,7 @@ class MemberObjectPass(
      * [known] at [sub] then.
      */
     private fun memberStructor(
-        f: Function,
+        f: Function?,
         sub: Subobject,
         role: StructorRole,
         called: Set<Function>,

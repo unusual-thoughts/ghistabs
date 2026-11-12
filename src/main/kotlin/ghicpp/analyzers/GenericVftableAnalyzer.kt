@@ -3,6 +3,7 @@ package ghicpp.analyzers
 import ghicpp.VfptrModel
 import ghicpp.recover.*
 import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
+import ghicpp.recover.ClassPass.Companion.INLINED_CONSTRUCTORS
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -47,7 +48,7 @@ class GenericVftableAnalyzer :
     }
 
     override fun registerOptions(options: Options, program: Program) =
-        options.register(VfptrModel.OPTION, FILL_ARRAYS, MEMBER_OBJECTS)
+        options.register(VfptrModel.OPTION, FILL_ARRAYS, INLINED_CONSTRUCTORS, MEMBER_OBJECTS)
 
     override fun canAnalyze(program: Program) = program.compilerSpec.callingConventions.any { it.hasThisPointer() }
 
@@ -55,7 +56,7 @@ class GenericVftableAnalyzer :
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val seeded = GenericVftableFinder(program, sink = sink).seed(monitor)
         val options = program.analyzerOptions(NAME)
-        val pass = ClassPass(program, PlainVtableParser(program, sink), sink, options)
+        val pass = ClassPass(program, PlainVtableParser(program, sink, options[INLINED_CONSTRUCTORS]), sink, options)
         val result = pass.run(monitor)
         val members = result.found?.takeIf { options[MEMBER_OBJECTS] }
             ?.let { MemberObjectPass(program, sink, pass.fillArrays).run(it, monitor) } ?: 0
