@@ -142,8 +142,8 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         val process = ProcessBuilder(
             "swipl",
             File(prolog, "oorules/ooprolog.pl").path,
-            "--oorulespath",
-            prolog.path,
+            "--library-path",
+            File(prolog, "oorules").path,
             "--facts",
             facts.path,
             "--results",
@@ -153,7 +153,8 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         if (!done) process.destroyForcibly()
         assumeTrue(done && results.isFile, "ooprolog gave no results for ${case.id}: see $log")
         val purecalls = PURECALL.findAll(facts.readText()).map { it.groupValues[1].toLong(16) }.toSet()
-        val solved = OoResults(results.readText(), purecalls).snapshot(case.subject)
+        val demangled = TYPE_DESCRIPTOR.findAll(facts.readText()).associate { it.groupValues[1] to it.groupValues[2] }
+        val solved = OoResults(results.readText(), purecalls, demangled).snapshot(case.subject)
         val card = Scorer(truth, solved).score()
         File(out, "ooanalyzer-scorecard.md").writeText(card.markdown("${case.id}: OOAnalyzer's rules over our facts"))
         File(out, "ooanalyzer-subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), solved))
@@ -303,6 +304,8 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         private val COMPACT = Json { ignoreUnknownKeys = true }
         private val COUNTERS = MapSerializer(String.serializer(), Long.serializer())
         private val PURECALL = Regex("""^purecall\(0x([0-9a-f]+)\)\.""", RegexOption.MULTILINE)
+        private val TYPE_DESCRIPTOR =
+            Regex("""^rTTITypeDescriptor\(\w+, \w+, '([^']*)', '([^']*)'\)\.""", RegexOption.MULTILINE)
         private const val OOPROLOG_TIMEOUT_MINUTES = 30L
 
         /** `-Pfixture=<subject>[,…]` narrows the cases to those subjects. */
