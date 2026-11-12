@@ -553,7 +553,11 @@
           primary vptr, this splits every base holding one, secondary and virtual ones too. Its
           <I>Arrays from fill loops</I> option, on by default, types a field a constructor fills in a
           loop counted down from a constant (x86 <CODE>rep stos</CODE>), or with
-          <CODE>memset</CODE> of a constant size, as an array.</TD>
+          <CODE>memset</CODE> of a constant size, as an array. Its <I>Constructors inlined after
+          new</I> option, on by default, reads a constructor the compiler inlined after
+          <CODE>operator new(size)</CODE>: the vptrs stored at the start of what it returns, in
+          order, are bases before the class they build, the last one stored is that class, of the
+          <CODE>new</CODE> size, and the fields stored and members built there are theirs.</TD>
         </TR>
 
         <TR>
@@ -561,7 +565,8 @@
           <TD>gcc 3 and later, without stabs. What <I>MSVC RTTI classes</I> does, off the Itanium
           RTTI: classes from the <CODE>typeinfo</CODE> labels, their bases from the typeinfo, their
           vtables from <I>GCC C++ vftables</I>' labels, with the same <I>Virtual function pointer
-          model</I> and <I>Arrays from fill loops</I> options. With <I>Itanium RTTI symbols</I> this covers
+          model</I>, <I>Arrays from fill loops</I> and <I>Constructors inlined after new</I> options. With
+          <I>Itanium RTTI symbols</I> this covers
           stripped binaries; a program with stabs gets its classes from them.</TD>
         </TR>
 
@@ -596,7 +601,8 @@
           class to each member a constructor builds at an offset into <CODE>this</CODE> with a
           function that stores no vptr, sized off that function's stores and laid in the holding
           class. It has no vtable, so it is named <CODE>NPKlass_&lt;address&gt;</CODE> after its
-          first constructor's address, not a table's, as its struct's description says. It also has the <I>Virtual function pointer model</I> and <I>Arrays from fill loops</I> options. Run it once most of the
+          first constructor's address, not a table's, as its struct's description says. It also has the <I>Virtual function pointer model</I>, <I>Arrays from fill loops</I> and
+          <I>Constructors inlined after new</I> options. Run it once most of the
           program is disassembled and its references marked, and again after: a rerun finds more,
           and cuts a table it seeded where code now refers into it.</TD>
         </TR>

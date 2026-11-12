@@ -43,6 +43,16 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
             val inlined = own.groupBy(::length).toSortedMap().values
             if (inlined.all { it.size == 1 }) inlined.zipWithNext { (base), (derived) -> add(derived, base) }
         }
+        for (built in uses.inlined) {
+            // After `operator new` it can only be building, so each vptr stored is a base of the next.
+            built.order.zipWithNext { base, derived -> add(derived, base) }
+            for (part in built.parts) {
+                val callees = part.calls[0L].orEmpty()
+                for (base in callees.flatMap { uses.stores[it]?.classes.orEmpty() }.filterNot { it in built.order }) {
+                    add(part.cls, base)
+                }
+            }
+        }
     }
 
     /** Off the functions several tables hold in one slot, each introduced by the shortest. */
@@ -69,7 +79,8 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
      * A function storing D's vptr that calls on `this` a function storing B's makes B a base of D, as a constructor
      * builds its bases and a destructor destroys them. A function storing several classes' vptrs at once, inlining
      * its bases', stores a base's first in a constructor and last in a destructor, so there their tables' lengths
-     * order them: a derived class's table holds at least its base's slots.
+     * order them: a derived class's table holds at least its base's slots. A constructor inlined after `operator
+     * new` can only build, so there the order of its stores says.
      *
      * A function several tables hold, in the same slot of each, was introduced by a class all of theirs derive from:
      * the one with the shortest table, if no other is as short, which is then a candidate base of the others. Not
@@ -132,7 +143,12 @@ private fun Set<ClassDecl>.mostDerived(candidates: Map<ClassDecl, Set<ClassDecl>
  * an ABI's vtable symbol nor the stabs import's, read as [PlainVtables]. A class with RTTI goes to its ABI's
  * parser, which knows its bases; these get theirs off their structors ([BaseCandidates.inferBases]).
  */
-class PlainVtableParser(private val program: Program, private val sink: DiagnosticSink = DummySink) : RttiParser {
+class PlainVtableParser(
+    private val program: Program,
+    private val sink: DiagnosticSink = DummySink,
+    /** Whether a constructor inlined after `operator new` orders the bases it builds ([BaseCandidates]). */
+    private val inlinedConstructors: Boolean = true,
+) : RttiParser {
     override val abi get() = PlainVtables
 
     private val symbols = program.symbolTable
@@ -146,7 +162,8 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             .values.map { labels ->
                 PlainClass(labels.first().parentNamespace, labels.map { PlainVtables.recordAt(program, it.address) })
             }
-        val uses = StructorInspector(program, classes, sink).readStorers(monitor)
+        val newNames = if (inlinedConstructors) abi.operatorNewNames else emptySet()
+        val uses = StructorInspector(program, classes, sink, operatorNewNames = newNames).readStorers(monitor)
         val slots = classes.associateWith { c ->
             c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
                 // An unnamed pure virtual stub never returns: it aborts.

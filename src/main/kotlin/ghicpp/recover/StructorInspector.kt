@@ -2,6 +2,7 @@ package ghicpp.recover
 
 import ghicpp.*
 import ghicpp.ClassDecl
+import ghicpp.abi.PlainVtables
 import ghicpp.abi.StructorConvention
 import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.*
@@ -37,9 +38,29 @@ data class VptrStores(
 )
 
 /**
+ * One class's share of an [InlinedConstruction]: what the code from its vptr store up to the next class's calls on
+ * the allocation, by offset into it ([calls]), and the fields it stores there ([fields]).
+ */
+class InlinedPart(val cls: ClassDecl, val calls: Map<Long, Set<Function>>, val fields: Map<Int, DataType>)
+
+/**
+ * A constructor the compiler inlined into [function] after the `operator new(size)` call at [at]: the vptrs it
+ * stores at the start of the fresh allocation, each class's [parts] in the order it stores them. A constructor
+ * stores a base's vptr before the vptr of the class deriving from it, so the last is the class it builds
+ * ([built]), and [size] is how large that is.
+ */
+class InlinedConstruction(val function: Function, val at: Address, val size: Long, val parts: List<InlinedPart>) {
+    /** The classes whose vptrs it stores, bases first. */
+    val order get() = parts.map { it.cls }
+
+    /** The class it builds: the one the others are bases of, else the last stored. */
+    val built: ClassDecl get() = storedClass(order.toSet()) ?: parts.last().cls
+}
+
+/**
  * What [StructorInspector.find] found: each structor's class and role ([roles]), each constructor a linker folded
- * into another class's that builds [folded] classes too, and the fields each function read stores through
- * `this`.
+ * into another class's that builds [folded] classes too, the fields each function read stores through
+ * `this`, and the constructors inlined after an `operator new` ([inlined]).
  */
 class FoundStructors(
     val roles: Map<Function, Pair<ClassDecl, StructorRole>>,
@@ -47,7 +68,13 @@ class FoundStructors(
     private val thisStores: Map<Function, Map<Int, DataType>>,
     /** What each function read calls on `this` or a subobject of it, by offset into it, in the order it calls. */
     val subobjectCalls: Map<Function, Map<Long, Set<Function>>> = emptyMap(),
+    val inlined: List<InlinedConstruction> = emptyList(),
 ) {
+    /** The size each class is allocated with where a constructor is inlined after its `operator new`, the largest. */
+    val inlinedSizes: Map<ClassDecl, Long> by lazy {
+        inlined.groupBy({ it.built }, { it.size }).mapValues { (_, sizes) -> sizes.max() }
+    }
+
     /** Each constructor, by the class it builds. */
     val constructors = roles.filterValues { it.second == CONSTRUCTOR }.mapValues { it.value.first }
 
@@ -58,9 +85,11 @@ class FoundStructors(
      */
     val constructorStores: Map<ClassDecl, Map<Int, DataType>> by lazy {
         val built = constructors.map { (f, cls) -> f to cls } + folded.flatMap { (f, cs) -> cs.map { f to it } }
-        built.groupBy({
-            it.second
-        }, { it.first }).mapValues { (_, fs) -> mergedStores(fs.map { thisStores[it].orEmpty() }) }
+        val byClass = built.groupBy({ it.second }, { thisStores[it.first].orEmpty() })
+        val parts = inlined.flatMap { it.parts }.groupBy({ it.cls }, { it.fields })
+        (byClass.keys + parts.keys).associateWith { cls ->
+            mergedStores(byClass[cls].orEmpty() + parts[cls].orEmpty())
+        }
     }
 }
 
@@ -75,15 +104,20 @@ internal fun mergedStores(stores: Iterable<Map<Int, DataType>>): Map<Int, DataTy
  * Decompiles functions for what they do with `this` ([ThisUses]): the vptrs they store, the fields they store and
  * so the layout of the struct, and what they call on `this` + k. Off that, it tells [classes]' constructors and
  * destructors apart ([find]). With [fillArrays], a field one fills in a counted loop or with `memset` is read as
- * an array ([thisFills]).
+ * an array ([fills]).
  */
 class StructorInspector(
     private val program: Program,
     classes: Collection<ClassDecl>,
     sink: DiagnosticSink,
     private val fillArrays: Boolean = true,
+    /** The names of `operator new(size)`, after whose call a constructor inlined builds its object ([inlined]). */
+    private val operatorNewNames: Set<String> = PlainVtables.operatorNewNames,
 ) : DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
+
+    /** Whether a pointer points into the function's incoming `this`. */
+    private val intoThis: (PointerInto) -> Boolean = { it.isThis(thisStorage) }
 
     private val tables = classes.vptrTables(program)
 
@@ -118,7 +152,7 @@ class StructorInspector(
             thisStores += more.thisStores
             built = found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
         }
-        return FoundStructors(roles, folded, thisStores, subobjectCalls)
+        return FoundStructors(roles, folded, thisStores, subobjectCalls, uses.inlined)
     }
 
     /** What [funcs] store and call through `this`, decompiled, whatever vptrs they store. */
@@ -149,12 +183,13 @@ class StructorInspector(
     /**
      * What each decompiled function does with `this`: the vptrs it stores ([stores]), the functions it calls on
      * `this` or a subobject of it, by offset into it ([subobjectCalls]), and the fields it stores through `this`, by
-     * offset ([thisStores]).
+     * offset ([thisStores]), and the constructors inlined after an `operator new` ([inlined]).
      */
     class ThisUses(
         val stores: Map<Function, VptrStores>,
         val subobjectCalls: Map<Function, Map<Long, Set<Function>>>,
         val thisStores: Map<Function, Map<Int, DataType>> = emptyMap(),
+        val inlined: List<InlinedConstruction> = emptyList(),
     ) {
         /** The functions each calls on `this` itself. */
         private val thisCalls = subobjectCalls.mapValues { (_, calls) -> calls[0L].orEmpty() }
@@ -269,7 +304,8 @@ class StructorInspector(
     /**
      * The stores of each function writing one of [tables], and what those and [others] call on `this`. A
      * store counts only through `this` at the table's own offset, which leaves out locals built inline and
-     * member objects; a call, only with `this` first, which leaves out a local built and destroyed.
+     * member objects; a call, only with `this` first, which leaves out a local built and destroyed. A store into
+     * what `operator new` just returned is a constructor inlined there ([inlined]).
      */
     private fun read(others: Collection<Function>, monitor: TaskMonitor): ThisUses {
         monitor.message = "Finding vptr stores"
@@ -298,6 +334,7 @@ class StructorInspector(
         val stores = mutableMapOf<Function, VptrStores>()
         val subobjectCalls = mutableMapOf<Function, Map<Long, Set<Function>>>()
         val thisStores = mutableMapOf<Function, Map<Int, DataType>>()
+        val inlined = mutableListOf<InlinedConstruction>()
         if (thisStorage != null) {
             val fill = FillOutStructureHelper(program, monitor)
             monitor.initialize(funcs.size.toLong(), message)
@@ -305,17 +342,69 @@ class StructorInspector(
                 for (func in funcs) {
                     monitor.incrementProgress()
                     val high = decomp.decompiled(func, monitor) ?: continue
-                    val calls = high.subobjectCalls()
+                    writes[func]?.let { inlined += fill.inlined(high, it) }
+                    val calls = high.subobjectCalls(intoThis)
                     val filled = fill.fillThis(high)
                     writes[func]?.let { stores[func] = filled.vptrStores(it, calls) }
                     subobjectCalls[func] =
                         calls.groupBy({ it.offset }, { it.callee }).mapValues { (_, fs) -> fs.toSet() }
-                    val fills = if (fillArrays) high.thisFills() else emptyMap()
+                    val fills = if (fillArrays) high.fills(intoThis).associate { it.second } else emptyMap()
                     thisStores[func] = filled.thisStores(storedOnly).withFills(fills)
                 }
             }
         }
-        return ThisUses(stores, subobjectCalls, thisStores)
+        return ThisUses(stores, subobjectCalls, thisStores, inlined)
+    }
+
+    /**
+     * The constructors [high] inlines after a call of `operator new` with a constant size: what the call returns
+     * followed as `this` is, through copies, casts and offsets, and which of [at]'s vptrs go at its start. Each
+     * class's part runs from its first store to the next class's, the first's from the call, and the last's to
+     * the end of the function. None where the allocation takes no vptr of these classes.
+     */
+    private fun FillOutStructureHelper.inlined(
+        high: HighFunction,
+        at: Map<Address, List<Pair<ClassDecl, Long>>>,
+    ): List<InlinedConstruction> = high.pcodeOps.asSequence().filter { it.isOperatorNew() }.toList().mapNotNull { new ->
+        val size = new.getInput(1).takeIf { it.isConstant }?.offset?.takeIf { it > 0 } ?: return@mapNotNull null
+        val fresh = new.output?.high ?: return@mapNotNull null
+        processStructure(fresh, high.function, true, false, null)
+        val stores = storePcodeOps.toList()
+        val firsts = linkedMapOf<ClassDecl, Address>()
+        for (store in stores.sortedBy { it.pcodeOp.seqnum.target }) {
+            val where = store.pcodeOp.seqnum.target
+            for ((cls, offset) in at[where].orEmpty()) {
+                if (offset == store.offset && offset == 0L) firsts.putIfAbsent(cls, where)
+            }
+        }
+        if (firsts.isEmpty()) return@mapNotNull null
+        val starts = firsts.values.drop(1)
+        fun part(where: Address) = starts.count { it <= where }
+        val into: (PointerInto) -> Boolean = { it.root == fresh }
+        val calls = high.subobjectCalls(into).filter { it.at > new.seqnum.target }
+        val types = componentMap.iterator().asSequence().associate { (offset, dt) -> offset.toInt() to dt }
+        val fields = stores.mapNotNull { store ->
+            val dt = types[store.offset.toInt()]?.takeIf { it.length > 0 } ?: return@mapNotNull null
+            store.pcodeOp.seqnum.target to (store.offset.toInt() to dt)
+        }
+        val fills = if (fillArrays) high.fills(into) else emptyList()
+        val parts = firsts.keys.mapIndexed { i, cls ->
+            fun <T> List<Pair<Address, T>>.own() = filter { part(it.first) == i }.map { it.second }
+            InlinedPart(
+                cls,
+                calls.filter { part(it.at) == i }
+                    .groupBy({ it.offset }, { it.callee }).mapValues { (_, fs) -> fs.toCollection(linkedSetOf()) },
+                fields.own().toMap().withFills(fills.own().toMap()),
+            )
+        }
+        InlinedConstruction(high.function, new.seqnum.target, size, parts)
+            .also { debug("structor-inlined", "${it.built.name} after operator new($size)", it.at) }
+    }
+
+    private fun PcodeOp.isOperatorNew(): Boolean {
+        if (opcode != PcodeOp.CALL || numInputs < 2) return false
+        val f = program.functionManager.getFunctionAt(getInput(0).address) ?: return false
+        return (f.getThunkedFunction(true) ?: f).name in operatorNewNames
     }
 
     private fun DecompInterface.decompiled(func: Function, monitor: TaskMonitor): HighFunction? {
@@ -351,21 +440,21 @@ class StructorInspector(
      * stores each turn of a loop that a counter counts down from a constant, as x86's `rep stos` does, or a
      * call of `memset` with a constant size.
      */
-    private fun HighFunction.thisFills(): Map<Int, DataType> = buildMap {
-        for (op in pcodeOps.asSequence()) {
+    private fun HighFunction.fills(into: (PointerInto) -> Boolean): List<Pair<Address, Pair<Int, DataType>>> =
+        pcodeOps.asSequence().mapNotNull { op ->
             when (op.opcode) {
-                PcodeOp.STORE -> loopFill(op)?.let { (at, dt) -> put(at, dt) }
-                PcodeOp.CALL -> memsetFill(op)?.let { (at, dt) -> put(at, dt) }
-            }
-        }
-    }
+                PcodeOp.STORE -> loopFill(op, into)
+                PcodeOp.CALL -> memsetFill(op, into)
+                else -> null
+            }?.let { op.seqnum.target to it }
+        }.toList()
 
     /** The array the loop [store] stores in fills, where its pointer steps from `this` + k by what it stores. */
-    private fun loopFill(store: PcodeOp): Pair<Int, DataType>? {
+    private fun loopFill(store: PcodeOp, into: (PointerInto) -> Boolean): Pair<Int, DataType>? {
         val size = store.getInput(2).size
         val phi = store.getInput(1).uncopied().def?.takeIf { it.opcode == PcodeOp.MULTIEQUAL } ?: return null
         val inputs = phi.inputs.map { it.uncopied() }
-        val start = inputs.firstNotNullOfOrNull { it.thisOffset() } ?: return null
+        val start = inputs.firstNotNullOfOrNull { it.offsetInto(into) } ?: return null
         if (inputs.none { it.steps(phi.output, size.toLong()) }) return null
         val count = phi.parent.countdown() ?: return null
         val elem = Undefined.getUndefinedDataType(size)
@@ -373,11 +462,11 @@ class StructorInspector(
     }
 
     /** `memset(this + k, c, n)`'s n bytes at k, where `memset` is named so and n is a constant. */
-    private fun memsetFill(call: PcodeOp): Pair<Int, DataType>? {
+    private fun memsetFill(call: PcodeOp, into: (PointerInto) -> Boolean): Pair<Int, DataType>? {
         if (call.numInputs < 4) return null
         val callee = program.functionManager.getFunctionAt(call.getInput(0).address) ?: return null
         if ((callee.getThunkedFunction(true) ?: callee).name !in MEMSET_NAMES) return null
-        val at = call.getInput(1).uncopied().thisOffset() ?: return null
+        val at = call.getInput(1).uncopied().offsetInto(into) ?: return null
         val n = call.getInput(3).uncopied().takeIf { it.isConstant }?.offset?.toInt()?.takeIf { it in 1..MAX_FILL }
             ?: return null
         return at.toInt() to ArrayDataType(Undefined1DataType.dataType, n, 1, program.dataTypeManager)
@@ -425,13 +514,14 @@ class StructorInspector(
     /** A call at [at] of [callee] with a pointer [offset] bytes into `this` first. */
     private class SubobjectCall(val at: Address, val offset: Long, val callee: Function)
 
-    /** The calls this makes with a pointer into `this` first. */
-    private fun HighFunction.subobjectCalls(): List<SubobjectCall> = pcodeOps.asSequence().mapNotNull { op ->
-        if (op.opcode != PcodeOp.CALL || op.numInputs < 2) return@mapNotNull null
-        val offset = op.getInput(1).thisOffset() ?: return@mapNotNull null
-        val callee = program.functionManager.getFunctionAt(op.getInput(0).address) ?: return@mapNotNull null
-        SubobjectCall(op.seqnum.target, offset, callee.getThunkedFunction(true) ?: callee)
-    }.toList()
+    /** The calls this makes with a pointer into `this`, or what else [into] says, first. */
+    private fun HighFunction.subobjectCalls(into: (PointerInto) -> Boolean): List<SubobjectCall> =
+        pcodeOps.asSequence().mapNotNull { op ->
+            if (op.opcode != PcodeOp.CALL || op.numInputs < 2) return@mapNotNull null
+            val offset = op.getInput(1).offsetInto(into) ?: return@mapNotNull null
+            val callee = program.functionManager.getFunctionAt(op.getInput(0).address) ?: return@mapNotNull null
+            SubobjectCall(op.seqnum.target, offset, callee.getThunkedFunction(true) ?: callee)
+        }.toList()
 
     /**
      * Which of the vptrs [at] holds the function filled stores through `this`, at the offset each belongs at,
@@ -456,8 +546,8 @@ class StructorInspector(
         )
     }
 
-    /** How far past `this` [this] points; null if it points into something else. */
-    private fun Varnode.thisOffset() = pointerInto()?.takeIf { it.isThis(thisStorage) }?.offset
+    /** How far past what [into] says, `this` say, [this] points; null if it points into something else. */
+    private fun Varnode.offsetInto(into: (PointerInto) -> Boolean) = pointerInto()?.takeIf(into)?.offset
 
     private companion object {
         val MEMSET_NAMES = setOf("memset", "_memset")

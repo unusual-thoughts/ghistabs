@@ -38,6 +38,9 @@ class ClassPass(
     /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([StructorInspector]). */
     var fillArrays: Boolean by FILL_ARRAYS
 
+    /** Whether a constructor inlined after `operator new` is read for its class's size, bases and fields. */
+    var inlinedConstructors: Boolean by INLINED_CONSTRUCTORS
+
     init {
         options?.let { import(it) }
     }
@@ -63,7 +66,13 @@ class ClassPass(
         val read = parser.parse(monitor)
         stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
-        val inspector = StructorInspector(program, read.classes, this, fillArrays)
+        val inspector = StructorInspector(
+            program,
+            read.classes,
+            this,
+            fillArrays,
+            if (inlinedConstructors) abi.operatorNewNames else emptySet(),
+        )
         val found = inspector.find(read.holders, abi, monitor)
         val structors = found.roles
         var moved = 0
@@ -92,7 +101,11 @@ class ClassPass(
             val align = if (cls.vftables.isEmpty()) 1L else program.defaultPointerSize.toLong()
             (end + align - 1) / align * align
         }
-        val sizes = sizeClasses(read.classes, AllocationSizeFinder(program, abi, this).read(ctors, monitor), reached)
+        val called = AllocationSizeFinder(program, abi, this).read(ctors, monitor)
+        val allocated = (called.keys + found.inlinedSizes.keys).associateWith { cls ->
+            maxOf(called[cls] ?: 0L, found.inlinedSizes[cls] ?: 0L)
+        }
+        val sizes = sizeClasses(read.classes, allocated, reached)
         monitor.message = "Filling class structs"
         val filled = ClassStructFiller(program, abi, this, vfptrModel).fillAll(read.recorded, stores)
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
@@ -244,6 +257,13 @@ class ClassPass(
             "Arrays from fill loops",
             "Type a field a constructor fills in a loop counted down from a constant, as x86's rep stos does, " +
                 "or with memset of a constant size, as an array",
+            true,
+        )
+        val INLINED_CONSTRUCTORS = BoolOption(
+            "Constructors inlined after new",
+            "Read the vtables, fields and member constructors that code stores into or calls on what " +
+                "operator new(size) returns as a constructor inlined there: the last vtable stored is the class " +
+                "built, of that size, each one before it a base of the next",
             true,
         )
     }
