@@ -7,6 +7,7 @@ import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.runTransaction
 import ghistabs.harvest.Func

@@ -9,10 +9,10 @@ import ghidra.docking.settings.SettingsImpl
  * what 12's `SettingsImpl` returns; the other implementations a component hands out
  * (`ComponentDBSettings`) answer false there too.
  *
- * Declared in each caller's own package so that 12.0+, where this file is not compiled, has no import
- * left pointing at nothing.
+ * Callers reach it through `import ghidrakt.*`, a package that exists on every version, so 12.0+, where
+ * this file is not compiled, has no import left pointing at nothing.
  */
-internal val Settings.isImmutableSettings: Boolean
+val Settings.isImmutableSettings: Boolean
     get() = this is SettingsImpl && immutable.getBoolean(this)
 
 private val immutable = SettingsImpl::class.java.getDeclaredField("immutable").apply { isAccessible = true }
