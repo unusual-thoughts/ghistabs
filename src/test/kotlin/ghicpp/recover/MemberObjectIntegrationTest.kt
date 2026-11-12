@@ -124,6 +124,26 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         sink.lines.filter { it.tag == "member-unplaced" } mustBe emptyList()
     }
 
+    @Test
+    fun `a member running into its holder's own fields stretches them back to hold it`() {
+        // mov dword ptr [esi+0xc], 1; nop: the holder's own fields start inside the member at +8.
+        build(afterMember = "c7 46 0c 01 00 00 00 90")
+        val sink = CapturingSink()
+        program.runTransaction("recover") {
+            GenericVftableFinder(program).seed() mustBe 1
+            val found = ClassPass(program, PlainVtableParser(program), sink).run(TaskMonitor.DUMMY).found!!
+            MemberObjectPass(program, sink).run(found) mustBe 1
+        }
+        val member = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
+        val holder = structOf("${GenericVftableFinder.SEEDED_CLASS_PREFIX}00402010")
+        val own = holder.getComponentAt(8).dataType as Structure
+        own.name mustBe "${GenericVftableFinder.SEEDED_CLASS_PREFIX}00402010_data"
+        own.getComponentAt(0).dataType.name mustBe member
+        holder.length mustBe 32
+        own.length mustBe 24
+        sink.lines.filter { it.tag == "member-unplaced" } mustBe emptyList()
+    }
+
     private companion object {
         /** lea ecx, [esi+8]; call MEMBER_METHOD */
         const val CALL_MEMBER_METHOD = "8d 4e 08 e8 8c 00 00 00"
