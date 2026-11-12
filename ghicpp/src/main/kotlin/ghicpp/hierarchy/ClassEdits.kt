@@ -30,7 +30,7 @@ sealed interface Drop {
 }
 
 /** Why the namespace at [from] can't move under the one at [to], or null when it can. */
-internal fun checkNamespaceMove(from: List<String>, to: List<String>): String? = when {
+fun checkNamespaceMove(from: List<String>, to: List<String>): String? = when {
     to == from.dropLast(1) -> "${from.joinToString("::")} is already there"
     to.startsWith(from) -> "a namespace can't move into itself"
     else -> null
@@ -44,11 +44,11 @@ internal fun checkNamespaceMove(from: List<String>, to: List<String>): String? =
 data class BaseEdit(val of: ClassView, val removed: BaseRef?, val added: ClassView? = null)
 
 /** An edit of [owner]'s base clause [edge] that keeps its base, to spell it anew; null for a base with no class. */
-internal fun ClassHierarchy.reclause(owner: ClassView, edge: BaseRef): BaseEdit? =
+fun ClassHierarchy.reclause(owner: ClassView, edge: BaseRef): BaseEdit? =
     this[edge]?.takeIf { owner.origin != Origin.LIBRARY && edge in owner.bases }?.let { BaseEdit(owner, edge, it) }
 
 /** Whether this keeps the base it removes, only spelling its clause anew. */
-internal val BaseEdit.isReclause get() = added != null && removed?.targetId == added.id
+val BaseEdit.isReclause get() = added != null && removed?.targetId == added.id
 
 /**
  * The edits a drop in the Class Hierarchy window asks for: [owner] gains [base], and [removedFrom] loses
@@ -57,12 +57,7 @@ internal val BaseEdit.isReclause get() = added != null && removed?.targetId == a
  * where the new base takes the old one's place. [base] null (a drop on the root or a namespace) only
  * removes, and [owner] then just names the dragged class.
  */
-internal fun ClassHierarchy.planDrop(
-    owner: ClassView,
-    base: ClassView?,
-    removedFrom: ClassView?,
-    edge: BaseRef?,
-): Drop {
+fun ClassHierarchy.planDrop(owner: ClassView, base: ClassView?, removedFrom: ClassView?, edge: BaseRef?): Drop {
     val replaced = edge.takeIf { removedFrom?.id == owner.id }
     return when {
         base == null && removedFrom != null -> Drop.MoveBase(BaseEdit(removedFrom, edge))
@@ -104,7 +99,7 @@ internal fun ClassView.solidSource(): String? =
     origin.desc.removePrefix("from ").takeIf { origin.baseSource == SourceType.IMPORTED }
 
 /** What ties [member] to its class when that is worth a warning before moving it: null if nothing does. */
-internal fun Program.memberSource(member: Member): String? {
+fun Program.memberSource(member: Member): String? {
     val at = addressFactory.getAddress(member.address)
     return when {
         at != null && memberAttrs(at)?.source == SourceType.IMPORTED -> "the stabs"
@@ -120,7 +115,7 @@ internal fun Program.memberSource(member: Member): String? {
  * Sets [owner]'s bases to [bases], by hand ([ClassHierarchyRecords.EDITS]): the class then shows these
  * whatever its stabs or typeinfo say.
  */
-internal fun Program.setBases(owner: ClassView, bases: List<BaseRef>) {
+fun Program.setBases(owner: ClassView, bases: List<BaseRef>) {
     val entries = bases.map {
         ClassHierarchyRecords.Base(
             it.targetId,
@@ -134,7 +129,7 @@ internal fun Program.setBases(owner: ClassView, bases: List<BaseRef>) {
 }
 
 /** [edit] applied to its owner's bases, [added] spelled as [clause] gives it. */
-internal fun BaseEdit.bases(clause: BaseRef?): List<BaseRef> {
+fun BaseEdit.bases(clause: BaseRef?): List<BaseRef> {
     val kept = of.bases.toMutableList()
     val at = removed?.let(kept::indexOf)?.takeIf { it >= 0 }
     at?.let(kept::removeAt)
@@ -143,7 +138,7 @@ internal fun BaseEdit.bases(clause: BaseRef?): List<BaseRef> {
 }
 
 /** What [base] takes up embedded in a deriving class: its self-base, else its struct. Null for an empty one. */
-internal fun Program.embeddingOf(base: ClassView): Structure? {
+fun Program.embeddingOf(base: ClassView): Structure? {
     val struct = base.structId?.let(dataTypeManager::getDataType) as? Structure ?: return null
     // Where ClassUtils.getSelfBaseType (11.1+) looks: the self-base sits at its base-class path.
     val selfBase = dataTypeManager.getDataType(ClassUtils.getBaseClassDataTypePath(struct)) as? Structure
@@ -155,7 +150,7 @@ internal fun Program.structOf(cls: ClassView): Structure? =
     cls.structId?.let(dataTypeManager::getDataType) as? Structure
 
 /** The fields of [cls]'s struct that [base] placed at [offset] would overwrite. */
-internal fun Program.overwrittenBy(cls: ClassView, base: ClassView, offset: Int): List<DataTypeComponent> {
+fun Program.overwrittenBy(cls: ClassView, base: ClassView, offset: Int): List<DataTypeComponent> {
     val struct = structOf(cls) ?: return emptyList()
     val part = embeddingOf(base) ?: return emptyList()
     return struct.componentsOverlapping(offset, part.length)
@@ -168,13 +163,7 @@ internal fun Program.overwrittenBy(cls: ClassView, base: ClassView, offset: Int)
  * `_base_<Base>` (`_vbase_` for a virtual one), and a lone `_base_` already there takes its type's name
  * once [baseCount] makes it one of several. Returns why it couldn't, or null.
  */
-internal fun Program.placeBase(
-    cls: ClassView,
-    base: ClassView,
-    offset: Int,
-    isVirtual: Boolean,
-    baseCount: Int,
-): String? {
+fun Program.placeBase(cls: ClassView, base: ClassView, offset: Int, isVirtual: Boolean, baseCount: Int): String? {
     val struct = structOf(cls) ?: return "${cls.qualifiedName} has no struct"
     val part = embeddingOf(base) ?: return "${base.qualifiedName} has no struct with data"
     if (struct.isPackingEnabled) return "${struct.name} is packed, so its fields have no fixed offsets"
@@ -194,7 +183,7 @@ internal fun Program.placeBase(
  * the field the base's struct or self-base takes, or, split around the class's own vfptr, its
  * `<Base>_fields_…` run. False when no field holds it.
  */
-internal fun Program.respellBase(cls: ClassView, base: ClassView, isVirtual: Boolean, baseCount: Int): Boolean {
+fun Program.respellBase(cls: ClassView, base: ClassView, isVirtual: Boolean, baseCount: Int): Boolean {
     val struct = structOf(cls) ?: return false
     val part = embeddingOf(base)
     val runs = base.name + ClassNaming.FIELDS + "_"
@@ -206,7 +195,7 @@ internal fun Program.respellBase(cls: ClassView, base: ClassView, isVirtual: Boo
 }
 
 /** Moves [member]'s symbol into [target]'s namespace. Throws what Ghidra does (a name taken there). */
-internal fun Program.moveMember(member: Member, target: ClassView) {
+fun Program.moveMember(member: Member, target: ClassView) {
     val ns = resolve(target) ?: error("no namespace for ${target.qualifiedName}")
     val sym = member.symbolId?.let(symbolTable::getSymbol) ?: error("no symbol for ${member.name}")
     sym.setNameAndNamespace(sym.name, ns, sym.source.takeUnless { it == SourceType.DEFAULT } ?: SourceType.USER_DEFINED)
@@ -215,12 +204,12 @@ internal fun Program.moveMember(member: Member, target: ClassView) {
 fun Program.resolve(cls: ClassView) = symbolTable.getSymbol(cls.id)?.`object` as? GhidraClass
 
 /** The functions [ns] holds, its thunks and imports aside. */
-internal fun Program.methodsOf(ns: GhidraClass): List<Function> = symbolTable.getSymbols(ns)
+fun Program.methodsOf(ns: GhidraClass): List<Function> = symbolTable.getSymbols(ns)
     .filter { it.symbolType == SymbolType.FUNCTION && !it.isExternal }
     .mapNotNull { functionManager.getFunctionAt(it.address)?.takeUnless(Function::isThunk) }
 
 /** The function at [m]'s address, when it is a function member. */
-internal fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == MemberKind.FUNCTION }
+fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == MemberKind.FUNCTION }
     ?.let { addressFactory.getAddress(it.address) }
     ?.let(functionManager::getFunctionAt)
 
@@ -228,7 +217,7 @@ internal fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == Me
  * Retypes [cls]'s own fields off what [methods] load and store through `this`, or off all of [methodsOf] its
  * namespace's when null.
  */
-internal fun Program.updateFieldTypes(cls: ClassView, methods: List<Function>?, monitor: TaskMonitor) {
+fun Program.updateFieldTypes(cls: ClassView, methods: List<Function>?, monitor: TaskMonitor) {
     val ns = resolve(cls) ?: return
     updateFieldTypes(ns, methods ?: methodsOf(ns), monitor)
 }
@@ -252,7 +241,7 @@ internal fun Program.slotDefinitionsOf(func: Function): Set<FunctionDefinition> 
  * does for a whole class: every vftable holding it then calls it so. A definition keeps its name. How many
  * it changed.
  */
-internal fun Program.applySignatureToSlots(func: Function): Int {
+fun Program.applySignatureToSlots(func: Function): Int {
     val defs = slotDefinitionsOf(func)
     for (def in defs) {
         def.replaceWith(
@@ -278,7 +267,7 @@ internal fun Program.applySignatureToSlots(func: Function): Int {
  * else that can't take its new name (a datatype already so named) keeps the old one, and is listed in
  * what this returns.
  */
-internal fun Program.renameClass(hierarchy: ClassHierarchy, cls: ClassView, newName: String): List<String> {
+fun Program.renameClass(hierarchy: ClassHierarchy, cls: ClassView, newName: String): List<String> {
     val ns = resolve(cls) ?: return listOf("no class namespace")
     val old = ns.name
     if (newName == old) return emptyList()
@@ -381,7 +370,7 @@ private fun Program.renameInDerived(
  * before anything changes. Anything else that can't move keeps its place, and is listed in what this
  * returns.
  */
-internal fun Program.relocateNamespace(ns: Namespace, newParent: Namespace, newName: String = ns.name): List<String> {
+fun Program.relocateNamespace(ns: Namespace, newParent: Namespace, newName: String = ns.name): List<String> {
     val oldPath = ns.path
     // Each class at or under it, with its struct and its path now.
     val classes = (sequenceOf(ns) + ns.nestedNamespaces()).filterIsInstance<GhidraClass>()

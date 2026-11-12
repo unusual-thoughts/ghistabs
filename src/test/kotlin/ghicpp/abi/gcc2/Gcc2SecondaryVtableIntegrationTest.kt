@@ -3,8 +3,8 @@ package ghicpp.abi.gcc2
 import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.LoadedProgram
-import ghistabs.integration.Fixtures
 import ghidrakt.loadProgram
+import ghistabs.integration.Fixtures
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
 import ghistabs.test.mustBe

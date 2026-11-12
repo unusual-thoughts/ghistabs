@@ -2,6 +2,9 @@
 # happens to be named `build` — it silently swallowed build-logic/src/main/kotlin/ghistabs/build/.
 /build/
 /build-logic/build/
+/ghidrakt/build/
+/ghicpp/build/
+/ghicpp/dist/
 /build-logic/buildSrc/
 /buildSrc/
 /dist/

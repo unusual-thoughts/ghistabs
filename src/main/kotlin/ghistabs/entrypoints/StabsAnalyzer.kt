@@ -12,12 +12,12 @@ import ghidrakt.diagnose.BookmarkSink
 import ghidrakt.diagnose.MessageLogSink
 import ghidrakt.diagnose.StabsDiagnostics
 import ghidrakt.diagnose.TeeSink
+import ghidrakt.runTransaction
 import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.ImportOptions.Companion.registerStabs
 import ghistabs.importer.ImportOptions.Companion.stabsOptions
 import ghistabs.parse.StabReader
-import ghidrakt.runTransaction
 
 /**
  * Imports STABS debug info (.stab/.stabstr) into Ghidra: types, function signatures,

@@ -6,9 +6,9 @@ import ghicpp.qualifiedName
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghidrakt.componentsOverlapping
+import ghidrakt.runTransaction
 import ghistabs.harvest.Type
 import ghistabs.parse.*
-import ghidrakt.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum
 
 internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath, placeholder: DataType): DataType =

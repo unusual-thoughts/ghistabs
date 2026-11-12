@@ -11,13 +11,13 @@ import ghidra.program.model.data.Enum as GhidraEnum
  * types in the same categories, and a re-import's type replaced or adopted in place keeps its earlier
  * DTM id.
  */
-open class DtmRegistry(internal val dtm: DataTypeManager) {
+open class DtmRegistry(val dtm: DataTypeManager) {
     // Replace-empty, not keep: when we file a type under its namespace category (scope attribution), it
     // collides with the empty this-param shadow Ghidra's demangler forged there (`std::X::method` → empty
     // `/std/X`). KEEP_HANDLER would return that empty shadow and discard our filled type, so every
     // reference resolves to undefined; REPLACE_EMPTY_STRUCTS fills the shadow with ours (and still
     // RENAME_AND_ADDs two genuinely-distinct non-empty types, like DEFAULT_HANDLER).
-    private val conflictHandler = DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER
+    @PublishedApi internal val conflictHandler = DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER
 
     /** Ids of the types in the DTM before this import: an earlier import's, and analysis's own. */
     private val preexisting = dtm.allDataTypes.asSequence().mapTo(HashSet()) { dtm.getID(it) }
@@ -64,14 +64,14 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
     private val registered = LinkedHashSet<DataType>()
 
     /** Everything [register]ed or [adopt]ed so far. */
-    internal val registeredTypes: Set<DataType> get() = registered
+    val registeredTypes: Set<DataType> get() = registered
 
     /** [resolveIntoDtm], recorded in [registered]. Returns the DTM-resolved instance (may differ). */
-    internal fun register(dt: DataType, handler: DataTypeConflictHandler = conflictHandler) =
+    fun register(dt: DataType, handler: DataTypeConflictHandler = conflictHandler) =
         dt.resolveIntoDtm(handler).also { registered.add(it) }
 
     /** [register] for a vftable slot's function definition, over an earlier import's: see [reimportHandler]. */
-    internal fun registerAgain(dt: DataType): DataType = register(dt, reimportHandler)
+    fun registerAgain(dt: DataType): DataType = register(dt, reimportHandler)
 
     /**
      * Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. One found there is
@@ -79,7 +79,7 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
      * definitions it points at, so a re-import's registry reads as the first's did. A [handler] replaces
      * the shared one for what [build] gives.
      */
-    internal inline fun <reified T : DataType> getOrRegister(
+    inline fun <reified T : DataType> getOrRegister(
         path: DataTypePath,
         handler: DataTypeConflictHandler = conflictHandler,
         build: () -> T,
@@ -94,7 +94,7 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
      * than rebuilt: a swept vftable slot is typed off its target's signature, which the earlier import
      * has since typed, so rebuilding it would not give back what it was.
      */
-    internal fun <T : DataType> adopt(existing: T): T = existing.also {
+    @PublishedApi internal fun <T : DataType> adopt(existing: T): T = existing.also {
         if (!registered.add(it)) return it
         for (c in (it as? Composite)?.definedComponents.orEmpty()) {
             val fd = (c.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
@@ -106,7 +106,7 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
      * [layout] as the DTM holds it: the one an earlier import or pass left at its path, else resolved in, the
      * layouts it points at kept as the DTM has them (KEEP_HANDLER), so nothing forks a `.conflict`.
      */
-    internal fun resolveLayout(layout: StructureDataType) =
+    fun resolveLayout(layout: StructureDataType) =
         getOrRegister<Structure>(layout.dataTypePath, DataTypeConflictHandler.KEEP_HANDLER) { layout }
             .also { copyFormats(layout, it) }
 }

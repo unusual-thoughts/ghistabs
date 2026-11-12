@@ -4,11 +4,11 @@ import ghicpp.abi.gcc2.Gcc2
 import ghidra.program.model.data.CategoryPath
 import ghidrakt.Demangler
 import ghidrakt.diagnose.StabsDiagnostics
+import ghidrakt.toCategoryPath
 import ghistabs.harvest.*
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
-import ghidrakt.toCategoryPath
 
 /**
  * Stdlib path marker. Requires `/usr|lib|include/` (plus one optional segment) before a stdlib

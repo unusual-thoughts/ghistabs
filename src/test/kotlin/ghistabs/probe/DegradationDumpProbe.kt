@@ -4,12 +4,12 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.CapturingSink
+import ghidrakt.runTransaction
+import ghidrakt.withProgram
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.importer.import
-import ghidrakt.runTransaction
 import ghistabs.test.importAndAnalyze
-import ghidrakt.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance

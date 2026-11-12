@@ -4,12 +4,12 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghidrakt.runTransaction
+import ghidrakt.withProgram
 import ghistabs.importer.ImportProbe
 import ghistabs.materialize.resolveRef
-import ghidrakt.runTransaction
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
-import ghidrakt.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest

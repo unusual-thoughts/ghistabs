@@ -3,12 +3,12 @@ package ghistabs.probe
 import ghidra.app.util.importer.MessageLog
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghidrakt.withProgram
 import ghistabs.harvest.Func
 import ghistabs.harvest.identity
 import ghistabs.index.hasHeaderExtension
 import ghistabs.parse.StabReader
 import ghistabs.test.defaultContext
-import ghidrakt.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance

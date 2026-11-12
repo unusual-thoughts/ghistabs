@@ -180,7 +180,7 @@ object Itanium : CxxAbi {
     }
 
     /** A `_ZTI` symbol, told without demangling. */
-    internal fun looksLikeZti(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(TYPEINFO_PREFIX)
+    fun looksLikeZti(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(TYPEINFO_PREFIX)
 
     /** The kind of special name [symbolName] is, or null for a source-level or unmangled one. */
     fun specialName(symbolName: String): SpecialName? {
@@ -196,7 +196,7 @@ object Itanium : CxxAbi {
     }
 
     /** Whether [obj] is [className]'s demangled vtable. */
-    internal fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
+    fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
 
     /** The qualified class of a demangled `<kind> for <class>` table, or null if [obj] is no [kind]. */
     private fun addressTableClass(obj: DemangledObject, kind: String): String? {

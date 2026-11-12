@@ -11,10 +11,10 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghidrakt.runTransaction
 import ghistabs.entrypoints.Correction
 import ghistabs.entrypoints.STRUCT_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StructReturnAnalyzer
-import ghidrakt.runTransaction
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeEmpty
