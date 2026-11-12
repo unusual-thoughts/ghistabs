@@ -99,6 +99,9 @@ object ClassNaming {
     /** Where that secondary's slot definitions go, apart from the primary's: `internal_<i>`. */
     fun internalSlotCategory(primary: DataTypePath, i: Int) = CategoryPath(primary.categoryPath, "$INTERNAL_PREFIX$i")
 
+    /** The name of a field a class pass lays at [offset] into the class: `field_0x<offset>`, as Ghidra names one. */
+    fun fieldName(offset: Int) = "field_0x${offset.toString(16)}"
+
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
         (if (isVirtual) VBASE_PREFIX else BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()
 }

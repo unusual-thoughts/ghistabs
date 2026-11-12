@@ -8,7 +8,6 @@ import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
-import ghistabs.componentsOverlapping
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.path
 import ghistabs.toCategoryPath
@@ -56,11 +55,7 @@ class VirtualBasePass(private val program: Program, private val abi: CxxAbi, sin
             ?: (found to foundWithin)
 
         val offset = vbaseAt + within
-        when {
-            offset + dt.length > length -> "${dt.name} (${dt.length}b) at +$offset overruns $length"
-            componentsOverlapping(offset, dt.length).isNotEmpty() -> "${dt.name} at +$offset covers existing fields"
-            else -> null
-        }?.let { problem -> return false.also { degradation("vbase-layout-failed", at, problem) } }
+        layoutProblem(offset, dt)?.let { return false.also { _ -> degradation("vbase-layout-failed", at, it) } }
 
         val part = "; only its ${dt.name} at +$within is defined"
             .takeUnless { within == 0 && dt.name == name.leafName }.orEmpty()

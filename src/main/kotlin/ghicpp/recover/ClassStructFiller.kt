@@ -65,7 +65,7 @@ class ClassStructFiller(
         val ns = ns?.toClass() ?: return false
         val struct = program.classStruct(ns) ?: return false
         // Any struct with fields is another's, the stabs import's, the script's, a PDB's, or an earlier pass's.
-        if (struct.numDefinedComponents > 0 || struct.isZeroLength) return false.also { struct.fillData(store, ns) }
+        if (struct.numDefinedComponents > 0 || struct.isZeroLength) return false.also { struct.fillData(store) }
         val bases = bases.filterNot { it.isVirtual }
         for (base in bases) struct.placeBase(base, bases.size, ns)
         for (at in vbptrs) struct.placeVbptr(at.toInt(), ns)
@@ -78,7 +78,7 @@ class ClassStructFiller(
             struct.placeVfptr(at, PointerDataType(vftable, dtm), ns)
         }
         struct.placeData(store, ns)
-        struct.fillData(store, ns)
+        struct.fillData(store)
         return true
     }
 
@@ -88,11 +88,7 @@ class ClassStructFiller(
         val whole = base.cls.ns?.toClass()?.let(program::classStruct)?.takeUnless { it.isZeroLength }
         if (whole == null) return degradation("base-undefined", qualified.member(base.cls.name), "no struct for it")
         val dt = nonVirtualSize(base.cls)?.takeIf { it < whole.length }?.let { selfBaseOf(whole, it) } ?: whole
-        when {
-            at + dt.length > length -> "${dt.name} (${dt.length}b) at +$at overruns $length"
-            componentsOverlapping(at, dt.length).isNotEmpty() -> "${dt.name} at +$at covers existing fields"
-            else -> null
-        }?.let { return degradation("base-layout-failed", qualified.member(dt.name), it) }
+        layoutProblem(at, dt)?.let { return degradation("base-layout-failed", qualified.member(dt.name), it) }
         placeBase(
             this,
             at,
@@ -116,14 +112,10 @@ class ClassStructFiller(
         return registry.getOrRegister<Structure>(path) {
             StructureDataType(path.categoryPath, path.dataTypeName, size, dtm).apply {
                 description = "${cls.name} as a base subobject"
-                cls.definedComponents.filter { it.offset + it.length <= size && !it.isVirtualBaseField() }.forEach {
-                    replaceAtOffset(it.offset, it.dataType, it.length, it.fieldName, it.comment)
-                }
+                copyNonVirtualPart(cls)
             }
         }
     }
-
-    private fun DataTypeComponent.isVirtualBaseField() = fieldName.orEmpty().startsWith(ClassNaming.VBASE_PREFIX)
 
     /**
      * The fields [store] puts where no field is yet, the class's own, gathered in a `<Class>_data` struct
@@ -155,9 +147,7 @@ class ClassStructFiller(
     private fun Structure.placeVbptr(at: Int, ns: GhidraClass) {
         val vbptr = PointerDataType(IntegerDataType.dataType, dtm)
         if (at < 0 || getComponentContaining(at)?.isBaseField() == true) return
-        if (componentsOverlapping(at, vbptr.length).isNotEmpty() || at + vbptr.length > length) {
-            return degradation("vbptr-collision", ns.getName(true), "cannot place {vbptr} at +$at")
-        }
+        layoutProblem(at, vbptr)?.let { return degradation("vbptr-collision", ns.getName(true), it) }
         replaceAtOffset(at, vbptr, vbptr.length, ClassNaming.VBPTR, "vbtable pointer: its virtual bases' offsets")
     }
 
@@ -171,9 +161,7 @@ class ClassStructFiller(
             }
             return
         }
-        if (componentsOverlapping(at, vfptr.length).isNotEmpty() || at + vfptr.length > length) {
-            return degradation("vfptr-collision", ns.getName(true), "cannot place {vfptr} at +$at")
-        }
+        layoutProblem(at, vfptr)?.let { return degradation("vfptr-collision", ns.getName(true), it) }
         replaceAtOffset(at, vfptr, vfptr.length, ClassUtils.VFPTR, "vtable pointer")
     }
 
@@ -214,21 +202,19 @@ class ClassStructFiller(
 }
 
 /**
- * Fills each `<Class>_data` struct placed in this with the fields of [store] it holds, as Auto Fill in Structure
- * fills one: where a field is there already, [NoisyStructureBuilder] keeps the more specific type,
- * and the field keeps its name
+ * Fills each of this class struct's own `<Class>_data` structs ([ownData]) with the fields of [store] it holds,
+ * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
+ * specific type, and the field keeps its name
  */
-private fun Structure.fillData(store: Map<Int, DataType>, ns: GhidraClass) {
-    for (part in definedComponents) {
-        val data = part.dataType as? Structure ?: continue
-        if (data.categoryPath != categoryPath || !data.name.startsWith(ns.name + ClassNaming.DATA)) continue
-        val inside = store.filter { (at, dt) -> at >= part.offset && at + dt.length <= part.endOffset + 1 }
+private fun Structure.fillData(store: Map<Int, DataType>) {
+    for ((offset, data) in ownData()) {
+        val inside = store.filter { (at, dt) -> offset.withLength(data.length).includes(at.withLength(dt.length)) }
         val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
-        for ((at, dt) in inside) merged.addDataType(at.toLong() - part.offset, dt)
+        for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
         for ((at, dt) in merged.iterator()) {
             val old = data.getComponentAt(at.toInt())
             if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
-            val name = old?.fieldName ?: "field_0x${(part.offset + at).toString(16)}"
+            val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
             data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
         }
     }
@@ -240,8 +226,5 @@ private fun Structure.fillData(store: Map<Int, DataType>, ns: GhidraClass) {
  */
 fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor) {
     val struct = classStruct(ns) ?: return
-    struct.fillData(
-        mergedStores(StructorInspector(this, emptyList(), DummySink).thisFields(methods, monitor).values),
-        ns,
-    )
+    struct.fillData(mergedStores(StructorInspector(this, emptyList(), DummySink).thisFields(methods, monitor).values))
 }

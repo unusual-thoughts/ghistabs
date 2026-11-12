@@ -2,6 +2,7 @@ package ghistabs.materialize
 
 import ghicpp.ClassNaming
 import ghicpp.VfptrModel
+import ghicpp.copyNonVirtualPart
 import ghicpp.member
 import ghicpp.placeBase
 import ghidra.program.model.data.*
@@ -402,16 +403,10 @@ private class ClassStructBuilder(val registry: DataTypeRegistry, val vfptrs: Vfp
             StructureDataType(path.categoryPath, path.dataTypeName, size, registry.dtm).apply {
                 description = "${cls.name} as a base subobject"
             }
-        }.also { copyNonVirtualPart(cls, it) }
-    }
-
-    private fun copyNonVirtualPart(from: Structure, into: Structure) {
-        into.definedComponents.map { it.offset }.forEach(into::clearAtOffset)
-        from.definedComponents.filter {
-            it.offset + it.length <= into.length && !it.fieldName.orEmpty().startsWith(ClassNaming.VBASE_PREFIX)
-        }.forEach {
-            runCatching { into.replaceAtOffset(it.offset, it.dataType, it.length, it.fieldName, it.comment) }
-                .onFailure { e -> degradation("self-base-field-dropped", "${into.name}.${it.fieldName}", e.message) }
+        }.also { into ->
+            into.copyNonVirtualPart(cls) { field, e ->
+                degradation("self-base-field-dropped", "${into.name}.${field.fieldName}", e.message)
+            }
         }
     }
 }

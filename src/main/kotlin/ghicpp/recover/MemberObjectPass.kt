@@ -102,16 +102,12 @@ class MemberObjectPass(
             is NonPolymorphicClass -> root[h]?.cls
             is ContainingClass.Existing -> h.cls
         }?.let(::structOf)
-        monitor.initialize((order.size + known.size).toLong(), "Laying member objects in their classes")
-        for (sub in order) {
+        val laid = order.map { it to root.getValue(held.getValue(it)).cls } + known.toList()
+        monitor.initialize(laid.size.toLong(), "Laying member objects in their classes")
+        for ((sub, cls) in laid) {
             monitor.increment()
-            val member = root.getValue(held.getValue(sub)).cls?.let(::structOf)?.takeUnless { it.isZeroLength }
-            if (member != null) containerOf(sub)?.placeMember(sub.offset.toInt(), member)
-        }
-        for ((sub, cls) in known) {
-            monitor.increment()
-            val member = structOf(cls)?.takeUnless { it.isZeroLength } ?: continue
-            containerOf(sub)?.placeMember(sub.offset.toInt(), member)
+            val member = cls?.let(::structOf)?.takeUnless { it.isZeroLength } ?: continue
+            containerOf(sub)?.let { placeMember(it, sub.offset.toInt(), member) }
         }
         writeRecords(classes.mapNotNull { it.cls })
         return classes.size
@@ -270,26 +266,6 @@ class MemberObjectPass(
     private fun Function.takesThis() = takesThisAt(thisStorage) || (!isExternal && parameterCount == 0)
 
     private fun structOf(cls: ClassDecl): Structure? = cls.ns?.toClass()?.let(program::classStruct)
-
-    /**
-     * Lays [member] at [at] in this, or in the `<Class>_data` struct there, over the plain fields there; this
-     * grows to hold it where it ends short.
-     */
-    private fun Structure.placeMember(at: Int, member: Structure) {
-        if (member == this) return
-        val part = getComponentContaining(at)?.takeIf { it.dataType is Structure && it.dataType != member }
-        val into = part?.dataType as? Structure ?: this
-        val offset = at - (part?.offset ?: 0)
-        if (part == null && at + member.length > length) growStructure(at + member.length - length)
-        val clash = into.definedComponents.filter { it.offset < offset + member.length && it.endOffset >= offset }
-        if (offset + member.length > into.length || clash.any { it.dataType is Structure && it.dataType != member }) {
-            return debug("member-unplaced", "${member.name} at +$at in $name")
-        }
-        val field = "field_0x${at.toString(16)}"
-        runCatching { into.replaceAtOffset(offset, member, member.length, field, "member or base") }
-            .onFailure { degradation("member-unplaced", "$name::$field", it.message) }
-        debug("member-placed", "${member.name} at +$at in $name")
-    }
 
     private fun writeRecords(classes: Collection<ClassDecl>) {
         val entries = classes.mapNotNull { cls ->
