@@ -128,6 +128,12 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         File(out, "truth.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), truth.snapshot))
         checkBaseline(case, card.counters())
         System.getProperty("ooprolog").orEmpty().takeIf { it.isNotEmpty() }?.let { solve(case, truth, facts, File(it)) }
+        System.getProperty("pharosResults").orEmpty().takeIf { it.isNotEmpty() }?.let { dir ->
+            // A no-RTTI case takes the results of the same facts solved with `--rtti false`, where there are some.
+            val ran = listOfNotNull("no-rtti.".takeIf { case.recovery == Recovery.NO_RTTI }, "")
+                .map { File(dir, "${case.subject}.${it}results") }.firstOrNull { it.isFile } ?: return@let
+            score(truth, File(dir, "${case.subject}.facts"), ran, "pharos", "${case.id}: Pharos' ooanalyzer", out)
+        }
     }
 
     /**
@@ -155,13 +161,23 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         val done = process.waitFor(OOPROLOG_TIMEOUT_MINUTES, java.util.concurrent.TimeUnit.MINUTES)
         if (!done) process.destroyForcibly()
         assumeTrue(done && results.isFile, "ooprolog gave no results for ${case.id}: see $log")
-        val purecalls = PURECALL.findAll(facts.readText()).map { it.groupValues[1].toLong(16) }.toSet()
-        val demangled = TYPE_DESCRIPTOR.findAll(facts.readText()).associate { it.groupValues[1] to it.groupValues[2] }
-        val solved = OoResults(results.readText(), purecalls, demangled).snapshot(case.subject)
+        score(truth, facts, results, "ooanalyzer", "${case.id}: OOAnalyzer's rules over our facts", out)
+    }
+
+    /**
+     * OOAnalyzer's [results], from [facts], scored against [truth]: `<prefix>-scorecard.md`, its class view and
+     * its counters, in [out]. `-PpharosResults=<dir>` scores a Pharos `ooanalyzer` run's `<subject>.results`
+     * (with its `<subject>.facts`, `-F`) this way too, beside ours.
+     */
+    private fun score(truth: Truth, facts: File, results: File, prefix: String, title: String, out: File = OUTPUT_DIR) {
+        val text = facts.takeIf { it.isFile }?.readText().orEmpty()
+        val purecalls = PURECALL.findAll(text).map { it.groupValues[1].toLong(16) }.toSet()
+        val demangled = TYPE_DESCRIPTOR.findAll(text).associate { it.groupValues[1] to it.groupValues[2] }
+        val solved = OoResults(results.readText(), purecalls, demangled).snapshot(results.name)
         val card = Scorer(truth, solved).score()
-        File(out, "ooanalyzer-scorecard.md").writeText(card.markdown("${case.id}: OOAnalyzer's rules over our facts"))
-        File(out, "ooanalyzer-subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), solved))
-        File(out, "ooanalyzer-counters.json")
+        File(out, "$prefix-scorecard.md").writeText(card.markdown(title))
+        File(out, "$prefix-subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), solved))
+        File(out, "$prefix-counters.json")
             .writeText(PRETTY.encodeToString(COUNTERS, card.counters().toSortedMap()) + "\n")
     }
 
