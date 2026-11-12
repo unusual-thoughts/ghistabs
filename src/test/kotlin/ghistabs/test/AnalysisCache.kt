@@ -6,8 +6,8 @@ import ghidra.program.database.ProgramDB
 import ghidra.program.model.listing.Program
 import ghidra.util.Msg
 import ghidra.util.task.TaskMonitor
-import ghistabs.LoadedProgram
-import ghistabs.loadPackedProgram
+import ghidrakt.LoadedProgram
+import ghidrakt.loadPackedProgram
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE

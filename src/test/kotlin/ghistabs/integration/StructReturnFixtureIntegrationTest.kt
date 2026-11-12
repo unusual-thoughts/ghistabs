@@ -7,10 +7,10 @@ import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.entrypoints.Correction
-import ghistabs.functionsIterable
-import ghistabs.runTransaction
+import ghidrakt.functionsIterable
+import ghidrakt.runTransaction
 import ghistabs.test.*
-import ghistabs.withProgram
+import ghidrakt.withProgram
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll

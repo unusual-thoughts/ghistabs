@@ -11,9 +11,9 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.AnalysisProbe
-import ghistabs.diagnose.MessageLogSink
-import ghistabs.diagnose.report
+import ghidrakt.diagnose.AnalysisProbe
+import ghidrakt.diagnose.MessageLogSink
+import ghidrakt.diagnose.report
 
 /**
  * Places the virtual bases a class struct lacks where its Itanium vtable says they are ([VirtualBasePass] over

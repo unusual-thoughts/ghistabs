@@ -1,6 +1,6 @@
 package ghistabs.harvest
 
-import ghistabs.diagnose.DummySink
+import ghidrakt.diagnose.DummySink
 import ghistabs.parse.SourceFile
 import ghistabs.test.dummyHarvester
 import ghistabs.test.mustBeSameAs

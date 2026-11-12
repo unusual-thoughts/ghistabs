@@ -2,8 +2,8 @@ package ghistabs.importer
 
 import ghidra.program.database.sourcemap.UserDataPathTransformer
 import ghidra.program.model.listing.Program
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.Type
 import java.io.File

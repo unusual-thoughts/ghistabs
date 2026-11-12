@@ -17,7 +17,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.*
 import ghidra.program.model.scalar.Scalar
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DiagnosticSink
 
 /**
  * Decompiles functions for what they do with `this` ([Dissections]): the vptrs they store, the fields they store and

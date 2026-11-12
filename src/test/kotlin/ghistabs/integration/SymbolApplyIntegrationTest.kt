@@ -9,7 +9,7 @@ import ghistabs.importer.sweepPointees
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
 import ghistabs.test.defaultContext
 import ghistabs.test.must
 import ghistabs.test.mustBe

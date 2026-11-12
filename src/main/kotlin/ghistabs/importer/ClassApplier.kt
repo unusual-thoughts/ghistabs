@@ -19,9 +19,9 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.*
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.Level
+import ghidrakt.*
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.Level
 import ghistabs.harvest.AddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.index.LocatedType

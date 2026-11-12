@@ -3,7 +3,7 @@ package ghicpp.analyzers
 import ghicpp.ClassRecordSource
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.integration.FeatureFixtureTest
-import ghistabs.loadProgram
+import ghidrakt.loadProgram
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

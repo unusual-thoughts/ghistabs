@@ -8,7 +8,7 @@ import ghistabs.parse.SourceFile
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabType
 import ghistabs.parse.isRootedPath
-import ghistabs.withProgram
+import ghidrakt.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance

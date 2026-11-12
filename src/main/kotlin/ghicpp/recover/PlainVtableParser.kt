@@ -15,10 +15,10 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghidra.util.task.TaskMonitor
-import ghistabs.components
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
-import ghistabs.minus
+import ghidrakt.components
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
+import ghidrakt.minus
 
 /** A class known by its vftables alone, with no RTTI to give it bases: those its structors show ([inferBases]). */
 class PlainClass(override val ns: Namespace, override val vftables: List<VtableRecord>) : ClassDecl {

@@ -9,8 +9,8 @@ import ghidra.program.model.listing.CommentType
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
-import ghistabs.diagnose.DummySink
+import ghidrakt.*
+import ghidrakt.diagnose.DummySink
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
 import ghistabs.test.mustBe

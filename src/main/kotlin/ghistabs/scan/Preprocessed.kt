@@ -1,8 +1,8 @@
 package ghistabs.scan
 
 import ghidra.app.util.cparser.CPP.PreProcessor
-import ghistabs.ECHOES_DROPPED_LINES
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.ECHOES_DROPPED_LINES
+import ghidrakt.diagnose.DiagnosticSink
 import java.io.ByteArrayOutputStream
 import java.io.File
 

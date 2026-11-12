@@ -9,10 +9,10 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.NoReturnAnalyzer
 import ghistabs.entrypoints.markNoReturn
-import ghistabs.functionsIterable
-import ghistabs.runTransaction
+import ghidrakt.functionsIterable
+import ghidrakt.runTransaction
 import ghistabs.test.*
-import ghistabs.withProgram
+import ghidrakt.withProgram
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.io.File

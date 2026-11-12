@@ -8,8 +8,8 @@ import ghicpp.placeBase
 import ghidra.program.model.data.*
 import ghidra.program.model.data.DataOrganizationImpl.getAlignedOffset
 import ghidra.program.model.gclass.ClassUtils
-import ghistabs.componentsOverlapping
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.componentsOverlapping
+import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
 import ghistabs.index.demangledClassPath

@@ -12,9 +12,9 @@ import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
-import ghistabs.*
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.*
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 
 /**
  * Lays vtables and their slots, typed off the functions the slots point at: the toolkit the stabs import

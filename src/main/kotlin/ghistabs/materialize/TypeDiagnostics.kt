@@ -2,11 +2,11 @@ package ghistabs.materialize
 
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.data.*
-import ghistabs.DEMANGLER_CATEGORY
-import ghistabs.conflictBase
-import ghistabs.diagnose.GapRecord
+import ghidrakt.DEMANGLER_CATEGORY
+import ghidrakt.conflictBase
+import ghidrakt.diagnose.GapRecord
 import ghistabs.harvest.Type
-import ghistabs.isConflict
+import ghidrakt.isConflict
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
 import ghidra.program.model.data.Array as GhidraArray

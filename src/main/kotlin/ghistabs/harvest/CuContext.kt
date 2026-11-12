@@ -3,13 +3,13 @@
 package ghistabs.harvest
 
 import ghidra.program.model.address.Address
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 import ghistabs.parse.HeaderFile
 import ghistabs.parse.Language
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.SourceFile
-import ghistabs.rangeUntil
+import ghidrakt.rangeUntil
 import java.util.*
 
 /** Cross-CU dedup of header files via (filename, checksum) so BINCL/EXCL share one [HeaderFile]. */
