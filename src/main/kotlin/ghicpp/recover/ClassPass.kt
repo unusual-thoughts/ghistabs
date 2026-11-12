@@ -23,7 +23,8 @@ import ghistabs.toClass
  * What a class pass does once an ABI's records have given it the classes ([RttiParser], [ClassPassInput]): each virtual
  * function moved into the class that introduced it ([introducingClass]) and marked virtual, each constructor
  * and destructor ([StructorInspector]) moved there and named, each class sized off its allocations and layout
- * ([sizeBounds]), and the classes written to [ClassHierarchyRecords]. [vfptrModel] says whether a class
+ * ([sizeBounds]), what a constructor inlined after `operator new` builds typed as its class ([AllocationTyper]), and
+ * the classes written to [ClassHierarchyRecords]. [vfptrModel] says whether a class
  * struct splits a base around the vptr it takes over ([ClassStructFiller]).
  */
 class ClassPass(
@@ -108,6 +109,7 @@ class ClassPass(
         val sizes = sizeClasses(read.classes, allocated, reached)
         monitor.message = "Filling class structs"
         val filled = ClassStructFiller(program, abi, this, vfptrModel).fillAll(read.recorded, stores)
+        program.typeAllocations(found, this, monitor)
         val placed = owners.entries.mapNotNull { (f, owner) -> owner?.let { f to it } } +
             structors.map { (f, structor) -> f to structor.first }
         monitor.message = "Recording classes"

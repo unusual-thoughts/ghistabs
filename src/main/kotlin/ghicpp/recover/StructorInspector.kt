@@ -1,27 +1,17 @@
 package ghicpp.recover
 
 import ghicpp.*
-import ghicpp.ClassDecl
 import ghicpp.abi.PlainVtables
 import ghicpp.abi.StructorConvention
 import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.*
-import ghicpp.introducingClass
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.decompiler.util.FillOutStructureHelper
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.ArrayDataType
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.NoisyStructureBuilder
-import ghidra.program.model.data.Undefined
-import ghidra.program.model.data.Undefined1DataType
+import ghidra.program.model.data.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
-import ghidra.program.model.pcode.HighFunction
-import ghidra.program.model.pcode.HighVariable
-import ghidra.program.model.pcode.PcodeBlockBasic
-import ghidra.program.model.pcode.PcodeOp
-import ghidra.program.model.pcode.Varnode
+import ghidra.program.model.pcode.*
 import ghidra.program.model.scalar.Scalar
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
@@ -74,6 +64,8 @@ class FoundStructors(
     val inlinedSizes: Map<ClassDecl, Long> by lazy {
         inlined.groupBy({ it.built }, { it.size }).mapValues { (_, sizes) -> sizes.max() }
     }
+
+    val inlinedByFunction by lazy { inlined.groupBy { it.function } }
 
     /** Each constructor, by the class it builds. */
     val constructors = roles.filterValues { it.second == CONSTRUCTOR }.mapValues { it.value.first }

@@ -1,6 +1,7 @@
 package ghicpp.recover
 
 import ghicpp.classStruct
+import ghidra.app.decompiler.DecompInterface
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
@@ -19,6 +20,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DummySink
 import ghistabs.runTransaction
 import ghistabs.test.mustBe
+import ghistabs.useWith
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
@@ -117,6 +119,13 @@ class InlinedConstructorIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         val member = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
         program.functionManager.getFunctionAt(addr(MEMBER_CTOR)).getName(true) mustBe "$member::$member"
         base.getComponentContaining(0x10).dataType.name mustBe member
+
+        // What operator new returns is typed as the class it builds, in the factory that inlines its constructor.
+        DecompInterface().useWith(program) { decomp ->
+            val factory = program.functionManager.getFunctionAt(addr(FACTORY))
+            val c = decomp.decompileFunction(factory, 30, TaskMonitor.DUMMY).decompiledFunction.c
+            c.contains("$DERIVED *") mustBe true
+        }
     }
 
     @Test
