@@ -1,6 +1,6 @@
 package ghistabs.harvest
 
-import ghistabs.diagnose.CapturingSink
+import ghidrakt.diagnose.CapturingSink
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.test.*

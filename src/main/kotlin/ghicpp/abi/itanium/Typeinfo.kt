@@ -3,7 +3,7 @@ package ghicpp.abi.itanium
 import ghicpp.ClassNaming
 import ghidra.docking.settings.FormatSettingsDefinition
 import ghidra.program.model.data.*
-import ghistabs.*
+import ghidrakt.*
 
 /**
  * The structs of the Itanium `__cxxabiv1` typeinfo objects, after Ghidra's `RTTIGccClassRecoverer`, for

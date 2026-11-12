@@ -5,7 +5,7 @@ import ghicpp.VirtKind
 import ghicpp.member
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.diagnose.StabsDiagnostics
+import ghidrakt.diagnose.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*

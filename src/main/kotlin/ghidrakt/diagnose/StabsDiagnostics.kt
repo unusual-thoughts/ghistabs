@@ -1,0 +1,174 @@
+package ghidrakt.diagnose
+
+import ghidra.program.model.address.Address
+
+/** A gap between struct fields. `prev`/`next` are null at struct start/end. */
+data class GapRecord(val offsetBits: Long, val lengthBits: Long, val prevField: String?, val nextField: String?)
+
+/** Decision to route a type to `/std/`, the sources it weighed spelled as the render spells them. */
+data class AttributionTrace(
+    val typeName: String,
+    val definingCUs: Set<String>,
+    val matchedCU: String,
+    val routedTo: String,
+)
+
+/**
+ * A materialization fallback (Undefined4, dropped field, placeholder base, skipped vtable slot…) —
+ * every [DiagnosticSink.log] that carried a [degrades]. See [DiagnosticSink.degradation].
+ */
+data class DegradationRecord(
+    val category: String,
+    val degrades: String,
+    val detail: String? = null,
+    val address: Address? = null,
+    val level: Level = Level.WARN,
+) {
+    /** `degrades :: detail @ address`, the punch-list line. */
+    override fun toString() = diagnosticText(degrades, detail) + (address?.let { " @ $it" } ?: "")
+}
+
+/**
+ * Per-run diagnostic aggregator — the accumulating [DiagnosticSink] terminal. Each [log] bumps the
+ * category counter (by [count]) and, when a message is present, keeps it as a capped example for the
+ * summary. Single-threaded. [writeSummary] is one-shot — subsequent calls no-op, counters stay readable.
+ */
+class StabsDiagnostics : DiagnosticSink {
+    private val counters: MutableMap<String, MutableMap<Level, Long>> = linkedMapOf()
+    private val examples: MutableMap<String, MutableList<String>> = linkedMapOf()
+    private val gapCensus: MutableMap<String, List<GapRecord>> = linkedMapOf()
+    private val attributionTraces: MutableList<AttributionTrace> = mutableListOf()
+    private val degradations: MutableList<DegradationRecord> = mutableListOf()
+
+    private var isSealed = false
+
+    override fun log(
+        category: String,
+        message: String?,
+        level: Level,
+        address: Address?,
+        degrades: String?,
+        count: Long,
+    ) {
+        inc(category, level, count)
+        diagnosticText(degrades, message)?.let {
+            recordExample(category, if (address != null) "$it @ $address" else it)
+        }
+        if (degrades != null) degradations.add(DegradationRecord(category, degrades, message, address, level))
+    }
+
+    private fun inc(name: String, level: Level, by: Long = 1) {
+        counters.getOrPut(name) { mutableMapOf() }.compute(level) { _, lng -> (lng ?: 0) + by }
+    }
+
+    /** How often the category fired, at any level — the level is a reporting attribute, not identity. */
+    operator fun get(name: String): Long = counters[name]?.values?.sum() ?: 0L
+
+    operator fun get(name: String, level: Level): Long = counters[name]?.get(level) ?: 0L
+
+    fun snapshotCounters(): Map<String, Long> = counters.mapValues { it.value.values.sum() }
+
+    /**
+     * Every category that degraded something, against the sorted distinct things it degraded. Uncapped,
+     * unlike [recordExample]: a count tells you a fixture got worse, this tells you *what* got worse,
+     * which is the question a drifted baseline actually raises.
+     */
+    fun degradationTargets(): Map<String, List<String>> = degradations.groupBy { it.category }
+        .toSortedMap()
+        .mapValues { (_, records) -> records.map { it.degrades }.distinct().sorted() }
+
+    /** Backing store for [log]'s example capture — capped at 10/category. */
+    private fun recordExample(category: String, msg: String) {
+        val bucket = examples.getOrPut(category) { mutableListOf() }
+        if (bucket.size < 10) {
+            bucket.add(msg)
+        }
+    }
+
+    fun recordStructGaps(qualifiedName: String, gaps: List<GapRecord>) {
+        if (gaps.isNotEmpty()) {
+            gapCensus[qualifiedName] = gaps
+        }
+    }
+
+    /** Stores up to 200 traces total across all buckets; beyond that only the counter bumps. */
+    fun recordAttributionTrace(
+        typeName: String,
+        definingCUs: Set<String>,
+        matchedCU: String,
+        routedTo: String,
+        counter: String,
+    ) {
+        if (attributionTraces.size < 200) {
+            attributionTraces.add(
+                AttributionTrace(
+                    typeName = typeName,
+                    definingCUs = definingCUs,
+                    matchedCU = matchedCU,
+                    routedTo = routedTo,
+                ),
+            )
+        }
+        inc(counter, Level.DEBUG)
+    }
+
+    fun snapshotAttributionTraces() = attributionTraces.toList()
+
+    /**
+     * Structured degradations, filed by [log] for every event carrying a `degrades`
+     * (see [DiagnosticSink.degradation]).
+     */
+    fun snapshotDegradations(): List<DegradationRecord> = degradations.toList()
+
+    /** One-shot — subsequent calls are no-ops. Emits counters, example buckets, and gap census. */
+    fun writeSummary(sink: DiagnosticSink) {
+        if (isSealed) {
+            return
+        }
+        isSealed = true
+
+        sink.debug(
+            "diagnostics",
+            buildString {
+                appendLine("=== Summary of diagnostic categories ===")
+                for ((name, levels) in counters) {
+                    for ((_, value) in levels) {
+                        appendLine("$name = $value") // level)
+                    }
+                }
+            }.trimEnd(),
+        )
+
+        for ((category, msgs) in examples) {
+            if (msgs.isNotEmpty()) {
+                sink.debug(
+                    "diagnostics",
+                    buildString {
+                        appendLine("$category top ${msgs.size}/${counters[category]?.values?.sum()} examples:")
+                        for (msg in msgs) {
+                            appendLine("  - $msg")
+                        }
+                    }.trimEnd(),
+                )
+            }
+        }
+
+        sink.debug(
+            "diagnostics",
+            buildString {
+                if (gapCensus.isNotEmpty()) {
+                    appendLine("=== gap census ===")
+                    for ((qualifiedName, gaps) in gapCensus) {
+                        for ((offsetBits, lengthBits, prevField, nextField) in gaps) {
+                            val prevStr = prevField ?: "(start)"
+                            val nextStr = nextField ?: "(end)"
+                            appendLine(
+                                "  $qualifiedName: gap @+$offsetBits bits len=$lengthBits between $prevStr..$nextStr",
+                            )
+                        }
+                    }
+                }
+            }.trimEnd(),
+        )
+    }
+}

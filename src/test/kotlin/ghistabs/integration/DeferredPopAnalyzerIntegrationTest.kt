@@ -15,7 +15,7 @@ import ghistabs.entrypoints.CALL_BOOKMARK
 import ghistabs.entrypoints.DeferredPopAnalyzer
 import ghistabs.entrypoints.MERGE_BOOKMARK
 import ghistabs.entrypoints.UNFIXED_BOOKMARK
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustNot
 import org.junit.jupiter.api.AfterEach

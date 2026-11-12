@@ -11,8 +11,8 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.diagnose.CapturingSink
-import ghistabs.runTransaction
+import ghidrakt.diagnose.CapturingSink
+import ghidrakt.runTransaction
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach

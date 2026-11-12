@@ -21,10 +21,10 @@ import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghidra.util.task.TaskMonitor.DUMMY
-import ghistabs.BoolOption
-import ghistabs.OptionContainer
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.toClass
+import ghidrakt.BoolOption
+import ghidrakt.OptionContainer
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.toClass
 
 /**
  * What a class pass does once an ABI's records have given it the classes ([RttiParser], [ClassPassInput]): each virtual

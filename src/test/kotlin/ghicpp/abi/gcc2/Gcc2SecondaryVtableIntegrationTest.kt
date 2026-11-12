@@ -2,9 +2,9 @@ package ghicpp.abi.gcc2
 
 import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.LoadedProgram
+import ghidrakt.LoadedProgram
 import ghistabs.integration.Fixtures
-import ghistabs.loadProgram
+import ghidrakt.loadProgram
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
 import ghistabs.test.mustBe
@@ -62,7 +62,7 @@ class Gcc2SecondaryVtableIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             .mustBeTrue("$struct should be filled from the record's slots")
     }
 
-    /** The names are [ghistabs.Demangler]'s, so this needs Ghidra's native demangler: not a unit test. */
+    /** The names are [ghidrakt.Demangler]'s, so this needs Ghidra's native demangler: not a unit test. */
     @Test
     fun `reads the class and the base off a secondary vtable symbol`() {
         Gcc2.secondaryVtableClasses("_vt.8iostream.3ios") mustBe ("iostream" to "ios")

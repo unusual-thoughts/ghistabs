@@ -16,9 +16,9 @@ import ghidra.program.model.symbol.Reference
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.*
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 
 /** Every aligned word in the initialized data blocks of the default space, with the address it holds. */
 fun Program.findPointers() = cursorAt().run {

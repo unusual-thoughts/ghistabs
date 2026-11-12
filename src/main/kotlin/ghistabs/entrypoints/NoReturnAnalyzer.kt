@@ -12,7 +12,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.ExternalLocation
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.report
+import ghidrakt.diagnose.report
 
 const val NO_RETURN_ANALYZER_NAME = "Non-returning functions (reachability)"
 

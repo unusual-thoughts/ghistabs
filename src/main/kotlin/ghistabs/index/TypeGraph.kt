@@ -4,9 +4,9 @@ import ghicpp.canonTemplateName
 import ghicpp.isTemplated
 import ghicpp.member
 import ghicpp.templateLeaf
-import ghistabs.Demangler
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghidrakt.Demangler
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DummySink
 import ghistabs.harvest.Func
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Type

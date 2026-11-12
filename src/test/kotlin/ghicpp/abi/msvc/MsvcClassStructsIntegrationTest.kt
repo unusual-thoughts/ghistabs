@@ -12,7 +12,7 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
 import ghistabs.test.mustBeTrue

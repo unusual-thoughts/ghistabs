@@ -12,7 +12,7 @@ import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
-import ghistabs.*
+import ghidrakt.*
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -339,7 +339,7 @@ data class Func(
     fun sourceSignature(program: Program) = decl.scope.storageClass() + signature(program)
 
     /**
-     * How far below the entry SP this function's stab frame offsets count from: [ghistabs.frameBias] of the
+     * How far below the entry SP this function's stab frame offsets count from: [ghidrakt.frameBias] of the
      * Ghidra function at [addr] plus its [staleFrameShift], or the convention's when there is none. Asked
      * only once a stack local needs it, then kept.
      */
@@ -349,7 +349,7 @@ data class Func(
     }
 
     /**
-     * [ghistabs.staleFrameShift] over the frame-pointer-relative slots of [locals] and [params], read in
+     * [ghidrakt.staleFrameShift] over the frame-pointer-relative slots of [locals] and [params], read in
      * the N_FUN's span as well as Ghidra's body: a landing pad that nothing flows to is the function's too.
      */
     @Transient val staleFrameShift = Once { program: Program ->

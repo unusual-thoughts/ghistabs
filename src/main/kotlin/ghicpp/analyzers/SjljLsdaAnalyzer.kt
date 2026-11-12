@@ -10,9 +10,9 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.AnalysisProbe
-import ghistabs.diagnose.MessageLogSink
-import ghistabs.diagnose.report
+import ghidrakt.diagnose.AnalysisProbe
+import ghidrakt.diagnose.MessageLogSink
+import ghidrakt.diagnose.report
 
 /**
  * Lays the LSDA of every function MinGW's gcc built with SJLJ exceptions ([SjljLsdaPass]): the

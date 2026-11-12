@@ -1,6 +1,6 @@
 package ghistabs.cli
 
-import ghistabs.diagnose.Level
+import ghidrakt.diagnose.Level
 import org.apache.logging.log4j.core.Appender
 import org.apache.logging.log4j.core.Core
 import org.apache.logging.log4j.core.Filter

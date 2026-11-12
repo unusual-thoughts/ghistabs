@@ -12,8 +12,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.XmlEncode
 import ghidra.util.task.TaskMonitor
-import ghistabs.collidesWithInjectedParameter
-import ghistabs.diagnose.report
+import ghidrakt.collidesWithInjectedParameter
+import ghidrakt.diagnose.report
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader

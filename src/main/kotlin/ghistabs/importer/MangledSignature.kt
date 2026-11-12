@@ -12,10 +12,10 @@ import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.lang.PrototypeModel
 import ghidra.program.model.listing.Function
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.isParameterSized
-import ghistabs.parameterType
-import ghistabs.withoutTypedefs
+import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.isParameterSized
+import ghidrakt.parameterType
+import ghidrakt.withoutTypedefs
 
 // The signature rules both apply passes share: SymbolApplier.applyAllFunctions for every function the
 // stabs define, then ClassApplier for each member it reparents into its class.

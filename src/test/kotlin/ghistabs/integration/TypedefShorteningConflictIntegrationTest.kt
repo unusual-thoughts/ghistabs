@@ -5,21 +5,21 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.TypeDef
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.CapturingSink
-import ghistabs.diagnose.Level
+import ghidrakt.diagnose.CapturingSink
+import ghidrakt.diagnose.Level
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportOptions.Companion.enableStabsAnalyzer
 import ghistabs.importer.ImportProbe
-import ghistabs.isConflict
-import ghistabs.nameWithoutConflict
-import ghistabs.runTransaction
+import ghidrakt.isConflict
+import ghidrakt.nameWithoutConflict
+import ghidrakt.runTransaction
 import ghistabs.test.disableWindowsResourceAnalyzer
 import ghistabs.test.must
 import ghistabs.test.mustBeEmpty
 import ghistabs.test.mustNotBeNull
-import ghistabs.withProgram
+import ghidrakt.withProgram
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 

@@ -16,8 +16,8 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.Demangler
-import ghistabs.runTransaction
+import ghidrakt.Demangler
+import ghidrakt.runTransaction
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeEmpty
 import ghistabs.test.mustBeFalse

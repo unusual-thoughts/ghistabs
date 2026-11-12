@@ -12,7 +12,7 @@ import ghistabs.index.TypeGraph
 import ghistabs.materialize.*
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
-import ghistabs.runTransaction
+import ghidrakt.runTransaction
 import java.nio.file.Path
 
 /**

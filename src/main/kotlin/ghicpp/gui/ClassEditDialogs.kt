@@ -14,9 +14,9 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.Msg
 import ghidra.util.layout.PairLayout
-import ghistabs.namespaceAt
-import ghistabs.runTransaction
-import ghistabs.startsWith
+import ghidrakt.namespaceAt
+import ghidrakt.runTransaction
+import ghidrakt.startsWith
 import java.awt.Component
 import java.math.BigInteger
 import javax.swing.JCheckBox

@@ -15,8 +15,8 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
-import ghistabs.Demangler
-import ghistabs.namespaces
+import ghidrakt.Demangler
+import ghidrakt.namespaces
 
 /**
  * gcc 2.x's symbol spellings: vtables, thunks, typeinfo and mangled members, and what Ghidra's demangler

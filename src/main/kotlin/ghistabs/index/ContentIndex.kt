@@ -1,7 +1,7 @@
 package ghistabs.index
 
 import ghicpp.leafName
-import ghistabs.diagnose.DiagnosticSink
+import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.harvest.Type
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
