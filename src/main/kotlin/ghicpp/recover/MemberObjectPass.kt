@@ -9,6 +9,7 @@ import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
 import ghicpp.abi.StructorRole.DESTRUCTOR
 import ghicpp.dissect.*
+import ghicpp.recover.MemberObjectPass.Companion.MAX_DEPTH
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -129,8 +130,6 @@ class MemberObjectPass(
      * down to [MAX_DEPTH].
      */
     private fun collect(found: FoundStructors, monitor: TaskMonitor): Map<Subobject, NonPolymorphicClass> {
-        val dissector = ThisFunctionDissector(program, emptyList(), this, Dissection(fillArrays))
-        val held = linkedMapOf<Subobject, NonPolymorphicClass>()
         known.clear()
         // The constructors inlined after `operator new` are their classes' constructors too, with no function.
         var structors: List<Structor> = found.roles.map { (f, by) ->
@@ -138,6 +137,8 @@ class MemberObjectPass(
         } + found.inlined.flatMap { built ->
             built.parts.map { Structor(null, ContainingClass.Existing(it.cls), CONSTRUCTOR, it.calls) }
         }
+        val dissector = ThisFunctionDissector(program, emptyList(), this, Dissection(fillArrays))
+        val held = linkedMapOf<Subobject, NonPolymorphicClass>()
         for (depth in 1..MAX_DEPTH) {
             if (monitor.isCancelled) break
             val fresh = linkedSetOf<NonPolymorphicClass>()
