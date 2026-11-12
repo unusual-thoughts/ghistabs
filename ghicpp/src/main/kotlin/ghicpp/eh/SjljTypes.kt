@@ -1,6 +1,7 @@
 package ghicpp.eh
 
 import ghidra.program.model.data.*
+import ghidrakt.*
 
 /**
  * gcc's SJLJ exception ABI on 32-bit x86 (gcc 3.0 on): the `SjLj_Function_Context` a function with

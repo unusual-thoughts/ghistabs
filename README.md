@@ -96,8 +96,9 @@ one to install. The ghicpp zip (`ghicpp/dist/`) is those alone, for binaries wit
 ## Building
 
 Requires a Ghidra install and a JDK toolchain >=21 from Ghidra 11, or >=17 for 10.x. The
-API differences between releases are absorbed by each project's `src/main/kotlin-pre*` /
-`kotlin-since*` compat source sets, selected by the version of the install you build against;
+API differences between releases are absorbed by ghidrakt's `src/main/kotlin-pre*` /
+`kotlin-since*` compat source sets, selected by the version of the install you build against: the
+other projects reach its shims through `import ghidrakt.*`;
 releases are cut for Ghidra 10.4, 11.4.3, 12.0.4 and 12.1.3.
 
 Three Gradle projects, each depending on the one below it:

@@ -8,6 +8,7 @@ import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghidrakt.*
 import ghidrakt.componentsOverlapping
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.holds

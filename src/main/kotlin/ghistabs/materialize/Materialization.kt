@@ -5,6 +5,7 @@ import ghicpp.member
 import ghicpp.qualifiedName
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
+import ghidrakt.*
 import ghidrakt.componentsOverlapping
 import ghidrakt.runTransaction
 import ghistabs.harvest.Type

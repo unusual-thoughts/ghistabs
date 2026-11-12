@@ -42,7 +42,8 @@ detekt {
 }
 
 // Ghidra backwards-compatibility shims: `src/<set>/kotlin-since<v>` builds against Ghidra <v> and
-// later, `kotlin-pre<v>` against anything older.
+// later, `kotlin-pre<v>` against anything older. The main shims all live in ghidrakt, which the other
+// projects reach through `import ghidrakt.*`; only a test can need its own.
 for (set in listOf("main", "test")) {
     for (variant in projectDir.resolve("src").resolve(set).listFiles().orEmpty().filter {
         when {
