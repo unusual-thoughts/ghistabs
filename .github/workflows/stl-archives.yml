@@ -1,0 +1,102 @@
+name: MSVC STL archives
+
+# Builds Ghidra data type archives of the MSVC standard library layouts. msvcp140 comes from a probe
+# compiled here against the runner's own Visual Studio, for x86 and x64 and the release and debug
+# CRTs, and is checked against the layouts in Microsoft's public msvcp140 PDB. msvcp90 has no
+# toolchain on the runners, so it comes from the typed public PDB of its last security rebuild.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - ghidra_scripts/MsvcStlArchiveScript.java
+      - tools/stl-archives/**
+      - .github/workflows/stl-archives.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ x86, x64 ]
+        crt: [ release, debug ]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch == 'x86' && 'x86' || 'amd64' }}
+
+      # The debug CRT is what sets _ITERATOR_DEBUG_LEVEL=2, the layout msvcp140d.dll programs use.
+      - name: Build the probe
+        working-directory: tools/stl-archives
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /Zi /Od ${{ matrix.crt == 'debug' && '/MDd' || '/MD' }} stl_probe.cpp /Fe:stl_probe.exe /link /DEBUG:FULL
+
+      # The runtime this toolset ships, whose public PDB is the reference the archives are checked against.
+      - name: Keep the matching msvcp140.dll
+        if: matrix.crt == 'release'
+        shell: bash
+        run: cp "$(cygpath -u "$VCToolsRedistDir")"/${{ matrix.arch }}/Microsoft.VC*.CRT/msvcp140.dll tools/stl-archives/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-${{ matrix.arch }}-${{ matrix.crt }}
+          path: |
+            tools/stl-archives/stl_probe.exe
+            tools/stl-archives/stl_probe.pdb
+            tools/stl-archives/msvcp140.dll
+          if-no-files-found: error
+
+  archives:
+    needs: probe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: '12.3'
+          repo: unusual-thoughts/ghidra
+
+      - uses: actions/download-artifact@v7
+        with:
+          path: probes
+
+      - name: Fetch Microsoft's runtime PDBs
+        run: |
+          pip install --quiet pefile
+          mkdir -p refs
+          for arch in x86 x64; do
+            curl -fsSL -o refs/msvcp140_$arch.pdb "$(python3 tools/stl-archives/pdb_url.py probes/probe-$arch-release/msvcp140.dll)"
+          done
+          # msvcp90 9.0.30729.9619, the last security rebuild; earlier builds' public PDBs are stripped.
+          curl -fsSL -o refs/msvcp90_x86.pdb https://msdl.microsoft.com/download/symbols/msvcp90.i386.pdb/D026F453A2FD4DF99FD5EF360ECF33FE1/msvcp90.i386.pdb
+          curl -fsSL -o refs/msvcp90_x64.pdb https://msdl.microsoft.com/download/symbols/msvcp90.amd64.pdb/0AFF865471F54307A698437C27803A3A1/msvcp90.amd64.pdb
+
+      - name: Build the archives
+        run: |
+          run=tools/stl-archives/run.sh
+          for arch in x86 x64; do
+            $run archive archives/msvcp140_$arch.gdt probes/probe-$arch-release/stl_probe.exe probes/probe-$arch-release/stl_probe.pdb
+            $run archive archives/msvcp140d_$arch.gdt probes/probe-$arch-debug/stl_probe.exe probes/probe-$arch-debug/stl_probe.pdb
+            $run archive archives/msvcp90_$arch.gdt probes/probe-$arch-release/stl_probe.exe refs/msvcp90_$arch.pdb
+            $run archive refs/msvcp140_$arch.gdt probes/probe-$arch-release/stl_probe.exe refs/msvcp140_$arch.pdb
+          done
+
+      - name: Check against Microsoft's msvcp140 layouts
+        run: |
+          for arch in x86 x64; do
+            tools/stl-archives/run.sh compare probes/probe-$arch-release/stl_probe.exe archives/msvcp140_$arch.gdt refs/msvcp140_$arch.gdt
+          done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: msvc-stl-archives
+          path: archives/*.gdt
+          if-no-files-found: error
