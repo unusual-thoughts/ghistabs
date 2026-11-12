@@ -2,14 +2,14 @@ package ghistabs.index
 
 import ghicpp.Access
 import ghicpp.VirtKind
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustNot
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import ghistabs.test.must
-import ghistabs.test.mustBe
-import ghistabs.test.mustNot
 import ghistabs.test.typesOf
 import org.junit.jupiter.api.Test
 

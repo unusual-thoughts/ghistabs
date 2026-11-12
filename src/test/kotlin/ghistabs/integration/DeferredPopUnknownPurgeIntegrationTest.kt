@@ -7,9 +7,9 @@ import ghidra.program.model.pcode.HighFunction
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.runTransaction
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustNot
 import ghistabs.entrypoints.DeferredPopAnalyzer
-import ghistabs.test.mustBe
-import ghistabs.test.mustNot
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

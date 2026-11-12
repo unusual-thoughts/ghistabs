@@ -1,7 +1,7 @@
 package ghistabs.parse
 
+import ghidrakt.test.mustBe
 import ghistabs.test.longRange
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 /** What the parser reads past without modelling is noted in [ParseResult.Ok.skipped], not dropped silently. */

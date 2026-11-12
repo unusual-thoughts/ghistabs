@@ -1,6 +1,7 @@
 package ghistabs.harvest
 
 import ghidrakt.diagnose.CapturingSink
+import ghidrakt.test.*
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.test.*
@@ -85,7 +86,7 @@ class CuContextTest {
         val forwardExclLog = sink.lines.find { it.tag == "forward-excl" }
         forwardExclLog mustNotBe null
         "unknown.h" mustBeIn forwardExclLog!!.msg!!
-        "0x456" mustBeIn forwardExclLog.msg
+        "0x456" mustBeIn forwardExclLog.msg!!
     }
 
     @Test

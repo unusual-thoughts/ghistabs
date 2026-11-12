@@ -1,6 +1,7 @@
 package ghistabs.integration
 
 import ghidra.program.model.listing.Program
+import ghidrakt.test.*
 import ghistabs.test.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest

@@ -19,11 +19,11 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.MessageLogSink
 import ghidrakt.runTransaction
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeA
+import ghidrakt.test.mustBeNull
+import ghidrakt.test.mustNotBeNull
 import ghistabs.entrypoints.HullDisassemblyAnalyzer
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeA
-import ghistabs.test.mustBeNull
-import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

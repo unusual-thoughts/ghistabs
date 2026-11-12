@@ -6,6 +6,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.LoadedProgram
 import ghidrakt.loadProgram
+import ghidrakt.test.*
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue

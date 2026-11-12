@@ -1,9 +1,9 @@
 package ghidrakt.diagnose
 
-import ghistabs.test.must
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeIn
-import ghistabs.test.mustNotBeIn
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeIn
+import ghidrakt.test.mustNotBeIn
 import org.junit.jupiter.api.Test
 
 private const val SUMMARY_HEADER = "=== Summary of diagnostic categories ==="

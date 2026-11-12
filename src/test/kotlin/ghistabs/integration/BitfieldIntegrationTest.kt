@@ -4,12 +4,12 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.BitFieldDataType
 import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghidrakt.test.mustBe
 import ghistabs.importer.runOnRecords
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.test.defaultContext
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

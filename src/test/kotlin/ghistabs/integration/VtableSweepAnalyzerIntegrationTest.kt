@@ -18,10 +18,10 @@ import ghidrakt.DtmRegistry
 import ghidrakt.buildClassNamespaces
 import ghidrakt.diagnose.CountingSink
 import ghidrakt.runTransaction
-import ghistabs.test.must
-import ghistabs.test.mustBe
-import ghistabs.test.mustNot
-import ghistabs.test.mustNotBeNull
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustNot
+import ghidrakt.test.mustNotBeNull
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

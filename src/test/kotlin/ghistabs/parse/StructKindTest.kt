@@ -1,9 +1,9 @@
 package ghistabs.parse
 
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeFalse
+import ghidrakt.test.mustBeTrue
 import ghistabs.render.cxxKeyword
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeFalse
-import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.Test
 
 /**

@@ -8,6 +8,7 @@ import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.diagnose.Level
 import ghidrakt.runTransaction
+import ghidrakt.test.*
 import ghidrakt.withProgram
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.importer.ImportContext

@@ -1,10 +1,10 @@
 package ghistabs.importer
 
 import ghidra.program.model.data.*
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeA
-import ghistabs.test.mustBeEmpty
-import ghistabs.test.mustBeSameAs
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeA
+import ghidrakt.test.mustBeEmpty
+import ghidrakt.test.mustBeSameAs
 import org.junit.jupiter.api.Test
 
 /**

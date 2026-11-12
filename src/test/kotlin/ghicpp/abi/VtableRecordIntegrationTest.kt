@@ -7,9 +7,9 @@ import ghicpp.abi.itanium.vtableOffsetField
 import ghidra.program.model.address.Address
 import ghidrakt.get
 import ghidrakt.getScalar
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeTrue
 import ghistabs.integration.FeatureFixtureTest
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest

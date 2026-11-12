@@ -7,6 +7,7 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.Demangler
 import ghidrakt.formals
 import ghidrakt.runTransaction
+import ghidrakt.test.*
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach

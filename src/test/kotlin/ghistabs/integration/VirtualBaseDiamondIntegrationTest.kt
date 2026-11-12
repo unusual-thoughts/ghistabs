@@ -2,6 +2,7 @@ package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghidrakt.test.mustBe
 import ghistabs.importer.runOnRecords
 import ghistabs.index.virtualBases
 import ghistabs.materialize.virtualBaseStructs
@@ -10,7 +11,6 @@ import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.parse.TypeDecl
 import ghistabs.test.defaultContext
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

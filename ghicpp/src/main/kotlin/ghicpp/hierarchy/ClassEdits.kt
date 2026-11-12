@@ -183,7 +183,7 @@ fun Program.placeBase(cls: ClassView, base: ClassView, offset: Int, isVirtual: B
  * the field the base's struct or self-base takes, or, split around the class's own vfptr, its
  * `<Base>_fields_…` run. False when no field holds it.
  */
-fun Program.respellBase(cls: ClassView, base: ClassView, isVirtual: Boolean, baseCount: Int): Boolean {
+internal fun Program.respellBase(cls: ClassView, base: ClassView, isVirtual: Boolean, baseCount: Int): Boolean {
     val struct = structOf(cls) ?: return false
     val part = embeddingOf(base)
     val runs = base.name + ClassNaming.FIELDS + "_"
@@ -204,12 +204,12 @@ fun Program.moveMember(member: Member, target: ClassView) {
 fun Program.resolve(cls: ClassView) = symbolTable.getSymbol(cls.id)?.`object` as? GhidraClass
 
 /** The functions [ns] holds, its thunks and imports aside. */
-fun Program.methodsOf(ns: GhidraClass): List<Function> = symbolTable.getSymbols(ns)
+internal fun Program.methodsOf(ns: GhidraClass): List<Function> = symbolTable.getSymbols(ns)
     .filter { it.symbolType == SymbolType.FUNCTION && !it.isExternal }
     .mapNotNull { functionManager.getFunctionAt(it.address)?.takeUnless(Function::isThunk) }
 
 /** The function at [m]'s address, when it is a function member. */
-fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == MemberKind.FUNCTION }
+internal fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == MemberKind.FUNCTION }
     ?.let { addressFactory.getAddress(it.address) }
     ?.let(functionManager::getFunctionAt)
 
@@ -217,7 +217,7 @@ fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == MemberKind.
  * Retypes [cls]'s own fields off what [methods] load and store through `this`, or off all of [methodsOf] its
  * namespace's when null.
  */
-fun Program.updateFieldTypes(cls: ClassView, methods: List<Function>?, monitor: TaskMonitor) {
+internal fun Program.updateFieldTypes(cls: ClassView, methods: List<Function>?, monitor: TaskMonitor) {
     val ns = resolve(cls) ?: return
     updateFieldTypes(ns, methods ?: methodsOf(ns), monitor)
 }
@@ -241,7 +241,7 @@ internal fun Program.slotDefinitionsOf(func: Function): Set<FunctionDefinition> 
  * does for a whole class: every vftable holding it then calls it so. A definition keeps its name. How many
  * it changed.
  */
-fun Program.applySignatureToSlots(func: Function): Int {
+internal fun Program.applySignatureToSlots(func: Function): Int {
     val defs = slotDefinitionsOf(func)
     for (def in defs) {
         def.replaceWith(

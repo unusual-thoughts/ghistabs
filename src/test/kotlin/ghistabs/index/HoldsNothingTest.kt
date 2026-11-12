@@ -1,13 +1,13 @@
 package ghistabs.index
 
+import ghidrakt.test.mustBeFalse
+import ghidrakt.test.mustBeTrue
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.parse.TypeDecl
 import ghistabs.test.dummyHarvester
-import ghistabs.test.mustBeFalse
-import ghistabs.test.mustBeTrue
 import org.junit.jupiter.api.Test
 
 /**

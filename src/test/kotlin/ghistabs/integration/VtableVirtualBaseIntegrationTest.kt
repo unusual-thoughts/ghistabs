@@ -12,13 +12,13 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.applyDemangling
 import ghidrakt.diagnose.DummySink
 import ghidrakt.runTransaction
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.test.defaultContext
 import ghistabs.test.importAndAnalyze
-import ghistabs.test.must
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

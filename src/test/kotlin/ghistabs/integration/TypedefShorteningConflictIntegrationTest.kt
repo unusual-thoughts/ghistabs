@@ -10,6 +10,9 @@ import ghidrakt.diagnose.Level
 import ghidrakt.isConflict
 import ghidrakt.nameWithoutConflict
 import ghidrakt.runTransaction
+import ghidrakt.test.must
+import ghidrakt.test.mustBeEmpty
+import ghidrakt.test.mustNotBeNull
 import ghidrakt.withProgram
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.importer.ImportContext
@@ -17,9 +20,6 @@ import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportOptions.Companion.enableStabsAnalyzer
 import ghistabs.importer.ImportProbe
 import ghistabs.test.disableWindowsResourceAnalyzer
-import ghistabs.test.must
-import ghistabs.test.mustBeEmpty
-import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
