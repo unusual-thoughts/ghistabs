@@ -221,6 +221,20 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
         program.layout("Label") mustBe before
     }
 
+    @Test
+    fun `renaming a destructor slot names each class's scalar deleting destructor`() = program.rolledBack {
+        val h = ClassHierarchy.of(program, hasStabs = false)
+        val slots = VirtualSlots(program, h)
+        fun cls(name: String) = h.classes.single { it.qualifiedName == name }
+        val dtor = slots.target(slots.slotsOf(cls("Rect"))[0])!!
+        slots.rename(dtor, "~Rect").skipped mustBe emptyList()
+        for (name in listOf("Rect", "Circle", "Label")) {
+            // cl folds some classes' into one, outside any class: named the same, all the same.
+            slots.target(slots.slotsOf(cls(name))[0])!!.name mustBe "`scalar_deleting_destructor'"
+        }
+        program.classStruct("Shape_vftable").getComponent(0).fieldName mustBe "`scalar_deleting_destructor'"
+    }
+
     /** Runs [edit] in a transaction it then rolls back, so the other tests see the program as analysed. */
     private fun Program.rolledBack(edit: () -> Unit) {
         val tx = startTransaction("rolled back")

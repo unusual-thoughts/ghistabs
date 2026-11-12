@@ -11,6 +11,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghidra.util.task.TaskMonitor
+import ghistabs.components
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.minus
@@ -32,11 +33,11 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
     }
 
     /** Off the calls of each structor on `this`, and the vptrs it stores together. */
-    fun addStructors(reading: StructorFinder.Reading) {
-        for ((f, stores) in reading.stores) {
+    fun addStructors(uses: StructorInspector.ThisUses) {
+        for ((f, stores) in uses.stores) {
             val own = stores.classes
-            val callees = reading.subobjectCalls[f].orEmpty()[0L].orEmpty()
-            for (base in callees.flatMap { reading.stores[it]?.classes.orEmpty() }.filterNot { it in own }) {
+            val callees = uses.subobjectCalls[f].orEmpty()[0L].orEmpty()
+            for (base in callees.flatMap { uses.stores[it]?.classes.orEmpty() }.filterNot { it in own }) {
                 own.forEach { add(it, base) }
             }
             val inlined = own.groupBy(::length).toSortedMap().values
@@ -61,7 +62,7 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
 
     /**
      * The direct bases of [classes] at the start of their objects, off what their structors store and call
-     * ([reading]) and the functions their tables' [slots] share, each table's slots in order, null where no function
+     * ([uses]) and the functions their tables' [slots] share, each table's slots in order, null where no function
      * of the program's own is (a null slot, a pure virtual stub, an import) or one that never returns, as an unnamed
      * pure virtual stub doesn't.
      *
@@ -80,8 +81,8 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
      * would derive from each other. A call on `this` + k is no evidence: it builds a member as well as a base, and
      * only a store of D's own table at k, which [PlainVtables] doesn't place, would tell them apart.
      */
-    fun inferBases(classes: Collection<PlainClass>, reading: StructorFinder.Reading) {
-        addStructors(reading)
+    fun inferBases(classes: Collection<PlainClass>, uses: StructorInspector.ThisUses) {
+        addStructors(uses)
         addSharedSlots()
         val direct = byClass.mapValues { (_, cs) -> cs.mostDerived(byClass) }
         for (cls in classes) {
@@ -138,14 +139,14 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
     private val ptr = program.defaultPointerSize.toLong()
 
     override fun parse(monitor: TaskMonitor): ClassPassInput {
-        monitor.setMessage("Reading vftable labels")
+        monitor.message = "Reading vftable labels"
         val classes = symbols.getSymbols(ClassNaming.VFTABLE).iterator().asSequence()
             .filter { it.isPlain() }
             .groupBy { it.parentNamespace.id }
             .values.map { labels ->
                 PlainClass(labels.first().parentNamespace, labels.map { PlainVtables.recordAt(program, it.address) })
             }
-        val reading = StructorFinder(program, classes, sink).readStorers(monitor)
+        val uses = StructorInspector(program, classes, sink).readStorers(monitor)
         val slots = classes.associateWith { c ->
             c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
                 // An unnamed pure virtual stub never returns: it aborts.
@@ -153,8 +154,8 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
                     ?.takeUnless { it.hasNoReturn() }
             }
         }
-        monitor.setMessage("Inferring bases from constructors")
-        BaseCandidates(slots).inferBases(classes, reading)
+        monitor.message = "Inferring bases from constructors"
+        BaseCandidates(slots).inferBases(classes, uses)
         return ClassPassInput(classes, classes, holders(classes))
     }
 
@@ -187,8 +188,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
     private fun slotsOf(record: VtableRecord, keepNulls: Boolean = false): List<Address> {
         val laid = program.listing.getDataAt(record.addressPoint)
         if (laid == null || laid.numComponents == 0 || !laid.isStructure) return record.slots(program)
-        return (0 until laid.numComponents).mapNotNull { laid.getComponent(it).value as? Address }
-            .filter { keepNulls || it.offset != 0L }
+        return laid.components.mapNotNull { it.value as? Address }.filter { keepNulls || it.offset != 0L }
     }
 
     private companion object {

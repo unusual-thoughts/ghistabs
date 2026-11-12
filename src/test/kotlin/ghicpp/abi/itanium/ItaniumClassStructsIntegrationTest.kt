@@ -152,6 +152,41 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
         }
     }
 
+    @Test
+    fun `the window lists a class's virtual functions by slot, then the rest by name`() {
+        val rect = ClassHierarchy.of(program, hasStabs = false).classes.single { it.qualifiedName == "Rect" }
+        val functions = rect.members.filter { it.kind == ClassHierarchy.MemberKind.FUNCTION }
+        // Its destructors, `area`, `name` (`Shape`'s, so not its own) and `perim`: slots 0, 1, 2 and 4.
+        functions.mapNotNull { it.slot?.toString() } mustBe listOf("slot 0", "slot 1", "slot 2", "slot 4")
+        functions.dropWhile { it.slot != null }.let { rest ->
+            rest.none { it.slot != null }.mustBeTrue()
+            rest.map { it.name } mustBe rest.map { it.name }.sorted()
+        }
+    }
+
+    @Test
+    fun `renaming a destructor slot names each class's pair of destructors after its class`() {
+        val tx = program.startTransaction("rolled back")
+        try {
+            val h = ClassHierarchy.of(program, hasStabs = false)
+            val slots = VirtualSlots(program, h)
+            fun cls(name: String) = h.classes.single { it.qualifiedName == name }
+            // `Rect`'s complete destructor, slot 0: the deleting one, slot 1, goes with it, and `Circle`'s and
+            // `Label`'s; `Shape`'s two are 0, so only their fields are named.
+            val dtor = slots.target(slots.slotsOf(cls("Rect"))[0])!!
+            slots.rename(dtor, "~").skipped mustBe emptyList()
+            for (name in listOf("Rect", "Circle", "Label")) {
+                slots.slotsOf(cls(name)).take(2).map { slots.target(it)!!.name } mustBe listOf("~$name", "~$name")
+            }
+            val shape = program.dataTypeManager.getDataType("/ClassDataTypes/Shape/Shape_vftable") as Structure
+            shape.definedComponents.take(2).map { it.fieldName } mustBe listOf("~Shape", "~Shape_1")
+            // Now a destructor, it takes no other name.
+            runCatching { slots.rename(dtor, "dispose") }.isFailure.mustBeTrue()
+        } finally {
+            program.endTransaction(tx, false)
+        }
+    }
+
     private fun Program.methods(cls: String) = functionManager.getFunctions(true).filter {
         it.parentNamespace.name == cls
     }

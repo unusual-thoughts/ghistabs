@@ -48,7 +48,7 @@ class FillerByteAnalyzer :
         val listing = program.listing
         val bookmarks = program.bookmarkManager
         val target = program.memory.executeSet.intersect(set)
-        val code = PseudoDisassembler(program).instructions
+        val code = PseudoDisassembler(program)
 
         var marked = 0
         monitor.initialize(target.numAddresses, "Collapsing filler bytes")
@@ -97,16 +97,16 @@ class FillerByteAnalyzer :
      * binary on some, none on cryptopp — where the junk decodes
      * to exactly the right length by luck).
      */
-    private fun Program.fillSpans(code: Instructions, range: AddressRange): List<Pair<Address, Long>> = buildList {
+    private fun Program.fillSpans(dis: PseudoDisassembler, range: AddressRange): List<Pair<Address, Long>> = buildList {
         val limit = range.maxAddress.next() ?: return@buildList
         var addr = range.minAddress
-        code.nopRunLength(addr, limit)?.let {
+        dis.nopRunLength(addr, limit)?.let {
             add(addr to it)
             addr += it
         }
         while (addr < limit) {
-            val fill = code.at(addr)
-                ?.let { code.fillJumpLength(it, addr.add(MAX_FILL)) }
+            val fill = dis.instructionAt(addr)
+                ?.let { dis.fillJumpLength(it, addr.add(MAX_FILL)) }
                 ?.takeIf { noFunctionIn(addr, it) }
             if (fill != null) add(addr to fill)
             addr = addr.add(fill ?: 1L)

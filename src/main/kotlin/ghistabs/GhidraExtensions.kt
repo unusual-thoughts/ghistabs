@@ -8,6 +8,7 @@ import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.PseudoData
+import ghidra.app.util.PseudoDisassembler
 import ghidra.app.util.SymbolPath
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
@@ -218,6 +219,10 @@ fun Structure.componentsOverlapping(range: IntRange) = definedComponents.filter 
 
 /** The defined components sharing a byte with the [length] bytes at [offset]. */
 fun Structure.componentsOverlapping(offset: Int, length: Int) = componentsOverlapping(offset.withLength(length))
+
+/** Instructions decoded from the bytes, whatever the listing has made of them. */
+fun PseudoDisassembler.instructionAt(addr: Address): Instruction? =
+    runCatching { disassemble(addr) }.getOrNull()?.takeIf { it.length > 0 }
 
 /**
  * Clear any instructions covering [range]; true if there were any. An empty [range]

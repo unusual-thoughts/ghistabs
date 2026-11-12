@@ -1,11 +1,15 @@
 package ghicpp.recover
 
 import ghicpp.*
-import ghicpp.abi.*
 import ghicpp.abi.VftableBuilder
+import ghicpp.abi.definedVtableRecord
+import ghicpp.abi.isVtableClaimed
 import ghicpp.abi.itanium.*
+import ghicpp.abi.primaryVtableOf
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.*
+import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -54,7 +58,7 @@ class VtableSweepPass(
      * and no class struct is made. Returns how many primary vtables it laid, and marks the program swept.
      */
     fun run(monitor: TaskMonitor): Int {
-        monitor.setMessage("Finding vtables no class claimed")
+        monitor.message = "Finding vtables no class claimed"
         val unclaimed = symtab.symbolIterator
             .mapNotNull { sym ->
                 primaryVtableOf(sym)?.let { (cls, abi) ->
@@ -94,7 +98,7 @@ class VtableSweepPass(
             // Itanium's secondaries follow the primary; gcc 2.x's have symbols of their own, laid below.
             if (record.header != null) builder.laySecondaries(record, vftable, leaf, ns, SWEPT)
         }
-        monitor.setMessage("Laying secondary and construction vtables, and VTTs")
+        monitor.message = "Laying secondary and construction vtables, and VTTs"
         // gcc 2.x secondaries of classes without stabs, untagged: there is no class struct to find a vptr in.
         for (cls in builder.gcc2SecondaryVtables.keys) {
             builder.layGcc2Secondaries(
