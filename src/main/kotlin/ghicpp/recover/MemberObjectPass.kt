@@ -9,6 +9,7 @@ import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
 import ghicpp.abi.StructorRole.DESTRUCTOR
 import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -282,12 +283,16 @@ class MemberObjectPass(
         val offset = at - (part?.offset ?: 0)
         if (part == null && at + member.length > length) growStructure(at + member.length - length)
         val clash = into.definedComponents.filter { it.offset < offset + member.length && it.endOffset >= offset }
-        if (offset + member.length > into.length || clash.any { it.dataType is Structure && it.dataType != member }) {
+        val placedHere = { c: DataTypeComponent -> c.dataType == member && c.offset == offset }
+        if (offset + member.length > into.length || clash.any { it.dataType is Structure && !placedHere(it) }) {
             return debug("member-unplaced", "${member.name} at +$at in $name")
         }
         val field = "field_0x${at.toString(16)}"
-        runCatching { into.replaceAtOffset(offset, member, member.length, field, "member or base") }
-            .onFailure { degradation("member-unplaced", "$name::$field", it.message) }
+        runCatching {
+            // replaceAtOffset takes the field at offset and the undefined bytes after it, not the fields past it.
+            for (c in clash.sortedByDescending { it.offset }) into.clearAtOffset(c.offset)
+            into.replaceAtOffset(offset, member, member.length, field, "member or base")
+        }.onFailure { degradation("member-unplaced", "$name::$field", it.message) }
         debug("member-placed", "${member.name} at +$at in $name")
     }
 
