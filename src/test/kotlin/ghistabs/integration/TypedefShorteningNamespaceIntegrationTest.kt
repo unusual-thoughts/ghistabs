@@ -10,17 +10,17 @@ import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.CapturingSink
+import ghidrakt.runTransaction
+import ghidrakt.withProgram
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.importer.import
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.typedefAliases
-import ghidrakt.runTransaction
 import ghistabs.test.disableWindowsResourceAnalyzer
 import ghistabs.test.importAndAnalyze
 import ghistabs.test.mustBeEmpty
-import ghidrakt.withProgram
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 

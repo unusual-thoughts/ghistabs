@@ -174,8 +174,8 @@ fun DemangledDataType.parameterType(dtm: DataTypeManager): DataType? =
     runCatching { getDataType(dtm) }.getOrNull()?.takeIf { it.isParameterSized }
 
 /** Whether [this] has a parameter's size: neither a stand-in nor a 1-byte `undefined` in disguise. */
-internal val DataType.isParameterSized get() =
+val DataType.isParameterSized get() =
     !isNotYetDefined && !isZeroLength && withoutTypedefs() != DataType.DEFAULT
 
 /** [this] with the typedefs at its top peeled off. */
-internal fun DataType.withoutTypedefs(): DataType = generateSequence(this) { (it as? TypeDef)?.dataType }.last()
+fun DataType.withoutTypedefs(): DataType = generateSequence(this) { (it as? TypeDef)?.dataType }.last()

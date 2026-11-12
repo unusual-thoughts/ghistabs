@@ -7,3 +7,7 @@ pluginManagement {
 
 // Pinned, not derived from the directory name: `${project.name}` names the extension jar and zip.
 rootProject.name = "ghistabs"
+
+// The stabs extension is the root project; the C++ extension it bundles and the kernel under both are
+// subprojects, as Ghidra's own modules are.
+include(":ghidrakt", ":ghicpp")

@@ -91,8 +91,7 @@ class TypeinfoReader(val program: Program) {
     }
 
     // The vptr points two words past its vtable's `_ZTV` label.
-    internal fun kindOf(zti: Address) =
-        pointee(zti, Itanium.vtablePrefixBytes(ptr)) { it.vtableClass?.let(Kind::ofVtableClass) }
+    fun kindOf(zti: Address) = pointee(zti, Itanium.vtablePrefixBytes(ptr)) { it.vtableClass?.let(Kind::ofVtableClass) }
 
     /** The class whose typeinfo the pointer at [at] points at, and where that typeinfo's symbol is. */
     private fun classAt(at: Address) = pointee(at, 0) { sym -> sym.typeinfoClass?.let { it to sym.address } }

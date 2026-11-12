@@ -6,8 +6,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.pcode.HighFunction
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.entrypoints.DeferredPopAnalyzer
 import ghidrakt.runTransaction
+import ghistabs.entrypoints.DeferredPopAnalyzer
 import ghistabs.test.mustBe
 import ghistabs.test.mustNot
 import org.junit.jupiter.api.AfterEach

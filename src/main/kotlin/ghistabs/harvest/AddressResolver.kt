@@ -12,8 +12,8 @@ import ghidra.program.model.listing.Program
 import ghidrakt.baseStackParamOffset
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
-import ghistabs.parse.*
 import ghidrakt.plus
+import ghistabs.parse.*
 
 /**
  * Turns the numbers a stab carries into program addresses. One resolver serves the whole run, so the

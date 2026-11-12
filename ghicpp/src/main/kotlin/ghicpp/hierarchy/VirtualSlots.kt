@@ -22,8 +22,8 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghidrakt.AddressSerializer
 import ghidrakt.components
-import ghistabs.harvest.AddressSerializer
 import ghidrakt.pointerAt
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers

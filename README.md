@@ -86,21 +86,31 @@ Grab a prebuilt zips on the [releases page](https://github.com/unusual-thoughts/
 for one of the supported Ghidra versions. Or build your own, which lands in `dist/`. Then either
 
 - **Ghidra GUI:** `File > Install Extensions… > +`, pick the zip, restart Ghidra; or
-- **Gradle:** `./gradlew installExtension` (builds and unpacks straight into your Ghidra user
+- **Gradle:** `./gradlew :installExtension` (builds and unpacks straight into your Ghidra user
   extensions dir, e.g. `~/.config/ghidra/ghidra_12.1.2_DEV/Extensions`; set `GHIDRA_USER_DIR`
   to override), then restart Ghidra.
+
+The ghistabs zip carries the C++ analyzers and the Class Hierarchy window with it, so it is the only
+one to install. The ghicpp zip (`ghicpp/dist/`) is those alone, for binaries without stabs.
 
 ## Building
 
 Requires a Ghidra install and a JDK toolchain >=21 from Ghidra 11, or >=17 for 10.x. The
-API differences between releases are absorbed by the `src/main/kotlin-pre*` / `kotlin-since*`
-compat source sets, selected by the version of the install you build against; releases are cut
-for Ghidra 10.4, 11.4.3, 12.0.4 and 12.1.3.
+API differences between releases are absorbed by each project's `src/main/kotlin-pre*` /
+`kotlin-since*` compat source sets, selected by the version of the install you build against;
+releases are cut for Ghidra 10.4, 11.4.3, 12.0.4 and 12.1.3.
+
+Three Gradle projects, each depending on the one below it:
+
+- `ghistabs` (the root): the stabs import, render, exporters and CLI, an extension;
+- `ghicpp/`: the C++ class recovery, the gcc/MinGW fix-ups and the Class Hierarchy window, an
+  extension the ghistabs zip bundles;
+- `ghidrakt/`: the Ghidra and Kotlin extensions and the diagnostics both build on, a library.
 
 ```bash
 export GHIDRA_INSTALL_DIR=/opt/ghidra   # or pass -PGHIDRA_INSTALL_DIR=...
-./gradlew buildExtension                # zip under dist/
-./gradlew installExtension              # build + install into the Ghidra user dir
+./gradlew buildExtension                # zips under dist/ and ghicpp/dist/
+./gradlew :installExtension             # build + install ghistabs into the Ghidra user dir
 ./gradlew buildCli                      # standalone headless CLI at build/libs/ghistabs
 ./gradlew test                          # unit tests (see TESTING.md for the other tiers)
 ```
