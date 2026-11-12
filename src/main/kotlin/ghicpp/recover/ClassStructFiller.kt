@@ -202,21 +202,19 @@ class ClassStructFiller(
 }
 
 /**
- * Fills each `<Class>_data` struct placed in this with the fields of [store] it holds, as Auto Fill in Structure
- * fills one: where a field is there already, [NoisyStructureBuilder] keeps the more specific type,
- * and the field keeps its name
+ * Fills each of this class struct's own `<Class>_data` structs ([ownData]) with the fields of [store] it holds,
+ * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
+ * specific type, and the field keeps its name
  */
 private fun Structure.fillData(store: Map<Int, DataType>) {
-    for (part in definedComponents) {
-        if (!isOwnData(part)) continue
-        val data = part.dataType as Structure
-        val inside = store.filter { (at, dt) -> part.range.includes(at.withLength(dt.length)) }
+    for ((offset, data) in ownData()) {
+        val inside = store.filter { (at, dt) -> offset.withLength(data.length).includes(at.withLength(dt.length)) }
         val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
-        for ((at, dt) in inside) merged.addDataType(at.toLong() - part.offset, dt)
+        for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
         for ((at, dt) in merged.iterator()) {
             val old = data.getComponentAt(at.toInt())
             if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
-            val name = old?.fieldName ?: ClassNaming.fieldName(part.offset + at.toInt())
+            val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
             data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
         }
     }

@@ -92,8 +92,9 @@ fun Program.classStruct(ns: GhidraClass) =
 
 /**
  * Gives [ns] a [classStruct] of [size] bytes, or grows its own to them. Where its last field is one of its own
- * `<Class>_data` structs, that grows with it, so the fields its constructors store past the old end are refilled
- * there. A base's `_fields` part keeps its size: it is the base's, which grew none.
+ * `<Class>_data` structs, or, split around a deriving class's vptr, its own `_fields` run ending in one, that grows
+ * with it, so the fields its constructors store past the old end are refilled there. A base's `_fields` part keeps
+ * its size: it is the base's, which grew none.
  */
 fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
     if (size <= 0) return
@@ -108,7 +109,7 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
         else if struct.length < size -> {
             val last = struct.definedComponents.lastOrNull()?.takeIf { it.endOffset == struct.length - 1 }
             struct.growStructure(size - struct.length)
-            if (last != null && struct.isOwnData(last)) struct.stretch(last, last.offset..<size)
+            if (last != null) struct.stretchOwnTail(struct, last, size)
         }
     }
 }
@@ -169,10 +170,47 @@ private fun DataTypeComponent.isAt(at: Int, member: Structure) = dataType == mem
 
 private fun DataTypeComponent.describe() = "${fieldName ?: dataType.name} at +0x${offset.toString(16)}"
 
+/**
+ * Stretches [last], this struct's last field, on to [end], where it is one of [owner]'s own `<Class>_data` structs,
+ * or one of its own `_fields` runs, whose own last field stretches with it in turn.
+ */
+private fun Structure.stretchOwnTail(owner: Structure, last: DataTypeComponent, end: Int) {
+    if (!owner.isOwnData(last) && !owner.isOwnFields(last)) return
+    val tail = (last.dataType as Structure).definedComponents.lastOrNull()
+        ?.takeIf { owner.isOwnFields(last) && it.endOffset == last.length - 1 }
+    val offset = last.offset
+    val inner = stretch(last, offset..<end)
+    if (tail != null) inner.stretchOwnTail(owner, tail, end - offset)
+}
+
 /** Whether [part] holds one of this class struct's own `<Class>_data` structs, filed beside it. */
 fun Structure.isOwnData(part: DataTypeComponent) = (part.dataType as? Structure)?.let {
     it.categoryPath == categoryPath && it.name.startsWith(name + ClassNaming.DATA)
 } == true
+
+/**
+ * Whether [part] holds one of this class struct's own `<Class>_fields` runs, its own fields and those of its
+ * bases laid inside it, without the vptr a deriving class took over ([BaseSplitter]); filed beside it, or
+ * beside its self-base.
+ */
+fun Structure.isOwnFields(part: DataTypeComponent) = (part.dataType as? Structure)?.let {
+    it.categoryPath.isAncestorOrSelf(categoryPath) && it.name.startsWith(name + ClassNaming.FIELDS)
+} == true
+
+/**
+ * This class struct's own `<Class>_data` structs, by their offset into it: those it holds and, its fields split
+ * around a deriving class's vptr ([VfptrModel.SPLIT_BASE]), those inside its own `_fields` runs.
+ */
+fun Structure.ownData(): List<Pair<Int, Structure>> = definedComponents.flatMap { part ->
+    when {
+        isOwnData(part) -> listOf(part.offset to part.dataType as Structure)
+
+        isOwnFields(part) -> (part.dataType as Structure).definedComponents.filter { isOwnData(it) }
+            .map { part.offset + it.offset to it.dataType as Structure }
+
+        else -> emptyList()
+    }
+}
 
 /** Why [dt] can't go at [at] in this over undefined bytes alone, or null where it can. */
 fun Structure.layoutProblem(at: Int, dt: DataType): String? = when {

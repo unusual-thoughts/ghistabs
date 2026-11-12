@@ -7,7 +7,9 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.diagnose.CapturingSink
 import ghistabs.runTransaction
@@ -18,16 +20,16 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
- * [placeMember] on hand-built class structs: `Owner`, 0x20 bytes, a `{vfptr}` at 0 and its own fields at 4 in an
- * `Owner_data` struct, laid whole ([VfptrModel.INHERITED]) or, split around a deriving class's vptr
- * ([VfptrModel.SPLIT_BASE]), inside an `Owner_fields` run; and an 8-byte `Member` to lay in it.
+ * [placeMember], [ownData] and [sizeClassStruct] on hand-built class structs: `Owner`, 0x20 bytes, a `{vfptr}`
+ * at 0 and its own fields at 4 in an `Owner_data` struct, laid whole ([VfptrModel.INHERITED]) or, split around a
+ * deriving class's vptr ([VfptrModel.SPLIT_BASE]), inside an `Owner_fields` run; and an 8-byte `Member` to lay.
  */
 @Tag("integration")
-class MemberPlacementIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+class ClassStructLayoutIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var builder: ProgramBuilder
     private val program: Program get() = builder.program
     private val sink = CapturingSink()
-    private val category = CategoryPath("/ClassDataTypes/Owner")
+    private val category = ClassNaming.vftableCategory(listOf("Owner"))
 
     @BeforeEach
     fun setUp() {
@@ -76,6 +78,17 @@ class MemberPlacementIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         },
     )
 
+    /** `Owner` split around a deriving class's vptr: its `{vfptr}`, then its own fields in an `Owner_fields` run. */
+    private fun splitOwner(vararg fields: Int) = owner(
+        add(
+            StructureDataType(category, "Owner_fields_4_32", 0x1c).apply {
+                val own = data(4, *fields)
+                replaceAtOffset(0, own, own.length, own.name, "own fields")
+            },
+        ),
+        4,
+    )
+
     private fun unplaced() = sink.lines.filter { it.tag == "member-unplaced" }
 
     @Test
@@ -103,15 +116,7 @@ class MemberPlacementIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun `split around a vptr, a member goes in the own fields inside the class's fields run`() {
-        val (owner, member) = edit {
-            val run = add(
-                StructureDataType(category, "Owner_fields_4_32", 0x1c).apply {
-                    val own = data(4, 4, 0xc)
-                    replaceAtOffset(0, own, own.length, own.name, "own fields")
-                },
-            )
-            owner(run, 4) to member()
-        }
+        val (owner, member) = edit { splitOwner(4, 0xc) to member() }
         edit { sink.placeMember(owner, 8, member) }
         val run = owner.getComponentAt(4).dataType as Structure
         val own = run.getComponentAt(0).dataType as Structure
@@ -148,5 +153,30 @@ class MemberPlacementIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         edit { sink.placeMember(holder, 8, member) }
         base.definedComponents.map { it.offset } mustBe listOf(0, 0xc)
         unplaced().single().msg!!.contains("field_0xc at +0xc in Base") mustBe true
+    }
+
+    @Test
+    fun `a class's own fields are found whole and inside its fields run`() {
+        val whole = edit { owner(data(4, 4), 4) }
+        whole.ownData().map { (at, dt) -> at to dt.name } mustBe listOf(4 to "Owner_data")
+        edit { program.dataTypeManager.remove(whole) }
+        val split = edit { splitOwner(4) }
+        split.ownData().map { (at, dt) -> at to dt.name } mustBe listOf(4 to "Owner_data")
+    }
+
+    @Test
+    fun `split, a class grows its own fields inside its fields run`() {
+        val owner = edit {
+            program.symbolTable.createClass(program.globalNamespace, "Owner", SourceType.USER_DEFINED)
+            splitOwner(4)
+        }
+        val ns = program.symbolTable.getClassSymbol("Owner", program.globalNamespace).`object` as GhidraClass
+        edit { program.sizeClassStruct(ns, 0x28) }
+        owner.length mustBe 0x28
+        val run = owner.getComponentAt(4)
+        run.length mustBe 0x24
+        val own = (run.dataType as Structure).getComponentAt(0)
+        own.dataType.name mustBe "Owner_data"
+        own.length mustBe 0x24
     }
 }
