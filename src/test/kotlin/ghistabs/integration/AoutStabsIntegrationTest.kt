@@ -10,6 +10,7 @@ import ghidrakt.LoadedProgram
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.diagnose.Level
 import ghidrakt.loadProgram
+import ghidrakt.test.*
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.importer.import

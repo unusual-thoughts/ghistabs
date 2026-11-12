@@ -13,4 +13,6 @@ dependencies {
     }
     compileOnly(ghidra)
     testImplementation(ghidra)
+    // A library's test fixtures (when it has `java-test-fixtures`) build against the same install.
+    pluginManager.withPlugin("java-test-fixtures") { "testFixturesCompileOnly"(ghidra) }
 }

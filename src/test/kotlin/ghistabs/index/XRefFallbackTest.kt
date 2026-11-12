@@ -1,9 +1,9 @@
 package ghistabs.index
 
+import ghidrakt.test.mustBe
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*
-import ghistabs.test.mustBe
 import ghistabs.test.typesOf
 import org.junit.jupiter.api.Test
 

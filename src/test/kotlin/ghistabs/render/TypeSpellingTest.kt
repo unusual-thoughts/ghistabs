@@ -1,5 +1,6 @@
 package ghistabs.render
 
+import ghidrakt.test.*
 import ghistabs.harvest.NameBinding
 import ghistabs.harvest.Type
 import ghistabs.parse.GlobalTypeId

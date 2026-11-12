@@ -4,10 +4,10 @@ import ghicpp.Access
 import ghicpp.VirtKind
 import ghicpp.member
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghidrakt.test.mustBe
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.test.GenericAddressResolver
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 

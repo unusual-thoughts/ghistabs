@@ -55,3 +55,10 @@ for (set in listOf("main", "test")) {
         sourceSets.named(set) { java.srcDir(variant) }
     }
 }
+
+// Where the binary fixtures are, for TestBinaries: the corpus in the root project, the hello builds in
+// ghicpp. Every project's tests read them in place.
+tasks.withType<Test>().configureEach {
+    systemProperty("binariesDir", rootProject.file("src/test/resources/binaries").path)
+    systemProperty("hellosDir", rootProject.file("ghicpp/src/test/resources/binaries/features").path)
+}

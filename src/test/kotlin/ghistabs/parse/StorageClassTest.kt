@@ -1,6 +1,6 @@
 package ghistabs.parse
 
-import ghistabs.test.mustBe
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
 /** Pins the `static` the `S`/`V`/`f` stab letter spells: gcc's only record of internal linkage. */

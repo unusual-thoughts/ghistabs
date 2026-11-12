@@ -1,6 +1,6 @@
 package ghistabs.scan
 
-import ghistabs.test.mustBe
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
 /** Blanking has to keep every offset and newline, or every line number downstream is wrong. */

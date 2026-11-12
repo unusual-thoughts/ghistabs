@@ -376,7 +376,7 @@ class DissectionCache(
     )
 
     /** One function's share of [Dissections]. */
-    class Dissection(
+    internal class Dissection(
         val stores: VptrStores? = null,
         val subobjectCalls: Map<Long, Set<Function>> = emptyMap(),
         val thisStores: Stores = emptyMap(),
@@ -386,7 +386,7 @@ class DissectionCache(
     internal val reads = mutableMapOf<Key, Dissection>()
 }
 
-fun DissectionCache.Dissection?.orEmpty() = DissectionCache.Dissection()
+internal fun DissectionCache.Dissection?.orEmpty() = DissectionCache.Dissection()
 
 /**
  * A parser that dissects the vptr storers as it parses: in the [cache] the class pass gives it before it

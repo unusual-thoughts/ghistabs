@@ -1,12 +1,12 @@
 package ghistabs.harvest
 
 import ghicpp.Access
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeA
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.test.dummyCursor
 import ghistabs.test.longRange
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeA
 import org.junit.jupiter.api.Test
 import java.math.BigInteger
 

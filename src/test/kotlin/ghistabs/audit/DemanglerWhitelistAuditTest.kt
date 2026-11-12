@@ -1,7 +1,7 @@
 package ghistabs.audit
 
+import ghidrakt.test.mustBeEmpty
 import ghistabs.integration.Fixtures
-import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

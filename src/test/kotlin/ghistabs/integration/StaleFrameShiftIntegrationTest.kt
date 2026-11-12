@@ -7,6 +7,8 @@ import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.runTransaction
+import ghidrakt.test.*
+import ghidrakt.test.TestBinaries
 import ghidrakt.withProgram
 import ghistabs.test.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -43,7 +45,7 @@ class StaleFrameShiftIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         storage: String,
     ) {
         assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
-        withProgram(File("src/test/resources/binaries/features/$fixture"), log = MessageLog()) { program ->
+        withProgram(TestBinaries.file("features/$fixture"), log = MessageLog()) { program ->
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             mgr.initializeOptions()
             mgr.reAnalyzeAll(null)

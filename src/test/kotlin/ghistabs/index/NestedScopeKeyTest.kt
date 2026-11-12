@@ -6,6 +6,7 @@ import ghicpp.member
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.diagnose.StabsDiagnostics
+import ghidrakt.test.*
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*

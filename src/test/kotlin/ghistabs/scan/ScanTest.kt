@@ -1,7 +1,7 @@
 package ghistabs.scan
 
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeNull
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeNull
 import org.junit.jupiter.api.Test
 
 /** What the declarator index reads off C++ text, on the shapes libstdc++ actually contains. */

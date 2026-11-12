@@ -196,7 +196,7 @@ object Itanium : CxxAbi {
     }
 
     /** Whether [obj] is [className]'s demangled vtable. */
-    fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
+    internal fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
 
     /** The qualified class of a demangled `<kind> for <class>` table, or null if [obj] is no [kind]. */
     private fun addressTableClass(obj: DemangledObject, kind: String): String? {

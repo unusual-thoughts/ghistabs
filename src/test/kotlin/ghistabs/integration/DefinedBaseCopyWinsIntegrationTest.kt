@@ -3,12 +3,12 @@ package ghistabs.integration
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghidrakt.test.must
 import ghistabs.importer.runOnRecords
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.test.defaultContext
-import ghistabs.test.must
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

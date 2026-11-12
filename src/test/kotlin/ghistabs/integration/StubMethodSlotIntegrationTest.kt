@@ -4,6 +4,7 @@ import ghidra.program.model.data.FunctionDefinition
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.LoadedProgram
 import ghidrakt.loadProgram
+import ghidrakt.test.*
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue

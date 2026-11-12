@@ -2,11 +2,20 @@
 
 Three test tiers, split by JUnit tag. Pick the narrowest one for the change you made.
 
+The tests are in two projects. **ghistabs** (the root, `src/test/`) holds the stabs tests, and the
+C++ tests that need a binary's stabs. **ghicpp** (`ghicpp/src/test/`) holds the C++ tests that run on
+ghicpp alone. Both use the test fixtures of **ghidrakt** (`ghidrakt/src/testFixtures/`): the `must…`
+assertions (`ghidrakt.test`), `CapturingSink` and `TestBinaries`.
+
+A task named without a project path, like `./gradlew integrationTest`, runs in both projects. Give
+`--tests` a project path, since a project whose tests the filter doesn't match can fail the run:
+`./gradlew :ghicpp:integrationTest --tests 'ghicpp.score.*'`, or `:integrationTest --tests …` for ghistabs.
+
 | Task                        | What runs                                                                                            | Speed    | When                                                           |
 | --------------------------- | ---------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------- |
 | `./gradlew test`            | Unit tests — pure logic, synthetic inputs (no Ghidra headless boot). Excludes `integration`/`probe`. | seconds  | every change                                                   |
 | `./gradlew integrationTest` | `@Tag("integration")` — real-fixture assertion suite + synthetic-program behavioural tests.          | ~minutes | before pushing; after touching the import/materialize pipeline |
-| `./gradlew probeDump`       | `@Tag("probe")` — diagnostic generators (no pass/fail). Writes dumps under `build/test-output/`.     | ~minutes | on demand, when investigating                                  |
+| `./gradlew probes`          | `@Tag("probe")` — diagnostic generators (no pass/fail). Writes dumps under `build/test-output/`.     | ~minutes | on demand, when investigating                                  |
 
 Plus one guard task outside the tiers: **`./gradlew noSerializationTest`** re-runs one real-fixture
 import with `kotlinx-serialization-json` off the classpath, since main declares it `compileOnly` and the
@@ -18,7 +27,7 @@ what turns a GUI-only `NoClassDefFoundError` into a build failure. Dumps live in
 All three print per-test PASS/FAIL/SKIP and a final summary line to the console of the same
 command (no XML/HTML spelunking), and archive their report to a per-run timestamped dir
 (`build/reports/tests/<task>/<stamp>/index.html`) so a later run never clobbers an earlier one.
-`integrationTest`/`probeDump` always re-run (they never report `UP-TO-DATE`).
+`integrationTest`/`probes` always re-run (they never report `UP-TO-DATE`).
 
 ## Flags
 
@@ -29,7 +38,7 @@ Two axes, deliberately separate. **`-Pregression`** picks the *suite*; **`-Pfixt
   per binary × mode (`StabsImportRegressionBase` subclasses, package `ghistabs.fixtures`). Bare, that
   is every binary on disk; with a comma-separated list of exact filenames, **extension included**,
   only those. Nothing but the matrix runs, so the behavioural and fixture-parameterised classes are
-  skipped.
+  skipped, and so is ghicpp's whole `integrationTest`.
   ```
   ./gradlew integrationTest -Pregression                                   # matrix, every fixture
   ./gradlew integrationTest -Pregression=xmltest_gcc345_fullstabs.exe      # matrix, one fixture
@@ -77,12 +86,16 @@ them. `-Pregression` *includes*, so it does exactly that on purpose.
 ## Fixtures & baselines
 
 - Binaries live in `src/test/resources/binaries/` — see its README for the corpus and how to add to
-  it. Most are committed; anything absent (a binary that cannot be redistributed, dropped in locally)
+  it. `hello.cc` and its builds are ghicpp's, in `ghicpp/src/test/resources/binaries/features/`. Every
+  project's tests read both in place through `TestBinaries` (Gradle passes the directories as
+  `-DbinariesDir` and `-DhellosDir`), so never spell a path out in a test: `TestBinaries.file("features/hello_gcc421.exe")`
+  finds a hello build wherever it is. Most are committed; anything absent (a binary that cannot be redistributed, dropped in locally)
   makes the tests using it *skip*, not fail.
 - Baselines live in `src/test/resources/baselines/` (tracked), one per fixture; the baseline for a
   fixture that cannot be redistributed is gitignored alongside its binary, since it is derived from
   it. Same for `src/test/resources/corpus/` descriptor exports. Generated dumps go to
   `build/test-output/` so `./gradlew clean` regenerates them.
+- The class scorecards' ground truth and baselines live in `ghicpp/src/test/resources/ghicpp/scorecard/`.
 - **No assertion may be keyed to a fixture name.** A test gated on `binaryName == "foo.exe"`, or
   looking up a class only one binary declares, is dead the moment that binary is not on disk — and a
   whole tier of them was, silently, for every clone without the non-redistributable fixtures. Drive the
@@ -98,7 +111,12 @@ decides which task runs it. So a class's unit test, integration test, and probe 
 to the SUT — e.g. `ghistabs.importer` holds `DemanglerReplaceCoreTest` (unit) and
 `DemanglerReplaceIntegrationTest` (integration) side by side.
 
-Run **`./gradlew listTests`** to see every test class grouped by tag, with its test count — the way to
+A test sits in ghicpp when it needs nothing of ghistabs, and in the root otherwise. The C++ tests that
+import a binary's stabs stay in the root, in their `ghicpp.*` packages: `ClassHierarchyIntegrationTest`,
+`ItaniumClassAnalyzerStabsIntegrationTest`, `Gcc2SecondaryVtableIntegrationTest`,
+`VtableRecordIntegrationTest`, `TypeinfoReaderIntegrationTest` and `VxTableTagIntegrationTest`.
+
+Run **`./gradlew listTests`** to see every ghistabs test class grouped by tag (it doesn't list ghicpp's), with its test count — the way to
 find where a test lives. It asks JUnit rather than reading sources, so it sees the generated fixture
 classes and tags inherited from a base class; the price is that it needs the tests compiled first.
 `@ParameterizedTest` classes list as `(parameterized)`, since a dry run never expands them.
@@ -107,9 +125,9 @@ classes and tags inherited from a base class; the price is that it needs the tes
   in both analyzer modes (`CONCURRENT`/`AFTER`) and asserts the materialized output + baseline counters.
   Most fixture-specific assertions live here.
 - **Synthetic behavioural** (fast, build a tiny `ProgramBuilder` program, no fixture): the
-  `*IntegrationTest` classes under `ghistabs.importer` / `ghistabs.materialize` / `ghistabs` and under
-  `ghicpp.abi` / `ghicpp.recover`, such as `TypeinfoStructsDedupIntegrationTest` (`ghicpp.abi.itanium`).
-- **Probes** (`@Tag("probe")`, generators only, run via `probeDump`): `DegradationDumpProbe` (`ghistabs`),
+  `*IntegrationTest` classes under `ghistabs.importer` / `ghistabs.materialize` / `ghistabs`, and in
+  ghicpp under `ghicpp.abi` / `ghicpp.recover`, such as `TypeinfoStructsDedupIntegrationTest` (`ghicpp.abi.itanium`).
+- **Probes** (`@Tag("probe")`, generators only, run via `probes`): `DegradationDumpProbe` (`ghistabs`),
   `SourceSkeletonProbe` (`render`), `StringTypeProbe` / `TypedefShorteningProbe` (`materialize`).
 
 `Fixtures` (`ghistabs`) is the single source of the fixture corpus and the `-Pfixture`
@@ -123,4 +141,5 @@ narrowing — parameterised suites draw their list from it (`select(...)` or `@M
 - A suite that needs *a* fixture of a given shape rather than the corpus → `Fixtures
   .orDefault("<committed fixture>")`, which `-Pfixture` can still redirect.
 - Logic testable without a real binary → a `test` (unit) test, or a synthetic behavioural class.
+- A C++ test → `ghicpp/src/test/`, unless it imports stabs; then the root's `src/test/`, in the same package.
 - A diagnostic dump with no assertion → tag it `@Tag("probe")`, not `integration`.

@@ -4,10 +4,10 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.Demangler
 import ghidrakt.fullName
 import ghidrakt.namespaces
-import ghistabs.test.must
-import ghistabs.test.mustBe
-import ghistabs.test.mustBeEmpty
-import ghistabs.test.mustBeNull
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeEmpty
+import ghidrakt.test.mustBeNull
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 

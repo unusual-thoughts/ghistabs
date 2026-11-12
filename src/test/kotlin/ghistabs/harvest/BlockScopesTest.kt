@@ -2,9 +2,9 @@ package ghistabs.harvest
 
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.diagnose.Level
+import ghidrakt.test.mustBe
 import ghistabs.parse.*
 import ghistabs.test.GenericAddressResolver
-import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 /**
