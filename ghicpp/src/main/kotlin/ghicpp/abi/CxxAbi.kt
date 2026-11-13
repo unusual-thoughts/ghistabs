@@ -6,6 +6,7 @@ import ghicpp.MemberDecl
 import ghicpp.abi.gcc2.Gcc2
 import ghicpp.abi.gcc2.Gcc2Plain
 import ghicpp.abi.gcc2.Gcc2Thunks
+import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.SpecialName
 import ghicpp.abi.msvc.Msvc

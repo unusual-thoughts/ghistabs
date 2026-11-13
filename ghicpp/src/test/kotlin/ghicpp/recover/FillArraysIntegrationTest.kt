@@ -1,5 +1,6 @@
 package ghicpp.recover
 
+import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.classStruct
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address

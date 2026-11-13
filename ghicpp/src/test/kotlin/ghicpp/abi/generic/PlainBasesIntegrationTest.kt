@@ -1,4 +1,4 @@
-package ghicpp.recover
+package ghicpp.abi.generic
 
 import ghicpp.ClassDecl
 import ghicpp.dissect.DissectionCache

@@ -343,6 +343,21 @@ fun MutableMemBuffer.nextPointer(): Address? = nextValue(pointerType)
 /** A buffer for reading forward from [start]: it caches a window of memory, so reads near the last are cheap. */
 fun Program.cursorAt(start: Address = memory.minAddress): MutableMemBuffer = MemoryBufferImpl(memory, start)
 
+/** Every aligned word in the initialized data blocks of the default space, with the address it holds. */
+fun Program.findPointers() = cursorAt().run {
+    sequence {
+        for (b in memory.blocks.filter {
+            it.isInitialized && !it.isExecute &&
+                it.start.addressSpace == addressFactory.defaultAddressSpace
+        }) {
+            seek(b.start.alignTo(defaultPointerSize.toLong()))
+            while (address in b) {
+                yield(address to (nextPointer() ?: break))
+            }
+        }
+    }
+}
+
 /** A buffer that reads straight from memory at [addr], for a one-off read where a cached window would be wasted. */
 fun Program.bytesAt(addr: Address): MemBuffer = DumbMemBufferImpl(memory, addr)
 
