@@ -7,6 +7,7 @@ import ghicpp.dissect.DissectingParser
 import ghicpp.dissect.DissectionCache
 import ghicpp.dissect.Dissections
 import ghicpp.dissect.ThisFunctionDissector
+import ghicpp.recover.GenericVftableFinder
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
