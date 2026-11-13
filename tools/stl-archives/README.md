@@ -7,7 +7,10 @@ so the `this` of a demangled `std::` method matches the archive type by path: th
 placeholder is that path under `/Demangler`.
 
 The [`MSVC STL archives`](../../.github/workflows/stl-archives.yml) workflow builds them and uploads
-them as one artifact per archive, each downloading as its `.gdt` file:
+them as one artifact per archive, each downloading as its `.gdt` file. The published archives are
+rebuilt on Ghidra 10.4 from the layouts text (see below), so 10.4 and every newer release opens them; the
+`compat` job checks that 11.4, 12.0, 12.1 and 12.3 read them back unchanged.
+
 
 | Archive | Source | Check |
 | --- | --- | --- |
@@ -42,4 +45,5 @@ and describes its format. ghicpp's `MSVC standard library layouts` analyzer read
 a PE program imports and its pointer size, builds the matching runtime's types, and replaces each empty
 `std` struct the Microsoft demangler made (`/Demangler/std/...`) with the type at the same path. The
 workflow exports the layouts of the archives it builds as the `layouts` artifact, and warns when they
-no longer match the bundled copies.
+no longer match the bundled copies. [`LayoutsToGdt.java`](LayoutsToGdt.java) turns that text back into a
+`.gdt` on whichever Ghidra runs it (`run.sh gdt <program> <layouts.txt> <out.gdt>`).
