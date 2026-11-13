@@ -26,9 +26,12 @@ data class MsvcRuntime(val version: Int, val debug: Boolean) {
 
         /** What [MsvcStlArchives] ships: the layouts CI builds (see tools/stl-archives). */
         val BUNDLED = setOf(
-            "msvcp140_x86.gdt", "msvcp140_x64.gdt",
-            "msvcp140d_x86.gdt", "msvcp140d_x64.gdt",
-            "msvcp90_x86.gdt", "msvcp90_x64.gdt",
+            "msvcp140_x86.gdt",
+            "msvcp140_x64.gdt",
+            "msvcp140d_x86.gdt",
+            "msvcp140d_x64.gdt",
+            "msvcp90_x86.gdt",
+            "msvcp90_x64.gdt",
         )
 
         /**
