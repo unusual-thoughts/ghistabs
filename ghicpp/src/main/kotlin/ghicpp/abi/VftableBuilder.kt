@@ -9,6 +9,7 @@ import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Data
+import ghidra.program.model.listing.FunctionSignature
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
@@ -250,7 +251,7 @@ class VftableBuilder(
             .first(used::add)
 
         val funcDef = reused ?: func
-            ?.let { FunctionDefinitionDataType(category, name, it.signature, dtm) }
+            ?.let { slotDefinition(category, name, it.signature, dtm) }
             .let { it ?: demangledDefinition(category, name, linkage) }
             .let(registry::registerAgain)
         defined?.add(target, funcDef)
@@ -270,6 +271,15 @@ class VftableBuilder(
             }
         }
 }
+
+/**
+ * The definition a vftable slot holding a function with [signature] calls through, named [name] in [category]:
+ * the signature, but never `noreturn`. A call through a slot reaches whichever override the object's vptr
+ * names, so a base implementation that only throws doesn't make the call one that never returns; marked so,
+ * the decompiler would drop everything after each virtual call to it.
+ */
+fun slotDefinition(category: CategoryPath, name: String, signature: FunctionSignature, dtm: DataTypeManager?) =
+    FunctionDefinitionDataType(category, name, signature, dtm).apply { setNoReturn(false) }
 
 /**
  * Each slot target's definition, by the first vftable defining it, so every table pointing at a function

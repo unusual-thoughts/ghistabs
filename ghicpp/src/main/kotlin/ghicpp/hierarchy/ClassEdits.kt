@@ -6,6 +6,7 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassEdit
 import ghicpp.ClassNaming
 import ghicpp.MemberAttrs.Companion.memberAttrs
+import ghicpp.abi.slotDefinition
 import ghicpp.hierarchy.ClassHierarchy.*
 import ghicpp.recover.updateFieldTypes
 import ghidra.program.model.data.*
@@ -244,9 +245,7 @@ internal fun Program.slotDefinitionsOf(func: Function): Set<FunctionDefinition> 
 internal fun Program.applySignatureToSlots(func: Function): Int {
     val defs = slotDefinitionsOf(func)
     for (def in defs) {
-        def.replaceWith(
-            FunctionDefinitionDataType(def.categoryPath, def.name, func.signature, dataTypeManager),
-        )
+        def.replaceWith(slotDefinition(def.categoryPath, def.name, func.signature, dataTypeManager))
     }
     return defs.size
 }
