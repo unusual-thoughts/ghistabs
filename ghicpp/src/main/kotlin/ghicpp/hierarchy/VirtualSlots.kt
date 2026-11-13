@@ -6,6 +6,7 @@ import ghicpp.ClassNaming
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.gcc2.Gcc2Abi
 import ghicpp.abi.gcc2.Gcc2Plain
+import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.abi.msvc.Msvc
@@ -24,6 +25,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidrakt.AddressSerializer
 import ghidrakt.components
+import ghidrakt.path
 import ghidrakt.pointerAt
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
@@ -228,6 +230,65 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
             table.dataType.name.substringAfter("_" + ClassNaming.VFTABLE_FOR, "").takeIf { it.isNotEmpty() }
     }
 }
+
+/**
+ * The slots of [cls]'s vftables that hold another namespace's function than its own, past a thunk: a
+ * base's, not overridden. In slot order, each function once. Never an empty or pure virtual slot, nor a
+ * this-adjusting thunk left unresolved, which only an override makes. Read off memory, not off the laid
+ * structs, which can run on into the next table: a table ends at the first slot pointing at neither
+ * code nor an import.
+ */
+internal fun Program.inheritedOf(cls: ClassView, ns: Namespace): List<ClassHierarchy.InheritedSlot> {
+    val seen = HashSet<Address>()
+    return vftablesOf(ns).flatMap { (at, label) ->
+        functionSlotTargets(at).mapIndexed { i, target -> VirtualSlot(at, label, i) to target }
+    }.sortedBy { it.first }.mapNotNull { (slot, target) ->
+        val fn = functionManager.getFunctionAt(target) ?: return@mapNotNull null
+        val f = if (fn.isThunk) fn.getThunkedFunction(true) ?: return@mapNotNull null else fn
+        val owner = f.parentNamespace
+        when {
+            PlainVtables.isPureVirtualStub(fn.name) || PlainVtables.isPureVirtualStub(f.name) -> null
+
+            symbolTable.getSymbols(f.entryPoint).any { CxxAbi.looksLikeThunk(it.name) } -> null
+
+            owner.path == cls.path || !seen.add(f.entryPoint) -> null
+
+            else -> ClassHierarchy.InheritedSlot(
+                if (owner.isGlobal) emptyList() else owner.path,
+                f.name,
+                f.entryPoint.toString(),
+                slot,
+                f.getPrototypeString(false, false),
+            )
+        }
+    }.toList()
+}
+
+/**
+ * [vftable]'s function slots by the ABI's geometry, up to the first that can't be one: null, outside code
+ * and imports, or at data or another table, which a program laid in one writable, executable segment
+ * keeps beside its code.
+ */
+private fun Program.functionSlotTargets(vftable: Address): Sequence<Address> =
+    CxxAbi.ofVftable(this, vftable).slotOffsets(defaultPointerSize).take(MAX_SLOTS)
+        .map { runCatching { pointerAt(vftable.add(it)) }.getOrNull() }
+        .takeWhile { it != null && isSlotTarget(it) }
+        .filterNotNull()
+
+private fun Program.isSlotTarget(target: Address): Boolean =
+    target.offset != 0L && memory.getBlock(target)?.let { it.isExecute || it.isExternalBlock } == true &&
+        listing.getDefinedDataAt(target) == null &&
+        symbolTable.getSymbols(target).none { ClassNaming.isVftableLabel(it.name) || it.name in TABLE_LABELS }
+
+// The labels of a table rather than its vftable: the vtable a vftable sits in, construction ones too.
+private val TABLE_LABELS = setOf(
+    ClassNaming.vtableLabel(internal = false),
+    ClassNaming.vtableLabel(internal = true),
+    ClassNaming.vtableLabel(internal = true, construction = true),
+)
+
+// Past any table a program lays: a bound for reading one whose end nothing marks.
+private const val MAX_SLOTS = 1024
 
 /** Every function [ns]'s vtables hold, a thunk's target with it, by its first slot, the primary table's first. */
 internal fun Program.slotsOf(ns: Namespace): Map<Address, VirtualSlot> = buildMap {

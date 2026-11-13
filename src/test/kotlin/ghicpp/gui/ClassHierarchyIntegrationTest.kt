@@ -581,10 +581,12 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val shown = labelChildren(true)
         shown.filterIsInstance<InheritedSlotNode>().map { it.name }.containsAll(listOf("Shape::name", "Rect::perim"))
             .mustBeTrue("shown: ${shown.map { it.name }}")
-        // Among the functions, after the vtables.
-        val firstInherited = shown.indexOfFirst { it is InheritedSlotNode }
-        shown.take(firstInherited).filterIsInstance<MemberNode>().none { it.member.kind > MemberKind.FUNCTION }
-            .mustBeTrue("before the plain functions: ${shown.map { it.name }}")
+        // By slot among the class's own virtual functions, after its vtables and typeinfo.
+        val names = shown.map { it.name }
+        val order = listOf("area", "Shape::name", "Rect::perim").map(names::indexOf)
+        (order.all { it >= 0 } && order == order.sorted()).mustBeTrue("by slot: $names")
+        val lastAbi = shown.indexOfLast { it is MemberNode && it.member.kind < MemberKind.FUNCTION }
+        (lastAbi < order.first()).mustBeTrue("after the vtables: $names")
     }
 
     companion object {

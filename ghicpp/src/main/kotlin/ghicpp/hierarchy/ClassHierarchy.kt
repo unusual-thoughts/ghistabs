@@ -6,7 +6,6 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.gcc2.Gcc2
-import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.isPrimaryVftable
 import ghicpp.abi.itanium.*
 import ghicpp.abi.msvc.Msvc
@@ -331,8 +330,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                     members = membersOf(ns, group - ns),
                     bases = basesOf(ns, typeinfo, idOf) { path -> byPath[path]?.id },
                     size = struct?.takeUnless { it.isZeroLength }?.length?.toLong(),
-                    inherited = inheritedOf(ns, group),
-                )
+                ).let { it.copy(inherited = program.inheritedOf(it, ns)) }
             }
             return ClassHierarchy(classes.sortedBy { it.qualifiedName })
         }
@@ -347,38 +345,6 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                 val offset = base.offset.takeUnless { base.isVirtual }
                 BaseRef(base.className, idOf(base.className.nameSegments), base.isVirtual, base.access, offset)
             }
-
-        /**
-         * The slots of [ns]'s vftables holding another namespace's function than [group]'s, [ns]'s and its
-         * imports': a base's, not overridden. Past a thunk, and never an empty or pure virtual slot, nor a
-         * this-adjusting thunk left unresolved, which only an override makes.
-         */
-        fun inheritedOf(ns: GhidraClass, group: List<Namespace>): List<InheritedSlot> {
-            val own = group.mapTo(HashSet()) { it.path }
-            val seen = HashSet<Address>()
-            return program.vftablesOf(ns).flatMap { (at, label) ->
-                program.slotTargets(at).mapIndexed { i, target -> VirtualSlot(at, label, i) to target }
-            }.sortedBy { it.first }.mapNotNull { (slot, target) ->
-                val fn = program.functionManager.getFunctionAt(target) ?: return@mapNotNull null
-                val real = if (fn.isThunk) fn.getThunkedFunction(true) ?: return@mapNotNull null else fn
-                val owner = real.parentNamespace
-                when {
-                    PlainVtables.isPureVirtualStub(fn.name) || PlainVtables.isPureVirtualStub(real.name) -> null
-
-                    real === fn && fn.isThunkLinkage() -> null
-
-                    owner.path in own || !seen.add(real.entryPoint) -> null
-
-                    else -> InheritedSlot(
-                        if (owner.isGlobal) emptyList() else owner.path,
-                        real.name,
-                        real.entryPoint.toString(),
-                        slot,
-                        real.getPrototypeString(false, false),
-                    )
-                }
-            }.toList()
-        }
 
         fun classNamespaces(): Sequence<GhidraClass> = symtab.classNamespaces.asSequence()
 
