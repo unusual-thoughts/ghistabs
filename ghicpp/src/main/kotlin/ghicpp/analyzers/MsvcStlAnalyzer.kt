@@ -49,8 +49,7 @@ class MsvcStlAnalyzer :
         return true
     }
 
-    private fun archiveFor(program: Program) =
-        MsvcRuntime.of(program)?.archive(program.defaultPointerSize)
+    private fun archiveFor(program: Program) = MsvcRuntime.of(program)?.archive(program.defaultPointerSize)
 
     companion object {
         const val NAME = "MSVC standard library layouts"
