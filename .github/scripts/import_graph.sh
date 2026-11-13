@@ -8,10 +8,14 @@
 #   3 stabs         parse → harvest → index → materialize → scan → importer → render → entrypoints
 #                   (entrypoints: the stabs analyzer, plugin and exporters, the last stage)
 #
+#   C++ stages      ghicpp, ghicpp.abi (model, ABI interfaces) → ghicpp.dissect, ghicpp.eh →
+#                   ghicpp.abi.* (ABI implementations) → ghicpp.structs → ghicpp.recover →
+#                   ghicpp.hierarchy → ghicpp.analyzers → ghicpp.gui
+#
 # An edge is a violation when it points up this stack: a layer importing a higher one (so ghicpp
-# importing any stabs stage or ghistabs.entrypoints), or an earlier stabs stage importing a later one.
-# Packages within the C++ layer may import each other. A package in no layer is flagged too, so a
-# new one has to be placed here. Counts are import lines, not distinct edges, so weight tracks how
+# importing any stabs stage), or an earlier stage of a layer importing a later one. An edge that closes
+# a cycle between packages of one stage is one too. A package in no layer, or a C++ or stabs
+# package in no stage, is flagged too, so a new one has to be placed here. Counts are import lines, not distinct edges, so weight tracks how
 # entangled a pair is.
 #
 # A package is folded to two levels (`ghicpp.abi.itanium` into `ghicpp.abi`) and self-loops dropped.
@@ -35,7 +39,12 @@ edges() {
     git grep --untracked -h -oP "^(package [\w.]+|import (${ROOTS})(\.\w+)*)" -- \
         ":(glob)src/main/**" ":(glob)*/src/main/**" ":(exclude)build-logic/**" |
         awk '
-            function fold(p,   n, a) { n = split(p, a, "."); return n > 2 ? a[1] "." a[2] : p }
+            # Two levels, but three under ghicpp.abi: its interfaces and its implementations are
+            # different stages.
+            function fold(p,   n, a, d) {
+                n = split(p, a, "."); d = (a[1] "." a[2] == "ghicpp.abi") ? 3 : 2
+                return n > d ? (d == 3 ? a[1] "." a[2] "." a[3] : a[1] "." a[2]) : p
+            }
             # The deepest declared package that prefixes the imported name, folded.
             function owner(name,   p) {
                 p = name
@@ -61,20 +70,50 @@ edges() {
             function layerOf(p) {
                 if (p == "ghidrakt" || p == "ghidrakt.diagnose" || p == "ghistabs" || p == "ghistabs.diagnose") return 1
                 if (p == "ghicpp" || p ~ /^ghicpp\./) return 2
-                if (p in rank) return 3
+                if (p ~ /^ghistabs\./) return 3
                 return 0
+            }
+            # The stage of a C++ or stabs package; packages of one stage may import each other, short
+            # of a cycle. Absent: a package of that layer no stage was given.
+            function stageOf(p,   n) {
+                if (p in stage) return stage[p]
+                if (p ~ /^ghicpp\.abi\./) return stage["ghicpp.abi.*"]
+                return ""
             }
             BEGIN {
                 n = split("parse harvest index materialize scan importer render entrypoints", s, " ")
-                for (i = 1; i <= n; i++) rank["ghistabs." s[i]] = i
+                for (i = 1; i <= n; i++) stage["ghistabs." s[i]] = i
+                # model and ABI interfaces → dissect, eh → ABI implementations → structs → recover →
+                # hierarchy → analyzers → gui
+                stage["ghicpp"] = stage["ghicpp.abi"] = 1
+                stage["ghicpp.dissect"] = stage["ghicpp.eh"] = 2
+                stage["ghicpp.abi.*"] = 3
+                stage["ghicpp.structs"] = 4
+                stage["ghicpp.recover"] = 5
+                stage["ghicpp.hierarchy"] = 6
+                stage["ghicpp.analyzers"] = 7
+                stage["ghicpp.gui"] = 8
             }
             {
-                cnt = $1; from = $2; to = $3
-                lf = layerOf(from); lt = layerOf(to)
-                bad = (lf == 0 || lt == 0) || lf < lt ||
-                      ((from in rank) && (to in rank) && rank[from] < rank[to])
-                why = (lf == 0 || lt == 0) ? "package-in-no-layer" : lf < lt ? "imports-a-higher-layer" : bad ? "imports-a-later-stabs-stage" : "-"
-                print cnt, from, to, bad, why, lf, lt
+                cnt[++m] = $1; from[m] = $2; to[m] = $3; node[$2]; node[$3]
+                if (layerOf($2) == layerOf($3) && stageOf($2) == stageOf($3)) reach[$2, $3] = 1
+            }
+            END {
+                # Closure over the edges within a stage: an edge u → v of one stage closes a cycle when v
+                # reaches u without leaving it. A cycle across stages has an edge up a stage already.
+                for (k in node) for (i in node) if ((i, k) in reach) for (j in node) if ((k, j) in reach) reach[i, j] = 1
+                for (e = 1; e <= m; e++) {
+                    f = from[e]; t = to[e]
+                    lf = layerOf(f); lt = layerOf(t)
+                    sf = stageOf(f); st = stageOf(t)
+                    if (lf == 0 || lt == 0) why = "package-in-no-layer"
+                    else if (lf < lt) why = "imports-a-higher-layer"
+                    else if (lf == lt && lf > 1 && (sf == "" || st == "")) why = "package-in-no-stage"
+                    else if (lf == lt && lf > 1 && sf < st) why = "imports-a-later-stage"
+                    else if (((f, t) in reach) && ((t, f) in reach)) why = "closes-a-cycle"
+                    else why = "-"
+                    print cnt[e], f, t, why != "-", why, lf, lt
+                }
             }'
 }
 
