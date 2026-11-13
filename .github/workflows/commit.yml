@@ -100,8 +100,8 @@ jobs:
           name: detekt-report
           path: '**/build/reports/detekt/detekt.html'
 
-      # Recompiled even when the build cache has the classes (a restored compile prints nothing), so the
-      # summary lists every warning; --rerun still stores the result in the cache.
+      # Recompiled even when the build cache has the classes (a restored compile prints nothing), so every
+      # warning is annotated; --rerun still stores the result in the cache.
       - name: Compile
         shell: bash
         run: >-
@@ -110,11 +110,15 @@ jobs:
           compileJava --rerun compileTestJava --rerun
           2>&1 | tee "$RUNNER_TEMP/compile.log"
 
-      # Lists the compiler's deprecations and other warnings, and Gradle's own deprecations, on the run's
-      # summary page, with an annotation per compiler warning; does not fail the job.
-      - name: Summarize build warnings
+      # An annotation per compiler warning, on the PR's diff at its line; does not fail the job.
+      - name: Annotate compiler warnings
         if: success() || failure()
-        run: python3 .github/scripts/build_warnings.py "$RUNNER_TEMP/compile.log" --summary "$GITHUB_STEP_SUMMARY" --annotate
+        run: python3 .github/scripts/build_warnings.py "$RUNNER_TEMP/compile.log" --kind compiler
+
+      # A step of their own: GitHub keeps 10 warning annotations per step, and the compiler's can fill them.
+      - name: Annotate Gradle deprecations
+        if: success() || failure()
+        run: python3 .github/scripts/build_warnings.py "$RUNNER_TEMP/compile.log" --kind gradle
 
       - name: Run unit tests
         run: ./gradlew --build-cache test
