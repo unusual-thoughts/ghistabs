@@ -427,6 +427,19 @@ private fun ClassTree.addViewToggles() {
         )
     }
     addLocalAction(
+        object : ToggleDockingAction("Show Inherited Slots", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                showInherited = isSelected
+                reshow()
+            }
+        }.apply {
+            toolBarData = ToolBarData(INHERITED_ICON, null)
+            description = "Also show, muted, each vftable slot a class leaves to its base's function " +
+                "(Base::f), in slot order among its own virtual functions; pure virtual slots left out"
+            helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+        },
+    )
+    addLocalAction(
         object : ToggleDockingAction("Show Empty Classes", owner) {
             override fun actionPerformed(context: ActionContext?) {
                 showEmpty = isSelected

@@ -22,6 +22,7 @@ import ghidrakt.test.mustBeFalse
 import ghidrakt.test.mustBeIn
 import ghidrakt.test.mustBeNull
 import ghidrakt.test.mustBeTrue
+import ghidrakt.test.mustNotBe
 import ghistabs.integration.FeatureFixtureTest
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.fail
@@ -549,6 +550,41 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
             }
             root.nodeAt(listOf("ffffffff")) mustBe null
         }
+    }
+
+    /**
+     * `Rect` overrides `area` but not `name`, `Label` neither `name` nor `perim`: their tables hold
+     * `Shape::name` and `Rect::perim`, listed as inherited. Their own functions and `Shape`'s pure `area`
+     * never are; the tree lists the inherited ones only once asked, muted among the class's own.
+     */
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `the slots a class leaves to its bases are listed as inherited`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        fun inherited(name: String) = hierarchy.cls(name).inherited.map { it.label }
+
+        "Shape::name" mustBeIn inherited("Rect")
+        for (label in listOf("Shape::name", "Rect::perim")) label mustBeIn inherited("Label")
+        inherited("Shape") mustBe emptyList()
+        for (cls in hierarchy.classes) {
+            for (slot in cls.inherited) {
+                slot.ownerPath mustNotBe cls.path
+                ("pure" !in slot.name).mustBeTrue("${cls.qualifiedName}: ${slot.label}")
+            }
+            cls.inherited.map { it.address }.distinct().size mustBe cls.inherited.size
+        }
+
+        fun labelChildren(show: Boolean) = ClassTreeRoot(program.name, hierarchy, showInherited = show)
+            .children.single { it.name == "Label" }.children
+        labelChildren(false).none { it is InheritedSlotNode }.mustBeTrue("hidden by default")
+        val shown = labelChildren(true)
+        shown.filterIsInstance<InheritedSlotNode>().map { it.name }.containsAll(listOf("Shape::name", "Rect::perim"))
+            .mustBeTrue("shown: ${shown.map { it.name }}")
+        // Among the functions, after the vtables.
+        val firstInherited = shown.indexOfFirst { it is InheritedSlotNode }
+        shown.take(firstInherited).filterIsInstance<MemberNode>().none { it.member.kind > MemberKind.FUNCTION }
+            .mustBeTrue("before the plain functions: ${shown.map { it.name }}")
     }
 
     companion object {
