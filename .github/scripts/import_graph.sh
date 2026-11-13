@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Package import graph for src/main, one cluster per layer, layering violations in red.
+# Package import graph for src/main, one cluster per layer, layering violations in red,
+# other edges between layers in dark blue.
 #
 #   1 kernel        ghidrakt, ghidrakt.diagnose                 Ghidra/Kotlin extensions, diagnostics
 #                   (ghistabs, ghistabs.diagnose before the rename)
@@ -113,8 +114,10 @@ dot_source() {
                 # cluster to cluster, below rather than package by package.
                 if (!f[4] && f[7] == 1 && f[6] != 1) { tokernel[f[6]] += f[1]; continue }
                 # A violation does not rank, so the layout keeps the layer order and the red edge points back.
+                # An allowed edge between two layers is dark blue, to tell it from one within a layer.
                 printf "  %s -> %s [xlabel=%d penwidth=%.1f%s];\n",
-                    q(f[2]), q(f[3]), f[1], 0.5 + f[1] / 8.0, f[4] ? " color=red fontcolor=red constraint=false" : ""
+                    q(f[2]), q(f[3]), f[1], 0.5 + f[1] / 8.0,
+                    f[4] ? " color=red fontcolor=red constraint=false" : f[6] != f[7] ? " color=navy fontcolor=navy" : ""
             }
             for (j = 1; j <= k; j++) if ((L = layer[p = order[j]]) in tokernel) printf "  %s -> anchor_%d [style=invis];\n", q(p), L
             for (L = 2; L <= 5; L++) if (L in tokernel)
