@@ -1,6 +1,6 @@
 @file:Suppress("SERIALIZER_TYPE_INCOMPATIBLE")
 
-package ghidrakt.diagnose
+package ghistabs.cli
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType

@@ -1,4 +1,4 @@
-package ghidrakt.diagnose
+package ghistabs.cli
 
 import ghidrakt.test.*
 import ghistabs.parse.LocalTypeId
