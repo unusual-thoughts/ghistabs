@@ -7,7 +7,6 @@ import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.AnalysisProbe
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.TeeSink
-import ghistabs.StabsDiagnostics
 import ghistabs.harvest.AddressResolver
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
@@ -15,6 +14,7 @@ import ghistabs.harvest.ProgramAddressResolver
 import ghistabs.importer.ImportOptions.Companion.stabsOptions
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
+import ghistabs.index.StabsDiagnostics
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.StabReader

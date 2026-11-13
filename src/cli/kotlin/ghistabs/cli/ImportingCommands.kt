@@ -9,13 +9,13 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.file
 import ghicpp.VfptrModel
+import ghicpp.fixup.NO_RETURN_ANALYZER_NAME
 import ghicpp.hierarchy.ClassHierarchy
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
 import ghidra.program.util.GhidraProgramUtilities
 import ghidrakt.runTransaction
-import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.analyzeAfterImport
 import ghistabs.importer.ImportArtifacts

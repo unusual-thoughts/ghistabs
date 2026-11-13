@@ -1,4 +1,5 @@
-package ghistabs
+package ghicpp.fixup
+
 import ghidra.app.util.PseudoDisassembler
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange

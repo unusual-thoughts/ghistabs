@@ -1,4 +1,4 @@
-package ghistabs.entrypoints
+package ghicpp.fixup
 
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority

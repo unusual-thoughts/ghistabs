@@ -3,8 +3,7 @@
 
 Layers, bottom up:
 
-  1 kernel   ghidrakt, ghidrakt.diagnose (and ghistabs, ghistabs.diagnose: the kernel's name before
-             the rename)
+  1 kernel   ghidrakt, ghidrakt.diagnose
   2 C++      stages: ghicpp (model) → ghicpp.dissect, ghicpp.eh, ghicpp.fixup → ghicpp.abi →
              ghicpp.structs → ghicpp.recover → ghicpp.hierarchy → ghicpp.analyzers → ghicpp.gui
   3 stabs    stages: parse → harvest → index → materialize → scan → importer → render → entrypoints
@@ -37,7 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOTS = ("ghidrakt", "ghistabs", "ghicpp")
-KERNEL = {"ghidrakt", "ghidrakt.diagnose", "ghistabs", "ghistabs.diagnose"}
+KERNEL = {"ghidrakt", "ghidrakt.diagnose"}
 LAYER_TITLES = {0: "in no layer", 1: "kernel", 2: "C++", 3: "stabs"}
 
 # Packages of one stage may import each other, short of a cycle.

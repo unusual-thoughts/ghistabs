@@ -1,4 +1,4 @@
-package ghistabs.entrypoints
+package ghicpp.fixup
 
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.services.AbstractAnalyzer
@@ -145,9 +145,9 @@ private data class Pop(val extra: Int, val joins: Set<Address>)
 private data class Plan(val pops: Map<Address, Pop>, val unfixed: Map<Address, Map<Address, Long>>)
 
 /** Bookmark categories, one per kind, so two kinds at one address don't replace each other. */
-internal const val CALL_BOOKMARK = "${DeferredPopAnalyzer.NAME}: call"
-internal const val MERGE_BOOKMARK = "${DeferredPopAnalyzer.NAME}: merge"
-internal const val UNFIXED_BOOKMARK = "${DeferredPopAnalyzer.NAME}: unfixed merge"
+const val CALL_BOOKMARK = "${DeferredPopAnalyzer.NAME}: call"
+const val MERGE_BOOKMARK = "${DeferredPopAnalyzer.NAME}: merge"
+const val UNFIXED_BOOKMARK = "${DeferredPopAnalyzer.NAME}: unfixed merge"
 internal const val IMPORT_BOOKMARK = "${DeferredPopAnalyzer.NAME}: stdcall import"
 
 /** Says at [call] what its override pops and why, since nothing in the listing shows a call-site prototype. */

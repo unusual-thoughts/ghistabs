@@ -1,4 +1,4 @@
-package ghistabs.entrypoints
+package ghicpp.fixup
 
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
@@ -27,7 +27,7 @@ const val NO_RETURN_ANALYZER_NAME = "Non-returning functions (reachability)"
  * `targetOnlyCallsNoReturn` is this walk. But it is only the *fallback* for a target whose call sites
  * showed damage — garbage decoded after the call — and `error()`'s call sites decode perfectly
  * cleanly, so it is never examined. (It also runs at `DISASSEMBLY.after().after()`, before
- * [StabsAnalyzer] at `LOW_PRIORITY` has created the functions it would examine.) Hence the same walk,
+ * the Stabs Importer at `LOW_PRIORITY` has created the functions it would examine.) Hence the same walk,
  * ungated, as a FUNCTION_ANALYZER — the trigger wanted is a new function being defined, by stabs or
  * by anything else.
  *

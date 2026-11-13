@@ -1,5 +1,6 @@
 package ghistabs.integration
 
+import ghicpp.fixup.DeferredPopAnalyzer
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.listing.Function
@@ -9,7 +10,6 @@ import ghidra.util.task.TaskMonitor
 import ghidrakt.runTransaction
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustNot
-import ghistabs.entrypoints.DeferredPopAnalyzer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
