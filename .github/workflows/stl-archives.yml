@@ -10,6 +10,7 @@ on:
     branches: [ "main" ]
     paths:
       - ghicpp/ghidra_scripts/MsvcStlArchiveScript.java
+      - ghicpp/src/main/resources/ghicpp/stl/**
       - tools/stl-archives/**
       - .github/workflows/stl-archives.yml
 
@@ -95,12 +96,18 @@ jobs:
             tools/stl-archives/run.sh compare probes/probe-$arch-release/stl_probe.exe archives/msvcp140_$arch.gdt refs/msvcp140_$arch.gdt
           done
 
-      # The layouts as this Ghidra reads them, for the compat job to compare its own reading against.
-      - name: Dump the archives
+      # The layouts as this Ghidra reads them, of the archives just built and of the copies ghicpp
+      # bundles. The compat job checks the bundled copies read the same on every supported Ghidra.
+      - name: Compare with the bundled archives
         run: |
-          mkdir -p layouts
-          for gdt in archives/*.gdt; do
-            tools/stl-archives/run.sh dump ghicpp/src/test/resources/binaries/features/hello_msvc.exe "$gdt" layouts/$(basename "$gdt" .gdt).txt
+          mkdir -p layouts fresh
+          program=ghicpp/src/test/resources/binaries/features/hello_msvc.exe
+          for gdt in ghicpp/src/main/resources/ghicpp/stl/*.gdt; do
+            name=$(basename "$gdt" .gdt)
+            tools/stl-archives/run.sh dump $program "$gdt" layouts/$name.txt
+            tools/stl-archives/run.sh dump $program archives/$name.gdt fresh/$name.txt
+            diff -q layouts/$name.txt fresh/$name.txt >/dev/null ||
+              echo "::warning::$name.gdt built here differs from ghicpp's bundled copy; refresh it from this run's artifact"
           done
 
       - uses: actions/upload-artifact@v7
@@ -146,8 +153,8 @@ jobs:
           archive: false
           if-no-files-found: error
 
-  # ghicpp supports Ghidra 10.4 onwards, so every release it builds for must read the archives the
-  # 12.3 fork wrote, with the same types and layouts.
+  # ghicpp supports Ghidra 10.4 onwards, so every release it builds for must read the archives it
+  # bundles, written by the 12.3 fork, with the same types and layouts.
   compat:
     needs: archives
     runs-on: ubuntu-latest
@@ -173,12 +180,6 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          pattern: '*.gdt'
-          path: archives
-          merge-multiple: true
-
-      - uses: actions/download-artifact@v7
-        with:
           name: layouts
           path: expected
 
@@ -188,7 +189,7 @@ jobs:
           status=0
           for txt in expected/*.txt; do
             name=$(basename "$txt" .txt)
-            gdt=$(find archives -name "$name.gdt" | head -1)
+            gdt=ghicpp/src/main/resources/ghicpp/stl/$name.gdt
             tools/stl-archives/run.sh dump ghicpp/src/test/resources/binaries/features/hello_msvc.exe "$gdt" layouts/$name.txt
             diff -u "$txt" layouts/$name.txt > layouts/$name.diff || { echo "::error::$name reads differently"; head -40 layouts/$name.diff; status=1; }
           done
