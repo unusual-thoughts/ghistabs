@@ -37,6 +37,11 @@ jobs:
         if: success() || failure()
         run: ./gradlew detekt
 
+      # Reports imports that point up the package layers on the run's summary page; does not fail the job.
+      - name: Check package layering
+        if: success() || failure()
+        run: .github/scripts/import_graph.sh --markdown "$GITHUB_STEP_SUMMARY"
+
       - name: Upload detekt report
         if: steps.detekt.conclusion == 'failure'
         uses: actions/upload-artifact@v7
