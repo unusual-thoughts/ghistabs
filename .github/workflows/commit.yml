@@ -74,14 +74,17 @@ jobs:
       - name: Check for shifted baselines
         id: shifted
         if: success() || failure()
-        run: if [ -n "$(ls -A build/test-output/shifted-baselines 2>/dev/null)" ]; then echo found=true >> "$GITHUB_OUTPUT"; fi
+        run: if [ -n "$(find . -path '*/build/test-output/shifted-baselines/*' -type f -print -quit)" ]; then echo found=true >> "$GITHUB_OUTPUT"; fi
 
       - name: Upload shifted baselines
         if: (success() || failure()) && steps.shifted.outputs.found == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: shifted-baselines-${{ steps.commit_id.outputs.sha }}.zip
-          path: build/test-output/shifted-baselines/
+          # Each project writes its own: the root's and ghicpp's.
+          path: |
+            build/test-output/shifted-baselines/
+            */build/test-output/shifted-baselines/
 
       # ghicpp's on its own first: it must build without the stabs project.
       - name: Build zips
