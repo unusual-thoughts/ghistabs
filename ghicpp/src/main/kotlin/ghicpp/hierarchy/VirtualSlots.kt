@@ -3,6 +3,7 @@
 package ghicpp.hierarchy
 
 import ghicpp.ClassNaming
+import ghicpp.ClassRecordSource
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.gcc2.Gcc2Abi
 import ghicpp.abi.gcc2.Gcc2Plain
@@ -10,12 +11,11 @@ import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.msvc.MsvcStructor
+import ghicpp.classStruct
 import ghicpp.hierarchy.ClassHierarchy.ClassView
 import ghicpp.hierarchy.ClassHierarchy.Origin
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.FunctionDefinition
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.Structure
+import ghidra.program.model.data.*
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -24,6 +24,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidrakt.AddressSerializer
 import ghidrakt.components
+import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.pointerAt
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
@@ -73,17 +74,21 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         val at = component(slot)?.value as? Address ?: return null
         val f = program.functionManager.getFunctionAt(at) ?: return null
         return (if (f.isThunk) f.getThunkedFunction(true) else f)
-            ?.takeUnless { it.isExternal || PURE_VIRTUAL_ABIS.any { abi -> abi.isPureVirtualStub(it.name) } }
+            ?.takeUnless { it.isExternal || isPureVirtualStub(it.name) }
     }
 
     /** The slot [slot] overrides, up to the base that first declares it. */
-    fun root(slot: VirtualSlot): VirtualSlot {
+    fun root(slot: VirtualSlot): VirtualSlot = overridden(slot).lastOrNull() ?: slot
+
+    /** The slots [slot] overrides, the nearest base's first, up to the base that first declares it. */
+    private fun overridden(slot: VirtualSlot): Sequence<VirtualSlot> = sequence {
         var s = slot
         val seen = mutableSetOf(s.table)
         while (true) {
-            val up = byAddress[s.table]?.let(::extended)?.takeIf { seen.add(it.address) } ?: return s
-            if (s.index >= up.functionSlots().size) return s
+            val up = byAddress[s.table]?.let(::extended)?.takeIf { seen.add(it.address) } ?: break
+            if (s.index >= up.functionSlots().size) break
             s = VirtualSlot(up.address, up.label, s.index)
+            yield(s)
         }
     }
 
@@ -139,19 +144,114 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         }.onFailure { skipped += "${struct.name}.${field.fieldName}: ${it.message}" }.isSuccess
     }
 
+    /**
+     * Types each pure virtual slot still typed as its ABI's stub (`__cxa_pure_virtual`, `_purecall`), in a
+     * primary or a secondary table, off an override of it in a class deriving from the table's: that
+     * override's signature as its function now has it, named as it is, with `this` the table's class. Of
+     * several overrides, the one whose function's signature has the surest source ([SourceType]), then the
+     * signature most of them share, then the nearest, then the first class by name ([pickOverride]). A slot
+     * typed otherwise, by the stabs or by hand, stays. Returns how many slots it changed.
+     */
+    fun typePureSlots(): Int {
+        val found = mutableMapOf<VirtualSlot, MutableList<Override>>()
+        for (slot in hierarchy.classes.flatMap(::slotsOf)) {
+            val func = target(slot) ?: continue
+            overridden(slot).forEachIndexed { hops, up ->
+                if (holdsStub(up)) found.getOrPut(up) { mutableListOf() } += Override(slot, func, hops + 1)
+            }
+        }
+        return found.count { (slot, overrides) -> typeFrom(slot, overrides) }
+    }
+
+    /** An override of a pure virtual slot: [slot] holds [func], [hops] tables down from it. */
+    private class Override(val slot: VirtualSlot, val func: Function, val hops: Int)
+
+    /**
+     * Types the pure virtual [slot] off the best of [overrides]; whether that changed it. A slot typed so
+     * before is typed again in place, as the overrides' signatures may have grown since, and their names.
+     */
+    private fun typeFrom(slot: VirtualSlot, overrides: List<Override>): Boolean {
+        val struct = byAddress[slot.table]?.dataType as? Structure ?: return false
+        val field = field(slot) ?: return false
+        val old = definition(slot) ?: return false
+        val dtm = program.dataTypeManager
+        val thisType = owner[slot.table]?.let(program::resolve)?.let(program::classStruct)
+            ?.let { PointerDataType(it, dtm) }
+        val typed = overrides.map { FunctionDefinitionDataType(it.func.signature, dtm).withThis(thisType) }
+        val ranks = overrides.mapIndexed { i, o ->
+            OverrideRank(
+                o.func.signatureSource,
+                typed[i].signatureKey(),
+                o.hops,
+                owner[o.slot.table]?.qualifiedName.orEmpty(),
+            )
+        }
+        val chosen = pickOverride(ranks)
+        val from = overrides[chosen].func
+        val before = Triple(old.getPrototypeString(true), field.fieldName, field.comment)
+        val again = isTypedOff(field)
+        // The stub's own folder when it was laid for this table, so the name is free to take there.
+        val category = old.categoryPath.takeIf { again || it.isAncestorOrSelf(struct.categoryPath) }
+            ?: struct.categoryPath
+        val used = struct.definedComponents.filter { it.ordinal != field.ordinal }.mapNotNull { it.fieldName }.toSet()
+        val name = generateSequence(0) { it + 1 }.map { if (it == 0) from.name else "${from.name}_$it" }
+            .first { it !in used && dtm.getDataType(category, it).let { dt -> dt == null || (again && dt == old) } }
+        val def = FunctionDefinitionDataType(category, name, typed[chosen], dtm)
+        val comment = TYPED_OFF + from.getName(true)
+        if (again) {
+            if (old.name != name) old.name = name
+            old.replaceWith(def)
+            field.fieldName = name
+            field.comment = comment
+        } else {
+            val added = dtm.addDataType(def, DataTypeConflictHandler.DEFAULT_HANDLER)
+            struct.replace(field.ordinal, PointerDataType(added, dtm), field.length, name, comment)
+        }
+        val now = field(slot) ?: return true
+        return before != Triple(definition(slot)?.getPrototypeString(true), now.fieldName, now.comment)
+    }
+
+    /**
+     * Whether [slot] holds its ABI's pure virtual stub, typed as the stub is, taking nothing
+     * ([ghicpp.abi.VftableBuilder.addSlot]), or as [typePureSlots] typed it before: the stabs give a pure
+     * virtual they declare its `this`.
+     */
+    private fun holdsStub(slot: VirtualSlot): Boolean {
+        val def = definition(slot) ?: return false
+        if (def.arguments.isNotEmpty() && field(slot)?.let(::isTypedOff) != true) return false
+        val at = component(slot)?.value as? Address ?: return false
+        val func = program.functionManager.getFunctionAt(at)?.let {
+            if (it.isThunk) it.getThunkedFunction(true) else it
+        }
+        return (func?.name ?: program.symbolTable.getPrimarySymbol(at)?.name)?.let(::isPureVirtualStub) == true
+    }
+
+    private fun isTypedOff(field: DataTypeComponent) = field.comment?.startsWith(TYPED_OFF) == true
+
+    /** [slot]'s field in its table's struct. */
+    private fun field(slot: VirtualSlot): DataTypeComponent? =
+        component(slot)?.let { (byAddress[slot.table]?.dataType as? Structure)?.getComponent(it.componentIndex) }
+
+    private fun definition(slot: VirtualSlot) = (component(slot)?.dataType as? Pointer)?.dataType as? FunctionDefinition
+
     private fun component(slot: VirtualSlot): Data? = byAddress[slot.table]?.functionSlots()?.getOrNull(slot.index)
 
-    /** The table of a base [table]'s slots begin with. */
+    /**
+     * The table of a base [table]'s slots begin with. For a table for a base `B`, the nearest ancestor's
+     * table for `B` where one has it, as an abstract class's does for a base whose pure virtuals it leaves
+     * pure, else `B`'s own.
+     */
     private fun extended(table: Data): Data? {
         val cls = owner[table.address] ?: return null
         val named = forBase(table)
-        val base = if (named != null) {
-            hierarchy.ancestorsOf(cls).firstOrNull { it.name == named }
-        } else {
-            val others = tables[cls.id].orEmpty().mapNotNull(::forBase).toSet()
-            cls.bases.mapNotNull(hierarchy::get).firstOrNull { it.name !in others && primary(it) != null }
+        if (named != null) {
+            val ancestors = hierarchy.ancestorsOf(cls)
+            return ancestors.firstNotNullOfOrNull { a -> tables[a.id].orEmpty().firstOrNull { forBase(it) == named } }
+                ?: ancestors.firstOrNull { it.name == named }?.let(::primary)
         }
-        return base?.let(::primary)
+        val others = tables[cls.id].orEmpty().mapNotNull(::forBase).toSet()
+        return cls.bases.mapNotNull(hierarchy::get).firstOrNull { it.name !in others && primary(it) != null }
+            ?.let(::primary)
     }
 
     /** [cls]'s primary table: its own, else the one for its first base. */
@@ -223,10 +323,21 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
     private companion object {
         val PURE_VIRTUAL_ABIS = listOf(Itanium, Msvc, Gcc2Plain)
 
+        /** How the comment of a pure virtual slot [typePureSlots] typed begins. */
+        const val TYPED_OFF = "pure virtual, typed off "
+
+        fun isPureVirtualStub(name: String) = PURE_VIRTUAL_ABIS.any { it.isPureVirtualStub(name) }
+
         /** The base a table is for, by its struct's name, `D_vftable_for_B`. */
         fun forBase(table: Data): String? =
             table.dataType.name.substringAfter("_" + ClassNaming.VFTABLE_FOR, "").takeIf { it.isNotEmpty() }
     }
+}
+
+/** Types [this]'s pure virtual slots off their overrides ([VirtualSlots.typePureSlots]), counted to [sink]. */
+fun Program.typePureSlots(sink: DiagnosticSink) {
+    val typed = VirtualSlots(this, ClassHierarchy.of(this, ClassRecordSource.describedElsewhere(this))).typePureSlots()
+    if (typed > 0) sink.debug("vftable-pure-slot-typed", count = typed.toLong())
 }
 
 /** Every function [ns]'s vtables hold, a thunk's target with it, by its first slot, the primary table's first. */
@@ -281,3 +392,40 @@ private fun Program.vftableDataAt(at: Address): Data? {
     }
     return null
 }
+
+/** What [pickOverride] ranks an override of a pure virtual slot by. */
+internal data class OverrideRank(val source: SourceType, val signature: String, val hops: Int, val cls: String)
+
+/**
+ * The index of the override among [ranks] a pure virtual slot is typed off: the surest signature source
+ * first, then the signature the most of them share, then the fewest tables down, then the class first by name.
+ */
+internal fun pickOverride(ranks: List<OverrideRank>): Int {
+    val shared = ranks.groupingBy { it.signature }.eachCount()
+    return ranks.indices.sortedWith(
+        compareByDescending<Int> { ranks[it].source.ordinal() }
+            .thenByDescending { shared.getValue(ranks[it].signature) }
+            .thenBy { ranks[it].hops }
+            .thenBy { ranks[it].cls },
+    ).first()
+}
+
+/** How sure a source is, `USER_DEFINED` the surest, as [SourceType.isHigherPriorityThan] orders them. */
+private fun SourceType.ordinal() = SourceType.entries.count { isHigherPriorityThan(it) }
+
+/** [this], `this` retyped to [thisType] where its first parameter is `this` and there is one. */
+private fun FunctionDefinition.withThis(thisType: DataType?): FunctionDefinition = apply {
+    val args = arguments
+    if (thisType != null && args.firstOrNull()?.name == "this") {
+        setArguments(
+            *args.mapIndexed { i, a ->
+                if (i == 0) ParameterDefinitionImpl(a.name, thisType, a.comment) else a
+            }.toTypedArray(),
+        )
+    }
+}
+
+/** [this]'s signature, its name aside: what two overrides of a slot agree on. */
+private fun FunctionDefinition.signatureKey() =
+    (listOf(returnType) + arguments.map { it.dataType }).joinToString(",") { it.pathName } +
+        "|$callingConventionName|${hasVarArgs()}"
