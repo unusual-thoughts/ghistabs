@@ -31,6 +31,9 @@ class PlainClass(override val ns: Namespace, override val vftables: List<VtableR
     override val name: String get() = ns.name
     override val bases = mutableListOf<ClassBase>()
     override val virtualBases get() = bases.filter { it.isVirtual }.map { it.copy(offsetSource = SourceType.ANALYSIS) }
+
+    /** The vbase offsets in front of its primary's `offset_to_top`, where it has an Itanium header. */
+    override var vbaseOffsets: Set<Long> = emptySet()
 }
 
 /** The candidate bases of each class, as [inferBases] finds them, off their tables' [slots]. */
@@ -231,8 +234,14 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
      */
     private fun subobjects(cls: PlainClass): Map<Long, Boolean> {
         val primary = cls.vftables.firstOrNull()?.addressPoint ?: return emptyMap()
-        val vbaseOffsets = (3..2 + MAX_VBASE_WORDS).mapNotNull { primary.signedWordBefore(it) }
-            .takeWhile { it in 1 until GenericVftableFinder.MAX_SUBOBJECT_OFFSET }.toSet()
+        val vbaseOffsets = if (primary.signedWordBefore(2) == 0L) {
+            (3..2 + MAX_VBASE_WORDS).asSequence().map { primary.signedWordBefore(it) }
+                .takeWhile { it != null && it in ptr until GenericVftableFinder.MAX_SUBOBJECT_OFFSET }
+                .filterNotNull().toSet()
+        } else {
+            emptySet()
+        }
+        cls.vbaseOffsets = vbaseOffsets
         return cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } }
             .associateWith { it in vbaseOffsets }
     }

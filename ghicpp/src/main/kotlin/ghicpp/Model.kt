@@ -68,6 +68,12 @@ interface ClassDecl {
      */
     val virtualBases: List<ClassBase> get() = emptyList()
 
+    /**
+     * Where its complete object's virtual bases start, as its records state them: [virtualBases]' offsets, and
+     * those of virtual bases no record names, such as a plain Itanium vtable's vbase offsets.
+     */
+    val vbaseOffsets: Set<Long> get() = virtualBases.mapNotNullTo(mutableSetOf()) { it.offset }
+
     /** Where its vbptrs sit, MSVC's, which point at its vbtables; Itanium keeps vbase offsets in the vtable. */
     val vbptrs: Set<Long> get() = emptySet()
 
