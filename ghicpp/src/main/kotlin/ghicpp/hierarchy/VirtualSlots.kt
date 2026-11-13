@@ -194,7 +194,10 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         val category = old.categoryPath.takeIf { again || it.isAncestorOrSelf(struct.categoryPath) }
             ?: struct.categoryPath
         val used = struct.definedComponents.filter { it.ordinal != field.ordinal }.mapNotNull { it.fieldName }.toSet()
-        val name = generateSequence(0) { it + 1 }.map { if (it == 0) from.name else "${from.name}_$it" }
+        // A destructor is named after the table's own class, as [renameDestructor] names one.
+        val leaf = owner[slot.table]?.name?.takeIf { isDestructor(overrides[chosen].slot) }?.let(::destructorName)
+            ?: from.name
+        val name = generateSequence(0) { it + 1 }.map { if (it == 0) leaf else "${leaf}_$it" }
             .first { it !in used && dtm.getDataType(category, it).let { dt -> dt == null || (again && dt == old) } }
         val def = FunctionDefinitionDataType(category, name, typed[chosen], dtm)
         val comment = TYPED_OFF + from.getName(true)
@@ -278,7 +281,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         for (slot in all.distinct()) {
             val f = target(slot)
             val cls = (f?.parentNamespace as? GhidraClass)?.name ?: owner[slot.table]?.name ?: continue
-            val name = if (abi == Msvc) MsvcStructor.SCALAR_DELETING_DESTRUCTOR.displayName(cls) else "~$cls"
+            val name = destructorName(cls, abi)
             if (f != null && f.name != name) {
                 runCatching { f.setName(name, SourceType.USER_DEFINED) }
                     .onSuccess { functions++ }.onFailure { skipped += "${f.getName(true)}: ${it.message}" }
@@ -287,6 +290,12 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         }
         return SlotRenames(functions, fields, skipped)
     }
+
+    /** [cls]'s destructor as its ABI spells the function a vftable holds ([renameDestructor]). */
+    private fun destructorName(cls: String, abi: CxxAbi = vtableAbi) =
+        if (abi == Msvc) MsvcStructor.SCALAR_DELETING_DESTRUCTOR.displayName(cls) else "~$cls"
+
+    private val vtableAbi by lazy { destructorAbi() }
 
     /** Whether [slot] holds a destructor, by its name or its mangled one: `~Foo`, a deleting one, a `D` variant. */
     internal fun isDestructor(slot: VirtualSlot): Boolean {
