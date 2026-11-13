@@ -219,13 +219,14 @@ internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function
 }
 
 /**
- * Whether the slot at [pfn] points at code: executable memory outside the block the slot itself is in.
- * gcc 3.3–4.9 link `.rodata` into the R-X text segment, so the vtables, VTTs and typeinfos there are
- * executable too: past a table's last slot, the next record's `offset_to_top` 0 reads as a null slot, and
- * its typeinfo pointer, or a VTT's pointers at other tables, as functions.
+ * Whether the slot at [pfn] points at code: executable memory, and not back into the read-only block the
+ * slot itself is in. gcc 3.3–4.9 link `.rodata` into the R-X text segment, so the vtables, VTTs and
+ * typeinfos there are executable too: past a table's last slot, the next record's `offset_to_top` 0 reads
+ * as a null slot, and its typeinfo pointer, or a VTT's pointers at other tables, as functions. An a.out
+ * object loads its text and data as one writable block, where a slot does point into its own block.
  */
 private fun Program.isSlotCode(pfn: Address, target: Address): Boolean =
-    isCode(target) && memory.getBlock(target) != memory.getBlock(pfn)
+    isCode(target) && memory.getBlock(pfn).let { it == null || it.isWrite || it != memory.getBlock(target) }
 
 /**
  * The program's own function the slot pointing at [at] holds, past a jump stub, and made where code has
