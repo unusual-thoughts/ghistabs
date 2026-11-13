@@ -27,7 +27,7 @@ headless() {
 }
 
 case ${1:-} in
-    archive) headless "$3" "$here/../../ghidra_scripts" MsvcStlArchiveScript.java "$4" "$2" ;;
+    archive) headless "$3" "$here/../../ghicpp/ghidra_scripts" MsvcStlArchiveScript.java "$4" "$2" ;;
     compare) headless "$2" "$here" CompareStlArchives.java "$3" "$4" ;;
     *) sed -n '2,6p' "$0"; exit 2 ;;
 esac

@@ -9,7 +9,7 @@ on:
   pull_request:
     branches: [ "main" ]
     paths:
-      - ghidra_scripts/MsvcStlArchiveScript.java
+      - ghicpp/ghidra_scripts/MsvcStlArchiveScript.java
       - tools/stl-archives/**
       - .github/workflows/stl-archives.yml
 
