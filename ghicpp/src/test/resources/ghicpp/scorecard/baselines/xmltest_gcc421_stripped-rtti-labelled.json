@@ -21,7 +21,7 @@
     "fields-fp": 1,
     "fields-tp": 333,
     "methods-fn": 281,
-    "methods-fp": 18,
+    "methods-fp": 19,
     "methods-tp": 680,
     "polymorphic-classes-fn": 0,
     "polymorphic-classes-fp": 0,
