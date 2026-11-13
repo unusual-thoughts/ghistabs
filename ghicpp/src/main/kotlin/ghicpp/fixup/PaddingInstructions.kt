@@ -1,8 +1,11 @@
-package ghidrakt
+package ghicpp.fixup
+
 import ghidra.app.util.PseudoDisassembler
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
 import ghidra.program.model.listing.Instruction
+import ghidrakt.instructionAt
+import ghidrakt.minus
 
 /**
  * NOP, or a self-referential `lea r,[r(+0)]` / `mov r,r` / `xchg r,r` — GAS's alignment fillers

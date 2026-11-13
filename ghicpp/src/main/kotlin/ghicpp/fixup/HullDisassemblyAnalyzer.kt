@@ -1,4 +1,4 @@
-package ghistabs.entrypoints
+package ghicpp.fixup
 
 import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.services.AbstractAnalyzer
@@ -17,14 +17,10 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghidrakt.MAX_FILL
 import ghidrakt.diagnose.report
-import ghidrakt.fillJumpLength
 import ghidrakt.instructionAt
-import ghidrakt.nopRunLength
 import ghidrakt.plus
 import ghidrakt.rangeUntil
-import ghidrakt.tiles
 
 /**
  * Recovers code Ghidra left undisassembled *inside* a function's extent — hot/cold split holes and
@@ -42,7 +38,7 @@ import ghidrakt.tiles
  * last instruction. Ghidra's pseudo flow walk ([PseudoDisassembler.followSubFlows]) takes it from the
  * call to every jump back into the function and every return, and it is kept only if it gets there.
  *
- * Runs after Ghidra's function analysis (hulls exist) and before [StabsAnalyzer] / its data-coverage
+ * Runs after Ghidra's function analysis (hulls exist) and before the Stabs Importer / its data-coverage
  * report, which would otherwise flag these fragments as undescribed data. Re-runnable.
  *
  * The alignment fill in a gap is left to [FillerByteAnalyzer], which runs later and

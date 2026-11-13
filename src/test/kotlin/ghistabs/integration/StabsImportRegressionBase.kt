@@ -12,6 +12,8 @@ import ghicpp.abi.vftableStructAt
 import ghicpp.eh.SjljLsda
 import ghicpp.eh.SjljLsdaPass
 import ghicpp.eh.SjljRegistrationFinder
+import ghicpp.fixup.isAllPadding
+import ghicpp.fixup.tiles
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.demangler.gnu.GnuDemangler
@@ -29,9 +31,7 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 import ghidrakt.diagnose.CapturingSink
-import ghidrakt.isAllPadding
 import ghidrakt.test.*
-import ghidrakt.tiles
 import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.Observations
@@ -832,7 +832,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             ).filter { code.tiles(it) && !code.isAllPadding(it) }.map { "$it in ${fn.name}" }
         }
         val bookmarks = program.bookmarkManager.bookmarksIterator.asSequence()
-            .count { it.category == ghistabs.entrypoints.HullDisassemblyAnalyzer.NAME }
+            .count { it.category == ghicpp.fixup.HullDisassemblyAnalyzer.NAME }
         println("hullGapsAreDisassembled[$binaryName/$mode]: $bookmarks bookmarks, ${left.size} gaps left")
         left.take(10).mustBeEmpty("${left.size} decodable gaps left inside function hulls")
     }

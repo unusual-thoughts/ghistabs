@@ -4,6 +4,7 @@ import ghicpp.analyzers.SjljContextAnalyzer
 import ghicpp.analyzers.SjljLsdaAnalyzer
 import ghicpp.eh.SjljContextPass
 import ghicpp.eh.SjljTypes
+import ghicpp.fixup.HullDisassemblyAnalyzer
 import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.plugin.core.clear.ClearFlowAndRepairCmd
@@ -23,7 +24,6 @@ import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeA
 import ghidrakt.test.mustBeNull
 import ghidrakt.test.mustNotBeNull
-import ghistabs.entrypoints.HullDisassemblyAnalyzer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

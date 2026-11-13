@@ -1,4 +1,4 @@
-package ghistabs.entrypoints
+package ghicpp.fixup
 
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
@@ -13,19 +13,16 @@ import ghidra.program.model.data.AlignmentDataType
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghidrakt.MAX_FILL
 import ghidrakt.addressesBefore
 import ghidrakt.diagnose.report
-import ghidrakt.fillJumpLength
 import ghidrakt.forceCreateData
 import ghidrakt.instructionAt
-import ghidrakt.nopRunLength
 import ghidrakt.plus
 
 /**
  * Marks compiler alignment padding in executable memory as [AlignmentDataType], so downstream passes
  * (the stabs importer's data-coverage report) don't mistake it for undescribed data. Runs before
- * [StabsAnalyzer]; re-runnable (idempotent — already-defined padding is skipped).
+ * the Stabs Importer; re-runnable (idempotent — already-defined padding is skipped).
  *
  * GCC 3.4.4 emits `.p2align`; GAS fills the gap with whatever NOP idiom fits (`0x90`, `0f 1f …`, and
  * the classic `lea r,[r]` forms — `8d 76 00`, `8d bc 27 …`). For a wider gap it uses the jump-over-fill
