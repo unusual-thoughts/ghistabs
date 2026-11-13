@@ -10,7 +10,7 @@ on:
     branches: [ "main" ]
     paths:
       - ghicpp/ghidra_scripts/MsvcStlArchiveScript.java
-      - ghicpp/src/main/resources/ghicpp/stl/**
+      - ghicpp/data/typeinfo/msvc/**
       - tools/stl-archives/**
       - .github/workflows/stl-archives.yml
 
@@ -96,16 +96,18 @@ jobs:
             tools/stl-archives/run.sh compare probes/probe-$arch-release/stl_probe.exe archives/msvcp140_$arch.gdt refs/msvcp140_$arch.gdt
           done
 
-      # ghicpp bundles the layouts as text, which every Ghidra it supports can read: a .gdt written
-      # here opens only on this Ghidra or a newer one.
-      - name: Export the layouts ghicpp bundles
+      # A .gdt written here opens only on this Ghidra or a newer one, so the archives are carried to
+      # the portable job as text. ghicpp's bundled copies (built there earlier) should read the same.
+      - name: Export the layouts
         run: |
-          mkdir -p layouts
+          mkdir -p layouts bundled
+          program=ghicpp/src/test/resources/binaries/features/hello_msvc.exe
           for gdt in archives/*.gdt; do
             name=$(basename "$gdt" .gdt)
-            tools/stl-archives/run.sh layouts ghicpp/src/test/resources/binaries/features/hello_msvc.exe "$gdt" layouts/$name.txt
-            cmp -s layouts/$name.txt ghicpp/src/main/resources/ghicpp/stl/$name.txt ||
-              echo "::warning::$name differs from ghicpp's bundled layouts; refresh them from this run's layouts artifact"
+            tools/stl-archives/run.sh layouts $program "$gdt" layouts/$name.txt
+            tools/stl-archives/run.sh layouts $program ghicpp/data/typeinfo/msvc/$name.gdt bundled/$name.txt
+            cmp -s layouts/$name.txt bundled/$name.txt ||
+              echo "::warning::$name.gdt built here differs from ghicpp's bundled copy; refresh it from this run's artifacts"
           done
 
       - uses: actions/upload-artifact@v7

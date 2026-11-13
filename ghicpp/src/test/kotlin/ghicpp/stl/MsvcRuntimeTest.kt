@@ -17,12 +17,12 @@ class MsvcRuntimeTest {
     }
 
     @Test
-    fun `only the bundled runtimes have layouts`() {
-        MsvcRuntime(90, false).layouts(4) mustBe "msvcp90_x86"
-        MsvcRuntime(140, true).layouts(8) mustBe "msvcp140d_x64"
-        MsvcRuntime(90, true).layouts(4) mustBe null
-        MsvcRuntime(100, false).layouts(4) mustBe null
-        MsvcRuntime(140, false).layouts(2) mustBe null
+    fun `only the bundled runtimes have an archive`() {
+        MsvcRuntime(90, false).archive(4) mustBe "msvcp90_x86"
+        MsvcRuntime(140, true).archive(8) mustBe "msvcp140d_x64"
+        MsvcRuntime(90, true).archive(4) mustBe null
+        MsvcRuntime(100, false).archive(4) mustBe null
+        MsvcRuntime(140, false).archive(2) mustBe null
     }
 
     @Test
