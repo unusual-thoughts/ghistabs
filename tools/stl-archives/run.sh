@@ -3,7 +3,7 @@
 #   run.sh archive <out.gdt> <program> <pdb>       build an archive from <pdb>; <program> is any binary
 #                                                  of the PDB's architecture, the script reads its language
 #   run.sh compare <program> <archive> <reference> fail if the two disagree on a std layout
-#   run.sh dump <program> <archive> <out.txt>      write the archive's types and layouts as text
+#   run.sh layouts <program> <archive> <out.txt>   write the archive as the text ghicpp bundles
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -30,6 +30,6 @@ headless() {
 case ${1:-} in
     archive) headless "$3" "$here/../../ghicpp/ghidra_scripts" MsvcStlArchiveScript.java "$4" "$2" ;;
     compare) headless "$2" "$here" CompareStlArchives.java "$3" "$4" ;;
-    dump) headless "$2" "$here" DumpStlArchive.java "$3" "$4" ;;
+    layouts) headless "$2" "$here" ExportStlLayouts.java "$3" "$4" ;;
     *) sed -n '2,7p' "$0"; exit 2 ;;
 esac

@@ -23,7 +23,7 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun `msvcp90 x86 string`() = check(
         ProgramBuilder._X86,
         "??0?\$basic_string@DU?\$char_traits@D@std@@V?\$allocator@D@2@@std@@QAE@PBD@Z",
-        "msvcp90_x86.gdt",
+        "msvcp90_x86",
         size = 28,
     )
 
@@ -31,7 +31,7 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun `msvcp140 x64 string`() = check(
         ProgramBuilder._X64,
         "??0?\$basic_string@DU?\$char_traits@D@std@@V?\$allocator@D@2@@std@@QEAA@PEBD@Z",
-        "msvcp140_x64.gdt",
+        "msvcp140_x64",
         size = 32,
     )
 
@@ -39,11 +39,11 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun `msvcp140d x86 string carries the container proxy`() = check(
         ProgramBuilder._X86,
         "??0?\$basic_string@DU?\$char_traits@D@std@@V?\$allocator@D@2@@std@@QAE@PBD@Z",
-        "msvcp140d_x86.gdt",
+        "msvcp140d_x86",
         size = 28,
     )
 
-    private fun check(language: String, mangled: String, archiveName: String, size: Int) {
+    private fun check(language: String, mangled: String, layouts: String, size: Int) {
         val builder = ProgramBuilder("stl", language, "windows", this)
         try {
             builder.createMemory(".text", "0x10001000", 0x100)
@@ -55,12 +55,7 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             }
             placeholders(program) mustBe listOf("/Demangler/std/$STRING")
 
-            val archive = MsvcStlArchives.open(archiveName)
-            try {
-                builder.withTransaction { MsvcStlApplier(program, archive).apply() }
-            } finally {
-                archive.close()
-            }
+            builder.withTransaction { MsvcStlApplier(program, StlLayouts.load(layouts)).apply() }
 
             placeholders(program) mustBe emptyList()
             val self = (program.functionManager.getFunctionAt(fn.entryPoint).getParameter(0).dataType as Pointer)
