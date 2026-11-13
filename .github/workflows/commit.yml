@@ -144,6 +144,7 @@ jobs:
           repo: unusual-thoughts/ghidra
 
       - name: Run integration tests
+        id: tests
         run: >-
           ./gradlew --build-cache ${{ matrix.suite == 'ghicpp' && ':ghicpp:integrationTest' || ':integrationTest' }}
           -Pmode=all -PignoreBaselines=true -Pshorten=true --fail-fast
@@ -190,8 +191,24 @@ jobs:
           name: shifted-baselines-${{ matrix.suite }}-${{ steps.commit_id.outputs.sha }}.zip
           path: shifted/
 
-  # The one check to require: it always runs, and passes only when every job that ran passed and no
-  # counter moved. A skipped suite uploads no shifted baselines, so it cannot count as a move.
+      # Tells the baselines job this suite finished, and how. A suite cancelled mid-run (GitHub cancels
+      # whole runs, never one job) uploads none, so its partial baselines are never read.
+      - name: Record suite result
+        if: success() || failure()
+        run: mkdir suite-result && echo '${{ steps.tests.outcome }}' > 'suite-result/${{ matrix.suite }}'
+
+      - name: Upload suite result
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: suite-result-${{ matrix.suite }}
+          path: suite-result/
+
+  # The one check to require. It always runs, even after the run is cancelled, and passes only when
+  # changes and build passed, no suite that finished failed, and no counter moved. A skipped suite
+  # uploads no shifted baselines, so it cannot count as a move. Cancelling the run once one suite has
+  # finished still gives that suite's result: a suite cancelled mid-run is reported, not failed,
+  # unless every selected suite was.
   baselines:
     needs: [ changes, build, integration ]
     if: always() && (github.event.action != 'labeled' || github.event.label.name == 'run-all-integration')
@@ -211,6 +228,13 @@ jobs:
           pattern: shifted-baselines-*
           merge-multiple: true
 
+      - name: Download suite results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: suite-result-*
+          path: suite-result
+          merge-multiple: true
+
       # Lists which counters moved on the run's summary page, with a warning annotation per moved baseline.
       - name: Summarize moved baseline counters
         id: moved
@@ -225,8 +249,33 @@ jobs:
           echo "::error title=Baseline counters moved::${{ steps.moved.outputs.moved }} counter(s) left their committed baselines; see the run summary, then commit the shifted baselines or fix the change."
           exit 1
 
-      - name: Fail on failed jobs
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+      - name: Check job results
+        env:
+          SUITES: ${{ needs.changes.outputs.suites }}
+          CHANGES: ${{ needs.changes.result }}
+          BUILD: ${{ needs.build.result }}
+          INTEGRATION: ${{ needs.integration.result }}
         run: |
-          echo "::error title=CI failed::changes: ${{ needs.changes.result }}, build: ${{ needs.build.result }}, integration: ${{ needs.integration.result }}"
-          exit 1
+          status=0
+          if [ "$CHANGES" != success ] || [ "$BUILD" != success ]; then
+            echo "::error title=CI failed::changes: $CHANGES, build: $BUILD"
+            status=1
+          fi
+          selected=$(python3 -c 'import json, os; print(" ".join(json.loads(os.environ["SUITES"] or "[]")))')
+          finished=0
+          { echo "### Integration results"; echo; echo "| Suite | Result |"; echo "|---|---|"; } >> "$GITHUB_STEP_SUMMARY"
+          for suite in $selected; do
+            # No result: cancelled with the run, or its job died before it could record one.
+            result=$(cat "suite-result/$suite" 2>/dev/null || { [ "$INTEGRATION" = cancelled ] && echo cancelled || echo missing; })
+            echo "| $suite | $result |" >> "$GITHUB_STEP_SUMMARY"
+            case "$result" in
+              success) finished=$((finished + 1)) ;;
+              cancelled) echo "::warning title=Suite cancelled::$suite was cancelled before it finished; its baselines are not checked." ;;
+              *) finished=$((finished + 1)); echo "::error title=Suite failed::$suite: $result"; status=1 ;;
+            esac
+          done
+          if [ -n "$selected" ] && [ "$finished" = 0 ]; then
+            echo "::error title=No suite finished::every selected integration suite was cancelled."
+            status=1
+          fi
+          exit $status

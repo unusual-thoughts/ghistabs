@@ -156,3 +156,7 @@ Both suites run anyway on a push to `main`, on a manual run of the workflow (its
 set to `all`, the default), and on a PR carrying the **`run-all-integration`** label; adding the label
 starts the run. The `baselines` job always runs: it fails when any job failed or a counter left its
 committed baseline, and a skipped suite writes no shifted baselines, so it never counts as a move.
+
+GitHub cancels whole runs, never one job, so to drop a slow suite, cancel the run once the other has
+finished: `baselines` still runs and checks the finished suite's results and baselines, and reports
+the cancelled one as a warning. It fails when every selected suite was cancelled.
