@@ -32,3 +32,12 @@ tools/stl-archives/run.sh compare <program> out.gdt reference.gdt
 Which runtime builds have typed public PDBs is not obvious: for msvcp80 and msvcp90 only the 2016 to
 2019 security rebuilds do, for msvcp100 build 40219.325 but not 40219.1, and msvcp60's are stripped.
 [`pdb_url.py`](pdb_url.py) prints the symbol server URL of a DLL's PDB.
+
+## In ghicpp
+
+ghicpp bundles copies of the six archives under `ghicpp/src/main/resources/ghicpp/stl/`. Its
+`MSVC standard library layouts` analyzer reads the `MSVCP<nn>[D].DLL` a PE program imports and its pointer
+size, picks the matching archive, and replaces each empty `std` struct the Microsoft demangler made
+(`/Demangler/std/...`) with the archive's type at the same path. To refresh the copies, download the
+workflow's artifacts and drop them in that folder. The workflow's `compat` job checks that Ghidra 10.4,
+11.4, 12.0 and 12.1 read the archives exactly as the 12.3 build that wrote them.
