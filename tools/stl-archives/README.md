@@ -7,7 +7,7 @@ so the `this` of a demangled `std::` method matches the archive type by path: th
 placeholder is that path under `/Demangler`.
 
 The [`MSVC STL archives`](../../.github/workflows/stl-archives.yml) workflow builds them and uploads
-them as the `msvc-stl-archives` artifact:
+them as one artifact per archive, each downloading as its `.gdt` file:
 
 | Archive | Source | Check |
 | --- | --- | --- |

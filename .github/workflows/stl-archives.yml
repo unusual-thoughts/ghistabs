@@ -95,8 +95,39 @@ jobs:
             tools/stl-archives/run.sh compare probes/probe-$arch-release/stl_probe.exe archives/msvcp140_$arch.gdt refs/msvcp140_$arch.gdt
           done
 
+      # One unzipped artifact per archive, so each downloads as its .gdt file.
       - uses: actions/upload-artifact@v7
         with:
-          name: msvc-stl-archives
-          path: archives/*.gdt
+          path: archives/msvcp140_x86.gdt
+          archive: false
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp140_x64.gdt
+          archive: false
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp140d_x86.gdt
+          archive: false
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp140d_x64.gdt
+          archive: false
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp90_x86.gdt
+          archive: false
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp90_x64.gdt
+          archive: false
           if-no-files-found: error
