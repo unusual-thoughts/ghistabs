@@ -1,6 +1,7 @@
 package ghicpp.analyzers
 
 import ghicpp.VfptrModel
+import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.recover.*
 import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
 import ghicpp.recover.ClassPass.Companion.INLINED_CONSTRUCTORS

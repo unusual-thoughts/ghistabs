@@ -1,4 +1,4 @@
-package ghicpp.recover
+package ghicpp.abi.generic
 
 import ghicpp.*
 import ghicpp.abi.*
@@ -142,16 +142,16 @@ private fun Set<ClassDecl>.mostDerived(candidates: Map<ClassDecl, Set<ClassDecl>
 }
 
 /**
- * The classes whose `vftable` labels no ABI's records describe, as [GenericVftableFinder] seeds them or a user
- * labels them, for the class pass: each label in a class namespace with no RTTI labels of its own, which isn't
- * an ABI's vtable symbol nor the stabs import's, read as [PlainVtables]. A class with RTTI goes to its ABI's
- * parser, which knows its bases; these get theirs off their structors ([BaseCandidates.inferBases]).
+ * The classes whose `vftable` labels no ABI's records describe, as [ghicpp.recover.GenericVftableFinder] seeds
+ * them or a user labels them, for the class pass: each label in a class namespace with no RTTI labels of its own,
+ * which isn't an ABI's vtable symbol nor the stabs import's, read as [PlainVtables]. A class with RTTI goes to its
+ * ABI's parser, which knows its bases; these get theirs off their structors ([BaseCandidates.inferBases]).
  */
 class PlainVtableParser(private val program: Program, private val sink: DiagnosticSink = DummySink) :
     RttiParser,
     DissectingParser {
     /** How it reads the storers: a constructor inlined after `operator new` orders the bases it builds, if read. */
-    override var cache = DissectionCache()
+    override var cache = DissectionCache(operatorNewNames = PlainVtables.operatorNewNames)
 
     override val abi get() = PlainVtables
 

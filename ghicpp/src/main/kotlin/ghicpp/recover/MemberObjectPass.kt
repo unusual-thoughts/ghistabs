@@ -4,10 +4,11 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.recordPlaced
-import ghicpp.abi.PlainVtables
 import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
 import ghicpp.abi.StructorRole.DESTRUCTOR
+import ghicpp.abi.generic.PlainClass
+import ghicpp.abi.generic.PlainVtables
 import ghicpp.dissect.*
 import ghicpp.recover.MemberObjectPass.Companion.MAX_DEPTH
 import ghidra.program.model.data.Structure

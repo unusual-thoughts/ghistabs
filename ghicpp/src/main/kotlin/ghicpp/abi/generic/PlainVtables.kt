@@ -1,5 +1,7 @@
-package ghicpp.abi
+package ghicpp.abi.generic
 
+import ghicpp.abi.CxxAbi
+import ghicpp.abi.VtableRecord
 import ghicpp.abi.gcc2.Gcc2Plain
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.msvc.Msvc
