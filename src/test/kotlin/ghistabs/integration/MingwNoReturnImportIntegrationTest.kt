@@ -1,12 +1,12 @@
 package ghistabs.integration
 
+import ghicpp.fixup.markNoReturn
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.listing.Function
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.runTransaction
 import ghidrakt.test.must
 import ghidrakt.test.mustNot
-import ghistabs.entrypoints.markNoReturn
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

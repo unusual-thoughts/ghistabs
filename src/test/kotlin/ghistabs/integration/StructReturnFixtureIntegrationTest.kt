@@ -1,5 +1,6 @@
 package ghistabs.integration
 
+import ghicpp.fixup.Correction
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.listing.Function
@@ -10,14 +11,13 @@ import ghidrakt.functionsIterable
 import ghidrakt.runTransaction
 import ghidrakt.test.*
 import ghidrakt.withProgram
-import ghistabs.entrypoints.Correction
 import ghistabs.test.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 
 /**
- * [ghistabs.entrypoints.StructReturnAnalyzer] against a real gcc 3.4.5 PE, through the ordinary analyzer pipeline — the
+ * [ghicpp.fixup.StructReturnAnalyzer] against a real gcc 3.4.5 PE, through the ordinary analyzer pipeline — the
  * Stabs Importer supplies the return types this reads, so the priority ordering is exercised for
  * real rather than simulated.
  *

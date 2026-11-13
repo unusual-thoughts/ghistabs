@@ -1,5 +1,8 @@
 package ghistabs.integration
 
+import ghicpp.fixup.NO_RETURN_ANALYZER_NAME
+import ghicpp.fixup.NoReturnAnalyzer
+import ghicpp.fixup.markNoReturn
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.listing.Function
@@ -10,16 +13,13 @@ import ghidrakt.functionsIterable
 import ghidrakt.runTransaction
 import ghidrakt.test.*
 import ghidrakt.withProgram
-import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
-import ghistabs.entrypoints.NoReturnAnalyzer
-import ghistabs.entrypoints.markNoReturn
 import ghistabs.test.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * [ghistabs.entrypoints.NoReturnAnalyzer] against one real binary, through the ordinary analyzer pipeline.
+ * [ghicpp.fixup.NoReturnAnalyzer] against one real binary, through the ordinary analyzer pipeline.
  *
  * **One configuration per invocation**, because each is a full load + autoanalysis. Both write
  * `build/test-output/noreturn/<fixture>.<on|off>.txt`, and `diff`ing the two files *is* the with/

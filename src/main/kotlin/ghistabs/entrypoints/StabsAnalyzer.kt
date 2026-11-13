@@ -11,7 +11,6 @@ import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.BookmarkSink
 import ghidrakt.diagnose.MessageLogSink
 import ghidrakt.diagnose.TeeSink
-import ghistabs.StabsDiagnostics
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
@@ -19,6 +18,7 @@ import ghistabs.importer.ImportOptions.Companion.registerStabs
 import ghistabs.importer.ImportOptions.Companion.stabsOptions
 import ghistabs.importer.ImportProbe
 import ghistabs.importer.import
+import ghistabs.index.StabsDiagnostics
 import ghistabs.parse.StabReader
 
 /**

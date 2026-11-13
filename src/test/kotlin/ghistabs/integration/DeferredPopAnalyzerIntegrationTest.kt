@@ -1,5 +1,9 @@
 package ghistabs.integration
 
+import ghicpp.fixup.CALL_BOOKMARK
+import ghicpp.fixup.DeferredPopAnalyzer
+import ghicpp.fixup.MERGE_BOOKMARK
+import ghicpp.fixup.UNFIXED_BOOKMARK
 import ghidra.app.decompiler.DecompInterface
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
@@ -14,10 +18,6 @@ import ghidra.util.task.TaskMonitor
 import ghidrakt.runTransaction
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustNot
-import ghistabs.entrypoints.CALL_BOOKMARK
-import ghistabs.entrypoints.DeferredPopAnalyzer
-import ghistabs.entrypoints.MERGE_BOOKMARK
-import ghistabs.entrypoints.UNFIXED_BOOKMARK
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

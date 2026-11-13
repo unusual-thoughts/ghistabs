@@ -1,5 +1,8 @@
 package ghistabs.integration
 
+import ghicpp.fixup.Correction
+import ghicpp.fixup.STRUCT_RETURN_ANALYZER_NAME
+import ghicpp.fixup.StructReturnAnalyzer
 import ghidra.app.cmd.function.FunctionPurgeAnalysisCmd
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
@@ -16,9 +19,6 @@ import ghidrakt.test.must
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeEmpty
 import ghidrakt.test.mustNot
-import ghistabs.entrypoints.Correction
-import ghistabs.entrypoints.STRUCT_RETURN_ANALYZER_NAME
-import ghistabs.entrypoints.StructReturnAnalyzer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
