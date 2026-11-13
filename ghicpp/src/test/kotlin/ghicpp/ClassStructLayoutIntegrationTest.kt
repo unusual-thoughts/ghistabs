@@ -7,6 +7,7 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
@@ -131,6 +132,42 @@ class ClassStructLayoutIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         edit { sink.placeMember(owner, 2, member) }
         unplaced().single().msg!!.contains("{vfptr} at +0x0") mustBe true
         (owner.getComponentAt(4).dataType as Structure).getComponentAt(0).fieldName mustBe "field_0x4"
+    }
+
+    /** `Owner` with a secondary `{vfptr}` at 0x10 too, typed [secondary], over undefined bytes. */
+    private fun twoVptrOwner(secondary: PointerDataType) = add(
+        StructureDataType(category, "Owner", 0x20).apply {
+            replaceAtOffset(0, PointerDataType.dataType, 4, ClassUtils.VFPTR, null)
+            replaceAtOffset(0x10, secondary, 4, ClassUtils.VFPTR, null)
+        },
+    )
+
+    @Test
+    fun `a member over a secondary vptr of its holder's is its base subobject, laid over it`() {
+        val (owner, member) = edit { twoVptrOwner(PointerDataType(DWordDataType.dataType)) to member() }
+        edit { sink.placeMember(owner, 0x10, member) }
+        owner.getComponentAt(0x10).dataType mustBe member
+        unplaced() mustBe emptyList()
+    }
+
+    @Test
+    fun `a polymorphic base subobject over a secondary vptr hands the vptr back, split around it`() {
+        val secondary = PointerDataType(DWordDataType.dataType)
+        val (owner, member) = edit {
+            twoVptrOwner(secondary) to add(
+                StructureDataType(CategoryPath("/ClassDataTypes/Poly"), "Poly", 8).apply {
+                    replaceAtOffset(0, PointerDataType.dataType, 4, ClassUtils.VFPTR, null)
+                    replaceAtOffset(4, DWordDataType.dataType, 4, "p", null)
+                },
+            )
+        }
+        edit { sink.placeMember(owner, 0x10, member) }
+        owner.getComponentAt(0x10).let {
+            it.fieldName mustBe ClassUtils.VFPTR
+            it.dataType.isEquivalent(secondary) mustBe true
+        }
+        (owner.getComponentAt(0x14).dataType as Structure).getComponentAt(0).fieldName mustBe "p"
+        unplaced() mustBe emptyList()
     }
 
     @Test
