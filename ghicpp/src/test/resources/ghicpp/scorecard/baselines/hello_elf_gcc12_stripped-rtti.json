@@ -3,8 +3,8 @@
     "abstract-fp": 0,
     "abstract-tp": 1,
     "base-access-fn": 0,
-    "base-access-fp": 1,
-    "base-access-tp": 14,
+    "base-access-fp": 0,
+    "base-access-tp": 15,
     "base-offsets-fn": 0,
     "base-offsets-fp": 0,
     "base-offsets-tp": 11,
@@ -35,7 +35,7 @@
     "vftables-fn": 0,
     "vftables-fp": 0,
     "vftables-tp": 11,
-    "virtual-methods-fn": 2,
-    "virtual-methods-fp": 7,
-    "virtual-methods-tp": 23
+    "virtual-methods-fn": 3,
+    "virtual-methods-fp": 0,
+    "virtual-methods-tp": 30
 }
