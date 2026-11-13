@@ -92,7 +92,10 @@ dot_source() {
         }
         END {
             print "digraph {"
-            print "  rankdir=LR; newrank=true; node [shape=box style=rounded]; edge [fontsize=10];"
+            # Top-down, so the layers stack 5 → 1 and every allowed edge points down. Counts go in xlabel:
+            # graphviz 2.42 fails in init_rank on labelled edges between clusters, and newrank (the
+            # other way round it) lets the clusters overlap.
+            print "  rankdir=TB; node [shape=box style=rounded]; edge [fontsize=10];"
             split("kernel|C++|C++ shell|stabs|stabs shell", title, "|")
             title[0] = "in no layer"
             # One cluster per layer, as in the mermaid render.
@@ -105,8 +108,11 @@ dot_source() {
             }
             for (i = 1; i <= m; i++) {
                 split(e[i], f, " ")
-                printf "  %s -> %s [label=%d penwidth=%.1f%s];\n",
-                    q(f[2]), q(f[3]), f[1], 0.5 + f[1] / 8.0, f[4] ? " color=red fontcolor=red" : ""
+                # Anything may import the kernel, so its edges are greyed to let the rest stand out. A
+                # violation does not rank, so the layout keeps the layer order and the red edge points up.
+                printf "  %s -> %s [xlabel=%d penwidth=%.1f%s];\n",
+                    q(f[2]), q(f[3]), f[1], 0.5 + f[1] / 8.0,
+                    f[4] ? " color=red fontcolor=red constraint=false" : f[7] == 1 ? " color=gray70 fontcolor=gray50" : ""
             }
             printf "  labelloc=b; label=\"%d violating imports / %d total\";\n", v, v + ok
             print "}"
