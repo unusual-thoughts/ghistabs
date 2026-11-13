@@ -2,10 +2,10 @@
 """Render the shifted baselines integrationTest wrote as a GitHub Actions job summary.
 
 CI runs integrationTest with -PignoreBaselines=true, so a counter that leaves its committed
-baseline does not fail the run; it only writes a shifted copy under build/test-output/shifted-baselines/.
-This compares each shifted copy with the committed file it shifted from and prints, as Markdown, one
-table per fixture or scorecard case: counter, committed value, new value, delta. With no shifted
-baselines it prints a one-line all-clear.
+baseline does not stop the tests; it writes a shifted copy under build/test-output/shifted-baselines/,
+and the job's last step fails on it instead. This compares each shifted copy with the committed file
+it shifted from and prints, as Markdown, one table per fixture or scorecard case: counter, committed
+value, new value, delta. With no shifted baselines it prints a one-line all-clear.
 
 Two layouts:
   * stabs import baselines: <root>/build/test-output/shifted-baselines/<fixture>-baseline.json against
@@ -13,8 +13,11 @@ Two layouts:
   * ghicpp scorecards: <root>/ghicpp/build/test-output/shifted-baselines/scorecard-<case>.json against
     <root>/ghicpp/src/test/resources/ghicpp/scorecard/baselines/<case>.json, a flat {name: count} map.
 
-Usage: baseline_summary.py [repo-root] [--artifact NAME]  (prints to stdout; CI appends it to
-$GITHUB_STEP_SUMMARY).
+Usage: baseline_summary.py [repo-root] [--artifact NAME] [--summary FILE] [--output FILE]
+  --summary  append the Markdown there (CI passes $GITHUB_STEP_SUMMARY) instead of printing it
+  --output   append `moved=<count>` there (CI passes $GITHUB_OUTPUT), so a later step can fail the job
+With --summary, it also prints one `::warning` workflow command per moved baseline, which GitHub shows
+as an annotation on the run and the PR.
 """
 import argparse
 import json
@@ -117,7 +120,7 @@ def render(found, artifact=None):
         return "\n".join(lines) + "\n"
     total = sum(len(rows) for _, _, rows in moved)
     lines += ["", f"**{total}** counter{'s' if total != 1 else ''} moved in **{len(moved)}** "
-              f"baseline{'s' if len(moved) != 1 else ''}. They do not fail CI (`-PignoreBaselines=true`)."]
+              f"baseline{'s' if len(moved) != 1 else ''}. The job fails on them once the rest of it has run."]
     if artifact:
         lines.append(f"The new baselines are in the `{artifact}` artifact.")
     for kind, label, rows in moved:
@@ -135,8 +138,23 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("root", nargs="?", default=".", type=Path)
     p.add_argument("--artifact", help="name of the uploaded shifted-baselines artifact, to point readers at")
+    p.add_argument("--summary", type=Path, help="file to append the Markdown to, instead of stdout")
+    p.add_argument("--output", type=Path, help="file to append `moved=<count>` to")
     args = p.parse_args(argv)
-    sys.stdout.write(render(collect(args.root), args.artifact))
+    found = collect(args.root)
+    text = render(found, args.artifact)
+    if args.summary is None:
+        sys.stdout.write(text)
+    else:
+        with args.summary.open("a") as f:
+            f.write(text)
+        for kind, label, rows in found:
+            if rows:
+                names = ", ".join(name for name, _, _ in rows[:8]) + (" …" if len(rows) > 8 else "")
+                print(f"::warning title={kind} moved: {label}::{len(rows)} counter(s) moved: {names}")
+    if args.output is not None:
+        with args.output.open("a") as f:
+            f.write(f"moved={sum(len(rows) for _, _, rows in found)}\n")
 
 
 if __name__ == "__main__":

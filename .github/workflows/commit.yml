@@ -86,13 +86,15 @@ jobs:
             build/test-output/shifted-baselines/
             */build/test-output/shifted-baselines/
 
-      # A green run can still have shifted baselines; list which counters moved on the run's summary page.
+      # Lists which counters moved on the run's summary page, with a warning annotation per moved baseline.
+      # The job fails on them only in its last step, so the packages still build and upload.
       - name: Summarize moved baseline counters
+        id: moved
         if: success() || failure()
         run: >-
           python3 .github/scripts/baseline_summary.py
           ${{ steps.shifted.outputs.found == 'true' && format('--artifact shifted-baselines-{0}.zip', steps.commit_id.outputs.sha) || '' }}
-          >> "$GITHUB_STEP_SUMMARY"
+          --summary "$GITHUB_STEP_SUMMARY" --output "$GITHUB_OUTPUT"
 
       # ghicpp's on its own first: it must build without the stabs project.
       - name: Build zips
@@ -104,3 +106,9 @@ jobs:
 
       - name: Generate and submit dependency graph
         uses: gradle/actions/dependency-submission@v6
+
+      - name: Fail on moved baseline counters
+        if: (success() || failure()) && steps.moved.outputs.moved != '' && steps.moved.outputs.moved != '0'
+        run: |
+          echo "::error title=Baseline counters moved::${{ steps.moved.outputs.moved }} counter(s) left their committed baselines; see the run summary, then commit the shifted baselines or fix the change."
+          exit 1
