@@ -4,10 +4,9 @@
 #
 #   1 kernel        ghidrakt, ghidrakt.diagnose                 Ghidra/Kotlin extensions, diagnostics
 #                   (ghistabs, ghistabs.diagnose before the rename)
-#   2 C++           ghicpp, ghicpp.abi, .eh, .recover, .gui …   C++ ABI, class passes, window: no stabs
-#   3 C++ shell     ghicpp.entrypoints                          the C++ analyzers and plugin
-#   4 stabs         parse → harvest → index → materialize → scan → importer → render
-#   5 stabs shell   ghistabs.entrypoints                        the stabs analyzer, plugin, exporters
+#   2 C++           ghicpp, ghicpp.abi, .eh, .recover, .gui …   C++ ABI, class passes, analyzers, window: no stabs
+#   3 stabs         parse → harvest → index → materialize → scan → importer → render → entrypoints
+#                   (entrypoints: the stabs analyzer, plugin and exporters, the last stage)
 #
 # An edge is a violation when it points up this stack: a layer importing a higher one (so ghicpp
 # importing any stabs stage or ghistabs.entrypoints), or an earlier stabs stage importing a later one.
@@ -61,14 +60,12 @@ edges() {
         awk '
             function layerOf(p) {
                 if (p == "ghidrakt" || p == "ghidrakt.diagnose" || p == "ghistabs" || p == "ghistabs.diagnose") return 1
-                if (p == "ghicpp.entrypoints") return 3
                 if (p == "ghicpp" || p ~ /^ghicpp\./) return 2
-                if (p == "ghistabs.entrypoints") return 5
-                if (p in rank) return 4
+                if (p in rank) return 3
                 return 0
             }
             BEGIN {
-                n = split("parse harvest index materialize scan importer render", s, " ")
+                n = split("parse harvest index materialize scan importer render entrypoints", s, " ")
                 for (i = 1; i <= n; i++) rank["ghistabs." s[i]] = i
             }
             {
@@ -96,10 +93,10 @@ dot_source() {
             # Counts go in xlabel: graphviz 2.42 fails in init_rank on labelled edges between clusters,
             # and newrank (the other way round it) lets the clusters drift apart.
             print "  rankdir=LR; compound=true; node [shape=box style=rounded]; edge [fontsize=10];"
-            split("kernel|C++|C++ shell|stabs|stabs shell", title, "|")
+            split("kernel|C++|stabs", title, "|")
             title[0] = "in no layer"
             # One cluster per layer, as in the mermaid render.
-            for (L = 0; L <= 5; L++) {
+            for (L = 0; L <= 3; L++) {
                 body = ""
                 for (j = 1; j <= k; j++) if (layer[p = order[j]] == L) body = body "    " q(p) ";\n"
                 # An invisible point per cluster anchors the layer-to-kernel edges below. Outside the
@@ -120,7 +117,7 @@ dot_source() {
                     f[4] ? " color=red fontcolor=red constraint=false" : f[6] != f[7] ? " color=navy fontcolor=navy" : ""
             }
             for (j = 1; j <= k; j++) if ((L = layer[p = order[j]]) in tokernel) printf "  %s -> anchor_%d [style=invis];\n", q(p), L
-            for (L = 2; L <= 5; L++) if (L in tokernel)
+            for (L = 2; L <= 3; L++) if (L in tokernel)
                 printf "  anchor_%d -> anchor_1 [ltail=cluster_%d lhead=cluster_1 xlabel=%d penwidth=%.1f color=gray50 fontcolor=gray40];\n",
                     L, L, tokernel[L], 0.5 + tokernel[L] / 40.0
             printf "  labelloc=b; label=\"%d violating imports / %d total\";\n", v, v + ok
@@ -169,9 +166,9 @@ markdown() {
             printf "<details%s><summary>Import graph</summary>\n\n", n ? " open" : "" >> out
             print "```mermaid" >> out
             print "graph LR" >> out
-            split("kernel|C++|C++ shell|stabs|stabs shell", title, "|")
+            split("kernel|C++|stabs", title, "|")
             title[0] = "in no layer"
-            for (L = 0; L <= 5; L++) {
+            for (L = 0; L <= 3; L++) {
                 body = ""
                 for (j = 1; j <= k; j++) if (layer[p = order[j]] == L) body = body sprintf("    %s[\"%s\"]\n", id(p), p)
                 if (body != "") printf "  subgraph L%d[\"%d %s\"]\n%s  end\n", L, L, title[L], body >> out
