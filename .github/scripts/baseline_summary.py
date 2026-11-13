@@ -7,8 +7,8 @@ and the job's last step fails on it instead. This compares each shifted copy wit
 it shifted from and prints, as Markdown, one table per fixture or scorecard case: counter, committed
 value, new value, delta, the delta led by 🟢 or 🔴 where the counter has a better direction (a
 scorecard's -tp up, its -fp or -fn down, an import counter that names what it degrades down), and for
-a scorecard the precision and recall of each attribute that moved. With no shifted baselines it prints
-a one-line all-clear.
+a scorecard, as extra columns on each attribute's first row, its precision and recall old → new.
+With no shifted baselines it prints a one-line all-clear.
 
 Two layouts:
   * stabs import baselines: <root>/build/test-output/shifted-baselines/<fixture>-baseline.json against
@@ -124,10 +124,17 @@ def fmt_pct(x):
 
 def fmt_pts(old, new):
     """The change in percentage points, coloured: precision and recall are better higher."""
-    if old is None or new is None or abs(new - old) < 5e-4:
+    if old is None or new is None:
+        return ""
+    if abs(new - old) < 5e-4:
         return "0"
     d = 100 * (new - old)
     return f"{marker(d)} {'+' if d > 0 else ''}{d:.1f} pts"
+
+
+def fmt_ratio_move(old, new):
+    pts = fmt_pts(old, new)
+    return f"{fmt_pct(old)} → {fmt_pct(new)}" + (f" ({pts})" if pts else "")
 
 
 def precision_recall(committed, shifted, rows):
@@ -231,18 +238,24 @@ def render(found, artifact=None, patch=None):
     lines.append(f"{GOOD} marks a move for the better, {BAD} one for the worse.")
     for f in moved:
         any_targets = any(fmt_targets(o, n) for _, o, n in f.rows)
+        pr = {attr: rest for attr, *rest in precision_recall(f.committed, f.shifted, f.rows)}
         lines += ["", f"### {f.kind}: `{f.label}`", ""]
-        header = "| Counter | Committed | New | Δ |" + (" What moved |" if any_targets else "")
-        lines += [header, "|---|---:|---:|---:|" + ("---|" if any_targets else "")]
+        header = "| Counter | Committed | New | Δ |" + (" Precision | Recall |" if pr else "") \
+            + (" What moved |" if any_targets else "")
+        lines += [header, "|---|---:|---:|---:|" + ("---:|---:|" if pr else "") + ("---|" if any_targets else "")]
+        shown = set()
         for name, old, new in f.rows:
             row = f"| `{name}` | {fmt_range(old)} | {fmt_range(new)} | {fmt_coloured_delta(name, old, new)} |"
+            if pr:
+                # An attribute's precision and recall go on the first of its rows only.
+                attr = name.rsplit("-", 1)[0]
+                if attr in pr and attr not in shown:
+                    shown.add(attr)
+                    p0, p1, r0, r1 = pr[attr]
+                    row += f" {fmt_ratio_move(p0, p1)} | {fmt_ratio_move(r0, r1)} |"
+                else:
+                    row += " | |"
             lines.append(row + (f" {fmt_targets(old, new)} |" if any_targets else ""))
-        pr = precision_recall(f.committed, f.shifted, f.rows)
-        if pr:
-            lines += ["", "| Attribute | Precision | Δ | Recall | Δ |", "|---|---:|---:|---:|---:|"]
-            for attr, p0, p1, r0, r1 in pr:
-                lines.append(f"| `{attr}` | {fmt_pct(p0)} → {fmt_pct(p1)} | {fmt_pts(p0, p1)} "
-                             f"| {fmt_pct(r0)} → {fmt_pct(r1)} | {fmt_pts(r0, r1)} |")
     return "\n".join(lines) + "\n"
 
 
