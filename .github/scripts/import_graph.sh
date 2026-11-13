@@ -21,9 +21,10 @@
 #
 # Usage: import_graph.sh [out.pdf]   — no argument opens it in okular.
 #        import_graph.sh --text      — the edges as text, violations first; exits 1 on any.
-#        import_graph.sh --markdown FILE — appends a job-summary section listing the violations to FILE
-#                                          (CI passes $GITHUB_STEP_SUMMARY) and prints a `::warning`
-#                                          annotation for each; exits 0.
+#        import_graph.sh --markdown FILE — appends a job-summary section to FILE (CI passes
+#                                          $GITHUB_STEP_SUMMARY): the violations as a table, then the
+#                                          graph as mermaid; prints a `::warning` annotation for each
+#                                          violation; exits 0.
 set -euo pipefail
 
 ROOTS='ghidrakt|ghistabs|ghicpp'
@@ -75,7 +76,7 @@ edges() {
                 bad = (lf == 0 || lt == 0) || lf < lt ||
                       ((from in rank) && (to in rank) && rank[from] < rank[to])
                 why = (lf == 0 || lt == 0) ? "package-in-no-layer" : lf < lt ? "imports-a-higher-layer" : bad ? "imports-a-later-stabs-stage" : "-"
-                print cnt, from, to, bad, why
+                print cnt, from, to, bad, why, lf, lt
             }'
 }
 
@@ -107,22 +108,54 @@ markdown() {
     local out="$1"
     edges | sort -k4,4nr -k1,1nr | awk -v out="$out" '
         function why(w) { gsub(/-/, " ", w); return w }
-        { if ($4) { v += $1; bad[++n] = $0 } else ok += $1 }
+        function id(p) { gsub(/\./, "_", p); return p }
+        {
+            e[++m] = $0
+            if ($4) { v += $1; bad[++n] = $0 } else ok += $1
+            if (!($2 in layer)) order[++k] = $2
+            if (!($3 in layer)) order[++k] = $3
+            layer[$2] = $6; layer[$3] = $7
+        }
         END {
             print "## Package layering" >> out
             print "" >> out
-            if (n == 0) { printf "No layering violations (%d imports between packages).\n", ok >> out; exit 0 }
-            printf "**%d** violating import%s over **%d** edge%s, of %d imports between packages.\n",
-                v, v == 1 ? "" : "s", n, n == 1 ? "" : "s", v + ok >> out
-            print "" >> out
-            print "| Imports | From | To | Why |" >> out
-            print "|---:|---|---|---|" >> out
-            for (i = 1; i <= n; i++) {
-                split(bad[i], f, " ")
-                printf "| %d | `%s` | `%s` | %s |\n", f[1], f[2], f[3], why(f[5]) >> out
-                printf "::warning title=Layering violation::%s imports %s (%d import%s): %s\n",
-                    f[2], f[3], f[1], f[1] == 1 ? "" : "s", why(f[5])
+            if (n == 0) printf "No layering violations (%d imports between packages).\n", ok >> out
+            else {
+                printf "**%d** violating import%s over **%d** edge%s, of %d imports between packages.\n",
+                    v, v == 1 ? "" : "s", n, n == 1 ? "" : "s", v + ok >> out
+                print "" >> out
+                print "| Imports | From | To | Why |" >> out
+                print "|---:|---|---|---|" >> out
+                for (i = 1; i <= n; i++) {
+                    split(bad[i], f, " ")
+                    printf "| %d | `%s` | `%s` | %s |\n", f[1], f[2], f[3], why(f[5]) >> out
+                    printf "::warning title=Layering violation::%s imports %s (%d import%s): %s\n",
+                        f[2], f[3], f[1], f[1] == 1 ? "" : "s", why(f[5])
+                }
             }
+
+            # The whole graph, one box per layer, violations in red. Open by default only when it has some.
+            print "" >> out
+            printf "<details%s><summary>Import graph</summary>\n\n", n ? " open" : "" >> out
+            print "```mermaid" >> out
+            print "graph LR" >> out
+            split("kernel|C++|C++ shell|stabs|stabs shell", title, "|")
+            title[0] = "in no layer"
+            for (L = 0; L <= 5; L++) {
+                body = ""
+                for (j = 1; j <= k; j++) if (layer[p = order[j]] == L) body = body sprintf("    %s[\"%s\"]\n", id(p), p)
+                if (body != "") printf "  subgraph L%d[\"%d %s\"]\n%s  end\n", L, L, title[L], body >> out
+            }
+            red = ""
+            for (i = 1; i <= m; i++) {
+                split(e[i], f, " ")
+                printf "  %s -->|%d| %s\n", id(f[2]), f[1], id(f[3]) >> out
+                if (f[4]) red = red (red == "" ? "" : ",") (i - 1)
+            }
+            if (red != "") printf "  linkStyle %s stroke:#d1242f,stroke-width:2px,color:#d1242f\n", red >> out
+            print "```" >> out
+            print "" >> out
+            print "</details>" >> out
         }'
 }
 
