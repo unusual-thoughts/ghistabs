@@ -95,6 +95,20 @@ jobs:
             tools/stl-archives/run.sh compare probes/probe-$arch-release/stl_probe.exe archives/msvcp140_$arch.gdt refs/msvcp140_$arch.gdt
           done
 
+      # The layouts as this Ghidra reads them, for the compat job to compare its own reading against.
+      - name: Dump the archives
+        run: |
+          mkdir -p layouts
+          for gdt in archives/*.gdt; do
+            tools/stl-archives/run.sh dump ghicpp/src/test/resources/binaries/features/hello_msvc.exe "$gdt" layouts/$(basename "$gdt" .gdt).txt
+          done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: layouts
+          path: layouts/*.txt
+          if-no-files-found: error
+
       # One unzipped artifact per archive, so each downloads as its .gdt file.
       - uses: actions/upload-artifact@v7
         with:
@@ -131,3 +145,51 @@ jobs:
           path: archives/msvcp90_x64.gdt
           archive: false
           if-no-files-found: error
+
+  # ghicpp supports Ghidra 10.4 onwards, so every release it builds for must read the archives the
+  # 12.3 fork wrote, with the same types and layouts.
+  compat:
+    needs: archives
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ghidra: '10.4'
+            java: '17'
+          - ghidra: '11.4.3'
+            java: '21'
+          - ghidra: '12.0.4'
+            java: '21'
+          - ghidra: '12.1.3'
+            java: '21'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: ${{ matrix.ghidra }}
+          java-version: ${{ matrix.java }}
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: '*.gdt'
+          path: archives
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: layouts
+          path: expected
+
+      - name: Read the archives
+        run: |
+          mkdir -p layouts
+          status=0
+          for txt in expected/*.txt; do
+            name=$(basename "$txt" .txt)
+            gdt=$(find archives -name "$name.gdt" | head -1)
+            tools/stl-archives/run.sh dump ghicpp/src/test/resources/binaries/features/hello_msvc.exe "$gdt" layouts/$name.txt
+            diff -u "$txt" layouts/$name.txt > layouts/$name.diff || { echo "::error::$name reads differently"; head -40 layouts/$name.diff; status=1; }
+          done
+          exit $status
