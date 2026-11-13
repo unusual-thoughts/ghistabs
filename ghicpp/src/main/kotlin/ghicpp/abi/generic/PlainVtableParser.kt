@@ -96,7 +96,11 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
      * would derive from each other. A call on `this` + k is no evidence: it builds a member as well as a base, and
      * only a store of D's own table at k, which [PlainVtables] doesn't place, would tell them apart.
      */
-    fun inferBases(classes: Collection<PlainClass>, uses: Dissections) {
+    fun inferBases(
+        classes: Collection<PlainClass>,
+        uses: Dissections,
+        subobjects: Map<PlainClass, Map<Long, Boolean>> = emptyMap(),
+    ) {
         addStructors(uses)
         addSharedSlots()
         val direct = byClass.mapValues { (_, cs) -> cs.mostDerived(byClass) }
@@ -104,7 +108,36 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
             val base = direct[cls] ?: continue
             if (direct[base] != cls) cls.bases += ClassBase(base, isVirtual = false, Access.PUBLIC, 0L)
         }
+        for ((cls, offsets) in subobjects) {
+            val found = offsets.mapNotNull { (offset, isVirtual) ->
+                subobjectBase(cls, offset, uses)?.let { ClassBase(it, isVirtual, Access.PUBLIC, offset) }
+            }
+            // A virtual base may be one of another base's, which the complete-object constructor builds as well:
+            // not while a non-virtual subobject's class is unknown, as it may be the one deriving from it.
+            val unknown = offsets.count { !it.value } > found.count { !it.isVirtual }
+            for (base in found.filterNot { it.isVirtual && unknown }) {
+                if (cls.bases.none { it.cls == base.cls }) cls.bases += base
+            }
+        }
+        // A complete-object constructor builds every virtual base, its bases' too: one another base of the class
+        // derives from is that base's, not the class's own.
+        for (cls in subobjects.keys) {
+            cls.bases.removeAll { b -> b.isVirtual && cls.bases.any { it !== b && it.cls.derivesFrom(b.cls) } }
+        }
     }
+
+    /**
+     * The class of [cls]'s base subobject at [offset], where [cls] has a secondary table: the one class whose
+     * table the functions [cls]'s structors call on `this` + [offset] store. Once [cls]'s own table is known to
+     * sit there, such a call builds a base, not a member, which would have no table of [cls]'s in it.
+     */
+    private fun subobjectBase(cls: ClassDecl, offset: Long, uses: Dissections): ClassDecl? =
+        uses.stores.filterValues { cls in it.classes }.keys
+            .flatMap { f -> uses.subobjectCalls[f].orEmpty()[offset].orEmpty() }
+            .flatMap { uses.stores[it]?.classes.orEmpty() }
+            .filter { it != cls && !it.derivesFrom(cls) }
+            .toSet()
+            .let { bases -> bases.singleOrNull { b -> bases.all { it == b || b.derivesFrom(it) } } }
 }
 
 /**
@@ -160,11 +193,16 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
 
     override fun parse(monitor: TaskMonitor): ClassPassInput {
         monitor.message = "Reading vftable labels"
+        // The primary first, then its secondaries ([ClassNaming.plainSecondaryLabel]) by their subobjects' offsets.
         val classes = symbols.getSymbols(ClassNaming.VFTABLE).iterator().asSequence()
             .filter { it.isPlain() }
             .groupBy { it.parentNamespace.id }
             .values.map { labels ->
-                PlainClass(labels.first().parentNamespace, labels.map { PlainVtables.recordAt(program, it.address) })
+                val ns = labels.first().parentNamespace
+                val secondaries = symbols.getSymbols(ns).iterator().asSequence()
+                    .mapNotNull { sym -> ClassNaming.plainSubobjectOffset(sym.name)?.let { it to sym } }
+                    .sortedBy { it.first }.map { it.second }
+                PlainClass(ns, (labels + secondaries).map { PlainVtables.recordAt(program, it.address) })
             }
         val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
         val slots = classes.associateWith { c ->
@@ -175,9 +213,27 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             }
         }
         monitor.message = "Inferring bases from constructors"
-        BaseCandidates(slots).inferBases(classes, uses)
+        BaseCandidates(slots).inferBases(classes, uses, classes.associateWith(::subobjects))
         return ClassPassInput(classes, classes, holders(classes))
     }
+
+    /**
+     * The offsets of [cls]'s base subobjects that have secondary tables, each with whether the base is virtual:
+     * in an Itanium group, a virtual base's offset is one of the vbase offsets in front of the primary's
+     * `offset_to_top`.
+     */
+    private fun subobjects(cls: PlainClass): Map<Long, Boolean> {
+        val primary = cls.vftables.firstOrNull()?.addressPoint ?: return emptyMap()
+        val vbaseOffsets = (3..2 + MAX_VBASE_WORDS).mapNotNull { primary.signedWordBefore(it) }
+            .takeWhile { it in 1 until GenericVftableFinder.MAX_SUBOBJECT_OFFSET }.toSet()
+        return cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } }
+            .associateWith { it in vbaseOffsets }
+    }
+
+    private fun Address.signedWordBefore(words: Int): Long? = runCatching {
+        val at = subtractNoWrap(words * ptr)
+        if (ptr == 8L) program.memory.getLong(at) else program.memory.getInt(at).toLong()
+    }.getOrNull()
 
     /** Whether [this] labels a table no ABI's records describe, in a class that has none. */
     private fun Symbol.isPlain(): Boolean {
@@ -212,6 +268,9 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
     }
 
     private companion object {
+        /** How many vbase offsets to read in front of a primary table. */
+        const val MAX_VBASE_WORDS = 8
+
         /** The labels the RTTI of a class with any is laid under: Itanium's typeinfo and vtable, MSVC's records. */
         val RTTI_LABELS = setOf(
             ClassNaming.TYPEINFO,
