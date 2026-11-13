@@ -35,3 +35,4 @@ corpus.new/
 /build.*/
 ..bfg-report/
 .bfg-report/
+__pycache__/
