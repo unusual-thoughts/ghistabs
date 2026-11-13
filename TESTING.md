@@ -160,3 +160,8 @@ committed baseline, and a skipped suite writes no shifted baselines, so it never
 GitHub cancels whole runs, never one job, so to drop a slow suite, cancel the run once the other has
 finished: `baselines` still runs and checks the finished suite's results and baselines, and reports
 the cancelled one as a warning. It fails when every selected suite was cancelled.
+
+The `build` job also lists every compiler warning on the run's summary page, deprecated API use first,
+plus Gradle's own deprecations (`.github/scripts/build_warnings.py`), and annotates each compiler warning
+on the PR's diff. Warnings never fail the job. All jobs run on `ubuntu-26.04`, pinned rather than
+`ubuntu-latest`.

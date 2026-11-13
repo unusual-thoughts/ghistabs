@@ -26,13 +26,15 @@ concurrency:
 # run: setup-gradle saves the build cache from main and restores it everywhere. Tests are never cached
 # (ghidra-module.gradle.kts), so they always run.
 
+# Runners pinned to one image: the baselines' counters come from a fixed toolchain, and a new
+# ubuntu-latest should arrive as a reviewed change, not mid-PR.
 jobs:
   # Which integration suites this run needs: each one only when its project, or code both share,
   # changed (.github/scripts/changed_suites.py has the rules). A push to main, a manual run (unless it
   # asks for `changed`) and the run-all-integration PR label run both.
   changes:
     if: github.event.action != 'labeled' || github.event.label.name == 'run-all-integration'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       suites: ${{ steps.suites.outputs.suites }}
     steps:
@@ -64,7 +66,7 @@ jobs:
 
   build:
     if: github.event.action != 'labeled' || github.event.label.name == 'run-all-integration'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
       checks: write
@@ -98,6 +100,22 @@ jobs:
           name: detekt-report
           path: '**/build/reports/detekt/detekt.html'
 
+      # Recompiled even when the build cache has the classes (a restored compile prints nothing), so the
+      # summary lists every warning; --rerun still stores the result in the cache.
+      - name: Compile
+        shell: bash
+        run: >-
+          ./gradlew --build-cache --warning-mode all
+          compileKotlin --rerun compileTestKotlin --rerun compileCliKotlin --rerun compileTestFixturesKotlin --rerun
+          compileJava --rerun compileTestJava --rerun
+          2>&1 | tee "$RUNNER_TEMP/compile.log"
+
+      # Lists the compiler's deprecations and other warnings, and Gradle's own deprecations, on the run's
+      # summary page, with an annotation per compiler warning; does not fail the job.
+      - name: Summarize build warnings
+        if: success() || failure()
+        run: python3 .github/scripts/build_warnings.py "$RUNNER_TEMP/compile.log" --summary "$GITHUB_STEP_SUMMARY" --annotate
+
       - name: Run unit tests
         run: ./gradlew --build-cache test
 
@@ -126,7 +144,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.suites != '[]' && needs.changes.outputs.suites != ''
     name: integration (${{ matrix.suite }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       checks: write
@@ -212,7 +230,7 @@ jobs:
   baselines:
     needs: [ changes, build, integration ]
     if: always() && (github.event.action != 'labeled' || github.event.label.name == 'run-all-integration')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
         with:
