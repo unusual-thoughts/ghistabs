@@ -1,7 +1,6 @@
 package ghicpp.abi.itanium
 
 import ghicpp.abi.CxxAbi.Companion.prevailingAbi
-import ghicpp.recover.findPointers
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
@@ -9,6 +8,7 @@ import ghidrakt.BoolOption
 import ghidrakt.Demangler
 import ghidrakt.cStringAt
 import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.findPointers
 import ghidrakt.get
 import ghidrakt.isData
 import ghidrakt.pointerAt

@@ -1,7 +1,6 @@
 package ghicpp.dissect
 
 import ghicpp.ClassDecl
-import ghicpp.abi.PlainVtables
 import ghicpp.abi.StructorConvention
 import ghicpp.abi.StructorRole
 import ghicpp.abi.StructorRole.CONSTRUCTOR
@@ -366,7 +365,8 @@ class ThisFunctionDissector(
  */
 class DissectionCache(
     val fillArrays: Boolean = true,
-    val operatorNewNames: Set<String> = PlainVtables.operatorNewNames,
+    /** None by default: only a dissector given vptrs to look for reads a constructor inlined after one. */
+    val operatorNewNames: Set<String> = emptySet(),
 ) {
     /** A function, read for these vptrs, for what it stores only or loads too. */
     internal data class Key(
