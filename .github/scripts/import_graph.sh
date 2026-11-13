@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Package import graph for src/main, laid out as the layers with layering violations in red.
+# Package import graph for src/main, one cluster per layer, layering violations in red.
 #
 #   1 kernel        ghidrakt, ghidrakt.diagnose                 Ghidra/Kotlin extensions, diagnostics
 #                   (ghistabs, ghistabs.diagnose before the rename)
@@ -82,17 +82,32 @@ edges() {
 
 dot_source() {
     edges | awk '
-        BEGIN {
-            print "digraph {"
-            print "  rankdir=LR; node [shape=box style=rounded]; edge [fontsize=10];"
-        }
+        function q(p) { return "\"" p "\"" }
         {
-            cnt = $1; from = $2; to = $3; bad = $4
-            printf "  \"%s\" -> \"%s\" [label=%d penwidth=%.1f%s];\n",
-                from, to, cnt, 0.5 + cnt / 8.0, bad ? " color=red fontcolor=red" : ""
-            if (bad) v += cnt; else ok += cnt
+            e[++m] = $0
+            if (!($2 in layer)) order[++k] = $2
+            if (!($3 in layer)) order[++k] = $3
+            layer[$2] = $6; layer[$3] = $7
+            if ($4) v += $1; else ok += $1
         }
         END {
+            print "digraph {"
+            print "  rankdir=LR; newrank=true; node [shape=box style=rounded]; edge [fontsize=10];"
+            split("kernel|C++|C++ shell|stabs|stabs shell", title, "|")
+            title[0] = "in no layer"
+            # One cluster per layer, as in the mermaid render.
+            for (L = 0; L <= 5; L++) {
+                body = ""
+                for (j = 1; j <= k; j++) if (layer[p = order[j]] == L) body = body "    " q(p) ";\n"
+                if (body != "")
+                    printf "  subgraph cluster_%d {\n    label=\"%d %s\"; style=\"rounded,dashed\"; color=gray50;\n%s  }\n",
+                        L, L, title[L], body
+            }
+            for (i = 1; i <= m; i++) {
+                split(e[i], f, " ")
+                printf "  %s -> %s [label=%d penwidth=%.1f%s];\n",
+                    q(f[2]), q(f[3]), f[1], 0.5 + f[1] / 8.0, f[4] ? " color=red fontcolor=red" : ""
+            }
             printf "  labelloc=b; label=\"%d violating imports / %d total\";\n", v, v + ok
             print "}"
         }'
