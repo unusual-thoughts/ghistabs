@@ -21,7 +21,7 @@ running the same probe.
 
 ## Building one yourself
 
-`ghidra_scripts/MsvcStlArchiveScript.java` ships with the extension. Run it from the Script Manager on
+`ghicpp/ghidra_scripts/MsvcStlArchiveScript.java` ships with the ghicpp extension. Run it from the Script Manager on
 any program of the right architecture and point it at a PDB with type information, or headless:
 
 ```
