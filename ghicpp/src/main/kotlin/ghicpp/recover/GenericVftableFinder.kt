@@ -2,6 +2,8 @@ package ghicpp.recover
 
 import ghicpp.ClassNaming
 import ghicpp.abi.*
+import ghicpp.abi.generic.PlainVtableParser
+import ghicpp.abi.generic.PlainVtables
 import ghicpp.describeVxTable
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRangeImpl
@@ -19,21 +21,6 @@ import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
-
-/** Every aligned word in the initialized data blocks of the default space, with the address it holds. */
-fun Program.findPointers() = cursorAt().run {
-    sequence {
-        for (b in memory.blocks.filter {
-            it.isInitialized && !it.isExecute &&
-                it.start.addressSpace == addressFactory.defaultAddressSpace
-        }) {
-            seek(b.start.alignTo(defaultPointerSize.toLong()))
-            while (address in b) {
-                yield(address to (nextPointer() ?: break))
-            }
-        }
-    }
-}
 
 /** The word at [src] holding [dst], and where code refers to it ([refs]). */
 data class Pointer(val src: Address, val dst: Address, val refs: List<Address>)

@@ -3,6 +3,7 @@ package ghicpp.recover
 import ghicpp.MemberAttrs
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.StructorRole
+import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.classStruct
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
