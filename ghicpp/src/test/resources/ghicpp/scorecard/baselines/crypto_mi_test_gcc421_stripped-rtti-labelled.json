@@ -20,9 +20,9 @@
     "fields-fn": 4849,
     "fields-fp": 16,
     "fields-tp": 1570,
-    "methods-fn": 828,
-    "methods-fp": 133,
-    "methods-tp": 3716,
+    "methods-fn": 785,
+    "methods-fp": 146,
+    "methods-tp": 3759,
     "polymorphic-classes-fn": 0,
     "polymorphic-classes-fp": 0,
     "polymorphic-classes-tp": 520,
@@ -35,7 +35,7 @@
     "vftables-fn": 0,
     "vftables-fp": 0,
     "vftables-tp": 520,
-    "virtual-methods-fn": 329,
-    "virtual-methods-fp": 6,
+    "virtual-methods-fn": 6,
+    "virtual-methods-fp": 0,
     "virtual-methods-tp": 2530
 }

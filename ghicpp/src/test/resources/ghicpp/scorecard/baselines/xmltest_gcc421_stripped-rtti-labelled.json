@@ -21,7 +21,7 @@
     "fields-fp": 1,
     "fields-tp": 333,
     "methods-fn": 281,
-    "methods-fp": 18,
+    "methods-fp": 19,
     "methods-tp": 680,
     "polymorphic-classes-fn": 0,
     "polymorphic-classes-fp": 0,
@@ -36,6 +36,6 @@
     "vftables-fp": 0,
     "vftables-tp": 71,
     "virtual-methods-fn": 6,
-    "virtual-methods-fp": 6,
+    "virtual-methods-fp": 0,
     "virtual-methods-tp": 371
 }
