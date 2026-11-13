@@ -10,9 +10,9 @@ import ghidrakt.Demangler
 import ghidrakt.DtmRegistry
 import ghidrakt.demanglerPath
 import ghidrakt.diagnose.DiagnosticSink
-import ghistabs.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.index.*
+import ghistabs.index.StabsDiagnostics
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId

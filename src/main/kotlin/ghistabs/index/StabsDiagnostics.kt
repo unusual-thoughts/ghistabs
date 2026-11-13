@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.index
 
 import ghidra.program.model.address.Address
 import ghidrakt.diagnose.DiagnosticSink

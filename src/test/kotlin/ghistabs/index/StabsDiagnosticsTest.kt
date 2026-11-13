@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.index
 
 import ghidrakt.diagnose.*
 import ghidrakt.test.must

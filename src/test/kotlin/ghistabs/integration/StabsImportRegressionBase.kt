@@ -29,7 +29,9 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 import ghidrakt.diagnose.CapturingSink
+import ghidrakt.isAllPadding
 import ghidrakt.test.*
+import ghidrakt.tiles
 import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.Observations
@@ -45,11 +47,9 @@ import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
 import ghistabs.index.hasPolymorphicBaseSubobject
 import ghistabs.index.vptrOffsetBytesOf
-import ghistabs.isAllPadding
 import ghistabs.materialize.conflictCount
 import ghistabs.parse.*
 import ghistabs.test.*
-import ghistabs.tiles
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.encodeToStream
 import org.junit.jupiter.api.*

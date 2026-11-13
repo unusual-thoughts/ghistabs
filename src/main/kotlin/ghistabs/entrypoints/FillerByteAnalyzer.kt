@@ -13,14 +13,14 @@ import ghidra.program.model.data.AlignmentDataType
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghidrakt.MAX_FILL
 import ghidrakt.addressesBefore
 import ghidrakt.diagnose.report
+import ghidrakt.fillJumpLength
 import ghidrakt.forceCreateData
 import ghidrakt.instructionAt
+import ghidrakt.nopRunLength
 import ghidrakt.plus
-import ghistabs.MAX_FILL
-import ghistabs.fillJumpLength
-import ghistabs.nopRunLength
 
 /**
  * Marks compiler alignment padding in executable memory as [AlignmentDataType], so downstream passes

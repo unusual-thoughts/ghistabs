@@ -8,7 +8,6 @@ import ghidrakt.test.must
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeIn
 import ghidrakt.test.mustNotBe
-import ghistabs.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*

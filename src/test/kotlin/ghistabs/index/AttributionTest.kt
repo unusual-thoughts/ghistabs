@@ -2,7 +2,6 @@ package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghidrakt.test.mustBe
-import ghistabs.StabsDiagnostics
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.parse.*
