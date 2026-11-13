@@ -8,6 +8,7 @@ import ghidra.program.model.address.Address
 import ghidrakt.get
 import ghidrakt.getScalar
 import ghidrakt.loadProgram
+import ghidrakt.test.TestBinaries
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeTrue
 import ghistabs.integration.FeatureFixtureTest
@@ -57,7 +58,7 @@ class VtableRecordIntegrationTest : FeatureFixtureTest() {
     @Test
     fun `a primary record with no typeinfo ends its header where its slots start`() {
         // No stabs to import: the loader's symbols are enough.
-        loadProgram(File(FEATURES, "hello_elf64_gcc13_nortti"), "gcc").use { loaded ->
+        loadProgram(File(TestBinaries.HELLOS, "hello_elf64_gcc13_nortti"), "gcc").use { loaded ->
             val program = loaded.program
             for (name in listOf("_ZTV7Diamond", "_ZTV4Down", "_ZTV4Both")) {
                 val ztv = program.symbolTable.getSymbols(name).single().address
