@@ -9,8 +9,14 @@ import kotlin.io.path.Path
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
-fun Project.envOrProp(key: String) = System.getenv(key)?.ifBlank { null }
-    ?: findProperty(key)?.toString()?.ifBlank { null }
+/**
+ * The environment variable [key], else the Gradle property (`-P`, `gradle.properties`,
+ * `ORG_GRADLE_PROJECT_<key>`). Read through [providers][Project.getProviders], which are build-wide,
+ * rather than `findProperty`: that would also find the root project's extras from a subproject, an
+ * implicit parent lookup Gradle 10 makes an error. Each project caches its own answer in [getOrCreate].
+ */
+fun Project.envOrProp(key: String) = providers.environmentVariable(key).orNull?.ifBlank { null }
+    ?: providers.gradleProperty(key).orNull?.ifBlank { null }
 
 @Suppress("UNCHECKED_CAST")
 fun <V> ExtraPropertiesExtension.getOrCreate(key: String, create: () -> V): V = when {
