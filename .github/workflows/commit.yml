@@ -40,7 +40,7 @@ jobs:
       # Reports imports that point up the package layers on the run's summary page; does not fail the job.
       - name: Check package layering
         if: success() || failure()
-        run: .github/scripts/import_graph.sh --markdown "$GITHUB_STEP_SUMMARY"
+        run: python3 .github/scripts/import_graph.py --markdown "$GITHUB_STEP_SUMMARY"
 
       - name: Upload detekt report
         if: steps.detekt.conclusion == 'failure'
