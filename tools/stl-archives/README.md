@@ -38,12 +38,15 @@ Which runtime builds have typed public PDBs is not obvious: for msvcp80 and msvc
 
 ## In ghicpp
 
-ghicpp bundles the six archives' layouts as text, under `ghicpp/src/main/resources/ghicpp/stl/`:
-a `.gdt` written by Ghidra 12.3 opens only on 12.3 or newer, and ghicpp supports 10.4 onwards.
-[`ExportStlLayouts.java`](ExportStlLayouts.java) writes that text (`run.sh layouts <program> <archive> <out.txt>`)
-and describes its format. ghicpp's `MSVC standard library layouts` analyzer reads the `MSVCP<nn>[D].DLL`
-a PE program imports and its pointer size, builds the matching runtime's types, and replaces each empty
-`std` struct the Microsoft demangler made (`/Demangler/std/...`) with the type at the same path. The
-workflow exports the layouts of the archives it builds as the `layouts` artifact, and warns when they
-no longer match the bundled copies. [`LayoutsToGdt.java`](LayoutsToGdt.java) turns that text back into a
-`.gdt` on whichever Ghidra runs it (`run.sh gdt <program> <layouts.txt> <out.gdt>`).
+ghicpp ships the six 10.4 archives in `ghicpp/data/typeinfo/msvc/`, where Ghidra lists them with its own
+archives (the ghistabs extension carries them too). Its `MSVC standard library layouts` analyzer reads the
+`MSVCP<nn>[D].DLL` a PE program imports and its pointer size, opens the matching archive, and replaces each
+empty `std` struct the Microsoft demangler made (`/Demangler/std/...`) with the archive's type at the same
+path. Only those types are resolved, with what they depend on, and they stay linked to the archive. To
+refresh the copies, download this workflow's `.gdt` artifacts into that folder; the workflow warns when a
+fresh build no longer matches them.
+
+The archives travel between Ghidra versions as text: [`ExportStlLayouts.java`](ExportStlLayouts.java)
+writes it (`run.sh layouts <program> <archive> <out.txt>`) and describes the format, and
+[`LayoutsToGdt.java`](LayoutsToGdt.java) turns it back into a `.gdt` on whichever Ghidra runs it
+(`run.sh gdt <program> <layouts.txt> <out.gdt>`).
