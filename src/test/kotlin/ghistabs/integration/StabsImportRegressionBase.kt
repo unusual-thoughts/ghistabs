@@ -29,12 +29,12 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 import ghidrakt.diagnose.CapturingSink
-import ghidrakt.diagnose.dumpJson
-import ghidrakt.diagnose.writeRegistryDump
 import ghidrakt.test.*
 import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.Observations
+import ghistabs.cli.dumpJson
+import ghistabs.cli.writeRegistryDump
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.harvest.Type
 import ghistabs.importer.*

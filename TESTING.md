@@ -22,7 +22,7 @@ import with `kotlinx-serialization-json` off the classpath, since main declares 
 extension ships without it. Run it after touching dependencies, or after adding a `@Serializable` /
 `Json` use anywhere under `src/main/` — if the analyzer path ever reaches for the JSON format, this is
 what turns a GUI-only `NoClassDefFoundError` into a build failure. Dumps live in the `cli` source set
-(`ghidrakt.diagnose.Dumps`) for the same reason; tests get them off the cli output.
+(`ghistabs.cli.Dumps`) for the same reason; tests get them off the cli output.
 
 All three print per-test PASS/FAIL/SKIP and a final summary line to the console of the same
 command (no XML/HTML spelunking), and archive their report to a per-run timestamped dir

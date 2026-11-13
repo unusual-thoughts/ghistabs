@@ -14,7 +14,6 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
 import ghidra.program.util.GhidraProgramUtilities
-import ghidrakt.diagnose.writeDump
 import ghidrakt.runTransaction
 import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StabsAnalyzer
