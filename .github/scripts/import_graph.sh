@@ -92,10 +92,9 @@ dot_source() {
         }
         END {
             print "digraph {"
-            # Top-down, so the layers stack 5 → 1 and every allowed edge points down. Counts go in xlabel:
-            # graphviz 2.42 fails in init_rank on labelled edges between clusters, and newrank (the
-            # other way round it) lets the clusters overlap.
-            print "  rankdir=TB; compound=true; node [shape=box style=rounded]; edge [fontsize=10];"
+            # Counts go in xlabel: graphviz 2.42 fails in init_rank on labelled edges between clusters,
+            # and newrank (the other way round it) lets the clusters drift apart.
+            print "  rankdir=LR; compound=true; node [shape=box style=rounded]; edge [fontsize=10];"
             split("kernel|C++|C++ shell|stabs|stabs shell", title, "|")
             title[0] = "in no layer"
             # One cluster per layer, as in the mermaid render.
@@ -103,7 +102,7 @@ dot_source() {
                 body = ""
                 for (j = 1; j <= k; j++) if (layer[p = order[j]] == L) body = body "    " q(p) ";\n"
                 # An invisible point per cluster anchors the layer-to-kernel edges below. Outside the
-                # kernel it ranks below every package of its layer, so the kernel lands at the bottom.
+                # kernel it ranks after every package of its layer, so the kernel lands at the far end.
                 if (body != "")
                     printf "  subgraph cluster_%d {\n    label=\"%d %s\"; style=\"rounded,dashed\"; color=gray50;\n    anchor_%d [shape=point style=invis width=0];\n%s  }\n",
                         L, L, title[L], L, body
@@ -113,7 +112,7 @@ dot_source() {
                 # Every layer may import the kernel, so those imports are drawn as one edge per layer,
                 # cluster to cluster, below rather than package by package.
                 if (!f[4] && f[7] == 1 && f[6] != 1) { tokernel[f[6]] += f[1]; continue }
-                # A violation does not rank, so the layout keeps the layer order and the red edge points up.
+                # A violation does not rank, so the layout keeps the layer order and the red edge points back.
                 printf "  %s -> %s [xlabel=%d penwidth=%.1f%s];\n",
                     q(f[2]), q(f[3]), f[1], 0.5 + f[1] / 8.0, f[4] ? " color=red fontcolor=red constraint=false" : ""
             }
