@@ -35,9 +35,11 @@ Which runtime builds have typed public PDBs is not obvious: for msvcp80 and msvc
 
 ## In ghicpp
 
-ghicpp bundles copies of the six archives under `ghicpp/src/main/resources/ghicpp/stl/`. Its
-`MSVC standard library layouts` analyzer reads the `MSVCP<nn>[D].DLL` a PE program imports and its pointer
-size, picks the matching archive, and replaces each empty `std` struct the Microsoft demangler made
-(`/Demangler/std/...`) with the archive's type at the same path. To refresh the copies, download the
-workflow's artifacts and drop them in that folder. The workflow's `compat` job checks that Ghidra 10.4,
-11.4, 12.0 and 12.1 read the archives exactly as the 12.3 build that wrote them.
+ghicpp bundles the six archives' layouts as text, under `ghicpp/src/main/resources/ghicpp/stl/`:
+a `.gdt` written by Ghidra 12.3 opens only on 12.3 or newer, and ghicpp supports 10.4 onwards.
+[`ExportStlLayouts.java`](ExportStlLayouts.java) writes that text (`run.sh layouts <program> <archive> <out.txt>`)
+and describes its format. ghicpp's `MSVC standard library layouts` analyzer reads the `MSVCP<nn>[D].DLL`
+a PE program imports and its pointer size, builds the matching runtime's types, and replaces each empty
+`std` struct the Microsoft demangler made (`/Demangler/std/...`) with the type at the same path. The
+workflow exports the layouts of the archives it builds as the `layouts` artifact, and warns when they
+no longer match the bundled copies.
