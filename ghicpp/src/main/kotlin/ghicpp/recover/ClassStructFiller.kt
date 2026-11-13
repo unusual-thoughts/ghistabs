@@ -68,7 +68,7 @@ class ClassStructFiller(
         // Any struct with fields is another's, the stabs import's, the script's, a PDB's, or an earlier pass's.
         if (struct.numDefinedComponents > 0 || struct.isZeroLength) return false.also { struct.fillData(store) }
         val bases = bases.filterNot { it.isVirtual }
-        for (base in bases) struct.placeBase(base, bases.size, ns)
+        for (base in bases) struct.placeBase(base, bases, ns)
         for (at in vbptrs) struct.placeVbptr(at.toInt(), ns)
         vbases.placeAll(listOf(this))
         val records = vftables.mapNotNull { r ->
@@ -83,12 +83,14 @@ class ClassStructFiller(
         return true
     }
 
-    private fun Structure.placeBase(base: ClassBase, count: Int, ns: GhidraClass) {
+    private fun Structure.placeBase(base: ClassBase, all: List<ClassBase>, ns: GhidraClass) {
+        val count = all.size
         val at = base.offset?.toInt() ?: return
         val qualified = ns.getName(true)
         val whole = base.cls.ns?.toClass()?.let(program::classStruct)?.takeUnless { it.isZeroLength }
         if (whole == null) return degradation("base-undefined", qualified.member(base.cls.name), "no struct for it")
-        val dt = nonVirtualSize(base.cls)?.takeIf { it < whole.length }?.let { selfBaseOf(whole, it) } ?: whole
+        val dt = (nonVirtualSize(base.cls) ?: roomForNonVirtualPart(base.cls, at, whole, all))
+            ?.takeIf { it < whole.length }?.let { selfBaseOf(whole, it) } ?: whole
         layoutProblem(at, dt)?.let { return degradation("base-layout-failed", qualified.member(dt.name), it) }
         placeBase(
             this,
@@ -101,8 +103,31 @@ class ClassStructFiller(
         )
     }
 
-    /** Where [cls]'s first virtual base sits, which its non-virtual part ends before; null without one. */
-    private fun nonVirtualSize(cls: ClassDecl) = cls.virtualBases.mapNotNull { it.offset?.toInt() }.minOrNull()
+    /**
+     * Where [cls]'s first virtual base sits, which its non-virtual part ends before, named or not
+     * ([ClassDecl.vbaseOffsets]); null without one.
+     */
+    private fun nonVirtualSize(cls: ClassDecl) =
+        (cls.virtualBases.mapNotNull { it.offset } + cls.vbaseOffsets).minOrNull()?.toInt()
+
+    /**
+     * The room this struct has at [at] for [cls], a base whose virtual bases sit where nothing says: up to the next
+     * of the class's bases ([all]), or field laid already, or the end. The non-virtual part fits there, where the
+     * whole class, its virtual bases counted in its size, may run on over the fields after it. Null for a class
+     * without virtual bases, or where the whole of it fits.
+     */
+    private fun Structure.roomForNonVirtualPart(
+        cls: ClassDecl,
+        at: Int,
+        whole: Structure,
+        all: List<ClassBase>,
+    ): Int? {
+        if (cls.virtualBases.isEmpty() && cls.bases.none { it.isVirtual }) return null
+        val next = (all.mapNotNull { it.offset?.toInt() } + definedComponents.map { it.offset })
+            .filter { it > at }.minOrNull() ?: length
+        if (at + whole.length <= next && layoutProblem(at, whole) == null) return null
+        return (next - at).takeIf { it > 0 }
+    }
 
     /**
      * [cls]'s first [size] bytes as a struct of their own, filed where Ghidra's PDB importer files a class's
