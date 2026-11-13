@@ -114,6 +114,43 @@ jobs:
           path: layouts/*.txt
           if-no-files-found: error
 
+  # A .gdt opens on the Ghidra that wrote it and newer ones, so the published archives are rebuilt from
+  # the layouts on the oldest release ghicpp supports, and must read back to the same text.
+  portable:
+    needs: archives
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: '10.4'
+          java-version: '17'
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: layouts
+          path: layouts
+
+      - name: Build the archives on Ghidra 10.4
+        run: |
+          mkdir -p archives readback
+          program=ghicpp/src/test/resources/binaries/features/hello_msvc.exe
+          for txt in layouts/*.txt; do
+            name=$(basename "$txt" .txt)
+            tools/stl-archives/run.sh gdt $program "$txt" archives/$name.gdt
+            tools/stl-archives/run.sh layouts $program archives/$name.gdt readback/$name.txt
+            diff -u "$txt" readback/$name.txt | head -40
+            cmp -s "$txt" readback/$name.txt
+          done
+
+      # Zipped, for the compat job: download-artifact cannot fetch the unzipped ones below.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: portable-archives
+          path: archives/*.gdt
+          if-no-files-found: error
+
       # One unzipped artifact per archive, so each downloads as its .gdt file.
       - uses: actions/upload-artifact@v7
         with:
@@ -151,3 +188,44 @@ jobs:
           archive: false
           if-no-files-found: error
 
+  # Every newer Ghidra opens the 10.4 archives and reads the same layouts out of them.
+  compat:
+    needs: portable
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ghidra: '11.4.3'
+          - ghidra: '12.0.4'
+          - ghidra: '12.1.3'
+          - ghidra: '12.3'
+            repo: unusual-thoughts/ghidra
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: ${{ matrix.ghidra }}
+          repo: ${{ matrix.repo }}
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: layouts
+          path: layouts
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: portable-archives
+          path: archives
+
+      - name: Read the archives
+        run: |
+          mkdir -p readback
+          status=0
+          for txt in layouts/*.txt; do
+            name=$(basename "$txt" .txt)
+            tools/stl-archives/run.sh layouts ghicpp/src/test/resources/binaries/features/hello_msvc.exe archives/$name.gdt readback/$name.txt
+            cmp -s "$txt" readback/$name.txt || { echo "::error::$name reads differently"; diff -u "$txt" readback/$name.txt | head -40; status=1; }
+          done
+          exit $status
