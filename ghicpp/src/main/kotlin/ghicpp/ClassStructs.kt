@@ -122,10 +122,18 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
  * `<Class>_data` struct, where it goes over the plain fields there. That struct [stretch]es to hold it where it
  * starts before or ends past it, and [owner] grows where it ends past the end. Anywhere else it goes only over
  * undefined bytes: a vptr, another class's fields or another member in the way leaves it unplaced, with a warning.
+ *
+ * But for [owner]'s own vptr right where it goes: one of a class's vptrs past its start is a secondary one, and what
+ * its constructors build there is the base subobject holding it, as a member couldn't. It goes over that vptr, then
+ * gives it back to [owner], split around it as a base is ([BaseSplitter.splitBase]), where the member has a vptr
+ * of its own there; one known only from its constructors, which store the vptr as a plain field, keeps it whole.
  */
 internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Structure) {
     if (member == owner) return
     val field = ClassNaming.fieldName(at)
+    fun DataTypeComponent.isOwnVfptr(into: Structure) =
+        into == owner && at > 0 && this.offset == at && fieldName == ClassUtils.VFPTR
+    val vfptr = owner.definedComponents.firstOrNull { it.isOwnVfptr(owner) }?.dataType
     fun unplaced(into: Structure, why: List<DataTypeComponent>) = degradation(
         "member-unplaced",
         "${owner.name}::$field",
@@ -137,7 +145,7 @@ internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Struc
     var ownData = false
     while (!ownData) {
         val range = offset.withLength(member.length)
-        val inWay = into.componentsOverlapping(range).filterNot { it.isAt(offset, member) }
+        val inWay = into.componentsOverlapping(range).filterNot { it.isAt(offset, member) || it.isOwnVfptr(into) }
         val part = inWay.singleOrNull()?.takeIf { it.dataType is Structure }
         when {
             inWay.isEmpty() -> break
@@ -162,9 +170,19 @@ internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Struc
         .filter { it.dataType is Structure && !it.isAt(offset, member) }
     if (clash.isNotEmpty()) return unplaced(into, clash)
     runCatching { into.lay(offset, member, field, "member or base") }
-        .onSuccess { debug("member-placed", "${member.name} at +$at in ${owner.name}") }
+        .onSuccess { laid ->
+            debug("member-placed", "${member.name} at +$at in ${owner.name}")
+            if (vfptr != null && into == owner && member.holdsVfptrAt(0)) {
+                BaseSplitter(DtmRegistry(owner.dataTypeManager), this)
+                    .splitBase(owner, listOf(owner.name), at, laid, vfptr)
+            }
+        }
         .onFailure { degradation("member-unplaced", "${owner.name}::$field", it.message) }
 }
+
+/** Whether this struct's own `{vfptr}` sits at [at]. */
+private fun Structure.holdsVfptrAt(at: Int) =
+    definedComponents.any { it.offset == at && it.fieldName == ClassUtils.VFPTR }
 
 /** Whether this is [member] laid at [at] already. */
 private fun DataTypeComponent.isAt(at: Int, member: Structure) = dataType == member && offset == at
