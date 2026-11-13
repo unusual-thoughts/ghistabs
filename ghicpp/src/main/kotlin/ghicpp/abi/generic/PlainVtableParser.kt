@@ -21,10 +21,14 @@ import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
 import ghidrakt.minus
 
-/** A class known by its vftables alone, with no RTTI to give it bases: those its structors show ([inferBases]). */
+/**
+ * A class known by its vftables alone, with no RTTI to give it bases: those its structors show ([inferBases]). Its
+ * [virtualBases] are its direct virtual ones, each where the secondary table its subobject has sits.
+ */
 class PlainClass(override val ns: Namespace, override val vftables: List<VtableRecord>) : ClassDecl {
     override val name: String get() = ns.name
     override val bases = mutableListOf<ClassBase>()
+    override val virtualBases get() = bases.filter { it.isVirtual }.map { it.copy(offsetSource = SourceType.ANALYSIS) }
 }
 
 /** The candidate bases of each class, as [inferBases] finds them, off their tables' [slots]. */

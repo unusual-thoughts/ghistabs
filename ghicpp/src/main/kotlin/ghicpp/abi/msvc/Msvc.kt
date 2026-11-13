@@ -60,6 +60,8 @@ object Msvc : CxxAbi {
 
     override val virtualBaseRecord get() = "vbtable"
 
+    override val vtableName get() = "vftable"
+
     override val mangledOperatorNew get() = setOf("??2@YAPAXI@Z", "??2@YAPEAX_K@Z")
 
     override val mangledOperatorDelete get() = setOf(
