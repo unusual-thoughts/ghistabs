@@ -8,9 +8,8 @@
 #   3 stabs         parse → harvest → index → materialize → scan → importer → render → entrypoints
 #                   (entrypoints: the stabs analyzer, plugin and exporters, the last stage)
 #
-#   C++ stages      ghicpp, ghicpp.abi (model, ABI interfaces) → ghicpp.dissect, ghicpp.eh →
-#                   ghicpp.abi.* (ABI implementations) → ghicpp.structs → ghicpp.recover →
-#                   ghicpp.hierarchy → ghicpp.analyzers → ghicpp.gui
+#   C++ stages      ghicpp (model) → ghicpp.dissect, ghicpp.eh → ghicpp.abi → ghicpp.structs →
+#                   ghicpp.recover → ghicpp.hierarchy → ghicpp.analyzers → ghicpp.gui
 #
 # An edge is a violation when it points up this stack: a layer importing a higher one (so ghicpp
 # importing any stabs stage), or an earlier stage of a layer importing a later one. An edge that closes
@@ -39,12 +38,7 @@ edges() {
     git grep --untracked -h -oP "^(package [\w.]+|import (${ROOTS})(\.\w+)*)" -- \
         ":(glob)src/main/**" ":(glob)*/src/main/**" ":(exclude)build-logic/**" |
         awk '
-            # Two levels, but three under ghicpp.abi: its interfaces and its implementations are
-            # different stages.
-            function fold(p,   n, a, d) {
-                n = split(p, a, "."); d = (a[1] "." a[2] == "ghicpp.abi") ? 3 : 2
-                return n > d ? (d == 3 ? a[1] "." a[2] "." a[3] : a[1] "." a[2]) : p
-            }
+            function fold(p,   n, a) { n = split(p, a, "."); return n > 2 ? a[1] "." a[2] : p }
             # The deepest declared package that prefixes the imported name, folded.
             function owner(name,   p) {
                 p = name
@@ -77,17 +71,15 @@ edges() {
             # of a cycle. Absent: a package of that layer no stage was given.
             function stageOf(p,   n) {
                 if (p in stage) return stage[p]
-                if (p ~ /^ghicpp\.abi\./) return stage["ghicpp.abi.*"]
                 return ""
             }
             BEGIN {
                 n = split("parse harvest index materialize scan importer render entrypoints", s, " ")
                 for (i = 1; i <= n; i++) stage["ghistabs." s[i]] = i
-                # model and ABI interfaces → dissect, eh → ABI implementations → structs → recover →
-                # hierarchy → analyzers → gui
-                stage["ghicpp"] = stage["ghicpp.abi"] = 1
+                # model → dissect, eh → abi → structs → recover → hierarchy → analyzers → gui
+                stage["ghicpp"] = 1
                 stage["ghicpp.dissect"] = stage["ghicpp.eh"] = 2
-                stage["ghicpp.abi.*"] = 3
+                stage["ghicpp.abi"] = 3
                 stage["ghicpp.structs"] = 4
                 stage["ghicpp.recover"] = 5
                 stage["ghicpp.hierarchy"] = 6
