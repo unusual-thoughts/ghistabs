@@ -59,25 +59,43 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         .filter { it.parentNamespace.name.startsWith(GenericVftableFinder.SEEDED_CLASS_PREFIX) }
         .associate { it.address.subtract(program.imageBase) to program.listing.getDataAt(it.address).numComponents }
 
+    /** Each secondary table seeded, by its offset from the image base: its primary's, and its subobject's offset. */
+    private fun secondaries(): Map<Long, Pair<Long, Long>> =
+        program.symbolTable.getSymbolIterator(true).iterator().asSequence()
+            .mapNotNull { sym -> ClassNaming.plainSubobjectOffset(sym.name)?.let { sym to it } }
+            .filter { (sym, _) -> sym.parentNamespace.name.startsWith(GenericVftableFinder.SEEDED_CLASS_PREFIX) }
+            .associate { (sym, offset) ->
+                val primary = program.symbolTable.getSymbols(sym.parentNamespace).iterator().asSequence()
+                    .first { it.name == ClassNaming.VFTABLE }
+                sym.address.subtract(program.imageBase) to (primary.address.subtract(program.imageBase) to offset)
+            }
+
     @Test
-    fun `every vtable a constructor stores is seeded with its slots, and no GOT entry it loads`() {
+    fun `every primary vtable a constructor stores is seeded with its slots, and no GOT entry it loads`() {
         seeded() mustBe mapOf(
             0x6930L to 4, // Circle
             0x6960L to 3, // Secret
             0x6988L to 3, // Logger
             0x69b8L to 3, // Both
-            0x69e8L to 3, // Both, for Down
-            0x6a20L to 3, // Both, for Core
             0x6b58L to 3, // Down
-            0x6b90L to 3, // Down, for Core
             0x6bc8L to 3, // Core
             0x6bf0L to 5, // Label
-            0x6c28L to 2, // Label, for Named
             0x6c48L to 5, // Rect
             0x6c88L to 2, // Diamond
-            0x6cc0L to 2, // Diamond, for Named
             0x6d00L to 2, // Named
             0x6d20L to 4, // Shape
+        )
+    }
+
+    /** Off the `offset_to_top` word in front of each, which is minus its subobject's offset. */
+    @Test
+    fun `a secondary vtable joins the class of the primary its group opens with, at its subobject's offset`() {
+        secondaries() mustBe mapOf(
+            0x69e8L to (0x69b8L to 16L), // Both, for Down
+            0x6a20L to (0x69b8L to 32L), // Both, for its virtual Core
+            0x6b90L to (0x6b58L to 16L), // Down, for its virtual Core
+            0x6c28L to (0x6bf0L to 32L), // Label, for Named
+            0x6cc0L to (0x6c88L to 32L), // Diamond, for Named
         )
     }
 
@@ -102,12 +120,16 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         val bases = program.readClassRecord().orEmpty().entries
             .filter { (_, e) -> e.bases.isNotEmpty() }
             .associate { (id, e) -> table(id) to e.bases.map { table(it.namespaceId) } }
-        // Each primary table only: a base at an offset, as Label's Named and every virtual one, goes unseen.
+        // A base at an offset, off the class's secondary table there and the constructor called on it. Both's Up
+        // and Down have no tables of their own, only construction ones, so Both's bases go unseen, and with them
+        // whether its virtual Core is its own.
         bases mustBe mapOf(
             0x6930L to listOf(SHAPE), // Circle
             0x6960L to listOf(0x6988L), // Secret : Logger
-            0x6bf0L to listOf(0x6c48L), // Label : Rect
+            0x6b58L to listOf(0x6bc8L), // Down : virtual Core
+            0x6bf0L to listOf(0x6c48L, 0x6d00L), // Label : Rect, Named
             0x6c48L to listOf(SHAPE), // Rect
+            0x6c88L to listOf(0x6d00L), // Diamond : Named, past its Left and Right, which have no table of their own
         )
     }
 

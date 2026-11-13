@@ -1,5 +1,6 @@
 package ghicpp.abi.generic
 
+import ghicpp.ClassNaming
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.VtableRecord
 import ghicpp.abi.gcc2.Gcc2Plain
@@ -19,7 +20,9 @@ object PlainVtables : CxxAbi {
 
     override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 
-    override fun vfptrOffsetOf(record: VtableRecord, program: Program) = 0L
+    /** 0 for a class's primary; a secondary's own label says its subobject's ([ClassNaming.plainSecondaryLabel]). */
+    override fun vfptrOffsetOf(record: VtableRecord, program: Program) = program.symbolTable.getSymbols(record.address)
+        .firstNotNullOfOrNull { ClassNaming.plainSubobjectOffset(it.name) } ?: 0L
 
     override fun isPureVirtualStub(name: String) = abis.any { it.isPureVirtualStub(name) }
 

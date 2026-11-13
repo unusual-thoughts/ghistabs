@@ -61,6 +61,18 @@ object ClassNaming {
     /** The label of a class's table serving [base], once the class has more than one: `vftable_for_<base>`. */
     fun vftableForLabel(base: String) = VFTABLE_FOR + base
 
+    /**
+     * The label of a class's secondary table, found with no RTTI to name the base it serves: `vftable_for_base_at_<k>`,
+     * for the subobject at offset [offset].
+     */
+    fun plainSecondaryLabel(offset: Long) = vftableForLabel("$BASE_AT$offset")
+
+    /** The subobject offset a [plainSecondaryLabel] names; null for any other name. */
+    fun plainSubobjectOffset(name: String): Long? =
+        name.takeIf { it.startsWith(vftableForLabel(BASE_AT)) }?.removePrefix(vftableForLabel(BASE_AT))?.toLongOrNull()
+
+    private const val BASE_AT = "base_at_"
+
     /** Whether [name] labels one of a class's own vftables: `vftable`, `internal_vftable`, `vftable_for_<Base>`. */
     fun isClassVftableLabel(name: String) =
         name == VFTABLE || name == vftableLabel(internal = true) || name.startsWith(vftableForLabel(""))
