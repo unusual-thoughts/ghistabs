@@ -143,3 +143,16 @@ narrowing — parameterised suites draw their list from it (`select(...)` or `@M
 - Logic testable without a real binary → a `test` (unit) test, or a synthetic behavioural class.
 - A C++ test → `ghicpp/src/test/`, unless it imports stabs; then the root's `src/test/`, in the same package.
 - A diagnostic dump with no assertion → tag it `@Tag("probe")`, not `integration`.
+
+## In CI
+
+CI runs each project's `integrationTest` in its own job, side by side, and only when the change can
+affect it: a change under `ghicpp/` runs ghicpp's, one under `src/` (or the root build files) runs
+ghistabs', and a change to what both use (`ghidrakt/`, `build-logic/`, Gradle, the CI workflow, the
+binary fixtures) runs both. Docs and lint configs run neither. `.github/scripts/changed_suites.py`
+holds the rules; `--self-test` checks them.
+
+Both suites run anyway on a push to `main`, on a manual run of the workflow (its `integration` input
+set to `all`, the default), and on a PR carrying the **`run-all-integration`** label; adding the label
+starts the run. The `baselines` job always runs: it fails when any job failed or a counter left its
+committed baseline, and a skipped suite writes no shifted baselines, so it never counts as a move.

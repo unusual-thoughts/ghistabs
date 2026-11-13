@@ -5,16 +5,65 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+    # `labeled`, so adding run-all-integration starts a full run without a push.
+    types: [ opened, synchronize, reopened, labeled ]
   workflow_dispatch:
+    inputs:
+      integration:
+        description: Integration suites to run
+        type: choice
+        options: [ all, changed ]
+        default: all
 
 # A newer push to the same PR supersedes the in-flight run. On main, only a force push
-# cancels the in-flight run; ordinary pushes wait their turn.
+# cancels the in-flight run; ordinary pushes wait their turn. Adding any other label gets a group of
+# its own, so it cannot cancel the PR's real run (every job then skips itself).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ (github.event.action == 'labeled' && github.event.label.name != 'run-all-integration') && github.run_id || github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event.forced || false }}
 
+# Every ./gradlew here passes --build-cache, so each job reuses the compiled classes of the latest main
+# run: setup-gradle saves the build cache from main and restores it everywhere. Tests are never cached
+# (ghidra-module.gradle.kts), so they always run.
+
 jobs:
+  # Which integration suites this run needs: each one only when its project, or code both share,
+  # changed (.github/scripts/changed_suites.py has the rules). A push to main, a manual run (unless it
+  # asks for `changed`) and the run-all-integration PR label run both.
+  changes:
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-all-integration'
+    runs-on: ubuntu-latest
+    outputs:
+      suites: ${{ steps.suites.outputs.suites }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # A PR checks out its merge commit: the first parent is the base, so HEAD^1..HEAD is the PR's diff.
+          fetch-depth: 2
+          sparse-checkout: .github
+
+      - name: Select integration suites
+        id: suites
+        env:
+          FORCE: >-
+            ${{ github.event_name == 'push' && 'push to main'
+            || (github.event_name == 'workflow_dispatch' && inputs.integration != 'changed') && 'manual run'
+            || contains(github.event.pull_request.labels.*.name, 'run-all-integration') && 'run-all-integration label'
+            || '' }}
+        run: |
+          pick_suites() { python3 .github/scripts/changed_suites.py "$@" --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"; }
+          if [ -n "$FORCE" ]; then
+            pick_suites --force "$FORCE"
+          elif [ "${{ github.event_name }}" = pull_request ]; then
+            git diff --name-only HEAD^1 HEAD | pick_suites
+          else
+            # A manual run asking for `changed`: compare the branch with main.
+            git fetch --depth=1 origin main
+            git diff --name-only FETCH_HEAD HEAD | pick_suites
+          fi
+
   build:
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-all-integration'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,12 +79,12 @@ jobs:
           repo: unusual-thoughts/ghidra
 
       - name: Check formatting
-        run: ./gradlew ktlintCheck
+        run: ./gradlew --build-cache ktlintCheck
 
       - name: Run static analysis
         id: detekt
         if: success() || failure()
-        run: ./gradlew detekt
+        run: ./gradlew --build-cache detekt
 
       # Reports imports that point up the package layers on the run's summary page; does not fail the job.
       - name: Check package layering
@@ -50,10 +99,54 @@ jobs:
           path: '**/build/reports/detekt/detekt.html'
 
       - name: Run unit tests
-        run: ./gradlew test
+        run: ./gradlew --build-cache test
+
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v6
+        if: success() || failure() # always run even if the previous step fails
+        with:
+          check_name: Unit tests
+          report_paths: '**/build/test-results/**/TEST-*.xml'
+          include_passed: true
+          include_skipped: true
+
+      # ghicpp's on its own first: it must build without the stabs project.
+      - name: Build zips
+        run: |
+          ./gradlew --build-cache :ghicpp:buildExtension
+          ./gradlew --build-cache buildExtension packageCli
+
+      - uses: ./.github/actions/upload-packages
+
+      - name: Generate and submit dependency graph
+        uses: gradle/actions/dependency-submission@v6
+
+  # One job per selected suite, side by side; each takes most of the run's time.
+  integration:
+    needs: changes
+    if: needs.changes.outputs.suites != '[]' && needs.changes.outputs.suites != ''
+    name: integration (${{ matrix.suite }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.changes.outputs.suites) }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: '12.3'
+          repo: unusual-thoughts/ghidra
 
       - name: Run integration tests
-        run: ./gradlew integrationTest -Pmode=all -PignoreBaselines=true -Pshorten=true --fail-fast
+        run: >-
+          ./gradlew --build-cache ${{ matrix.suite == 'ghicpp' && ':ghicpp:integrationTest' || ':integrationTest' }}
+          -Pmode=all -PignoreBaselines=true -Pshorten=true --fail-fast
 
       - name: Resolve commit under test
         id: commit_id
@@ -61,10 +154,10 @@ jobs:
         run: echo "sha=$(echo '${{ github.event.pull_request.head.sha || github.sha }}' | cut -c1-12)" >> "$GITHUB_OUTPUT"
 
       - name: Publish Test Report
-        id: report
         uses: mikepenz/action-junit-report@v6
-        if: success() || failure() # always run even if the previous step fails
+        if: success() || failure()
         with:
+          check_name: Integration tests (${{ matrix.suite }})
           report_paths: '**/build/test-results/**/TEST-*.xml'
           include_passed: true
           include_skipped: true
@@ -73,47 +166,67 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: integration-logs-${{ steps.commit_id.outputs.sha }}.zip
-          path: build/test-output/logs/
+          name: integration-logs-${{ matrix.suite }}-${{ steps.commit_id.outputs.sha }}.zip
+          path: |
+            build/test-output/logs/
+            */build/test-output/logs/
 
-      - name: Check for shifted baselines
+      # Copied under one directory with their paths from the repo root kept, so the artifact has the same
+      # layout whichever suites wrote some, and the baselines job can lay them back over a checkout.
+      - name: Collect shifted baselines
         id: shifted
         if: success() || failure()
-        run: if [ -n "$(find . -path '*/build/test-output/shifted-baselines/*' -type f -print -quit)" ]; then echo found=true >> "$GITHUB_OUTPUT"; fi
+        run: |
+          find . -path '*/build/test-output/shifted-baselines/*' -type f -printf '%P\n' > shifted.txt
+          if [ -s shifted.txt ]; then
+            mkdir shifted && rsync -a --files-from=shifted.txt . shifted/
+            echo found=true >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload shifted baselines
         if: (success() || failure()) && steps.shifted.outputs.found == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: shifted-baselines-${{ steps.commit_id.outputs.sha }}.zip
-          # Each project writes its own: the root's and ghicpp's.
-          path: |
-            build/test-output/shifted-baselines/
-            */build/test-output/shifted-baselines/
+          name: shifted-baselines-${{ matrix.suite }}-${{ steps.commit_id.outputs.sha }}.zip
+          path: shifted/
+
+  # The one check to require: it always runs, and passes only when every job that ran passed and no
+  # counter moved. A skipped suite uploads no shifted baselines, so it cannot count as a move.
+  baselines:
+    needs: [ changes, build, integration ]
+    if: always() && (github.event.action != 'labeled' || github.event.label.name == 'run-all-integration')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            .github
+            src/test/resources/baselines
+            ghicpp/src/test/resources/ghicpp/scorecard/baselines
+
+      # Into the checkout, back at build/test-output/ and ghicpp/build/test-output/.
+      - name: Download shifted baselines
+        uses: actions/download-artifact@v8
+        with:
+          pattern: shifted-baselines-*
+          merge-multiple: true
 
       # Lists which counters moved on the run's summary page, with a warning annotation per moved baseline.
-      # The job fails on them only in its last step, so the packages still build and upload.
       - name: Summarize moved baseline counters
         id: moved
-        if: success() || failure()
         run: >-
           python3 .github/scripts/baseline_summary.py
-          ${{ steps.shifted.outputs.found == 'true' && format('--artifact shifted-baselines-{0}.zip', steps.commit_id.outputs.sha) || '' }}
+          --artifact "shifted-baselines-<suite>-$(echo '${{ github.event.pull_request.head.sha || github.sha }}' | cut -c1-12).zip"
           --summary "$GITHUB_STEP_SUMMARY" --output "$GITHUB_OUTPUT"
 
-      # ghicpp's on its own first: it must build without the stabs project.
-      - name: Build zips
-        run: |
-          ./gradlew :ghicpp:buildExtension
-          ./gradlew buildExtension packageCli
-
-      - uses: ./.github/actions/upload-packages
-
-      - name: Generate and submit dependency graph
-        uses: gradle/actions/dependency-submission@v6
-
       - name: Fail on moved baseline counters
-        if: (success() || failure()) && steps.moved.outputs.moved != '' && steps.moved.outputs.moved != '0'
+        if: steps.moved.outputs.moved != '' && steps.moved.outputs.moved != '0'
         run: |
           echo "::error title=Baseline counters moved::${{ steps.moved.outputs.moved }} counter(s) left their committed baselines; see the run summary, then commit the shifted baselines or fix the change."
+          exit 1
+
+      - name: Fail on failed jobs
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "::error title=CI failed::changes: ${{ needs.changes.result }}, build: ${{ needs.build.result }}, integration: ${{ needs.integration.result }}"
           exit 1
