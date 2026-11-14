@@ -24,10 +24,8 @@ class StlArchives(private val dir: String, val bundled: Set<String>) {
     fun classes(name: String): List<StdClass> {
         require(name in bundled) { "no bundled archive $name" }
         val file = "$name${StdClasses.SUFFIX}"
-        val text = shipped(file)?.inputStream?.use { String(it.readBytes(), Charsets.UTF_8) }
-            ?: resource(file)?.use { String(it.readBytes(), Charsets.UTF_8) }
-            ?: return emptyList()
-        return StdClasses.fromJson(text).classes
+        val input = shipped(file)?.inputStream ?: resource(file) ?: return emptyList()
+        return StdClasses.read(input).classes
     }
 
     private fun shipped(file: String) =

@@ -1,10 +1,15 @@
 package ghicpp.stl
 
-import com.google.gson.GsonBuilder
 import ghicpp.Access
+import ghidra.framework.options.GProperties
 import ghidra.program.model.data.CategoryPath
+import ghidra.util.xml.XmlUtilities
+import ghidrakt.GPropertiesFormat
 import kotlinx.serialization.Serializable
 import java.io.File
+import java.io.InputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 /** A direct base of a [StdClass]: the base at its archive [path], how the class holds it, and where. */
 @Serializable
@@ -27,20 +32,28 @@ data class StdClass(val path: String, val bases: List<StdBase> = emptyList(), va
 
 /**
  * The classes of a standard library archive, whichever ABI's and whatever debug info they come from, which
- * ship beside it as `<archive>.classes.json`. Ghidra's Gson writes and reads them off these classes as they
- * are: the format is the model, with no serializer of its own. [MsvcPdbClasses] reads them off a PDB.
+ * ship beside it as `<archive>.classes.xml.gz`: the model as [GPropertiesFormat] encodes it, the way ghicpp
+ * stores its class hierarchy record, saved as GProperties' XML and gzipped (each value carries its type, so
+ * the text repeats itself and packs small). [MsvcPdbClasses] reads them off a PDB.
  */
 @Serializable
 data class StdClasses(val classes: List<StdClass> = emptyList()) {
-    fun toJson(): String = GSON.toJson(this) + "\n"
-
-    /** Writes [toJson] to [file]. */
-    fun write(file: File) = file.writeText(toJson())
+    /** Writes the classes to [file], gzipped. */
+    fun write(file: File) {
+        val properties = GProperties(NAME)
+        GPropertiesFormat.encode(serializer(), this, properties)
+        GZIPOutputStream(file.outputStream()).use { it.write(XmlUtilities.xmlToByteArray(properties.saveToXml())) }
+    }
 
     companion object {
-        const val SUFFIX = ".classes.json"
-        private val GSON = GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create()
+        const val SUFFIX = ".classes.xml.gz"
+        private const val NAME = "StdClasses"
 
-        fun fromJson(text: String): StdClasses = GSON.fromJson(text, StdClasses::class.java)
+        /** Reads what [write] wrote off [input], closing it. */
+        fun read(input: InputStream): StdClasses {
+            val bytes = GZIPInputStream(input).use { it.readBytes() }
+            val properties = GProperties(XmlUtilities.byteArrayToXml(bytes))
+            return GPropertiesFormat.decode(serializer(), properties)
+        }
     }
 }
