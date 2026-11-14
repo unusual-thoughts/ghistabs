@@ -189,12 +189,25 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
             StructureDataType(baseDt.categoryPath, name, length, dtm).apply {
                 description = "${baseDt.name} as a base subobject (+$first..${last + 1}): its fields " +
                     "without the vptr the deriving class now owns"
-                for (it in baseDt.definedComponents.filter(::holds)) {
-                    runCatching {
-                        if (it.length == 0) {
-                            insertAtOffset(it.offset - first, it.dataType, 0, it.fieldName, it.comment)
-                        } else {
-                            replaceAtOffset(it.offset - first, it.dataType, it.length, it.fieldName, it.comment)
+                // A zero-length member (`T x[0]`) overlaps nothing, so it is kept where the run holds it.
+                for (it in baseDt.definedComponents.filter { overlaps(it) || (it.length == 0 && holds(it)) }) {
+                    val inner = it.dataType as? Structure
+                    // A base of the base that the vptr word cuts, as a runtime's layout holds it whole
+                    // (`exception` in `runtime_error`): its own fields in the run, cut the same way.
+                    val part = if (holds(it) || inner == null) {
+                        it.takeIf(::holds)?.dataType
+                    } else {
+                        (maxOf(first, it.offset) - it.offset..minOf(last, it.endOffset) - it.offset)
+                            .baseFieldsRun(inner)
+                    }
+                    val at = maxOf(first, it.offset)
+                    if (part != null) {
+                        runCatching {
+                            if (it.length == 0) {
+                                insertAtOffset(at - first, part, 0, it.fieldName, it.comment)
+                            } else {
+                                replaceAtOffset(at - first, part, part.length, it.fieldName, it.comment)
+                            }
                         }
                     }
                 }
