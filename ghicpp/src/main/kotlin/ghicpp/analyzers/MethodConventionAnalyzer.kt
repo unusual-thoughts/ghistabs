@@ -9,8 +9,8 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.report
-import ghidrakt.isMethod
 
 /**
  * Each method's calling convention as `this` makes it ([fixMethodConvention]): an x86 `__fastcall` that takes

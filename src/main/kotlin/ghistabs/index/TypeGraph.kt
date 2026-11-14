@@ -2,15 +2,16 @@ package ghistabs.index
 
 import ghicpp.canonTemplateName
 import ghicpp.isTemplated
-import ghicpp.member
 import ghicpp.templateLeaf
-import ghidrakt.Demangler
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
 import ghistabs.harvest.Func
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Type
-import ghistabs.parse.*
+import ghistabs.parse.GlobalTypeDecl
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.TypeDecl
 
 /**
  * The type graph: every harvested [Type] indexed by id, by name and by base tag, plus the xref oracle

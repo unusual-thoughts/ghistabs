@@ -6,7 +6,7 @@ import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.Undefined1DataType
 import ghidra.program.model.gclass.ClassUtils
-import ghidrakt.DtmRegistry
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.index.vptrOffsetBytesOf
 import ghistabs.parse.GlobalTypeId

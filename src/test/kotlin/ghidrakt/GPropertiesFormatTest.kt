@@ -1,8 +1,7 @@
 package ghidrakt
 import ghicpp.Access
 import ghidra.framework.options.GProperties
-import ghidrakt.test.*
-import ghistabs.test.*
+import ghidrakt.test.mustBe
 import kotlinx.serialization.Serializable
 import org.junit.jupiter.api.Test
 

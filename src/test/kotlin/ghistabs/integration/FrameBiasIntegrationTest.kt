@@ -2,10 +2,11 @@ package ghistabs.integration
 
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.LoadedProgram
-import ghidrakt.loadProgram
-import ghidrakt.test.*
-import ghistabs.test.*
+import ghidrakt.*
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeIn
+import ghistabs.test.defaultContext
+import ghistabs.test.importAndAnalyze
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag

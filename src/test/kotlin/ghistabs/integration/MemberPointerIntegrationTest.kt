@@ -1,12 +1,8 @@
 package ghistabs.integration
 
-import ghidra.program.model.data.AbstractIntegerDataType
-import ghidra.program.model.data.Composite
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.TypeDef
-import ghidrakt.test.*
-import ghistabs.test.*
+import ghidra.program.model.data.*
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest

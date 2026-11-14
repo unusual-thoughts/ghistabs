@@ -3,9 +3,7 @@ package ghicpp.score
 import ghicpp.VirtKind
 import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.hierarchy.ClassHierarchy
-import ghicpp.hierarchy.ClassHierarchy.ClassView
-import ghicpp.hierarchy.ClassHierarchy.MemberKind
-import ghicpp.hierarchy.ClassHierarchy.Origin
+import ghicpp.hierarchy.ClassHierarchy.*
 
 /** True positives, false positives and false negatives of one thing a recovery claims. */
 data class Tally(val tp: Int = 0, val fp: Int = 0, val fn: Int = 0) {

@@ -15,9 +15,9 @@ import ghidra.program.model.symbol.RefType
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.diagnose.DummySink
-import ghidrakt.runTransaction
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Tag

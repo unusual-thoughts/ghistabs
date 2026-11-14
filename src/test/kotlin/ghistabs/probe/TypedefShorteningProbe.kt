@@ -4,12 +4,9 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.isConflict
-import ghidrakt.nameWithoutConflict
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.must
 import ghidrakt.test.mustBeEmpty
-import ghidrakt.withProgram
 import ghistabs.importer.ImportProbe
 import ghistabs.materialize.shortenTypedefs
 import ghistabs.materialize.typedefShorteningRenames

@@ -1,12 +1,8 @@
 package ghistabs.render
 
 import ghidra.program.model.address.Address
-import ghidrakt.chunkedBy
-import ghistabs.harvest.Func
-import ghistabs.harvest.GhidraSourceFile
-import ghistabs.harvest.LineEntry
-import ghistabs.harvest.blockAt
-import ghistabs.harvest.outermostAt
+import ghidrakt.*
+import ghistabs.harvest.*
 
 /**
  * One inlined region, or the statements of one this-file source line. [file] is the file an inlined

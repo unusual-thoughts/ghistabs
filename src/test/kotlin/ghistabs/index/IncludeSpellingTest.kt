@@ -1,7 +1,7 @@
 package ghistabs.index
 
 import ghidrakt.test.mustBe
-import ghistabs.harvest.*
+import ghistabs.harvest.sourceFileOf
 import org.junit.jupiter.api.Test
 
 /** The spelling is read off the identity, so the identity is what the fixtures are written as. */

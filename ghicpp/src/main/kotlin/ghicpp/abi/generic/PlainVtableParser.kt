@@ -19,10 +19,9 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghidra.util.task.TaskMonitor
-import ghidrakt.components
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
-import ghidrakt.minus
 
 /**
  * A class known by its vftables alone, with no RTTI to give it bases: those its structors show ([inferBases]). Its

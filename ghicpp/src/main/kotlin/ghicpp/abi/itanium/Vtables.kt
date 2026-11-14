@@ -1,7 +1,6 @@
 package ghicpp.abi.itanium
 
 import ghicpp.ClassNaming
-import ghicpp.abi.CxxAbi
 import ghicpp.abi.VtableRecord
 import ghicpp.abi.functionSlots
 import ghidra.program.model.address.Address

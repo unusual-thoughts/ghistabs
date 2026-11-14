@@ -1,7 +1,7 @@
 package ghistabs.importer
 
 import ghicpp.recover.VtableSweepPass.Companion.markVtablesSwept
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.isOverlayDone

@@ -2,7 +2,6 @@ package ghistabs.harvest
 
 import ghicpp.Access
 import ghicpp.VirtKind
-import ghicpp.member
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidrakt.test.mustBe
 import ghistabs.parse.*

@@ -12,8 +12,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.util.Saveable
 import ghidra.util.datastruct.DataTable
 import ghidra.util.map.ObjectStorageAdapter
-import ghidrakt.test.*
-import ghistabs.test.*
+import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
 class ClassHierarchyRecordTest {

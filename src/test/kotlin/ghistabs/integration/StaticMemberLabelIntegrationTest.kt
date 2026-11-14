@@ -1,8 +1,8 @@
 package ghistabs.integration
 
 import ghidra.program.model.listing.Program
-import ghidrakt.test.*
-import ghistabs.test.*
+import ghidrakt.test.must
+import ghidrakt.test.mustBeEmpty
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
