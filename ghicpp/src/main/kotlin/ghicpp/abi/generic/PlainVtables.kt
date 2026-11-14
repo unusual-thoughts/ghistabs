@@ -35,7 +35,7 @@ object PlainVtables : CxxAbi {
     override val mangledOperatorDelete get() = abis.flatMapTo(mutableSetOf()) { it.mangledOperatorDelete }
 
     /** It has no symbols of its own: a table it reads is labelled `vftable` in its class's namespace. */
-    override fun looksLikeTableSymbol(symbolName: String) = false
+    override fun looksLikeVtable(symbolName: String) = false
 
     override fun vtableCandidates(className: String) = emptyList<String>()
 

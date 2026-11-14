@@ -17,13 +17,13 @@ import org.junit.jupiter.api.Test
 class Gcc2Test {
     @Test
     fun recognisesBothMarkersAndTheThunkSpelling() {
-        Gcc2.must { looksLikeTableSymbol("_vt.9exception") }
-        Gcc2.must { looksLikeTableSymbol($$"_vt$9exception") }
-        Gcc2.must { looksLikeTableSymbol("__vt_9TiXmlNode") }
-        Gcc2.mustNot { looksLikeTableSymbol("_ZTV10ThisStream") }
+        Gcc2.must { looksLikeVtable("_vt.9exception") }
+        Gcc2.must { looksLikeVtable($$"_vt$9exception") }
+        Gcc2.must { looksLikeVtable("__vt_9TiXmlNode") }
+        Gcc2.mustNot { looksLikeVtable("_ZTV10ThisStream") }
         // `_vt` with no marker is not the form, and neither is a name that merely contains it.
-        Gcc2.mustNot { looksLikeTableSymbol("_vt9exception") }
-        Gcc2.mustNot { looksLikeTableSymbol("x_vt.9exception") }
+        Gcc2.mustNot { looksLikeVtable("_vt9exception") }
+        Gcc2.mustNot { looksLikeVtable("x_vt.9exception") }
     }
 
     @Test

@@ -157,7 +157,7 @@ class VtableSweepPass(
     private fun layVtts() {
         val symbols = symtab.symbolIterator.toList()
         val names = symbols.mapNotNull { sym -> typeinfoTypeOf(sym.name)?.let { sym.address to it } }.toMap()
-        val dynamic = symbols.filter { Itanium.looksLikeTableSymbol(it.name) || looksLikeZtc(it.name) }
+        val dynamic = symbols.filter { Itanium.looksLikeVtable(it.name) || looksLikeZtc(it.name) }
             .mapNotNullTo(HashSet()) { Itanium.recordAt(program, it.address).rttiOf(program) }
         val reader = VttReader(program, TypeinfoReader(program), names, dynamic)
         for (sym in symbols.filter { looksLikeZtt(it.name) }.distinctBy { it.address }) {

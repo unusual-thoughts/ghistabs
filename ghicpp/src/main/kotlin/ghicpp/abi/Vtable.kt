@@ -27,14 +27,14 @@ interface VtableSymbols {
      * secondary. Where it sits is the ABI's: Itanium's `_ZTV` at the vtable's header, MSVC's `??_7` and gcc 2.x's
      * `_vt` at the vftable's address point.
      */
-    fun looksLikeTableSymbol(symbolName: String): Boolean
+    fun looksLikeVtable(symbolName: String): Boolean
 
     /**
      * Whether [symbolName] names a class's own table rather than a base's secondary one, by the name alone.
      * gcc 2.x and MSVC give secondaries symbols of their own; MSVC qualifies all of a class's tables once it
      * has several, its own too, so only [isPrimaryTableSymbol] can tell those apart.
      */
-    fun isPrimaryVtable(symbolName: String) = looksLikeTableSymbol(symbolName)
+    fun isPrimaryVtable(symbolName: String) = looksLikeVtable(symbolName)
 
     /** The symbols [className]'s vtable may have, most likely first; none for a template, which has no closed form. */
     fun vtableCandidates(className: String): List<String>

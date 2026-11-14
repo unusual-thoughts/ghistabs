@@ -98,14 +98,14 @@ object Msvc : CxxAbi {
                 .getOrNull()
         }
 
-    override fun looksLikeTableSymbol(symbolName: String) = symbolName.startsWith(VFTABLE_PREFIX)
+    override fun looksLikeVtable(symbolName: String) = symbolName.startsWith(VFTABLE_PREFIX)
 
     /**
      * A class's only table is unqualified, `??_7D@@6B@`. Once it has several, each is qualified with the base it
      * is for, `??_7D@@6BB1@@@` for `B1`, the one at offset 0 too, which the name alone can't tell.
      */
     override fun isPrimaryVtable(symbolName: String) =
-        looksLikeTableSymbol(symbolName) && symbolName.endsWith(UNQUALIFIED_VFTABLE_SUFFIX)
+        looksLikeVtable(symbolName) && symbolName.endsWith(UNQUALIFIED_VFTABLE_SUFFIX)
 
     /** A template's name has no closed form, as its arguments mangle as types. */
     override fun vtableCandidates(className: String) = listOfNotNull(
