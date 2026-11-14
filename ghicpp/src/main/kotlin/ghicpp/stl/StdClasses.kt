@@ -1,6 +1,7 @@
 package ghicpp.stl
 
 import ghicpp.Access
+import ghicpp.BaseDecl
 import ghidra.framework.options.GProperties
 import ghidra.program.model.data.CategoryPath
 import ghidra.util.xml.XmlUtilities
@@ -13,7 +14,12 @@ import java.util.zip.GZIPOutputStream
 
 /** A direct base of a [StdClass]: the base at its archive [path], how the class holds it, and where. */
 @Serializable
-data class StdBase(val path: String, val access: Access, val isVirtual: Boolean = false, val offset: Long? = null)
+data class StdBase(
+    val path: String,
+    override val access: Access,
+    override val isVirtual: Boolean = false,
+    override val offset: Long? = null,
+) : BaseDecl
 
 /** A virtual function a [StdClass] introduces: its [name], and its [offset] in bytes into the class's vftable. */
 @Serializable
