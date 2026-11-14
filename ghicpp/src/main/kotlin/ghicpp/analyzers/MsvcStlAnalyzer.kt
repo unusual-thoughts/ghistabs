@@ -36,9 +36,8 @@ class MsvcStlAnalyzer :
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val name = archiveFor(program) ?: return false
-        val archive = MsvcRuntime.ARCHIVES.open(name)
-        try {
-            val result = StlApplier(program, archive, MsvcRuntime.ARCHIVES.classes(name)).apply()
+        MsvcRuntime.ARCHIVES.open(name).use { archive ->
+            val result = StlApplier(program, archive.dataTypeManager, MsvcRuntime.ARCHIVES.classes(name)).apply()
             val laid = result.replaced + result.filled + result.laid
             if (laid + result.recorded > 0) {
                 report(
@@ -46,8 +45,6 @@ class MsvcStlAnalyzer :
                         "recorded the bases of ${result.recorded}",
                 )
             }
-        } finally {
-            archive.close()
         }
         return true
     }

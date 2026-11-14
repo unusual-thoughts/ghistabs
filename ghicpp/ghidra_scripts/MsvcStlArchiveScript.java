@@ -25,7 +25,9 @@ import ghidra.app.util.demangler.*;
 import ghidra.app.util.demangler.microsoft.MicrosoftDemangler;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.app.util.pdb.pdbapplicator.*;
+import ghidra.program.database.dtarchive.DataTypeArchiveFactory;
 import ghidra.program.model.data.*;
+import ghidra.program.model.dtarchive.FileDataTypeArchive;
 import ghidra.program.model.symbol.SymbolUtilities;
 
 public class MsvcStlArchiveScript extends GhidraScript {
@@ -73,7 +75,9 @@ public class MsvcStlArchiveScript extends GhidraScript {
 	}
 
 	private void build(File pdbFile, File out) throws Exception {
-		FileDataTypeManager dtm = FileDataTypeManager.createFileArchive(out);
+		// 12.2+'s archive API: the workflow runs this on 12.3 only.
+		FileDataTypeArchive archive = DataTypeArchiveFactory.createFileArchive(out, this);
+		DataTypeManager dtm = archive.getDataTypeManager();
 		try (AbstractPdb pdb = PdbParser.parse(pdbFile, new PdbReaderOptions(), monitor)) {
 			pdb.deserialize();
 			Map<String, DataTypePath> targets = demangledPaths(pdb);
@@ -99,10 +103,10 @@ public class MsvcStlArchiveScript extends GhidraScript {
 					read[0].getClasses().getClasses().stream().filter(c -> !c.getBases().isEmpty()).count()));
 			});
 			read[0].getClasses().write(new File(out.getPath().replaceAll("\\.gdt$", "") + StdClasses.SUFFIX));
-			dtm.save();
+			archive.save("MSVC STL types", monitor);
 		}
 		finally {
-			dtm.close();
+			archive.release(this);
 		}
 	}
 

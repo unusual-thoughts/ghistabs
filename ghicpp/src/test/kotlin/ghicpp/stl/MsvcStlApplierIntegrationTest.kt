@@ -75,8 +75,8 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             }
             placeholders(program) mustBe listOf("/Demangler/std/$STRING")
 
-            val archive = MsvcRuntime.ARCHIVES.open(archiveName)
-            try {
+            MsvcRuntime.ARCHIVES.open(archiveName).use { opened ->
+                val archive = opened.dataTypeManager
                 builder.withTransaction { StlApplier(program, archive).apply() }
 
                 placeholders(program) mustBe emptyList()
@@ -87,8 +87,6 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 // Linked to the archive it came from, not a copy.
                 self.sourceArchive.sourceArchiveID mustBe archive.universalID
                 self.sourceArchive.name mustBe archiveName
-            } finally {
-                archive.close()
             }
         } finally {
             builder.dispose()
@@ -125,8 +123,8 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 StdClass("/std/$FILEBUF", listOf(StdBase("/std/$STREAMBUF", Access.PUBLIC, offset = 0))),
                 StdClass("/std/$STREAMBUF"),
             )
-            val archive = MsvcRuntime.ARCHIVES.open("msvcp140_x64")
-            try {
+            MsvcRuntime.ARCHIVES.open("msvcp140_x64").use { opened ->
+                val archive = opened.dataTypeManager
                 lateinit var result: StlApplier.Result
                 builder.withTransaction { result = StlApplier(program, archive, classes).apply() }
                 result.recorded mustBe 2
@@ -150,8 +148,6 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 record.getValue(streambuf.id).structId mustBe
                     program.dataTypeManager.getID(program.classStruct(streambuf)!!)
                 record.getValue(streambuf.id).bases mustBe emptyList()
-            } finally {
-                archive.close()
             }
         } finally {
             builder.dispose()
@@ -172,14 +168,12 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             "msvcp140d_x86" to 28,
             "msvcp140d_x64" to 40,
         ).forEach { (name, size) ->
-            val archive = MsvcRuntime.ARCHIVES.open(name)
-            try {
+            MsvcRuntime.ARCHIVES.open(name).use { opened ->
+                val archive = opened.dataTypeManager
                 archive.getDataType(DataTypePath(CategoryPath("/std"), STRING))?.length mustBe size
                 // Its classes' bases ship beside it: basic_iostream's two direct bases, say.
                 MsvcRuntime.ARCHIVES.classes(name).single { it.path.startsWith("/std/basic_iostream<char,") }
                     .bases.size mustBe 2
-            } finally {
-                archive.close()
             }
         }
     }
