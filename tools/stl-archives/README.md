@@ -24,8 +24,8 @@ running the same probe.
 
 ## Building one yourself
 
-[`MsvcStlArchiveScript.java`](MsvcStlArchiveScript.java) builds one. It uses ghicpp's classes, so it needs the
-ghicpp extension installed; add this folder to the Script Manager's paths and run it on any program of the
+[`build/MsvcStlArchiveScript.java`](build/MsvcStlArchiveScript.java) builds one. It uses ghicpp's classes and Ghidra 12.2+ APIs, so it needs the
+ghicpp extension installed. It sits in its own folder because Ghidra compiles a script folder as one bundle, and the other scripts here also run on 10.4, where this one cannot compile. Add that folder to the Script Manager's paths and run it on any program of the
 right architecture, pointing it at a PDB with type information, or headless:
 
 ```
@@ -54,7 +54,7 @@ Hierarchy window shows the library's classes and how the program's own derive fr
 passes take an archive type at a class's namespace path as that class's struct, as it is: they lay it as
 the base of the classes deriving from it, and neither size nor fill it. The file is ghicpp's own model of
 the classes (`ghicpp.stl.StdClasses`), encoded by the same `GPropertiesFormat` as its class hierarchy
-record and saved as gzipped GProperties XML, so [`MsvcStlArchiveScript`](MsvcStlArchiveScript.java)
+record and saved as gzipped GProperties XML, so [`MsvcStlArchiveScript`](build/MsvcStlArchiveScript.java)
 needs the ghicpp extension installed; the workflow builds and installs it first.
 
 The file also lists the virtual functions each class introduces, by vftable offset, and the archive gives

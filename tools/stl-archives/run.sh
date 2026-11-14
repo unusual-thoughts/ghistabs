@@ -29,7 +29,7 @@ headless() {
 }
 
 case ${1:-} in
-    archive) headless "$3" "$here" MsvcStlArchiveScript.java "$4" "$2" ;;
+    archive) headless "$3" "$here/build" MsvcStlArchiveScript.java "$4" "$2" ;;
     compare) headless "$2" "$here" CompareStlArchives.java "$3" "$4" ;;
     layouts) headless "$2" "$here" ExportStlLayouts.java "$3" "$4" ;;
     gdt) headless "$2" "$here" LayoutsToGdt.java "$3" "$4" ;;
