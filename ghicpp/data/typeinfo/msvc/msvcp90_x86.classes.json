@@ -1,0 +1,4603 @@
+{
+  "classes": [
+    {
+      "path": "/std/_Allocator_base<char>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Allocator_base<unsigned_short>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Allocator_base<wchar_t>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Aux_cont",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Char_traits_base",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Complex_base<double,_C_double_complex>",
+      "bases": [
+        {
+          "path": "/_C_double_complex",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Complex_base<float,_C_float_complex>",
+      "bases": [
+        {
+          "path": "/_C_float_complex",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Complex_base<long_double,_C_ldouble_complex>",
+      "bases": [
+        {
+          "path": "/_C_ldouble_complex",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Container_base_aux",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Container_base_secure",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Ctraits<double>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Ctraits<float>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Ctraits<long_double>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Fac_node",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_cerr",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_cin",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_clog",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_cout",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_locks",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_ushcerr",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_ushcin",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_ushclog",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_ushcout",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_wcerr",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_wcin",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_wclog",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Init_wcout",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Iosb<int>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Iterator_base_aux",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Iterator_base_secure",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Iterator_base_universal",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Locbase<int>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Locinfo",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Lockit",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Mpunct<char>",
+      "bases": [
+        {
+          "path": "/std/money_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_decimal_point"
+        },
+        {
+          "offset": 8,
+          "name": "do_thousands_sep"
+        },
+        {
+          "offset": 12,
+          "name": "do_grouping"
+        },
+        {
+          "offset": 16,
+          "name": "do_curr_symbol"
+        },
+        {
+          "offset": 20,
+          "name": "do_positive_sign"
+        },
+        {
+          "offset": 24,
+          "name": "do_negative_sign"
+        },
+        {
+          "offset": 28,
+          "name": "do_frac_digits"
+        },
+        {
+          "offset": 32,
+          "name": "do_pos_format"
+        },
+        {
+          "offset": 36,
+          "name": "do_neg_format"
+        }
+      ]
+    },
+    {
+      "path": "/std/_Mpunct<unsigned_short>",
+      "bases": [
+        {
+          "path": "/std/money_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_decimal_point"
+        },
+        {
+          "offset": 8,
+          "name": "do_thousands_sep"
+        },
+        {
+          "offset": 12,
+          "name": "do_grouping"
+        },
+        {
+          "offset": 16,
+          "name": "do_curr_symbol"
+        },
+        {
+          "offset": 20,
+          "name": "do_positive_sign"
+        },
+        {
+          "offset": 24,
+          "name": "do_negative_sign"
+        },
+        {
+          "offset": 28,
+          "name": "do_frac_digits"
+        },
+        {
+          "offset": 32,
+          "name": "do_pos_format"
+        },
+        {
+          "offset": 36,
+          "name": "do_neg_format"
+        }
+      ]
+    },
+    {
+      "path": "/std/_Mpunct<wchar_t>",
+      "bases": [
+        {
+          "path": "/std/money_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_decimal_point"
+        },
+        {
+          "offset": 8,
+          "name": "do_thousands_sep"
+        },
+        {
+          "offset": 12,
+          "name": "do_grouping"
+        },
+        {
+          "offset": 16,
+          "name": "do_curr_symbol"
+        },
+        {
+          "offset": 20,
+          "name": "do_positive_sign"
+        },
+        {
+          "offset": 24,
+          "name": "do_negative_sign"
+        },
+        {
+          "offset": 28,
+          "name": "do_frac_digits"
+        },
+        {
+          "offset": 32,
+          "name": "do_pos_format"
+        },
+        {
+          "offset": 36,
+          "name": "do_neg_format"
+        }
+      ]
+    },
+    {
+      "path": "/std/_Mutex",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Num_base",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Num_float_base",
+      "bases": [
+        {
+          "path": "/std/_Num_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Num_int_base",
+      "bases": [
+        {
+          "path": "/std/_Num_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Outit",
+      "bases": [
+        {
+          "path": "/std/iterator<std::output_iterator_tag,void,void,void,void>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Range_checked_iterator_tag",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Ranit_base<char,int,char_const*,char_const&,std::_Iterator_base_secure>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_secure",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Ranit_base<unsigned_short,int,unsigned_short_const*,unsigned_short_const&,std::_Iterator_base_secure>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_secure",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Ranit_base<wchar_t,int,wchar_t_const*,wchar_t_const&,std::_Iterator_base_secure>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_secure",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Revranit<std::_String_const_iterator<char,std::char_traits<char>,std::allocator<char>_>,std::iterator<std::random_access_iterator_tag,char,int,char_const*,char_const&>_>",
+      "bases": [
+        {
+          "path": "/std/iterator<std::random_access_iterator_tag,char,int,char_const*,char_const&>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Revranit<std::_String_const_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>,std::iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short_const*,unsigned_short_const&>_>",
+      "bases": [
+        {
+          "path": "/std/iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short_const*,unsigned_short_const&>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Revranit<std::_String_const_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,std::iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t_const*,wchar_t_const&>_>",
+      "bases": [
+        {
+          "path": "/std/iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t_const*,wchar_t_const&>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Revranit<std::_String_iterator<char,std::char_traits<char>,std::allocator<char>_>,std::iterator<std::random_access_iterator_tag,char,int,char*,char&>_>",
+      "bases": [
+        {
+          "path": "/std/iterator<std::random_access_iterator_tag,char,int,char*,char&>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Revranit<std::_String_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>,std::iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short*,unsigned_short&>_>",
+      "bases": [
+        {
+          "path": "/std/iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short*,unsigned_short&>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Revranit<std::_String_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,std::iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t*,wchar_t&>_>",
+      "bases": [
+        {
+          "path": "/std/iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t*,wchar_t&>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Secure_char_traits_tag",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Smanip<int>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_String_base",
+      "bases": [
+        {
+          "path": "/std/_Container_base_secure",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_String_const_iterator<char,std::char_traits<char>,std::allocator<char>_>",
+      "bases": [
+        {
+          "path": "/std/_Ranit_base<char,int,char_const*,char_const&,std::_Iterator_base_secure>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_String_const_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/_Ranit_base<unsigned_short,int,unsigned_short_const*,unsigned_short_const&,std::_Iterator_base_secure>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_String_const_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/_Ranit_base<wchar_t,int,wchar_t_const*,wchar_t_const&,std::_Iterator_base_secure>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_String_iterator<char,std::char_traits<char>,std::allocator<char>_>",
+      "bases": [
+        {
+          "path": "/std/_String_const_iterator<char,std::char_traits<char>,std::allocator<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_String_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/_String_const_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_String_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/_String_const_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_String_val<char,std::allocator<char>_>",
+      "bases": [
+        {
+          "path": "/std/_String_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_String_val<unsigned_short,std::allocator<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/_String_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_String_val<wchar_t,std::allocator<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/_String_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/_Timevec",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_UShinit",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Unchanged_checked_iterator_base_type_tag",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Unchecked_iterator_tag",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Undefined_inner_type_tag",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Unsecure_char_traits_tag",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/_Winit",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/allocator<char>",
+      "bases": [
+        {
+          "path": "/std/_Allocator_base<char>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/allocator<char>/rebind<char>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/allocator<unsigned_short>",
+      "bases": [
+        {
+          "path": "/std/_Allocator_base<unsigned_short>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/allocator<unsigned_short>/rebind<unsigned_short>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/allocator<void>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/allocator<wchar_t>",
+      "bases": [
+        {
+          "path": "/std/_Allocator_base<wchar_t>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/allocator<wchar_t>/rebind<wchar_t>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/bad_alloc",
+      "bases": [
+        {
+          "path": "/std/exception",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/bad_cast",
+      "bases": [
+        {
+          "path": "/std/exception",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/bad_exception",
+      "bases": [
+        {
+          "path": "/std/exception",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_filebuf<char,std::char_traits<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_streambuf<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_filebuf<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_streambuf<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_filebuf<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_streambuf<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_fstream<char,std::char_traits<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_iostream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_fstream<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_iostream<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_fstream<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_iostream<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ifstream<char,std::char_traits<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_istream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ifstream<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ifstream<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ios<char,std::char_traits<char>_>",
+      "bases": [
+        {
+          "path": "/std/ios_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ios<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/ios_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ios<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/ios_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_iostream<char,std::char_traits<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_istream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        },
+        {
+          "path": "/std/basic_ostream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 8
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_iostream<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        },
+        {
+          "path": "/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 8
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_iostream<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        },
+        {
+          "path": "/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 8
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_istream<char,std::char_traits<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ios<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": true
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_istream<char,std::char_traits<char>_>/_Sentry_base",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_istream<char,std::char_traits<char>_>/sentry",
+      "bases": [
+        {
+          "path": "/std/basic_istream<char,std::char_traits<char>_>/_Sentry_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ios<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": true
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>/_Sentry_base",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>/sentry",
+      "bases": [
+        {
+          "path": "/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>/_Sentry_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ios<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": true
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>/_Sentry_base",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>/sentry",
+      "bases": [
+        {
+          "path": "/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>/_Sentry_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_istringstream<char,std::char_traits<char>,std::allocator<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_istream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_istringstream<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_istringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ofstream<char,std::char_traits<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ostream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ofstream<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ofstream<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ostream<char,std::char_traits<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ios<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": true
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ostream<char,std::char_traits<char>_>/_Sentry_base",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_ostream<char,std::char_traits<char>_>/sentry",
+      "bases": [
+        {
+          "path": "/std/basic_ostream<char,std::char_traits<char>_>/_Sentry_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ios<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": true
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>/_Sentry_base",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>/sentry",
+      "bases": [
+        {
+          "path": "/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>/_Sentry_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ios<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": true
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>/_Sentry_base",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>/sentry",
+      "bases": [
+        {
+          "path": "/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>/_Sentry_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_ostringstream<char,std::char_traits<char>,std::allocator<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ostream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ostringstream<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_ostringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_streambuf<char,std::char_traits<char>_>",
+      "bases": [],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "~basic_streambuf<char,std::char_traits<char> >"
+        },
+        {
+          "offset": 4,
+          "name": "overflow"
+        },
+        {
+          "offset": 8,
+          "name": "pbackfail"
+        },
+        {
+          "offset": 12,
+          "name": "showmanyc"
+        },
+        {
+          "offset": 16,
+          "name": "underflow"
+        },
+        {
+          "offset": 20,
+          "name": "uflow"
+        },
+        {
+          "offset": 24,
+          "name": "xsgetn"
+        },
+        {
+          "offset": 28,
+          "name": "_Xsgetn_s"
+        },
+        {
+          "offset": 32,
+          "name": "xsputn"
+        },
+        {
+          "offset": 36,
+          "name": "seekoff"
+        },
+        {
+          "offset": 40,
+          "name": "seekpos"
+        },
+        {
+          "offset": 44,
+          "name": "setbuf"
+        },
+        {
+          "offset": 48,
+          "name": "sync"
+        },
+        {
+          "offset": 52,
+          "name": "imbue"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_streambuf<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "~basic_streambuf<unsigned short,std::char_traits<unsigned short> >"
+        },
+        {
+          "offset": 4,
+          "name": "overflow"
+        },
+        {
+          "offset": 8,
+          "name": "pbackfail"
+        },
+        {
+          "offset": 12,
+          "name": "showmanyc"
+        },
+        {
+          "offset": 16,
+          "name": "underflow"
+        },
+        {
+          "offset": 20,
+          "name": "uflow"
+        },
+        {
+          "offset": 24,
+          "name": "xsgetn"
+        },
+        {
+          "offset": 28,
+          "name": "_Xsgetn_s"
+        },
+        {
+          "offset": 32,
+          "name": "xsputn"
+        },
+        {
+          "offset": 36,
+          "name": "seekoff"
+        },
+        {
+          "offset": 40,
+          "name": "seekpos"
+        },
+        {
+          "offset": 44,
+          "name": "setbuf"
+        },
+        {
+          "offset": 48,
+          "name": "sync"
+        },
+        {
+          "offset": 52,
+          "name": "imbue"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_streambuf<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "~basic_streambuf<wchar_t,std::char_traits<wchar_t> >"
+        },
+        {
+          "offset": 4,
+          "name": "overflow"
+        },
+        {
+          "offset": 8,
+          "name": "pbackfail"
+        },
+        {
+          "offset": 12,
+          "name": "showmanyc"
+        },
+        {
+          "offset": 16,
+          "name": "underflow"
+        },
+        {
+          "offset": 20,
+          "name": "uflow"
+        },
+        {
+          "offset": 24,
+          "name": "xsgetn"
+        },
+        {
+          "offset": 28,
+          "name": "_Xsgetn_s"
+        },
+        {
+          "offset": 32,
+          "name": "xsputn"
+        },
+        {
+          "offset": 36,
+          "name": "seekoff"
+        },
+        {
+          "offset": 40,
+          "name": "seekpos"
+        },
+        {
+          "offset": 44,
+          "name": "setbuf"
+        },
+        {
+          "offset": 48,
+          "name": "sync"
+        },
+        {
+          "offset": 52,
+          "name": "imbue"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_string<char,std::char_traits<char>,std::allocator<char>_>",
+      "bases": [
+        {
+          "path": "/std/_String_val<char,std::allocator<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_string<char,std::char_traits<char>,std::allocator<char>_>/_No_debug_placeholder",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_string<char,std::char_traits<char>,std::allocator<char>_>/_Size_type_nosscl",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_string<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/_String_val<unsigned_short,std::allocator<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_string<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>/_No_debug_placeholder",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_string<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>/_Size_type_nosscl",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/_String_val<wchar_t,std::allocator<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>/_No_debug_placeholder",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>/_Size_type_nosscl",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/basic_stringbuf<char,std::char_traits<char>,std::allocator<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_streambuf<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_stringbuf<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_streambuf<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_stringbuf<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_streambuf<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_stringstream<char,std::char_traits<char>,std::allocator<char>_>",
+      "bases": [
+        {
+          "path": "/std/basic_iostream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_stringstream<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/basic_iostream<unsigned_short,std::char_traits<unsigned_short>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/basic_iostream<wchar_t,std::char_traits<wchar_t>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/bidirectional_iterator_tag",
+      "bases": [
+        {
+          "path": "/std/forward_iterator_tag",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/char_traits<char>",
+      "bases": [
+        {
+          "path": "/std/_Char_traits_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/char_traits<unsigned_short>",
+      "bases": [
+        {
+          "path": "/std/_Char_traits_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/char_traits<wchar_t>",
+      "bases": [
+        {
+          "path": "/std/_Char_traits_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/codecvt<char,char,int>",
+      "bases": [
+        {
+          "path": "/std/codecvt_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 16,
+          "name": "do_in"
+        },
+        {
+          "offset": 20,
+          "name": "do_out"
+        },
+        {
+          "offset": 24,
+          "name": "do_unshift"
+        },
+        {
+          "offset": 28,
+          "name": "do_length"
+        }
+      ]
+    },
+    {
+      "path": "/std/codecvt<unsigned_short,char,int>",
+      "bases": [
+        {
+          "path": "/std/codecvt_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 16,
+          "name": "do_in"
+        },
+        {
+          "offset": 20,
+          "name": "do_out"
+        },
+        {
+          "offset": 24,
+          "name": "do_unshift"
+        },
+        {
+          "offset": 28,
+          "name": "do_length"
+        }
+      ]
+    },
+    {
+      "path": "/std/codecvt<wchar_t,char,int>",
+      "bases": [
+        {
+          "path": "/std/codecvt_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 16,
+          "name": "do_in"
+        },
+        {
+          "offset": 20,
+          "name": "do_out"
+        },
+        {
+          "offset": 24,
+          "name": "do_unshift"
+        },
+        {
+          "offset": 28,
+          "name": "do_length"
+        }
+      ]
+    },
+    {
+      "path": "/std/codecvt_base",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_always_noconv"
+        },
+        {
+          "offset": 8,
+          "name": "do_max_length"
+        },
+        {
+          "offset": 12,
+          "name": "do_encoding"
+        }
+      ]
+    },
+    {
+      "path": "/std/collate<char>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_compare"
+        },
+        {
+          "offset": 8,
+          "name": "do_transform"
+        },
+        {
+          "offset": 12,
+          "name": "do_hash"
+        }
+      ]
+    },
+    {
+      "path": "/std/collate<unsigned_short>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_compare"
+        },
+        {
+          "offset": 8,
+          "name": "do_transform"
+        },
+        {
+          "offset": 12,
+          "name": "do_hash"
+        }
+      ]
+    },
+    {
+      "path": "/std/collate<wchar_t>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_compare"
+        },
+        {
+          "offset": 8,
+          "name": "do_transform"
+        },
+        {
+          "offset": 12,
+          "name": "do_hash"
+        }
+      ]
+    },
+    {
+      "path": "/std/complex<double>",
+      "bases": [
+        {
+          "path": "/std/_Complex_base<double,_C_double_complex>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/complex<float>",
+      "bases": [
+        {
+          "path": "/std/_Complex_base<float,_C_float_complex>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/complex<long_double>",
+      "bases": [
+        {
+          "path": "/std/_Complex_base<long_double,_C_ldouble_complex>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/ctype<char>",
+      "bases": [
+        {
+          "path": "/std/ctype_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_tolower"
+        },
+        {
+          "offset": 8,
+          "name": "do_tolower"
+        },
+        {
+          "offset": 12,
+          "name": "do_toupper"
+        },
+        {
+          "offset": 16,
+          "name": "do_toupper"
+        },
+        {
+          "offset": 20,
+          "name": "do_widen"
+        },
+        {
+          "offset": 24,
+          "name": "do_widen"
+        },
+        {
+          "offset": 28,
+          "name": "_Do_widen_s"
+        },
+        {
+          "offset": 32,
+          "name": "do_narrow"
+        },
+        {
+          "offset": 36,
+          "name": "do_narrow"
+        },
+        {
+          "offset": 40,
+          "name": "_Do_narrow_s"
+        }
+      ]
+    },
+    {
+      "path": "/std/ctype<unsigned_short>",
+      "bases": [
+        {
+          "path": "/std/ctype_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_is"
+        },
+        {
+          "offset": 8,
+          "name": "do_is"
+        },
+        {
+          "offset": 12,
+          "name": "do_scan_is"
+        },
+        {
+          "offset": 16,
+          "name": "do_scan_not"
+        },
+        {
+          "offset": 20,
+          "name": "do_tolower"
+        },
+        {
+          "offset": 24,
+          "name": "do_tolower"
+        },
+        {
+          "offset": 28,
+          "name": "do_toupper"
+        },
+        {
+          "offset": 32,
+          "name": "do_toupper"
+        },
+        {
+          "offset": 36,
+          "name": "do_widen"
+        },
+        {
+          "offset": 40,
+          "name": "do_widen"
+        },
+        {
+          "offset": 44,
+          "name": "_Do_widen_s"
+        },
+        {
+          "offset": 48,
+          "name": "do_narrow"
+        },
+        {
+          "offset": 52,
+          "name": "do_narrow"
+        },
+        {
+          "offset": 56,
+          "name": "_Do_narrow_s"
+        }
+      ]
+    },
+    {
+      "path": "/std/ctype<wchar_t>",
+      "bases": [
+        {
+          "path": "/std/ctype_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_is"
+        },
+        {
+          "offset": 8,
+          "name": "do_is"
+        },
+        {
+          "offset": 12,
+          "name": "do_scan_is"
+        },
+        {
+          "offset": 16,
+          "name": "do_scan_not"
+        },
+        {
+          "offset": 20,
+          "name": "do_tolower"
+        },
+        {
+          "offset": 24,
+          "name": "do_tolower"
+        },
+        {
+          "offset": 28,
+          "name": "do_toupper"
+        },
+        {
+          "offset": 32,
+          "name": "do_toupper"
+        },
+        {
+          "offset": 36,
+          "name": "do_widen"
+        },
+        {
+          "offset": 40,
+          "name": "do_widen"
+        },
+        {
+          "offset": 44,
+          "name": "_Do_widen_s"
+        },
+        {
+          "offset": 48,
+          "name": "do_narrow"
+        },
+        {
+          "offset": 52,
+          "name": "do_narrow"
+        },
+        {
+          "offset": 56,
+          "name": "_Do_narrow_s"
+        }
+      ]
+    },
+    {
+      "path": "/std/ctype_base",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/ctype_byname<char>",
+      "bases": [
+        {
+          "path": "/std/ctype<char>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/domain_error",
+      "bases": [
+        {
+          "path": "/std/logic_error",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/exception",
+      "bases": [],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "~exception"
+        },
+        {
+          "offset": 4,
+          "name": "what"
+        }
+      ]
+    },
+    {
+      "path": "/std/forward_iterator_tag",
+      "bases": [
+        {
+          "path": "/std/input_iterator_tag",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/fpos<int>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/input_iterator_tag",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/invalid_argument",
+      "bases": [
+        {
+          "path": "/std/logic_error",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/ios_base",
+      "bases": [
+        {
+          "path": "/std/_Iosb<int>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 4
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "~ios_base"
+        }
+      ]
+    },
+    {
+      "path": "/std/ios_base/Init",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/ios_base/_Fnarray",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/ios_base/_Iosarray",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/ios_base/failure",
+      "bases": [
+        {
+          "path": "/std/runtime_error",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/istreambuf_iterator<char,std::char_traits<char>_>",
+      "bases": [
+        {
+          "path": "/std/iterator<std::input_iterator_tag,char,long,char*,char&>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/istreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/iterator<std::input_iterator_tag,unsigned_short,long,unsigned_short*,unsigned_short&>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/iterator<std::input_iterator_tag,wchar_t,long,wchar_t*,wchar_t&>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/istrstream",
+      "bases": [
+        {
+          "path": "/std/basic_istream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/iterator<std::input_iterator_tag,char,long,char*,char&>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/iterator<std::input_iterator_tag,unsigned_short,long,unsigned_short*,unsigned_short&>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/iterator<std::input_iterator_tag,wchar_t,long,wchar_t*,wchar_t&>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/iterator<std::output_iterator_tag,void,void,void,void>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/iterator<std::random_access_iterator_tag,char,int,char*,char&>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/iterator<std::random_access_iterator_tag,char,int,char_const*,char_const&>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short*,unsigned_short&>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short_const*,unsigned_short_const&>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t*,wchar_t&>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t_const*,wchar_t_const&>",
+      "bases": [
+        {
+          "path": "/std/_Iterator_base_universal",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/length_error",
+      "bases": [
+        {
+          "path": "/std/logic_error",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/locale",
+      "bases": [
+        {
+          "path": "/std/_Locbase<int>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/locale/_Locimp",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/locale/facet",
+      "bases": [],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "~facet"
+        }
+      ]
+    },
+    {
+      "path": "/std/locale/id",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/logic_error",
+      "bases": [
+        {
+          "path": "/std/exception",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/messages<char>",
+      "bases": [
+        {
+          "path": "/std/messages_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_open"
+        },
+        {
+          "offset": 8,
+          "name": "do_get"
+        },
+        {
+          "offset": 12,
+          "name": "do_close"
+        }
+      ]
+    },
+    {
+      "path": "/std/messages<unsigned_short>",
+      "bases": [
+        {
+          "path": "/std/messages_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_open"
+        },
+        {
+          "offset": 8,
+          "name": "do_get"
+        },
+        {
+          "offset": 12,
+          "name": "do_close"
+        }
+      ]
+    },
+    {
+      "path": "/std/messages<wchar_t>",
+      "bases": [
+        {
+          "path": "/std/messages_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_open"
+        },
+        {
+          "offset": 8,
+          "name": "do_get"
+        },
+        {
+          "offset": 12,
+          "name": "do_close"
+        }
+      ]
+    },
+    {
+      "path": "/std/messages_base",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/money_base",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/money_base/pattern",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/money_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_get"
+        },
+        {
+          "offset": 8,
+          "name": "do_get"
+        }
+      ]
+    },
+    {
+      "path": "/std/money_get<unsigned_short,std::istreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_get"
+        },
+        {
+          "offset": 8,
+          "name": "do_get"
+        }
+      ]
+    },
+    {
+      "path": "/std/money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_get"
+        },
+        {
+          "offset": 8,
+          "name": "do_get"
+        }
+      ]
+    },
+    {
+      "path": "/std/money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_put"
+        },
+        {
+          "offset": 8,
+          "name": "do_put"
+        }
+      ]
+    },
+    {
+      "path": "/std/money_put<unsigned_short,std::ostreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_put"
+        },
+        {
+          "offset": 8,
+          "name": "do_put"
+        }
+      ]
+    },
+    {
+      "path": "/std/money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_put"
+        },
+        {
+          "offset": 8,
+          "name": "do_put"
+        }
+      ]
+    },
+    {
+      "path": "/std/moneypunct<char,0>",
+      "bases": [
+        {
+          "path": "/std/_Mpunct<char>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/moneypunct<char,1>",
+      "bases": [
+        {
+          "path": "/std/_Mpunct<char>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/moneypunct<unsigned_short,0>",
+      "bases": [
+        {
+          "path": "/std/_Mpunct<unsigned_short>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/moneypunct<unsigned_short,1>",
+      "bases": [
+        {
+          "path": "/std/_Mpunct<unsigned_short>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/moneypunct<wchar_t,0>",
+      "bases": [
+        {
+          "path": "/std/_Mpunct<wchar_t>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/moneypunct<wchar_t,1>",
+      "bases": [
+        {
+          "path": "/std/_Mpunct<wchar_t>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/num_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_get"
+        },
+        {
+          "offset": 8,
+          "name": "do_get"
+        },
+        {
+          "offset": 12,
+          "name": "do_get"
+        },
+        {
+          "offset": 16,
+          "name": "do_get"
+        },
+        {
+          "offset": 20,
+          "name": "do_get"
+        },
+        {
+          "offset": 24,
+          "name": "do_get"
+        },
+        {
+          "offset": 28,
+          "name": "do_get"
+        },
+        {
+          "offset": 32,
+          "name": "do_get"
+        },
+        {
+          "offset": 36,
+          "name": "do_get"
+        },
+        {
+          "offset": 40,
+          "name": "do_get"
+        },
+        {
+          "offset": 44,
+          "name": "do_get"
+        }
+      ]
+    },
+    {
+      "path": "/std/num_get<unsigned_short,std::istreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_get"
+        },
+        {
+          "offset": 8,
+          "name": "do_get"
+        },
+        {
+          "offset": 12,
+          "name": "do_get"
+        },
+        {
+          "offset": 16,
+          "name": "do_get"
+        },
+        {
+          "offset": 20,
+          "name": "do_get"
+        },
+        {
+          "offset": 24,
+          "name": "do_get"
+        },
+        {
+          "offset": 28,
+          "name": "do_get"
+        },
+        {
+          "offset": 32,
+          "name": "do_get"
+        },
+        {
+          "offset": 36,
+          "name": "do_get"
+        },
+        {
+          "offset": 40,
+          "name": "do_get"
+        },
+        {
+          "offset": 44,
+          "name": "do_get"
+        }
+      ]
+    },
+    {
+      "path": "/std/num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_get"
+        },
+        {
+          "offset": 8,
+          "name": "do_get"
+        },
+        {
+          "offset": 12,
+          "name": "do_get"
+        },
+        {
+          "offset": 16,
+          "name": "do_get"
+        },
+        {
+          "offset": 20,
+          "name": "do_get"
+        },
+        {
+          "offset": 24,
+          "name": "do_get"
+        },
+        {
+          "offset": 28,
+          "name": "do_get"
+        },
+        {
+          "offset": 32,
+          "name": "do_get"
+        },
+        {
+          "offset": 36,
+          "name": "do_get"
+        },
+        {
+          "offset": 40,
+          "name": "do_get"
+        },
+        {
+          "offset": 44,
+          "name": "do_get"
+        }
+      ]
+    },
+    {
+      "path": "/std/num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_put"
+        },
+        {
+          "offset": 8,
+          "name": "do_put"
+        },
+        {
+          "offset": 12,
+          "name": "do_put"
+        },
+        {
+          "offset": 16,
+          "name": "do_put"
+        },
+        {
+          "offset": 20,
+          "name": "do_put"
+        },
+        {
+          "offset": 24,
+          "name": "do_put"
+        },
+        {
+          "offset": 28,
+          "name": "do_put"
+        },
+        {
+          "offset": 32,
+          "name": "do_put"
+        }
+      ]
+    },
+    {
+      "path": "/std/num_put<unsigned_short,std::ostreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_put"
+        },
+        {
+          "offset": 8,
+          "name": "do_put"
+        },
+        {
+          "offset": 12,
+          "name": "do_put"
+        },
+        {
+          "offset": 16,
+          "name": "do_put"
+        },
+        {
+          "offset": 20,
+          "name": "do_put"
+        },
+        {
+          "offset": 24,
+          "name": "do_put"
+        },
+        {
+          "offset": 28,
+          "name": "do_put"
+        },
+        {
+          "offset": 32,
+          "name": "do_put"
+        }
+      ]
+    },
+    {
+      "path": "/std/num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_put"
+        },
+        {
+          "offset": 8,
+          "name": "do_put"
+        },
+        {
+          "offset": 12,
+          "name": "do_put"
+        },
+        {
+          "offset": 16,
+          "name": "do_put"
+        },
+        {
+          "offset": 20,
+          "name": "do_put"
+        },
+        {
+          "offset": 24,
+          "name": "do_put"
+        },
+        {
+          "offset": 28,
+          "name": "do_put"
+        },
+        {
+          "offset": 32,
+          "name": "do_put"
+        }
+      ]
+    },
+    {
+      "path": "/std/numeric_limits<__int64>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<bool>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<char>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<double>",
+      "bases": [
+        {
+          "path": "/std/_Num_float_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<float>",
+      "bases": [
+        {
+          "path": "/std/_Num_float_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<int>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<long>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<long_double>",
+      "bases": [
+        {
+          "path": "/std/_Num_float_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<short>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<signed_char>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<unsigned___int64>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<unsigned_char>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<unsigned_int>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<unsigned_long>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<unsigned_short>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numeric_limits<wchar_t>",
+      "bases": [
+        {
+          "path": "/std/_Num_int_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/numpunct<char>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_decimal_point"
+        },
+        {
+          "offset": 8,
+          "name": "do_thousands_sep"
+        },
+        {
+          "offset": 12,
+          "name": "do_grouping"
+        },
+        {
+          "offset": 16,
+          "name": "do_falsename"
+        },
+        {
+          "offset": 20,
+          "name": "do_truename"
+        }
+      ]
+    },
+    {
+      "path": "/std/numpunct<unsigned_short>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_decimal_point"
+        },
+        {
+          "offset": 8,
+          "name": "do_thousands_sep"
+        },
+        {
+          "offset": 12,
+          "name": "do_grouping"
+        },
+        {
+          "offset": 16,
+          "name": "do_falsename"
+        },
+        {
+          "offset": 20,
+          "name": "do_truename"
+        }
+      ]
+    },
+    {
+      "path": "/std/numpunct<wchar_t>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_decimal_point"
+        },
+        {
+          "offset": 8,
+          "name": "do_thousands_sep"
+        },
+        {
+          "offset": 12,
+          "name": "do_grouping"
+        },
+        {
+          "offset": 16,
+          "name": "do_falsename"
+        },
+        {
+          "offset": 20,
+          "name": "do_truename"
+        }
+      ]
+    },
+    {
+      "path": "/std/ostreambuf_iterator<char,std::char_traits<char>_>",
+      "bases": [
+        {
+          "path": "/std/_Outit",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/ostreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>",
+      "bases": [
+        {
+          "path": "/std/_Outit",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>",
+      "bases": [
+        {
+          "path": "/std/_Outit",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/ostrstream",
+      "bases": [
+        {
+          "path": "/std/basic_ostream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/out_of_range",
+      "bases": [
+        {
+          "path": "/std/logic_error",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/output_iterator_tag",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/overflow_error",
+      "bases": [
+        {
+          "path": "/std/runtime_error",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/random_access_iterator_tag",
+      "bases": [
+        {
+          "path": "/std/bidirectional_iterator_tag",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/range_error",
+      "bases": [
+        {
+          "path": "/std/runtime_error",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/reverse_iterator<std::_String_const_iterator<char,std::char_traits<char>,std::allocator<char>_>_>",
+      "bases": [
+        {
+          "path": "/std/_Revranit<std::_String_const_iterator<char,std::char_traits<char>,std::allocator<char>_>,std::iterator<std::random_access_iterator_tag,char,int,char_const*,char_const&>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/reverse_iterator<std::_String_const_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>_>",
+      "bases": [
+        {
+          "path": "/std/_Revranit<std::_String_const_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>,std::iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short_const*,unsigned_short_const&>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/reverse_iterator<std::_String_const_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>_>",
+      "bases": [
+        {
+          "path": "/std/_Revranit<std::_String_const_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,std::iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t_const*,wchar_t_const&>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/reverse_iterator<std::_String_iterator<char,std::char_traits<char>,std::allocator<char>_>_>",
+      "bases": [
+        {
+          "path": "/std/_Revranit<std::_String_iterator<char,std::char_traits<char>,std::allocator<char>_>,std::iterator<std::random_access_iterator_tag,char,int,char*,char&>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/reverse_iterator<std::_String_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>_>",
+      "bases": [
+        {
+          "path": "/std/_Revranit<std::_String_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>,std::iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short*,unsigned_short&>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/reverse_iterator<std::_String_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>_>",
+      "bases": [
+        {
+          "path": "/std/_Revranit<std::_String_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,std::iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t*,wchar_t&>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/runtime_error",
+      "bases": [
+        {
+          "path": "/std/exception",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/strstream",
+      "bases": [
+        {
+          "path": "/std/basic_iostream<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/strstreambuf",
+      "bases": [
+        {
+          "path": "/std/basic_streambuf<char,std::char_traits<char>_>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/time_base",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/time_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>",
+      "bases": [
+        {
+          "path": "/std/time_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_date_order"
+        },
+        {
+          "offset": 8,
+          "name": "do_get_time"
+        },
+        {
+          "offset": 12,
+          "name": "do_get_date"
+        },
+        {
+          "offset": 16,
+          "name": "do_get_weekday"
+        },
+        {
+          "offset": 20,
+          "name": "do_get_monthname"
+        },
+        {
+          "offset": 24,
+          "name": "do_get_year"
+        }
+      ]
+    },
+    {
+      "path": "/std/time_get<unsigned_short,std::istreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>",
+      "bases": [
+        {
+          "path": "/std/time_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_date_order"
+        },
+        {
+          "offset": 8,
+          "name": "do_get_time"
+        },
+        {
+          "offset": 12,
+          "name": "do_get_date"
+        },
+        {
+          "offset": 16,
+          "name": "do_get_weekday"
+        },
+        {
+          "offset": 20,
+          "name": "do_get_monthname"
+        },
+        {
+          "offset": 24,
+          "name": "do_get_year"
+        }
+      ]
+    },
+    {
+      "path": "/std/time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>",
+      "bases": [
+        {
+          "path": "/std/time_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_date_order"
+        },
+        {
+          "offset": 8,
+          "name": "do_get_time"
+        },
+        {
+          "offset": 12,
+          "name": "do_get_date"
+        },
+        {
+          "offset": 16,
+          "name": "do_get_weekday"
+        },
+        {
+          "offset": 20,
+          "name": "do_get_monthname"
+        },
+        {
+          "offset": 24,
+          "name": "do_get_year"
+        }
+      ]
+    },
+    {
+      "path": "/std/time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_put"
+        }
+      ]
+    },
+    {
+      "path": "/std/time_put<unsigned_short,std::ostreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_put"
+        }
+      ]
+    },
+    {
+      "path": "/std/time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>",
+      "bases": [
+        {
+          "path": "/std/locale/facet",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        },
+        {
+          "offset": 4,
+          "name": "do_put"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Bitmap",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Cl_names<char>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Cl_names<wchar_t>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Nil",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Node_assert",
+      "bases": [
+        {
+          "path": "/std/tr1/_Node_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Node_back",
+      "bases": [
+        {
+          "path": "/std/tr1/_Node_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Node_base",
+      "bases": [],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "~_Node_base"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Node_capture",
+      "bases": [
+        {
+          "path": "/std/tr1/_Node_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Node_end_group",
+      "bases": [
+        {
+          "path": "/std/tr1/_Node_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Node_end_rep",
+      "bases": [
+        {
+          "path": "/std/tr1/_Node_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Node_endif",
+      "bases": [
+        {
+          "path": "/std/tr1/_Node_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Node_if",
+      "bases": [
+        {
+          "path": "/std/tr1/_Node_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Node_rep",
+      "bases": [
+        {
+          "path": "/std/tr1/_Node_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Ph<10>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Ph<1>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Ph<2>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Ph<3>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Ph<4>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Ph<5>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Ph<6>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Ph<7>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Ph<8>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Ph<9>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Ref_count_base",
+      "bases": [],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "_Destroy"
+        },
+        {
+          "offset": 4,
+          "name": "_Delete_this"
+        },
+        {
+          "offset": 8,
+          "name": "~_Ref_count_base"
+        },
+        {
+          "offset": 12,
+          "name": "_Get_deleter"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/_Regex_traits<char>",
+      "bases": [
+        {
+          "path": "/std/tr1/_Regex_traits_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Regex_traits<wchar_t>",
+      "bases": [
+        {
+          "path": "/std/tr1/_Regex_traits_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Regex_traits_base",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/_Root_node",
+      "bases": [
+        {
+          "path": "/std/tr1/_Node_base",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/bad_function_call",
+      "bases": [
+        {
+          "path": "/std/exception",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/bad_weak_ptr",
+      "bases": [
+        {
+          "path": "/std/exception",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>",
+      "bases": [
+        {
+          "path": "/std/unary_function<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,unsigned_int>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/hash<std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>_>",
+      "bases": [
+        {
+          "path": "/std/unary_function<std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,unsigned_int>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/regex_error",
+      "bases": [
+        {
+          "path": "/std/runtime_error",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/std/tr1/regex_traits<char>",
+      "bases": [
+        {
+          "path": "/std/tr1/_Regex_traits<char>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/tr1/regex_traits<wchar_t>",
+      "bases": [
+        {
+          "path": "/std/tr1/_Regex_traits<wchar_t>",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": []
+    },
+    {
+      "path": "/std/unary_function<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,unsigned_int>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/unary_function<std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,unsigned_int>",
+      "bases": [],
+      "slots": []
+    },
+    {
+      "path": "/std/underflow_error",
+      "bases": [
+        {
+          "path": "/std/runtime_error",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/stdext/bad_alloc",
+      "bases": [
+        {
+          "path": "/stdext/exception",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/stdext/bad_exception",
+      "bases": [
+        {
+          "path": "/stdext/exception",
+          "access": "PUBLIC",
+          "isVirtual": false,
+          "offset": 0
+        }
+      ],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "__vecDelDtor"
+        }
+      ]
+    },
+    {
+      "path": "/stdext/exception",
+      "bases": [],
+      "slots": [
+        {
+          "offset": 0,
+          "name": "~exception"
+        },
+        {
+          "offset": 4,
+          "name": "what"
+        },
+        {
+          "offset": 8,
+          "name": "_Doraise"
+        }
+      ]
+    }
+  ]
+}
