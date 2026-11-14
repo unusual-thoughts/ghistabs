@@ -45,11 +45,13 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
 
     @Test
     fun `of a class's qualified vftable symbols, the one its locator gives offset 0 is its own`() {
-        val label = program.symbolTable.getNamespace("Label", null)
-        fun table(base: String) = program.symbolTable.getSymbols("vftable_for_$base", label).single().address
+        // `Label`'s tables, for `Rect` at +0 and `Named` at +24.
+        val tables = MsvcRttiParser(program, DummySink).parse(TaskMonitor.DUMMY).recorded
+            .single { it.qualifiedName == "Label" }.vftables.sortedBy { it.vfptrOffset(program) }
+        tables.map { it.vfptrOffset(program) } mustBe listOf(0L, 24L)
         val symbols = program.runTransaction {
-            listOf("Rect", "Named").map { base ->
-                program.symbolTable.createLabel(table(base), "??_7Label@@6B$base@@@", SourceType.IMPORTED)
+            tables.zip(listOf("Rect", "Named")).map { (table, base) ->
+                program.symbolTable.createLabel(table.addressPoint, "??_7Label@@6B$base@@@", SourceType.IMPORTED)
             }
         }
         try {
