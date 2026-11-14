@@ -272,13 +272,14 @@ class GenericVftableFinder(
     } == true
 
     /**
-     * Whether the word at [pfn] can be a slot pointing at [target]: an imported function's thunk, or code where
-     * a function begins or could, at an instruction's start or undisassembled; not inside a function, where a
-     * switch's jump table points.
+     * Whether the word at [pfn] can be a slot pointing at [target]: an imported function's thunk, or code
+     * ([isSlotCode], so not back into a read-only block its table shares with the code) where a function begins
+     * or could, at an instruction's start or undisassembled; not inside a function, where a switch's jump table
+     * points.
      */
     private fun isSlot(pfn: Address, target: Address): Boolean {
         if (program.importedFunction(pfn, target) != null) return true
-        if (!program.isCode(target) || !program.isInitialized(target)) return false
+        if (!program.isSlotCode(pfn, target) || !program.isInitialized(target)) return false
         if (listing.getDefinedDataContaining(target) != null) return false
         if (listing.getInstructionContaining(target)?.let { it.address != target } == true) return false
         return program.functionManager.getFunctionContaining(target)?.let { it.entryPoint == target } ?: true

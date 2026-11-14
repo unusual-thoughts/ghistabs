@@ -196,9 +196,9 @@ const val DESTRUCTOR_SLOTS = 2
 
 /**
  * The functions the slots of the [abi]'s vtable whose address point is [at] point at, in order. Nothing
- * records how many there are, so they end at the first entry that isn't code or an imported function
- * [imported] takes. Up to two nulls count when a function follows: gcc 12 leaves an abstract class's
- * destructor slots 0.
+ * records how many there are, so they end at the first entry that isn't code ([isSlotCode]) or an imported
+ * function [imported] takes. Up to two nulls count when a function follows: gcc 12 leaves an abstract
+ * class's destructor slots 0.
  */
 internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function) -> Boolean = { true }) = sequence {
     val nulls = mutableListOf<Address>()
@@ -207,7 +207,7 @@ internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function
         when {
             target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target
 
-            isCode(target) || importedFunction(pfn, target)?.let(imported) == true -> {
+            isSlotCode(pfn, target) || importedFunction(pfn, target)?.let(imported) == true -> {
                 yieldAll(nulls)
                 yield(target)
                 nulls.clear()
@@ -217,6 +217,16 @@ internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function
         }
     }
 }
+
+/**
+ * Whether the slot at [pfn] points at code: executable memory, and not back into the read-only block the
+ * slot itself is in. gcc 3.3–4.9 link `.rodata` into the R-X text segment, so the vtables, VTTs and
+ * typeinfos there are executable too: past a table's last slot, the next record's `offset_to_top` 0 reads
+ * as a null slot, and its typeinfo pointer, or a VTT's pointers at other tables, as functions. An a.out
+ * object loads its text and data as one writable block, where a slot does point into its own block.
+ */
+internal fun Program.isSlotCode(pfn: Address, target: Address): Boolean =
+    isCode(target) && memory.getBlock(pfn).let { it == null || it.isWrite || it != memory.getBlock(target) }
 
 /**
  * The program's own function the slot pointing at [at] holds, past a jump stub, and made where code has
