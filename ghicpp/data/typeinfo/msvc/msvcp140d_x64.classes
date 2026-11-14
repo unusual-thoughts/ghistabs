@@ -1,0 +1,1196 @@
+C	/std/_All_of_vbool_traits
+C	/std/_Any_big_RTTI
+C	/std/_Any_small_RTTI
+C	/std/_Arg_types<>
+C	/std/_Arg_types<int>
+C	/std/_Atomic_integral<int,4>
+	B	public	0	/std/_Atomic_storage<int,4>
+C	/std/_Atomic_integral<long,4>
+	B	public	0	/std/_Atomic_storage<long,4>
+C	/std/_Atomic_integral_facade<int>
+	B	public	0	/std/_Atomic_integral<int,4>
+C	/std/_Atomic_integral_facade<long>
+	B	public	0	/std/_Atomic_integral<long,4>
+C	/std/_Atomic_nonobject_pointer<void*___ptr64>
+	B	public	0	/std/_Atomic_storage<void*___ptr64,8>
+C	/std/_Atomic_padded<int>
+C	/std/_Atomic_padded<long>
+C	/std/_Atomic_padded<void*___ptr64>
+C	/std/_Atomic_storage<int,4>
+C	/std/_Atomic_storage<long,4>
+C	/std/_Atomic_storage<void*___ptr64,8>
+C	/std/_Base128
+C	/std/_Basic_container_proxy_ptr12
+C	/std/_Char_traits<char,int>
+C	/std/_Char_traits<char16_t,unsigned_short>
+C	/std/_Char_traits<char32_t,unsigned_int>
+C	/std/_Char_traits<wchar_t,unsigned_short>
+C	/std/_Complex_base<double,_C_double_complex>
+	B	public	0	/_C_double_complex
+C	/std/_Complex_base<float,_C_float_complex>
+	B	public	0	/_C_float_complex
+C	/std/_Complex_base<long_double,_C_ldouble_complex>
+	B	public	0	/_C_ldouble_complex
+C	/std/_Compressed_pair<std::allocator<char16_t>,std::_String_val<std::_Simple_types<char16_t>_>,1>
+	B	private	0	/std/allocator<char16_t>
+C	/std/_Compressed_pair<std::allocator<char32_t>,std::_String_val<std::_Simple_types<char32_t>_>,1>
+	B	private	0	/std/allocator<char32_t>
+C	/std/_Compressed_pair<std::allocator<char>,std::_String_val<std::_Simple_types<char>_>,1>
+	B	private	0	/std/allocator<char>
+C	/std/_Compressed_pair<std::allocator<int>,std::_Deque_val<std::_Deque_simple_types<int>_>,1>
+	B	private	0	/std/allocator<int>
+C	/std/_Compressed_pair<std::allocator<int>,std::_Vector_val<std::_Simple_types<int>_>,1>
+	B	private	0	/std/allocator<int>
+C	/std/_Compressed_pair<std::allocator<std::_Flist_node<int,void*___ptr64>_>,std::_Flist_val<std::_Flist_simple_types<int>_>,1>
+	B	private	0	/std/allocator<std::_Flist_node<int,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_node<int,void*___ptr64>_>,std::_List_val<std::_List_simple_types<int>_>,1>
+	B	private	0	/std/allocator<std::_List_node<int,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>,std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,1>
+	B	private	0	/std/allocator<std::_List_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_node<std::pair<int_const_,int>,void*___ptr64>_>,std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>,1>
+	B	private	0	/std/allocator<std::_List_node<std::pair<int_const_,int>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>,std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>,1>
+	B	private	0	/std/allocator<std::_List_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>,std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>,1>
+	B	private	0	/std/allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>,std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>,1>
+	B	private	0	/std/allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>,std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>,1>
+	B	private	0	/std/allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_node<void*___ptr64,void*___ptr64>_>,std::_List_val<std::_List_simple_types<void*___ptr64>_>,1>
+	B	private	0	/std/allocator<std::_List_node<void*___ptr64,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>_>,std::_Vector_val<std::_Simple_types<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>_>_>,1>
+	B	private	0	/std/allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>_>,std::_Vector_val<std::_Simple_types<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>_>_>,1>
+	B	private	0	/std/allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>_>,std::_Vector_val<std::_Simple_types<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>_>_>,1>
+	B	private	0	/std/allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>_>,std::_Vector_val<std::_Simple_types<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>_>_>,1>
+	B	private	0	/std/allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>_>,std::_Vector_val<std::_Simple_types<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>_>_>,1>
+	B	private	0	/std/allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>_>,std::_Vector_val<std::_Simple_types<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>_>_>,1>
+	B	private	0	/std/allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>_>
+C	/std/_Compressed_pair<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>_>,std::_Vector_val<std::_Simple_types<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>_>_>,1>
+	B	private	0	/std/allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>_>
+C	/std/_Compressed_pair<std::allocator<std::_Tree_node<int,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<int>_>,1>
+	B	private	0	/std/allocator<std::_Tree_node<int,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_Tree_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,1>
+	B	private	0	/std/allocator<std::_Tree_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_Tree_node<std::pair<int_const_,int>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::pair<int_const_,int>_>_>,1>
+	B	private	0	/std/allocator<std::_Tree_node<std::pair<int_const_,int>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_Tree_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::pair<int_const_,void*___ptr64>_>_>,1>
+	B	private	0	/std/allocator<std::_Tree_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>,1>
+	B	private	0	/std/allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>,1>
+	B	private	0	/std/allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>,1>
+	B	private	0	/std/allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::_Tree_node<void*___ptr64,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<void*___ptr64>_>,1>
+	B	private	0	/std/allocator<std::_Tree_node<void*___ptr64,void*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::_Vector_val<std::_Simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,1>
+	B	private	0	/std/allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Compressed_pair<std::allocator<std::filesystem::_Find_file_handle>,std::_Vector_val<std::_Simple_types<std::filesystem::_Find_file_handle>_>,1>
+	B	private	0	/std/allocator<std::filesystem::_Find_file_handle>
+C	/std/_Compressed_pair<std::allocator<std::sub_match<char_const*___ptr64>_>,std::_Vector_val<std::_Simple_types<std::sub_match<char_const*___ptr64>_>_>,1>
+	B	private	0	/std/allocator<std::sub_match<char_const*___ptr64>_>
+C	/std/_Compressed_pair<std::allocator<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>_>,std::_Vector_val<std::_Simple_types<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>_>_>,1>
+	B	private	0	/std/allocator<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>_>
+C	/std/_Compressed_pair<std::allocator<unsigned_int>,std::_Vector_val<std::_Simple_types<unsigned_int>_>,1>
+	B	private	0	/std/allocator<unsigned_int>
+C	/std/_Compressed_pair<std::allocator<void*___ptr64>,std::_Deque_val<std::_Deque_simple_types<void*___ptr64>_>,1>
+	B	private	0	/std/allocator<void*___ptr64>
+C	/std/_Compressed_pair<std::allocator<void*___ptr64>,std::_Vector_val<std::_Simple_types<void*___ptr64>_>,1>
+	B	private	0	/std/allocator<void*___ptr64>
+C	/std/_Compressed_pair<std::allocator<wchar_t>,std::_String_val<std::_Simple_types<wchar_t>_>,1>
+	B	private	0	/std/allocator<wchar_t>
+C	/std/_Compressed_pair<std::default_delete<int>,int*___ptr64,1>
+	B	private	0	/std/default_delete<int>
+C	/std/_Compressed_pair<std::default_delete<int_[0]>,int*___ptr64,1>
+	B	private	0	/std/default_delete<int_[0]>
+C	/std/_Compressed_pair<std::default_delete<std::_Facet_base>,std::_Facet_base*___ptr64,1>
+	B	private	0	/std/default_delete<std::_Facet_base>
+C	/std/_Compressed_pair<std::equal_to<int>,float,1>
+	B	private	0	/std/equal_to<int>
+C	/std/_Compressed_pair<std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,float,1>
+	B	private	0	/std/equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Compressed_pair<std::hash<int>,std::_Compressed_pair<std::equal_to<int>,float,1>,1>
+	B	private	0	/std/hash<int>
+C	/std/_Compressed_pair<std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::_Compressed_pair<std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,float,1>,1>
+	B	private	0	/std/hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Compressed_pair<std::less<int>,std::_Compressed_pair<std::allocator<std::_Tree_node<int,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<int>_>,1>,1>
+	B	private	0	/std/less<int>
+C	/std/_Compressed_pair<std::less<int>,std::_Compressed_pair<std::allocator<std::_Tree_node<std::pair<int_const_,int>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::pair<int_const_,int>_>_>,1>,1>
+	B	private	0	/std/less<int>
+C	/std/_Compressed_pair<std::less<int>,std::_Compressed_pair<std::allocator<std::_Tree_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::pair<int_const_,void*___ptr64>_>_>,1>,1>
+	B	private	0	/std/less<int>
+C	/std/_Compressed_pair<std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::_Compressed_pair<std::allocator<std::_Tree_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,1>,1>
+	B	private	0	/std/less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Compressed_pair<std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::_Compressed_pair<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>,1>,1>
+	B	private	0	/std/less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Compressed_pair<std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::_Compressed_pair<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>,1>,1>
+	B	private	0	/std/less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Compressed_pair<std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::_Compressed_pair<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>,1>,1>
+	B	private	0	/std/less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Compressed_pair<std::less<void*___ptr64>,std::_Compressed_pair<std::allocator<std::_Tree_node<void*___ptr64,void*___ptr64>_>,std::_Tree_val<std::_Tree_simple_types<void*___ptr64>_>,1>,1>
+	B	private	0	/std/less<void*___ptr64>
+C	/std/_Conditionally_enabled_hash<int,1>
+C	/std/_Conditionally_enabled_hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,1>
+C	/std/_Constexpr_immortalize_impl<std::_Generic_error_category>
+C	/std/_Constexpr_immortalize_impl<std::_Iostream_error_category2>
+C	/std/_Constexpr_immortalize_impl<std::_System_error_category>
+C	/std/_Container_base0
+C	/std/_Container_base12
+C	/std/_Container_proxy
+C	/std/_Container_proxy_ptr12<std::allocator<std::_Container_proxy>_>
+	B	public	0	/std/_Basic_container_proxy_ptr12
+C	/std/_Crt_new_delete
+C	/std/_Ctraits<double>
+C	/std/_Ctraits<float>
+C	/std/_Ctraits<long_double>
+C	/std/_Ctype_constants_base
+C	/std/_Default_allocate_traits
+C	/std/_Default_allocator_traits<std::allocator<char16_t>_>
+C	/std/_Default_allocator_traits<std::allocator<char32_t>_>
+C	/std/_Default_allocator_traits<std::allocator<char>_>
+C	/std/_Default_allocator_traits<std::allocator<int*___ptr64>_>
+C	/std/_Default_allocator_traits<std::allocator<int>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_Container_proxy>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_Flist_node<int,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_node<int,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::pair<int_const_,int>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_node<void*___ptr64,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<int,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::pair<int_const_,int>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<void*___ptr64,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::filesystem::_Find_file_handle>_>
+C	/std/_Default_allocator_traits<std::allocator<std::pair<int_const_,int>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::pair<int_const_,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::sub_match<char_const*___ptr64>_>_>
+C	/std/_Default_allocator_traits<std::allocator<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>_>_>
+C	/std/_Default_allocator_traits<std::allocator<unsigned_int>_>
+C	/std/_Default_allocator_traits<std::allocator<void*___ptr64*___ptr64>_>
+C	/std/_Default_allocator_traits<std::allocator<void*___ptr64>_>
+C	/std/_Default_allocator_traits<std::allocator<wchar_t>_>
+C	/std/_Default_sentinel
+C	/std/_Deque_const_iterator<std::_Deque_val<std::_Deque_simple_types<int>_>_>
+	B	public	0	/std/_Iterator_base12
+C	/std/_Deque_const_iterator<std::_Deque_val<std::_Deque_simple_types<void*___ptr64>_>_>
+	B	public	0	/std/_Iterator_base12
+C	/std/_Deque_val<std::_Deque_simple_types<int>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Deque_val<std::_Deque_simple_types<void*___ptr64>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Digit_pair_table<char>
+C	/std/_Digit_pair_table<wchar_t>
+C	/std/_Fac_node
+C	/std/_Fac_tidy_reg_t
+C	/std/_Facet_base
+C	/std/_Facetptr<std::codecvt<char,char,_Mbstatet>_>
+C	/std/_Facetptr<std::codecvt<wchar_t,char,_Mbstatet>_>
+C	/std/_Facetptr<std::collate<char>_>
+C	/std/_Facetptr<std::collate<wchar_t>_>
+C	/std/_Facetptr<std::ctype<char>_>
+C	/std/_Facetptr<std::ctype<wchar_t>_>
+C	/std/_Facetptr<std::messages<char>_>
+C	/std/_Facetptr<std::moneypunct<char,0>_>
+C	/std/_Facetptr<std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>_>
+C	/std/_Facetptr<std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>_>_>_>
+C	/std/_Facetptr<std::numpunct<char>_>
+C	/std/_Facetptr<std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>_>
+C	/std/_Fake_allocator
+C	/std/_Flist_const_iterator<std::_Flist_val<std::_Flist_simple_types<int>_>_>
+	B	public	0	/std/_Flist_unchecked_const_iterator<std::_Flist_val<std::_Flist_simple_types<int>_>,std::_Iterator_base12>
+C	/std/_Flist_node<int,void*___ptr64>
+C	/std/_Flist_unchecked_const_iterator<std::_Flist_val<std::_Flist_simple_types<int>_>,std::_Iterator_base12>
+	B	public	0	/std/_Iterator_base12
+C	/std/_Flist_val<std::_Flist_simple_types<int>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Func_base<int,int>
+C	/std/_Func_base<void>
+C	/std/_Func_class<int,int>
+	B	public	0	/std/_Arg_types<int>
+C	/std/_Func_class<void>
+	B	public	0	/std/_Arg_types<>
+C	/std/_Generic_error_category
+	B	public	0	/std/error_category
+C	/std/_Hash<std::_Umap_traits<int,int,std::_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>,std::allocator<std::pair<int_const_,int>_>,0>_>
+C	/std/_Hash<std::_Umap_traits<int,void*___ptr64,std::_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>,std::allocator<std::pair<int_const_,void*___ptr64>_>,0>_>
+C	/std/_Hash<std::_Umap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,int,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>,0>_>
+C	/std/_Hash<std::_Umap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>,0>_>
+C	/std/_Hash<std::_Umap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>,0>_>
+C	/std/_Hash<std::_Uset_traits<int,std::_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>,std::allocator<int>,0>_>
+C	/std/_Hash<std::_Uset_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,0>_>
+C	/std/_Hash_vec<std::allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>_>_>
+C	/std/_Hash_vec<std::allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>_>_>
+C	/std/_Hash_vec<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>_>_>
+C	/std/_Hash_vec<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>_>_>
+C	/std/_Hash_vec<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>_>_>
+C	/std/_Hash_vec<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>_>_>
+C	/std/_Hash_vec<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>_>_>
+C	/std/_Iosb<int>
+C	/std/_Iostream_error_category2
+	B	public	0	/std/error_category
+C	/std/_Iterator_base0
+C	/std/_Iterator_base12
+C	/std/_Leave_proxy_unbound
+C	/std/_List_const_iterator<std::_List_val<std::_List_simple_types<int>_>_>
+	B	public	0	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base12>
+C	/std/_List_iterator<std::_List_val<std::_List_simple_types<int>_>_>
+	B	public	0	/std/_List_const_iterator<std::_List_val<std::_List_simple_types<int>_>_>
+C	/std/_List_node<int,void*___ptr64>
+C	/std/_List_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>
+C	/std/_List_node<std::pair<int_const_,int>,void*___ptr64>
+C	/std/_List_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>
+C	/std/_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>
+C	/std/_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>
+C	/std/_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>
+C	/std/_List_node<void*___ptr64,void*___ptr64>
+C	/std/_List_simple_types<int>
+	B	public	0	/std/_Simple_types<int>
+C	/std/_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	public	0	/std/_Simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_List_simple_types<std::pair<int_const_,int>_>
+	B	public	0	/std/_Simple_types<std::pair<int_const_,int>_>
+C	/std/_List_simple_types<std::pair<int_const_,void*___ptr64>_>
+	B	public	0	/std/_Simple_types<std::pair<int_const_,void*___ptr64>_>
+C	/std/_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>
+	B	public	0	/std/_Simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>
+C	/std/_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>
+	B	public	0	/std/_Simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>
+C	/std/_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>
+	B	public	0	/std/_Simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>
+C	/std/_List_simple_types<void*___ptr64>
+	B	public	0	/std/_Simple_types<void*___ptr64>
+C	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>
+	B	public	0	/std/_Iterator_base0
+C	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base12>
+	B	public	0	/std/_Iterator_base12
+C	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>
+	B	public	0	/std/_Iterator_base0
+C	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>,std::_Iterator_base0>
+	B	public	0	/std/_Iterator_base0
+C	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>,std::_Iterator_base0>
+	B	public	0	/std/_Iterator_base0
+C	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>,std::_Iterator_base0>
+	B	public	0	/std/_Iterator_base0
+C	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>,std::_Iterator_base0>
+	B	public	0	/std/_Iterator_base0
+C	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>,std::_Iterator_base0>
+	B	public	0	/std/_Iterator_base0
+C	/std/_List_unchecked_iterator<std::_List_val<std::_List_simple_types<int>_>_>
+	B	public	0	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>
+C	/std/_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>_>
+	B	public	0	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>
+C	/std/_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>
+	B	public	0	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>,std::_Iterator_base0>
+C	/std/_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>
+	B	public	0	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>,std::_Iterator_base0>
+C	/std/_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>
+	B	public	0	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>,std::_Iterator_base0>
+C	/std/_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>
+	B	public	0	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>,std::_Iterator_base0>
+C	/std/_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>
+	B	public	0	/std/_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>,std::_Iterator_base0>
+C	/std/_List_val<std::_List_simple_types<int>_>
+	B	public	0	/std/_Container_base12
+C	/std/_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_List_val<std::_List_simple_types<void*___ptr64>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Locbase<int>
+C	/std/_Locinfo
+C	/std/_Lockit
+C	/std/_Mpunct<char>
+	B	public	0	/std/money_base
+C	/std/_Mpunct<wchar_t>
+	B	public	0	/std/money_base
+C	/std/_Mutex_base
+C	/std/_Narrow_char_traits<char,int>
+	B	private	0	/std/_Char_traits<char,int>
+C	/std/_Node_assert
+	B	public	0	/std/_Node_base
+C	/std/_Node_back
+	B	public	0	/std/_Node_base
+C	/std/_Node_base
+C	/std/_Node_capture
+	B	public	0	/std/_Node_base
+C	/std/_Node_end_group
+	B	public	0	/std/_Node_base
+C	/std/_Node_end_rep
+	B	public	0	/std/_Node_base
+C	/std/_Node_endif
+	B	public	0	/std/_Node_base
+C	/std/_Node_if
+	B	public	0	/std/_Node_base
+C	/std/_Node_rep
+	B	public	0	/std/_Node_base
+C	/std/_Non_trivial_copy<std::_Variant_destroy_layer_<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+	B	public	0	/std/_Variant_destroy_layer_<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Non_trivial_copy_assign<std::_Variant_destroy_layer_<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	public	0	/std/_Non_trivial_move<std::_Variant_destroy_layer_<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Non_trivial_move<std::_Variant_destroy_layer_<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	public	0	/std/_Non_trivial_copy<std::_Variant_destroy_layer_<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/_Non_trivial_move_assign<std::_Variant_destroy_layer_<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	public	0	/std/_Non_trivial_copy_assign<std::_Variant_destroy_layer_<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Nontrivial_dummy_type
+C	/std/_Num_base
+C	/std/_Num_float_base
+	B	public	0	/std/_Num_base
+C	/std/_Num_int_base
+	B	public	0	/std/_Num_base
+C	/std/_One_then_variadic_args_t
+C	/std/_Optional_construct_base<int>
+	B	public	0	/std/_Optional_destruct_base<int,1>
+C	/std/_Optional_destruct_base<int,1>
+C	/std/_Ptr_base<int>
+C	/std/_Ptr_base<std::filesystem::_Dir_enum_impl>
+C	/std/_Ptr_base<std::filesystem::_Recursive_dir_enum_impl>
+C	/std/_Ptr_base<std::mutex>
+C	/std/_Ptr_base<void>
+C	/std/_Ref_count_base
+C	/std/_Ref_count_obj2<int>
+	B	public	0	/std/_Ref_count_base
+C	/std/_Ref_count_obj2<std::filesystem::_Dir_enum_impl>
+	B	public	0	/std/_Ref_count_base
+C	/std/_Ref_count_obj2<std::filesystem::_Recursive_dir_enum_impl>
+	B	public	0	/std/_Ref_count_base
+C	/std/_Ref_count_obj2<std::mutex>
+	B	public	0	/std/_Ref_count_base
+C	/std/_Regex_base
+	B	public	0	/std/_Container_base12
+C	/std/_Regex_traits<char>
+	B	public	0	/std/_Regex_traits_base
+C	/std/_Regex_traits<wchar_t>
+	B	public	0	/std/_Regex_traits_base
+C	/std/_Regex_traits_base
+C	/std/_Root_node
+	B	public	0	/std/_Node_base
+C	/std/_Signed128
+	B	public	0	/std/_Base128
+C	/std/_Simple_types<int>
+C	/std/_Simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Simple_types<std::pair<int_const_,int>_>
+C	/std/_Simple_types<std::pair<int_const_,void*___ptr64>_>
+C	/std/_Simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>
+C	/std/_Simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>
+C	/std/_Simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>
+C	/std/_Simple_types<void*___ptr64>
+C	/std/_String_const_iterator<std::_String_val<std::_Simple_types<char16_t>_>_>
+	B	public	0	/std/_Iterator_base12
+C	/std/_String_const_iterator<std::_String_val<std::_Simple_types<char32_t>_>_>
+	B	public	0	/std/_Iterator_base12
+C	/std/_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>
+	B	public	0	/std/_Iterator_base12
+C	/std/_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>_>_>
+	B	public	0	/std/_Iterator_base12
+C	/std/_String_constructor_concat_tag
+C	/std/_String_iterator<std::_String_val<std::_Simple_types<char16_t>_>_>
+	B	public	0	/std/_String_const_iterator<std::_String_val<std::_Simple_types<char16_t>_>_>
+C	/std/_String_iterator<std::_String_val<std::_Simple_types<char32_t>_>_>
+	B	public	0	/std/_String_const_iterator<std::_String_val<std::_Simple_types<char32_t>_>_>
+C	/std/_String_iterator<std::_String_val<std::_Simple_types<char>_>_>
+	B	public	0	/std/_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>
+C	/std/_String_iterator<std::_String_val<std::_Simple_types<wchar_t>_>_>
+	B	public	0	/std/_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>_>_>
+C	/std/_String_val<std::_Simple_types<char16_t>_>
+	B	public	0	/std/_Container_base12
+C	/std/_String_val<std::_Simple_types<char32_t>_>
+	B	public	0	/std/_Container_base12
+C	/std/_String_val<std::_Simple_types<char>_>
+	B	public	0	/std/_Container_base12
+C	/std/_String_val<std::_Simple_types<wchar_t>_>
+	B	public	0	/std/_Container_base12
+C	/std/_System_error
+	B	public	0	/std/runtime_error
+C	/std/_System_error_category
+	B	public	0	/std/error_category
+C	/std/_System_error_message
+C	/std/_Tagged<int&___ptr64,0>
+C	/std/_Tagged<std::_Variant_storage_<0,int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>&___ptr64,-1>
+C	/std/_Tagged<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>&___ptr64,1>
+C	/std/_Tidy_guard<std::_Mpunct<char>_>
+C	/std/_Tidy_guard<std::numpunct<char>_>
+C	/std/_Timevec
+C	/std/_Tmap_traits<int,int,std::less<int>,std::allocator<std::pair<int_const_,int>_>,0>
+C	/std/_Tmap_traits<int,int,std::less<int>,std::allocator<std::pair<int_const_,int>_>,1>
+C	/std/_Tmap_traits<int,void*___ptr64,std::less<int>,std::allocator<std::pair<int_const_,void*___ptr64>_>,0>
+C	/std/_Tmap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,int,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>,0>
+C	/std/_Tmap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>,0>
+C	/std/_Tmap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>,0>
+C	/std/_Tree<std::_Tmap_traits<int,int,std::less<int>,std::allocator<std::pair<int_const_,int>_>,0>_>
+C	/std/_Tree<std::_Tmap_traits<int,int,std::less<int>,std::allocator<std::pair<int_const_,int>_>,1>_>
+C	/std/_Tree<std::_Tmap_traits<int,void*___ptr64,std::less<int>,std::allocator<std::pair<int_const_,void*___ptr64>_>,0>_>
+C	/std/_Tree<std::_Tmap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,int,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>,0>_>
+C	/std/_Tree<std::_Tmap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>,0>_>
+C	/std/_Tree<std::_Tmap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>,0>_>
+C	/std/_Tree<std::_Tset_traits<int,std::less<int>,std::allocator<int>,0>_>
+C	/std/_Tree<std::_Tset_traits<int,std::less<int>,std::allocator<int>,1>_>
+C	/std/_Tree<std::_Tset_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,0>_>
+C	/std/_Tree<std::_Tset_traits<void*___ptr64,std::less<void*___ptr64>,std::allocator<void*___ptr64>,0>_>
+C	/std/_Tree_const_iterator<std::_Tree_val<std::_Tree_simple_types<std::pair<int_const_,int>_>_>_>
+	B	public	0	/std/_Tree_unchecked_const_iterator<std::_Tree_val<std::_Tree_simple_types<std::pair<int_const_,int>_>_>,std::_Iterator_base12>
+C	/std/_Tree_iterator<std::_Tree_val<std::_Tree_simple_types<std::pair<int_const_,int>_>_>_>
+	B	public	0	/std/_Tree_const_iterator<std::_Tree_val<std::_Tree_simple_types<std::pair<int_const_,int>_>_>_>
+C	/std/_Tree_node<int,void*___ptr64>
+C	/std/_Tree_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>
+C	/std/_Tree_node<std::pair<int_const_,int>,void*___ptr64>
+C	/std/_Tree_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>
+C	/std/_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>
+C	/std/_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>
+C	/std/_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>
+C	/std/_Tree_node<void*___ptr64,void*___ptr64>
+C	/std/_Tree_unchecked_const_iterator<std::_Tree_val<std::_Tree_simple_types<std::pair<int_const_,int>_>_>,std::_Iterator_base12>
+	B	public	0	/std/_Iterator_base12
+C	/std/_Tree_val<std::_Tree_simple_types<int>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Tree_val<std::_Tree_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Tree_val<std::_Tree_simple_types<std::pair<int_const_,int>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Tree_val<std::_Tree_simple_types<std::pair<int_const_,void*___ptr64>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Tree_val<std::_Tree_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Tree_val<std::_Tree_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Tree_val<std::_Tree_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Tree_val<std::_Tree_simple_types<void*___ptr64>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Tuple_val<int>
+C	/std/_Uhash_choose_transparency<int,std::hash<int>,std::equal_to<int>_>
+C	/std/_Uhash_choose_transparency<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>
+	B	public	0	/std/_Uhash_choose_transparency<int,std::hash<int>,std::equal_to<int>_>
+C	/std/_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+	B	public	0	/std/_Uhash_choose_transparency<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/_Umap_traits<int,int,std::_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>,std::allocator<std::pair<int_const_,int>_>,0>
+	B	public	0	/std/_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>
+C	/std/_Umap_traits<int,void*___ptr64,std::_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>,std::allocator<std::pair<int_const_,void*___ptr64>_>,0>
+	B	public	0	/std/_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>
+C	/std/_Umap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,int,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>,0>
+	B	public	0	/std/_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/_Umap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>,0>
+	B	public	0	/std/_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/_Umap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>,0>
+	B	public	0	/std/_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/_Uninitialized_backout<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>*___ptr64>
+C	/std/_Uninitialized_backout<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>*___ptr64>
+C	/std/_Uninitialized_backout<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>*___ptr64>
+C	/std/_Uninitialized_backout<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>*___ptr64>
+C	/std/_Uninitialized_backout<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>*___ptr64>
+C	/std/_Uninitialized_backout<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>*___ptr64>
+C	/std/_Uninitialized_backout<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>*___ptr64>
+C	/std/_Unsigned128
+	B	public	0	/std/_Base128
+C	/std/_Uset_traits<int,std::_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>,std::allocator<int>,0>
+	B	public	0	/std/_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>
+C	/std/_Uset_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,0>
+	B	public	0	/std/_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/_Variant_base<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	private	0	/std/_Variant_storage_<0,int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Variant_destroy_layer_<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	public	0	/std/_Variant_base<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Variant_raw_visit1<1>
+C	/std/_Variant_storage_<0,int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Variant_storage_<0,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/_Variant_storage_<1>
+C	/std/_Vb_val<std::allocator<bool>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_const_iterator<std::_Vector_val<std::_Simple_types<int>_>_>
+	B	public	0	/std/_Iterator_base12
+C	/std/_Vector_const_iterator<std::_Vector_val<std::_Simple_types<std::filesystem::_Find_file_handle>_>_>
+	B	public	0	/std/_Iterator_base12
+C	/std/_Vector_iterator<std::_Vector_val<std::_Simple_types<int>_>_>
+	B	public	0	/std/_Vector_const_iterator<std::_Vector_val<std::_Simple_types<int>_>_>
+C	/std/_Vector_val<std::_Simple_types<int>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::filesystem::_Find_file_handle>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::sub_match<char_const*___ptr64>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>_>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<unsigned_int>_>
+	B	public	0	/std/_Container_base12
+C	/std/_Vector_val<std::_Simple_types<void*___ptr64>_>
+	B	public	0	/std/_Container_base12
+C	/std/_WChar_traits<char16_t>
+	B	private	0	/std/_Char_traits<char16_t,unsigned_short>
+C	/std/_WChar_traits<wchar_t>
+	B	private	0	/std/_Char_traits<wchar_t,unsigned_short>
+C	/std/_Weak_argument_type<int,void>
+	B	public	0	/std/_Weak_result_type<int,void>
+C	/std/_Weak_binary_args<int,void>
+	B	public	0	/std/_Weak_argument_type<int,void>
+C	/std/_Weak_result_type<int,void>
+C	/std/_Wrap<int>
+C	/std/_Wrap<std::filesystem::_Dir_enum_impl>
+C	/std/_Wrap<std::filesystem::_Recursive_dir_enum_impl>
+C	/std/_Wrap<std::mutex>
+C	/std/_Yarn<char>
+C	/std/_Yarn<wchar_t>
+C	/std/_Zero_then_variadic_args_t
+C	/std/__non_rtti_object
+	B	public	0	/std/bad_typeid
+C	/std/adopt_lock_t
+C	/std/allocator<bool>
+C	/std/allocator<char16_t>
+C	/std/allocator<char32_t>
+C	/std/allocator<char>
+C	/std/allocator<int*___ptr64>
+C	/std/allocator<int>
+C	/std/allocator<std::_Container_proxy>
+C	/std/allocator<std::_Flist_node<int,void*___ptr64>_>
+C	/std/allocator<std::_List_node<int,void*___ptr64>_>
+C	/std/allocator<std::_List_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>
+C	/std/allocator<std::_List_node<std::pair<int_const_,int>,void*___ptr64>_>
+C	/std/allocator<std::_List_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>
+C	/std/allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>
+C	/std/allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>
+C	/std/allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>
+C	/std/allocator<std::_List_node<void*___ptr64,void*___ptr64>_>
+C	/std/allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>_>
+C	/std/allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>_>
+C	/std/allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>_>
+C	/std/allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>_>
+C	/std/allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>_>
+C	/std/allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>_>
+C	/std/allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>_>
+C	/std/allocator<std::_Tree_node<int,void*___ptr64>_>
+C	/std/allocator<std::_Tree_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>
+C	/std/allocator<std::_Tree_node<std::pair<int_const_,int>,void*___ptr64>_>
+C	/std/allocator<std::_Tree_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>
+C	/std/allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>
+C	/std/allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>
+C	/std/allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>
+C	/std/allocator<std::_Tree_node<void*___ptr64,void*___ptr64>_>
+C	/std/allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/allocator<std::basic_string_view<wchar_t,std::char_traits<wchar_t>_>_>
+C	/std/allocator<std::filesystem::_Find_file_handle>
+C	/std/allocator<std::pair<int_const_,int>_>
+C	/std/allocator<std::pair<int_const_,void*___ptr64>_>
+C	/std/allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>
+C	/std/allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>
+C	/std/allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>
+C	/std/allocator<std::sub_match<char_const*___ptr64>_>
+C	/std/allocator<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>_>
+C	/std/allocator<unsigned_int>
+C	/std/allocator<void*___ptr64*___ptr64>
+C	/std/allocator<void*___ptr64>
+C	/std/allocator<wchar_t>
+C	/std/allocator_traits<std::allocator<char16_t>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<char16_t>_>
+C	/std/allocator_traits<std::allocator<char32_t>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<char32_t>_>
+C	/std/allocator_traits<std::allocator<char>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<char>_>
+C	/std/allocator_traits<std::allocator<int*___ptr64>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<int*___ptr64>_>
+C	/std/allocator_traits<std::allocator<int>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<int>_>
+C	/std/allocator_traits<std::allocator<std::_Flist_node<int,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_Flist_node<int,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_node<int,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_node<int,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_node<std::pair<int_const_,int>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::pair<int_const_,int>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_node<void*___ptr64,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_node<void*___ptr64,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<int>_>,std::_Iterator_base0>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_const_iterator<std::_List_val<std::_List_simple_types<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::_Iterator_base0>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,int>_>_>_>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<int_const_,void*___ptr64>_>_>_>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>_>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>_>_>_>
+C	/std/allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_List_unchecked_iterator<std::_List_val<std::_List_simple_types<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>_>_>_>
+C	/std/allocator_traits<std::allocator<std::_Tree_node<int,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<int,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_Tree_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_Tree_node<std::pair<int_const_,int>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::pair<int_const_,int>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_Tree_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::pair<int_const_,void*___ptr64>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::_Tree_node<void*___ptr64,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::_Tree_node<void*___ptr64,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/allocator_traits<std::allocator<std::filesystem::_Find_file_handle>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::filesystem::_Find_file_handle>_>
+C	/std/allocator_traits<std::allocator<std::pair<int_const_,int>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::pair<int_const_,int>_>_>
+C	/std/allocator_traits<std::allocator<std::pair<int_const_,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::pair<int_const_,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>
+C	/std/allocator_traits<std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>
+C	/std/allocator_traits<std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::sub_match<char_const*___ptr64>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::sub_match<char_const*___ptr64>_>_>
+C	/std/allocator_traits<std::allocator<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>_>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>_>_>
+C	/std/allocator_traits<std::allocator<unsigned_int>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<unsigned_int>_>
+C	/std/allocator_traits<std::allocator<void*___ptr64*___ptr64>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<void*___ptr64*___ptr64>_>
+C	/std/allocator_traits<std::allocator<void*___ptr64>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<void*___ptr64>_>
+C	/std/allocator_traits<std::allocator<wchar_t>_>
+	B	public	0	/std/_Default_allocator_traits<std::allocator<wchar_t>_>
+C	/std/any
+C	/std/any/_Big_storage_t
+C	/std/any/_Small_storage_t
+C	/std/any/_Storage_t
+C	/std/array<int,4>
+C	/std/atomic<int>
+	B	public	0	/std/_Atomic_integral_facade<int>
+C	/std/atomic<long>
+	B	public	0	/std/_Atomic_integral_facade<long>
+C	/std/atomic<void*___ptr64>
+	B	public	0	/std/_Atomic_nonobject_pointer<void*___ptr64>
+C	/std/atomic_flag
+C	/std/bad_alloc
+	B	public	0	/std/exception
+C	/std/bad_any_cast
+	B	public	0	/std/bad_cast
+C	/std/bad_array_new_length
+	B	public	0	/std/bad_alloc
+C	/std/bad_cast
+	B	public	0	/std/exception
+C	/std/bad_exception
+	B	public	0	/std/exception
+C	/std/bad_function_call
+	B	public	0	/std/exception
+C	/std/bad_optional_access
+	B	public	0	/std/exception
+C	/std/bad_typeid
+	B	public	0	/std/exception
+C	/std/bad_variant_access
+	B	public	0	/std/exception
+C	/std/bad_weak_ptr
+	B	public	0	/std/exception
+C	/std/basic_filebuf<char,std::char_traits<char>_>
+	B	public	0	/std/basic_streambuf<char,std::char_traits<char>_>
+C	/std/basic_filebuf<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/basic_streambuf<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_fstream<char,std::char_traits<char>_>
+	B	public	0	/std/basic_iostream<char,std::char_traits<char>_>
+C	/std/basic_fstream<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/basic_iostream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_ifstream<char,std::char_traits<char>_>
+	B	public	0	/std/basic_istream<char,std::char_traits<char>_>
+C	/std/basic_ifstream<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_ios<char,std::char_traits<char>_>
+	B	public	0	/std/ios_base
+C	/std/basic_ios<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/ios_base
+C	/std/basic_iostream<char,std::char_traits<char>_>
+	B	public	0	/std/basic_istream<char,std::char_traits<char>_>
+	B	public	16	/std/basic_ostream<char,std::char_traits<char>_>
+C	/std/basic_iostream<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>
+	B	public	16	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_istream<char,std::char_traits<char>_>
+	V	public	0	1	/std/basic_ios<char,std::char_traits<char>_>
+C	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>
+	V	public	0	1	/std/basic_ios<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_istringstream<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/basic_istream<char,std::char_traits<char>_>
+C	/std/basic_istringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_ofstream<char,std::char_traits<char>_>
+	B	public	0	/std/basic_ostream<char,std::char_traits<char>_>
+C	/std/basic_ofstream<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_ostream<char,std::char_traits<char>_>
+	V	public	0	1	/std/basic_ios<char,std::char_traits<char>_>
+C	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>
+	V	public	0	1	/std/basic_ios<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_ostringstream<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/basic_ostream<char,std::char_traits<char>_>
+C	/std/basic_ostringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_regex<char,std::regex_traits<char>_>
+	B	public	0	/std/_Regex_base
+C	/std/basic_regex<wchar_t,std::regex_traits<wchar_t>_>
+	B	public	0	/std/_Regex_base
+C	/std/basic_streambuf<char,std::char_traits<char>_>
+C	/std/basic_streambuf<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_string<char,std::char_traits<char>,std::allocator<char>_>
+C	/std/basic_string<char16_t,std::char_traits<char16_t>,std::allocator<char16_t>_>
+C	/std/basic_string<char32_t,std::char_traits<char32_t>,std::allocator<char32_t>_>
+C	/std/basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+C	/std/basic_string_view<char,std::char_traits<char>_>
+C	/std/basic_string_view<char16_t,std::char_traits<char16_t>_>
+C	/std/basic_string_view<char32_t,std::char_traits<char32_t>_>
+C	/std/basic_string_view<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_stringbuf<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/basic_streambuf<char,std::char_traits<char>_>
+C	/std/basic_stringbuf<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/basic_streambuf<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_stringstream<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/basic_iostream<char,std::char_traits<char>_>
+C	/std/basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/basic_iostream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/bidirectional_iterator_tag
+	B	public	0	/std/forward_iterator_tag
+C	/std/bitset<32>
+C	/std/char_traits<char16_t>
+	B	public	0	/std/_WChar_traits<char16_t>
+C	/std/char_traits<char32_t>
+	B	public	0	/std/_Char_traits<char32_t,unsigned_int>
+C	/std/char_traits<char>
+	B	public	0	/std/_Narrow_char_traits<char,int>
+C	/std/char_traits<wchar_t>
+	B	public	0	/std/_WChar_traits<wchar_t>
+C	/std/chrono/duration<__int64,std::ratio<1,1000000000>_>
+C	/std/chrono/duration<__int64,std::ratio<1,10000000>_>
+C	/std/chrono/duration<__int64,std::ratio<1,1000>_>
+C	/std/chrono/steady_clock
+C	/std/chrono/system_clock
+C	/std/chrono/time_point<std::chrono::steady_clock,std::chrono::duration<__int64,std::ratio<1,1000000000>_>_>
+C	/std/chrono/time_point<std::chrono::system_clock,std::chrono::duration<__int64,std::ratio<1,10000000>_>_>
+C	/std/chrono/time_point<std::filesystem::_File_time_clock,std::chrono::duration<__int64,std::ratio<1,10000000>_>_>
+C	/std/codecvt<char,char,_Mbstatet>
+	B	public	0	/std/codecvt_base
+C	/std/codecvt<char16_t,char,_Mbstatet>
+	B	public	0	/std/codecvt_base
+C	/std/codecvt<char32_t,char,_Mbstatet>
+	B	public	0	/std/codecvt_base
+C	/std/codecvt<unsigned_short,char,_Mbstatet>
+	B	public	0	/std/codecvt_base
+C	/std/codecvt<wchar_t,char,_Mbstatet>
+	B	public	0	/std/codecvt_base
+C	/std/codecvt_base
+	B	public	0	/std/locale/facet
+C	/std/codecvt_byname<char16_t,char,_Mbstatet>
+	B	public	0	/std/codecvt<char16_t,char,_Mbstatet>
+C	/std/codecvt_byname<char32_t,char,_Mbstatet>
+	B	public	0	/std/codecvt<char32_t,char,_Mbstatet>
+C	/std/collate<char>
+	B	public	0	/std/locale/facet
+C	/std/collate<wchar_t>
+	B	public	0	/std/locale/facet
+C	/std/complex<double>
+	B	public	0	/std/_Complex_base<double,_C_double_complex>
+C	/std/complex<float>
+	B	public	0	/std/_Complex_base<float,_C_float_complex>
+C	/std/complex<long_double>
+	B	public	0	/std/_Complex_base<long_double,_C_ldouble_complex>
+C	/std/condition_variable
+C	/std/condition_variable_any
+C	/std/ctype<char>
+	B	public	0	/std/ctype_base
+C	/std/ctype<unsigned_short>
+	B	public	0	/std/ctype_base
+C	/std/ctype<wchar_t>
+	B	public	0	/std/ctype_base
+C	/std/ctype_base
+	B	public	0	/std/locale/facet
+	B	public	0	/std/_Ctype_constants_base
+C	/std/default_delete<int>
+C	/std/default_delete<int_[0]>
+C	/std/default_delete<std::_Facet_base>
+C	/std/defer_lock_t
+C	/std/deque<int,std::allocator<int>_>
+C	/std/deque<void*___ptr64,std::allocator<void*___ptr64>_>
+C	/std/domain_error
+	B	public	0	/std/logic_error
+C	/std/equal_to<int>
+C	/std/equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/error_category
+C	/std/error_code
+C	/std/error_condition
+C	/std/exception
+C	/std/exception_ptr
+C	/std/filesystem/_Dir_enum_impl
+C	/std/filesystem/_Dir_enum_impl/_Creator
+C	/std/filesystem/_Dir_enum_impl/_Creator/_Create_status
+C	/std/filesystem/_Directory_entry_proxy
+C	/std/filesystem/_File_status_and_error
+C	/std/filesystem/_File_time_clock
+C	/std/filesystem/_Find_file_handle
+C	/std/filesystem/_Path_iterator<std::_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>_>_>_>
+C	/std/filesystem/_Path_iterator<wchar_t_const*___ptr64>
+C	/std/filesystem/_Recursive_dir_enum_impl
+	B	public	0	/std/filesystem/_Dir_enum_impl
+C	/std/filesystem/_Should_recurse_result
+C	/std/filesystem/directory_entry
+C	/std/filesystem/directory_iterator
+C	/std/filesystem/file_status
+C	/std/filesystem/filesystem_error
+	B	public	0	/std/system_error
+C	/std/filesystem/path
+C	/std/forward_iterator_tag
+	B	public	0	/std/input_iterator_tag
+C	/std/forward_list<int,std::allocator<int>_>
+C	/std/fpos<_Mbstatet>
+C	/std/function<int___cdecl(int)>
+	B	public	0	/std/_Func_class<int,int>
+C	/std/function<void___cdecl(void)>
+	B	public	0	/std/_Func_class<void>
+C	/std/hash<double>
+C	/std/hash<float>
+C	/std/hash<int>
+	B	public	0	/std/_Conditionally_enabled_hash<int,1>
+C	/std/hash<long_double>
+C	/std/hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	public	0	/std/_Conditionally_enabled_hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,1>
+C	/std/hash<std::nullptr_t>
+C	/std/in_place_index_t<0>
+C	/std/initializer_list<char16_t>
+C	/std/initializer_list<char32_t>
+C	/std/initializer_list<char>
+C	/std/initializer_list<int>
+C	/std/initializer_list<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/initializer_list<std::pair<int_const_,int>_>
+C	/std/initializer_list<std::pair<int_const_,void*___ptr64>_>
+C	/std/initializer_list<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>
+C	/std/initializer_list<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>
+C	/std/initializer_list<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>
+C	/std/initializer_list<unsigned_int>
+C	/std/initializer_list<wchar_t>
+C	/std/input_iterator_tag
+C	/std/integral_constant<bool,0>
+C	/std/integral_constant<bool,1>
+C	/std/integral_constant<unsigned___int64,0>
+C	/std/invalid_argument
+	B	public	0	/std/logic_error
+C	/std/ios_base
+	B	public	8	/std/_Iosb<int>
+C	/std/ios_base/Init
+C	/std/ios_base/_Fnarray
+	B	public	0	/std/_Crt_new_delete
+C	/std/ios_base/_Iosarray
+	B	public	0	/std/_Crt_new_delete
+C	/std/ios_base/failure
+	B	public	0	/std/system_error
+C	/std/istreambuf_iterator<char,std::char_traits<char>_>
+C	/std/istreambuf_iterator<char,std::char_traits<char>_>/_Istreambuf_proxy
+C	/std/istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>
+C	/std/istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>/_Istreambuf_proxy
+C	/std/length_error
+	B	public	0	/std/logic_error
+C	/std/less<int>
+C	/std/less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/less<void*___ptr64>
+C	/std/list<int,std::allocator<int>_>
+C	/std/list<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/list<std::pair<int_const_,int>,std::allocator<std::pair<int_const_,int>_>_>
+C	/std/list<std::pair<int_const_,void*___ptr64>,std::allocator<std::pair<int_const_,void*___ptr64>_>_>
+C	/std/list<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>
+C	/std/list<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>
+C	/std/list<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>
+C	/std/list<void*___ptr64,std::allocator<void*___ptr64>_>
+C	/std/locale
+	B	public	0	/std/_Locbase<int>
+	B	public	1	/std/_Crt_new_delete
+C	/std/locale/_Facet_guard
+C	/std/locale/_Locimp
+	B	public	0	/std/locale/facet
+C	/std/locale/_Secret_locale_construct_tag
+C	/std/locale/facet
+	B	public	0	/std/_Facet_base
+	B	public	8	/std/_Crt_new_delete
+C	/std/locale/id
+C	/std/lock_guard<std::mutex>
+C	/std/logic_error
+	B	public	0	/std/exception
+C	/std/map<int,int,std::less<int>,std::allocator<std::pair<int_const_,int>_>_>
+	B	public	0	/std/_Tree<std::_Tmap_traits<int,int,std::less<int>,std::allocator<std::pair<int_const_,int>_>,0>_>
+C	/std/map<int,void*___ptr64,std::less<int>,std::allocator<std::pair<int_const_,void*___ptr64>_>_>
+	B	public	0	/std/_Tree<std::_Tmap_traits<int,void*___ptr64,std::less<int>,std::allocator<std::pair<int_const_,void*___ptr64>_>,0>_>
+C	/std/map<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,int,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>
+	B	public	0	/std/_Tree<std::_Tmap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,int,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>,0>_>
+C	/std/map<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>
+	B	public	0	/std/_Tree<std::_Tmap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>,0>_>
+C	/std/map<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>
+	B	public	0	/std/_Tree<std::_Tmap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>,0>_>
+C	/std/match_results<char_const*___ptr64,std::allocator<std::sub_match<char_const*___ptr64>_>_>
+C	/std/match_results<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>,std::allocator<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>_>_>
+C	/std/messages<char>
+	B	public	0	/std/messages_base
+C	/std/messages<wchar_t>
+	B	public	0	/std/messages_base
+C	/std/messages_base
+	B	public	0	/std/locale/facet
+C	/std/money_base
+	B	public	0	/std/locale/facet
+C	/std/money_base/pattern
+C	/std/money_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/locale/facet
+C	/std/money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/locale/facet
+C	/std/money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/locale/facet
+C	/std/money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/locale/facet
+C	/std/moneypunct<char,0>
+	B	public	0	/std/_Mpunct<char>
+C	/std/moneypunct<char,1>
+	B	public	0	/std/_Mpunct<char>
+C	/std/moneypunct<wchar_t,0>
+	B	public	0	/std/_Mpunct<wchar_t>
+C	/std/moneypunct<wchar_t,1>
+	B	public	0	/std/_Mpunct<wchar_t>
+C	/std/multimap<int,int,std::less<int>,std::allocator<std::pair<int_const_,int>_>_>
+	B	public	0	/std/_Tree<std::_Tmap_traits<int,int,std::less<int>,std::allocator<std::pair<int_const_,int>_>,1>_>
+C	/std/multiset<int,std::less<int>,std::allocator<int>_>
+	B	public	0	/std/_Tree<std::_Tset_traits<int,std::less<int>,std::allocator<int>,1>_>
+C	/std/mutex
+	B	public	0	/std/_Mutex_base
+C	/std/nested_exception
+C	/std/nothrow_t
+C	/std/nullopt_t
+C	/std/nullopt_t/_Tag
+C	/std/num_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/locale/facet
+C	/std/num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/locale/facet
+C	/std/num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/locale/facet
+C	/std/num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/locale/facet
+C	/std/numeric_limits<__int64>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<bool>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<char16_t>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<char32_t>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<char>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<double>
+	B	public	0	/std/_Num_float_base
+C	/std/numeric_limits<float>
+	B	public	0	/std/_Num_float_base
+C	/std/numeric_limits<int>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<long>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<long_double>
+	B	public	0	/std/_Num_float_base
+C	/std/numeric_limits<short>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<signed_char>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<std::_Signed128>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<std::_Unsigned128>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<unsigned___int64>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<unsigned_char>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<unsigned_int>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<unsigned_long>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<unsigned_short>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<wchar_t>
+	B	public	0	/std/_Num_int_base
+C	/std/numpunct<char>
+	B	public	0	/std/locale/facet
+C	/std/numpunct<wchar_t>
+	B	public	0	/std/locale/facet
+C	/std/once_flag
+C	/std/optional<int>
+	B	private	0	/std/_Optional_construct_base<int>
+C	/std/ostreambuf_iterator<char,std::char_traits<char>_>
+C	/std/ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>
+C	/std/out_of_range
+	B	public	0	/std/logic_error
+C	/std/output_iterator_tag
+C	/std/overflow_error
+	B	public	0	/std/runtime_error
+C	/std/pair<char_const*___ptr64,char_const*___ptr64>
+C	/std/pair<int,int>
+C	/std/pair<int_const_,int>
+C	/std/pair<int_const_,void*___ptr64>
+C	/std/pair<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>,std::_String_const_iterator<class_std::_String_val<struct_std::_Simple_types<char>_>_>_>
+C	/std/pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>
+C	/std/pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>
+C	/std/pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>
+C	/std/pointer_traits<char*___ptr64>
+C	/std/pointer_traits<std::_Flist_node<int,void*___ptr64>*___ptr64>
+C	/std/pointer_traits<wchar_t*___ptr64>
+C	/std/priority_queue<int,std::vector<int,std::allocator<int>_>,std::less<int>_>
+C	/std/queue<int,std::deque<int,std::allocator<int>_>_>
+C	/std/random_access_iterator_tag
+	B	public	0	/std/bidirectional_iterator_tag
+C	/std/range_error
+	B	public	0	/std/runtime_error
+C	/std/ratio<1,1000000000>
+C	/std/ratio<1,10000000>
+C	/std/ratio<1,1000000>
+C	/std/ratio<1,1000>
+C	/std/ratio<1,1>
+C	/std/ratio<3600,1>
+C	/std/ratio<60,1>
+C	/std/recursive_mutex
+	B	public	0	/std/_Mutex_base
+C	/std/reference_wrapper<int>
+	B	public	0	/std/_Weak_binary_args<int,void>
+C	/std/regex_error
+	B	public	0	/std/runtime_error
+C	/std/regex_traits<char>
+	B	public	0	/std/_Regex_traits<char>
+C	/std/regex_traits<wchar_t>
+	B	public	0	/std/_Regex_traits<wchar_t>
+C	/std/reverse_iterator<wchar_t_const*___ptr64>
+C	/std/runtime_error
+	B	public	0	/std/exception
+C	/std/set<int,std::less<int>,std::allocator<int>_>
+	B	public	0	/std/_Tree<std::_Tset_traits<int,std::less<int>,std::allocator<int>,0>_>
+C	/std/set<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+	B	public	0	/std/_Tree<std::_Tset_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::less<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,0>_>
+C	/std/set<void*___ptr64,std::less<void*___ptr64>,std::allocator<void*___ptr64>_>
+	B	public	0	/std/_Tree<std::_Tset_traits<void*___ptr64,std::less<void*___ptr64>,std::allocator<void*___ptr64>,0>_>
+C	/std/shared_mutex
+C	/std/shared_ptr<int>
+	B	public	0	/std/_Ptr_base<int>
+C	/std/shared_ptr<std::filesystem::_Dir_enum_impl>
+	B	public	0	/std/_Ptr_base<std::filesystem::_Dir_enum_impl>
+C	/std/shared_ptr<std::filesystem::_Recursive_dir_enum_impl>
+	B	public	0	/std/_Ptr_base<std::filesystem::_Recursive_dir_enum_impl>
+C	/std/shared_ptr<std::mutex>
+	B	public	0	/std/_Ptr_base<std::mutex>
+C	/std/shared_ptr<void>
+	B	public	0	/std/_Ptr_base<void>
+C	/std/shared_timed_mutex
+C	/std/stack<int,std::deque<int,std::allocator<int>_>_>
+C	/std/sub_match<char_const*___ptr64>
+	B	public	0	/std/pair<char_const*___ptr64,char_const*___ptr64>
+C	/std/sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>
+	B	public	0	/std/pair<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>,std::_String_const_iterator<class_std::_String_val<struct_std::_Simple_types<char>_>_>_>
+C	/std/system_error
+	B	public	0	/std/_System_error
+C	/std/thread
+C	/std/thread/id
+C	/std/time_base
+	B	public	0	/std/locale/facet
+C	/std/time_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/time_base
+C	/std/time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/time_base
+C	/std/timed_mutex
+C	/std/try_to_lock_t
+C	/std/tuple<>
+C	/std/tuple<int,int,int>
+	B	private	0	/std/tuple<int,int>
+C	/std/tuple<int,int>
+	B	private	0	/std/tuple<int>
+C	/std/tuple<int>
+	B	private	0	/std/tuple<>
+C	/std/underflow_error
+	B	public	0	/std/runtime_error
+C	/std/unique_lock<std::mutex>
+C	/std/unique_ptr<int,std::default_delete<int>_>
+C	/std/unique_ptr<int_[0],std::default_delete<int_[0]>_>
+C	/std/unique_ptr<std::_Facet_base,std::default_delete<std::_Facet_base>_>
+C	/std/unordered_map<int,int,std::hash<int>,std::equal_to<int>,std::allocator<std::pair<int_const_,int>_>_>
+	B	public	0	/std/_Hash<std::_Umap_traits<int,int,std::_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>,std::allocator<std::pair<int_const_,int>_>,0>_>
+C	/std/unordered_map<int,void*___ptr64,std::hash<int>,std::equal_to<int>,std::allocator<std::pair<int_const_,void*___ptr64>_>_>
+	B	public	0	/std/_Hash<std::_Umap_traits<int,void*___ptr64,std::_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>,std::allocator<std::pair<int_const_,void*___ptr64>_>,0>_>
+C	/std/unordered_map<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,int,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>_>
+	B	public	0	/std/_Hash<std::_Umap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,int,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,int>_>,0>_>
+C	/std/unordered_map<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>_>
+	B	public	0	/std/_Hash<std::_Umap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,std::basic_string<char,struct_std::char_traits<char>,class_std::allocator<char>_>_>_>,0>_>
+C	/std/unordered_map<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>_>
+	B	public	0	/std/_Hash<std::_Umap_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,void*___ptr64,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::pair<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_const_,void*___ptr64>_>,0>_>
+C	/std/unordered_set<int,std::hash<int>,std::equal_to<int>,std::allocator<int>_>
+	B	public	0	/std/_Hash<std::_Uset_traits<int,std::_Uhash_compare<int,std::hash<int>,std::equal_to<int>_>,std::allocator<int>,0>_>
+C	/std/unordered_set<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+	B	public	0	/std/_Hash<std::_Uset_traits<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::_Uhash_compare<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,std::equal_to<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>,std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,0>_>
+C	/std/variant<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	private	0	/std/_Non_trivial_move_assign<std::_Variant_destroy_layer_<int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>,int,std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+C	/std/vector<bool,std::allocator<bool>_>
+	B	public	0	/std/_Vb_val<std::allocator<bool>_>
+C	/std/vector<int,std::allocator<int>_>
+C	/std/vector<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,std::allocator<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>_>
+C	/std/vector<std::filesystem::_Find_file_handle,std::allocator<std::filesystem::_Find_file_handle>_>
+C	/std/vector<std::filesystem::_Find_file_handle,std::allocator<std::filesystem::_Find_file_handle>_>/_Reallocation_guard2
+C	/std/vector<std::sub_match<char_const*___ptr64>,std::allocator<std::sub_match<char_const*___ptr64>_>_>
+C	/std/vector<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>,std::allocator<std::sub_match<std::_String_const_iterator<std::_String_val<std::_Simple_types<char>_>_>_>_>_>
+C	/std/vector<unsigned_int,std::allocator<unsigned_int>_>
+C	/std/vector<void*___ptr64,std::allocator<void*___ptr64>_>
+C	/std/weak_ptr<void>
+	B	public	0	/std/_Ptr_base<void>

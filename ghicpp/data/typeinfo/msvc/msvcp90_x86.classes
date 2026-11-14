@@ -1,0 +1,513 @@
+C	/std/_Allocator_base<char>
+C	/std/_Allocator_base<unsigned_short>
+C	/std/_Allocator_base<wchar_t>
+C	/std/_Aux_cont
+C	/std/_Char_traits_base
+C	/std/_Complex_base<double,_C_double_complex>
+	B	public	0	/_C_double_complex
+C	/std/_Complex_base<float,_C_float_complex>
+	B	public	0	/_C_float_complex
+C	/std/_Complex_base<long_double,_C_ldouble_complex>
+	B	public	0	/_C_ldouble_complex
+C	/std/_Container_base_aux
+C	/std/_Container_base_secure
+C	/std/_Ctraits<double>
+C	/std/_Ctraits<float>
+C	/std/_Ctraits<long_double>
+C	/std/_Fac_node
+C	/std/_Init_cerr
+C	/std/_Init_cin
+C	/std/_Init_clog
+C	/std/_Init_cout
+C	/std/_Init_locks
+C	/std/_Init_ushcerr
+C	/std/_Init_ushcin
+C	/std/_Init_ushclog
+C	/std/_Init_ushcout
+C	/std/_Init_wcerr
+C	/std/_Init_wcin
+C	/std/_Init_wclog
+C	/std/_Init_wcout
+C	/std/_Iosb<int>
+C	/std/_Iterator_base_aux
+	B	public	0	/std/_Iterator_base_universal
+C	/std/_Iterator_base_secure
+	B	public	0	/std/_Iterator_base_universal
+C	/std/_Iterator_base_universal
+C	/std/_Locbase<int>
+C	/std/_Locinfo
+C	/std/_Lockit
+C	/std/_Mpunct<char>
+	B	public	0	/std/money_base
+C	/std/_Mpunct<unsigned_short>
+	B	public	0	/std/money_base
+C	/std/_Mpunct<wchar_t>
+	B	public	0	/std/money_base
+C	/std/_Mutex
+C	/std/_Num_base
+C	/std/_Num_float_base
+	B	public	0	/std/_Num_base
+C	/std/_Num_int_base
+	B	public	0	/std/_Num_base
+C	/std/_Outit
+	B	public	0	/std/iterator<std::output_iterator_tag,void,void,void,void>
+C	/std/_Range_checked_iterator_tag
+C	/std/_Ranit_base<char,int,char_const*,char_const&,std::_Iterator_base_secure>
+	B	public	0	/std/_Iterator_base_secure
+C	/std/_Ranit_base<unsigned_short,int,unsigned_short_const*,unsigned_short_const&,std::_Iterator_base_secure>
+	B	public	0	/std/_Iterator_base_secure
+C	/std/_Ranit_base<wchar_t,int,wchar_t_const*,wchar_t_const&,std::_Iterator_base_secure>
+	B	public	0	/std/_Iterator_base_secure
+C	/std/_Revranit<std::_String_const_iterator<char,std::char_traits<char>,std::allocator<char>_>,std::iterator<std::random_access_iterator_tag,char,int,char_const*,char_const&>_>
+	B	public	0	/std/iterator<std::random_access_iterator_tag,char,int,char_const*,char_const&>
+C	/std/_Revranit<std::_String_const_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>,std::iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short_const*,unsigned_short_const&>_>
+	B	public	0	/std/iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short_const*,unsigned_short_const&>
+C	/std/_Revranit<std::_String_const_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,std::iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t_const*,wchar_t_const&>_>
+	B	public	0	/std/iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t_const*,wchar_t_const&>
+C	/std/_Revranit<std::_String_iterator<char,std::char_traits<char>,std::allocator<char>_>,std::iterator<std::random_access_iterator_tag,char,int,char*,char&>_>
+	B	public	0	/std/iterator<std::random_access_iterator_tag,char,int,char*,char&>
+C	/std/_Revranit<std::_String_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>,std::iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short*,unsigned_short&>_>
+	B	public	0	/std/iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short*,unsigned_short&>
+C	/std/_Revranit<std::_String_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,std::iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t*,wchar_t&>_>
+	B	public	0	/std/iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t*,wchar_t&>
+C	/std/_Secure_char_traits_tag
+C	/std/_Smanip<int>
+C	/std/_String_base
+	B	public	0	/std/_Container_base_secure
+C	/std/_String_const_iterator<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/_Ranit_base<char,int,char_const*,char_const&,std::_Iterator_base_secure>
+C	/std/_String_const_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>
+	B	public	0	/std/_Ranit_base<unsigned_short,int,unsigned_short_const*,unsigned_short_const&,std::_Iterator_base_secure>
+C	/std/_String_const_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/_Ranit_base<wchar_t,int,wchar_t_const*,wchar_t_const&,std::_Iterator_base_secure>
+C	/std/_String_iterator<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/_String_const_iterator<char,std::char_traits<char>,std::allocator<char>_>
+C	/std/_String_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>
+	B	public	0	/std/_String_const_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>
+C	/std/_String_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/_String_const_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+C	/std/_String_val<char,std::allocator<char>_>
+	B	public	0	/std/_String_base
+C	/std/_String_val<unsigned_short,std::allocator<unsigned_short>_>
+	B	public	0	/std/_String_base
+C	/std/_String_val<wchar_t,std::allocator<wchar_t>_>
+	B	public	0	/std/_String_base
+C	/std/_Timevec
+C	/std/_UShinit
+C	/std/_Unchanged_checked_iterator_base_type_tag
+C	/std/_Unchecked_iterator_tag
+C	/std/_Undefined_inner_type_tag
+C	/std/_Unsecure_char_traits_tag
+C	/std/_Winit
+C	/std/allocator<char>
+	B	public	0	/std/_Allocator_base<char>
+C	/std/allocator<char>/rebind<char>
+C	/std/allocator<unsigned_short>
+	B	public	0	/std/_Allocator_base<unsigned_short>
+C	/std/allocator<unsigned_short>/rebind<unsigned_short>
+C	/std/allocator<void>
+C	/std/allocator<wchar_t>
+	B	public	0	/std/_Allocator_base<wchar_t>
+C	/std/allocator<wchar_t>/rebind<wchar_t>
+C	/std/bad_alloc
+	B	public	0	/std/exception
+C	/std/bad_cast
+	B	public	0	/std/exception
+C	/std/bad_exception
+	B	public	0	/std/exception
+C	/std/basic_filebuf<char,std::char_traits<char>_>
+	B	public	0	/std/basic_streambuf<char,std::char_traits<char>_>
+C	/std/basic_filebuf<unsigned_short,std::char_traits<unsigned_short>_>
+	B	public	0	/std/basic_streambuf<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_filebuf<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/basic_streambuf<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_fstream<char,std::char_traits<char>_>
+	B	public	0	/std/basic_iostream<char,std::char_traits<char>_>
+C	/std/basic_fstream<unsigned_short,std::char_traits<unsigned_short>_>
+	B	public	0	/std/basic_iostream<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_fstream<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/basic_iostream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_ifstream<char,std::char_traits<char>_>
+	B	public	0	/std/basic_istream<char,std::char_traits<char>_>
+C	/std/basic_ifstream<unsigned_short,std::char_traits<unsigned_short>_>
+	B	public	0	/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_ifstream<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_ios<char,std::char_traits<char>_>
+	B	public	0	/std/ios_base
+C	/std/basic_ios<unsigned_short,std::char_traits<unsigned_short>_>
+	B	public	0	/std/ios_base
+C	/std/basic_ios<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/ios_base
+C	/std/basic_iostream<char,std::char_traits<char>_>
+	B	public	0	/std/basic_istream<char,std::char_traits<char>_>
+	B	public	8	/std/basic_ostream<char,std::char_traits<char>_>
+C	/std/basic_iostream<unsigned_short,std::char_traits<unsigned_short>_>
+	B	public	0	/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>
+	B	public	8	/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_iostream<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>
+	B	public	8	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_istream<char,std::char_traits<char>_>
+	V	public	0	1	/std/basic_ios<char,std::char_traits<char>_>
+C	/std/basic_istream<char,std::char_traits<char>_>/_Sentry_base
+C	/std/basic_istream<char,std::char_traits<char>_>/sentry
+	B	public	0	/std/basic_istream<char,std::char_traits<char>_>/_Sentry_base
+C	/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>
+	V	public	0	1	/std/basic_ios<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>/_Sentry_base
+C	/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>/sentry
+	B	public	0	/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>/_Sentry_base
+C	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>
+	V	public	0	1	/std/basic_ios<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>/_Sentry_base
+C	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>/sentry
+	B	public	0	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>/_Sentry_base
+C	/std/basic_istringstream<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/basic_istream<char,std::char_traits<char>_>
+C	/std/basic_istringstream<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>
+	B	public	0	/std/basic_istream<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_istringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/basic_istream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_ofstream<char,std::char_traits<char>_>
+	B	public	0	/std/basic_ostream<char,std::char_traits<char>_>
+C	/std/basic_ofstream<unsigned_short,std::char_traits<unsigned_short>_>
+	B	public	0	/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_ofstream<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_ostream<char,std::char_traits<char>_>
+	V	public	0	1	/std/basic_ios<char,std::char_traits<char>_>
+C	/std/basic_ostream<char,std::char_traits<char>_>/_Sentry_base
+C	/std/basic_ostream<char,std::char_traits<char>_>/sentry
+	B	public	0	/std/basic_ostream<char,std::char_traits<char>_>/_Sentry_base
+C	/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>
+	V	public	0	1	/std/basic_ios<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>/_Sentry_base
+C	/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>/sentry
+	B	public	0	/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>/_Sentry_base
+C	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>
+	V	public	0	1	/std/basic_ios<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>/_Sentry_base
+C	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>/sentry
+	B	public	0	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>/_Sentry_base
+C	/std/basic_ostringstream<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/basic_ostream<char,std::char_traits<char>_>
+C	/std/basic_ostringstream<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>
+	B	public	0	/std/basic_ostream<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_ostringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/basic_ostream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_streambuf<char,std::char_traits<char>_>
+C	/std/basic_streambuf<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_streambuf<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_string<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/_String_val<char,std::allocator<char>_>
+C	/std/basic_string<char,std::char_traits<char>,std::allocator<char>_>/_No_debug_placeholder
+C	/std/basic_string<char,std::char_traits<char>,std::allocator<char>_>/_Size_type_nosscl
+C	/std/basic_string<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>
+	B	public	0	/std/_String_val<unsigned_short,std::allocator<unsigned_short>_>
+C	/std/basic_string<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>/_No_debug_placeholder
+C	/std/basic_string<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>/_Size_type_nosscl
+C	/std/basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/_String_val<wchar_t,std::allocator<wchar_t>_>
+C	/std/basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>/_No_debug_placeholder
+C	/std/basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>/_Size_type_nosscl
+C	/std/basic_stringbuf<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/basic_streambuf<char,std::char_traits<char>_>
+C	/std/basic_stringbuf<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>
+	B	public	0	/std/basic_streambuf<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_stringbuf<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/basic_streambuf<wchar_t,std::char_traits<wchar_t>_>
+C	/std/basic_stringstream<char,std::char_traits<char>,std::allocator<char>_>
+	B	public	0	/std/basic_iostream<char,std::char_traits<char>_>
+C	/std/basic_stringstream<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>
+	B	public	0	/std/basic_iostream<unsigned_short,std::char_traits<unsigned_short>_>
+C	/std/basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>
+	B	public	0	/std/basic_iostream<wchar_t,std::char_traits<wchar_t>_>
+C	/std/bidirectional_iterator_tag
+	B	public	0	/std/forward_iterator_tag
+C	/std/char_traits<char>
+	B	public	0	/std/_Char_traits_base
+C	/std/char_traits<unsigned_short>
+	B	public	0	/std/_Char_traits_base
+C	/std/char_traits<wchar_t>
+	B	public	0	/std/_Char_traits_base
+C	/std/codecvt<char,char,int>
+	B	public	0	/std/codecvt_base
+C	/std/codecvt<unsigned_short,char,int>
+	B	public	0	/std/codecvt_base
+C	/std/codecvt<wchar_t,char,int>
+	B	public	0	/std/codecvt_base
+C	/std/codecvt_base
+	B	public	0	/std/locale/facet
+C	/std/collate<char>
+	B	public	0	/std/locale/facet
+C	/std/collate<unsigned_short>
+	B	public	0	/std/locale/facet
+C	/std/collate<wchar_t>
+	B	public	0	/std/locale/facet
+C	/std/complex<double>
+	B	public	0	/std/_Complex_base<double,_C_double_complex>
+C	/std/complex<float>
+	B	public	0	/std/_Complex_base<float,_C_float_complex>
+C	/std/complex<long_double>
+	B	public	0	/std/_Complex_base<long_double,_C_ldouble_complex>
+C	/std/ctype<char>
+	B	public	0	/std/ctype_base
+C	/std/ctype<unsigned_short>
+	B	public	0	/std/ctype_base
+C	/std/ctype<wchar_t>
+	B	public	0	/std/ctype_base
+C	/std/ctype_base
+	B	public	0	/std/locale/facet
+C	/std/ctype_byname<char>
+	B	public	0	/std/ctype<char>
+C	/std/domain_error
+	B	public	0	/std/logic_error
+C	/std/exception
+C	/std/forward_iterator_tag
+	B	public	0	/std/input_iterator_tag
+C	/std/fpos<int>
+C	/std/input_iterator_tag
+C	/std/invalid_argument
+	B	public	0	/std/logic_error
+C	/std/ios_base
+	B	public	4	/std/_Iosb<int>
+C	/std/ios_base/Init
+C	/std/ios_base/_Fnarray
+C	/std/ios_base/_Iosarray
+C	/std/ios_base/failure
+	B	public	0	/std/runtime_error
+C	/std/istreambuf_iterator<char,std::char_traits<char>_>
+	B	public	0	/std/iterator<std::input_iterator_tag,char,long,char*,char&>
+C	/std/istreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>
+	B	public	0	/std/iterator<std::input_iterator_tag,unsigned_short,long,unsigned_short*,unsigned_short&>
+C	/std/istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/iterator<std::input_iterator_tag,wchar_t,long,wchar_t*,wchar_t&>
+C	/std/istrstream
+	B	public	0	/std/basic_istream<char,std::char_traits<char>_>
+C	/std/iterator<std::input_iterator_tag,char,long,char*,char&>
+	B	public	0	/std/_Iterator_base_universal
+C	/std/iterator<std::input_iterator_tag,unsigned_short,long,unsigned_short*,unsigned_short&>
+	B	public	0	/std/_Iterator_base_universal
+C	/std/iterator<std::input_iterator_tag,wchar_t,long,wchar_t*,wchar_t&>
+	B	public	0	/std/_Iterator_base_universal
+C	/std/iterator<std::output_iterator_tag,void,void,void,void>
+	B	public	0	/std/_Iterator_base_universal
+C	/std/iterator<std::random_access_iterator_tag,char,int,char*,char&>
+	B	public	0	/std/_Iterator_base_universal
+C	/std/iterator<std::random_access_iterator_tag,char,int,char_const*,char_const&>
+	B	public	0	/std/_Iterator_base_universal
+C	/std/iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short*,unsigned_short&>
+	B	public	0	/std/_Iterator_base_universal
+C	/std/iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short_const*,unsigned_short_const&>
+	B	public	0	/std/_Iterator_base_universal
+C	/std/iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t*,wchar_t&>
+	B	public	0	/std/_Iterator_base_universal
+C	/std/iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t_const*,wchar_t_const&>
+	B	public	0	/std/_Iterator_base_universal
+C	/std/length_error
+	B	public	0	/std/logic_error
+C	/std/locale
+	B	public	0	/std/_Locbase<int>
+C	/std/locale/_Locimp
+	B	public	0	/std/locale/facet
+C	/std/locale/facet
+C	/std/locale/id
+C	/std/logic_error
+	B	public	0	/std/exception
+C	/std/messages<char>
+	B	public	0	/std/messages_base
+C	/std/messages<unsigned_short>
+	B	public	0	/std/messages_base
+C	/std/messages<wchar_t>
+	B	public	0	/std/messages_base
+C	/std/messages_base
+	B	public	0	/std/locale/facet
+C	/std/money_base
+	B	public	0	/std/locale/facet
+C	/std/money_base/pattern
+C	/std/money_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/locale/facet
+C	/std/money_get<unsigned_short,std::istreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>
+	B	public	0	/std/locale/facet
+C	/std/money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/locale/facet
+C	/std/money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/locale/facet
+C	/std/money_put<unsigned_short,std::ostreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>
+	B	public	0	/std/locale/facet
+C	/std/money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/locale/facet
+C	/std/moneypunct<char,0>
+	B	public	0	/std/_Mpunct<char>
+C	/std/moneypunct<char,1>
+	B	public	0	/std/_Mpunct<char>
+C	/std/moneypunct<unsigned_short,0>
+	B	public	0	/std/_Mpunct<unsigned_short>
+C	/std/moneypunct<unsigned_short,1>
+	B	public	0	/std/_Mpunct<unsigned_short>
+C	/std/moneypunct<wchar_t,0>
+	B	public	0	/std/_Mpunct<wchar_t>
+C	/std/moneypunct<wchar_t,1>
+	B	public	0	/std/_Mpunct<wchar_t>
+C	/std/num_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/locale/facet
+C	/std/num_get<unsigned_short,std::istreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>
+	B	public	0	/std/locale/facet
+C	/std/num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/locale/facet
+C	/std/num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/locale/facet
+C	/std/num_put<unsigned_short,std::ostreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>
+	B	public	0	/std/locale/facet
+C	/std/num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/locale/facet
+C	/std/numeric_limits<__int64>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<bool>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<char>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<double>
+	B	public	0	/std/_Num_float_base
+C	/std/numeric_limits<float>
+	B	public	0	/std/_Num_float_base
+C	/std/numeric_limits<int>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<long>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<long_double>
+	B	public	0	/std/_Num_float_base
+C	/std/numeric_limits<short>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<signed_char>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<unsigned___int64>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<unsigned_char>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<unsigned_int>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<unsigned_long>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<unsigned_short>
+	B	public	0	/std/_Num_int_base
+C	/std/numeric_limits<wchar_t>
+	B	public	0	/std/_Num_int_base
+C	/std/numpunct<char>
+	B	public	0	/std/locale/facet
+C	/std/numpunct<unsigned_short>
+	B	public	0	/std/locale/facet
+C	/std/numpunct<wchar_t>
+	B	public	0	/std/locale/facet
+C	/std/ostreambuf_iterator<char,std::char_traits<char>_>
+	B	public	0	/std/_Outit
+C	/std/ostreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>
+	B	public	0	/std/_Outit
+C	/std/ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>
+	B	public	0	/std/_Outit
+C	/std/ostrstream
+	B	public	0	/std/basic_ostream<char,std::char_traits<char>_>
+C	/std/out_of_range
+	B	public	0	/std/logic_error
+C	/std/output_iterator_tag
+C	/std/overflow_error
+	B	public	0	/std/runtime_error
+C	/std/random_access_iterator_tag
+	B	public	0	/std/bidirectional_iterator_tag
+C	/std/range_error
+	B	public	0	/std/runtime_error
+C	/std/reverse_iterator<std::_String_const_iterator<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	public	0	/std/_Revranit<std::_String_const_iterator<char,std::char_traits<char>,std::allocator<char>_>,std::iterator<std::random_access_iterator_tag,char,int,char_const*,char_const&>_>
+C	/std/reverse_iterator<std::_String_const_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>_>
+	B	public	0	/std/_Revranit<std::_String_const_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>,std::iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short_const*,unsigned_short_const&>_>
+C	/std/reverse_iterator<std::_String_const_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>_>
+	B	public	0	/std/_Revranit<std::_String_const_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,std::iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t_const*,wchar_t_const&>_>
+C	/std/reverse_iterator<std::_String_iterator<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	public	0	/std/_Revranit<std::_String_iterator<char,std::char_traits<char>,std::allocator<char>_>,std::iterator<std::random_access_iterator_tag,char,int,char*,char&>_>
+C	/std/reverse_iterator<std::_String_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>_>
+	B	public	0	/std/_Revranit<std::_String_iterator<unsigned_short,std::char_traits<unsigned_short>,std::allocator<unsigned_short>_>,std::iterator<std::random_access_iterator_tag,unsigned_short,int,unsigned_short*,unsigned_short&>_>
+C	/std/reverse_iterator<std::_String_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>_>
+	B	public	0	/std/_Revranit<std::_String_iterator<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,std::iterator<std::random_access_iterator_tag,wchar_t,int,wchar_t*,wchar_t&>_>
+C	/std/runtime_error
+	B	public	0	/std/exception
+C	/std/strstream
+	B	public	0	/std/basic_iostream<char,std::char_traits<char>_>
+C	/std/strstreambuf
+	B	public	0	/std/basic_streambuf<char,std::char_traits<char>_>
+C	/std/time_base
+	B	public	0	/std/locale/facet
+C	/std/time_get<char,std::istreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/time_base
+C	/std/time_get<unsigned_short,std::istreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>
+	B	public	0	/std/time_base
+C	/std/time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/time_base
+C	/std/time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>_>_>
+	B	public	0	/std/locale/facet
+C	/std/time_put<unsigned_short,std::ostreambuf_iterator<unsigned_short,std::char_traits<unsigned_short>_>_>
+	B	public	0	/std/locale/facet
+C	/std/time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>_>_>
+	B	public	0	/std/locale/facet
+C	/std/tr1/_Bitmap
+C	/std/tr1/_Cl_names<char>
+C	/std/tr1/_Cl_names<wchar_t>
+C	/std/tr1/_Nil
+C	/std/tr1/_Node_assert
+	B	public	0	/std/tr1/_Node_base
+C	/std/tr1/_Node_back
+	B	public	0	/std/tr1/_Node_base
+C	/std/tr1/_Node_base
+C	/std/tr1/_Node_capture
+	B	public	0	/std/tr1/_Node_base
+C	/std/tr1/_Node_end_group
+	B	public	0	/std/tr1/_Node_base
+C	/std/tr1/_Node_end_rep
+	B	public	0	/std/tr1/_Node_base
+C	/std/tr1/_Node_endif
+	B	public	0	/std/tr1/_Node_base
+C	/std/tr1/_Node_if
+	B	public	0	/std/tr1/_Node_base
+C	/std/tr1/_Node_rep
+	B	public	0	/std/tr1/_Node_base
+C	/std/tr1/_Ph<10>
+C	/std/tr1/_Ph<1>
+C	/std/tr1/_Ph<2>
+C	/std/tr1/_Ph<3>
+C	/std/tr1/_Ph<4>
+C	/std/tr1/_Ph<5>
+C	/std/tr1/_Ph<6>
+C	/std/tr1/_Ph<7>
+C	/std/tr1/_Ph<8>
+C	/std/tr1/_Ph<9>
+C	/std/tr1/_Ref_count_base
+C	/std/tr1/_Regex_traits<char>
+	B	public	0	/std/tr1/_Regex_traits_base
+C	/std/tr1/_Regex_traits<wchar_t>
+	B	public	0	/std/tr1/_Regex_traits_base
+C	/std/tr1/_Regex_traits_base
+C	/std/tr1/_Root_node
+	B	public	0	/std/tr1/_Node_base
+C	/std/tr1/bad_function_call
+	B	public	0	/std/exception
+C	/std/tr1/bad_weak_ptr
+	B	public	0	/std/exception
+C	/std/tr1/hash<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>_>
+	B	public	0	/std/unary_function<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,unsigned_int>
+C	/std/tr1/hash<std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>_>
+	B	public	0	/std/unary_function<std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,unsigned_int>
+C	/std/tr1/regex_error
+	B	public	0	/std/runtime_error
+C	/std/tr1/regex_traits<char>
+	B	public	0	/std/tr1/_Regex_traits<char>
+C	/std/tr1/regex_traits<wchar_t>
+	B	public	0	/std/tr1/_Regex_traits<wchar_t>
+C	/std/unary_function<std::basic_string<char,std::char_traits<char>,std::allocator<char>_>,unsigned_int>
+C	/std/unary_function<std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>,unsigned_int>
+C	/std/underflow_error
+	B	public	0	/std/runtime_error
+C	/stdext/bad_alloc
+	B	public	0	/stdext/exception
+C	/stdext/bad_exception
+	B	public	0	/stdext/exception
+C	/stdext/exception

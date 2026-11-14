@@ -174,6 +174,9 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val archive = MsvcStlArchives.open(name)
             try {
                 archive.getDataType(DataTypePath(CategoryPath("/std"), STRING))?.length mustBe size
+                // Its classes' bases ship beside it: basic_iostream's two direct bases, say.
+                MsvcStlArchives.classes(name).single { it.path.startsWith("/std/basic_iostream<char,") }
+                    .bases.size mustBe 2
             } finally {
                 archive.close()
             }
