@@ -15,7 +15,32 @@ class MsvcRuntimeTest {
         MsvcRuntime.of(listOf("MSVCP140_ATOMIC_WAIT.DLL")) mustBe MsvcRuntime(140, false)
         MsvcRuntime.of(listOf("MSVCP140_1D.DLL")) mustBe MsvcRuntime(140, true)
         MsvcRuntime.of(listOf("MSVCP140D_ATOMIC_WAIT.DLL")) mustBe MsvcRuntime(140, true)
-        MsvcRuntime.of(listOf("VCRUNTIME140.DLL", "KERNEL32.DLL")) mustBe null
+        MsvcRuntime.of(listOf("MSVCP90D.DLL", "MSVCR90D.DLL")) mustBe MsvcRuntime(90, true)
+    }
+
+    @Test
+    fun `without the standard library DLL, the C runtime's names the toolset`() {
+        MsvcRuntime.of(listOf("VCRUNTIME140.DLL", "KERNEL32.DLL")) mustBe MsvcRuntime(140, false)
+        MsvcRuntime.of(listOf("VCRUNTIME140_1.DLL", "VCRUNTIME140.DLL")) mustBe MsvcRuntime(140, false)
+        MsvcRuntime.of(listOf("VCRUNTIME140D.DLL", "UCRTBASED.DLL")) mustBe MsvcRuntime(140, true)
+        MsvcRuntime.of(listOf("VCRUNTIME140_1D.DLL")) mustBe MsvcRuntime(140, true)
+        MsvcRuntime.of(listOf("MSVCR90.DLL")) mustBe MsvcRuntime(90, false)
+        MsvcRuntime.of(listOf("msvcr100d.dll")) mustBe MsvcRuntime(100, true)
+        MsvcRuntime.of(listOf("MSVCRT.DLL", "KERNEL32.DLL")) mustBe null
+        MsvcRuntime.of(listOf("MSVCP140.DLL", "UCRTBASED.DLL")) mustBe MsvcRuntime(140, false)
+    }
+
+    @Test
+    fun `a static link's toolset is its linker's`() {
+        MsvcRuntime.toolset(14, 44) mustBe 140
+        MsvcRuntime.toolset(14, 0) mustBe 140
+        MsvcRuntime.toolset(12, 0) mustBe 120
+        MsvcRuntime.toolset(9, 0) mustBe 90
+        MsvcRuntime.toolset(7, 10) mustBe 71
+        MsvcRuntime.toolset(7, 0) mustBe 70
+        MsvcRuntime.toolset(6, 0) mustBe 60
+        MsvcRuntime.toolset(13, 0) mustBe null
+        MsvcRuntime.toolset(2, 56) mustBe null // GNU ld
     }
 
     @Test
