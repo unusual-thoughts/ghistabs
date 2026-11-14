@@ -4,11 +4,7 @@ import ghicpp.Access
 import ghicpp.MemberAttrs
 import ghicpp.VirtKind
 import ghicpp.hierarchy.ClassHierarchy
-import ghicpp.hierarchy.ClassHierarchy.BaseRef
-import ghicpp.hierarchy.ClassHierarchy.ClassView
-import ghicpp.hierarchy.ClassHierarchy.Member
-import ghicpp.hierarchy.ClassHierarchy.MemberKind
-import ghicpp.hierarchy.ClassHierarchy.Origin
+import ghicpp.hierarchy.ClassHierarchy.*
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 

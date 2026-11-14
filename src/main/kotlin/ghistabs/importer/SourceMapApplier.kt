@@ -1,3 +1,5 @@
+@file:UsesShims
+
 package ghistabs.importer
 
 import ghicpp.abi.itanium.Itanium

@@ -11,9 +11,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.LoadedProgram
-import ghidrakt.loadProgram
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.TestBinaries
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeTrue
@@ -131,6 +129,15 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             0x6c48L to listOf(SHAPE), // Rect
             0x6c88L to listOf(0x6d00L), // Diamond : Named, past its Left and Right, which have no table of their own
         )
+    }
+
+    @Test
+    fun `a virtual base is laid where its secondary table puts it, as one`() {
+        // Down : virtual Core, whose vptr Down's own table for it, at +16, takes over.
+        val down = program.dataTypeManager.getDataType("/ClassDataTypes/Klass_00106b58/Klass_00106b58") as Structure
+        down.definedComponents.map { "+${it.offset} ${it.fieldName}" } mustBe
+            listOf("+0 vfptr", "+8 Klass_00106b58_data", "+16 vfptr", "+24 _vbase_")
+        down.getComponentAt(24).comment mustBe "public virtual Klass_00106bc8 at +0x10, by its vftables"
     }
 
     private companion object {

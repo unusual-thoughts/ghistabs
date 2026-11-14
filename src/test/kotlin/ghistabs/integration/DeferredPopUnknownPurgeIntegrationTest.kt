@@ -7,7 +7,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.pcode.HighFunction
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustNot
 import org.junit.jupiter.api.AfterEach

@@ -12,8 +12,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.ObjectStorage
 import ghidra.util.Saveable
-import ghidrakt.GPropertiesFormat
-import ghidrakt.toClass
+import ghidrakt.*
 import kotlinx.serialization.Serializable
 
 /** A C++ member's or base's access, as a stab's visibility marker or an RTTI base flag states it. */
@@ -36,6 +35,8 @@ data class ClassBase(
     override val isVirtual: Boolean,
     override val access: Access,
     override val offset: Long?,
+    /** Where a virtual base's [offset] is from: IMPORTED its ABI record, ANALYSIS its vtables, DEFAULT nowhere. */
+    val offsetSource: SourceType = SourceType.IMPORTED,
 ) : BaseDecl
 
 /**

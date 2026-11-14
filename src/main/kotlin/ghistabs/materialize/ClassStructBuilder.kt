@@ -1,21 +1,12 @@
 package ghistabs.materialize
 
-import ghicpp.ClassNaming
-import ghicpp.VfptrModel
-import ghicpp.copyNonVirtualPart
-import ghicpp.member
-import ghicpp.placeBase
+import ghicpp.*
 import ghidra.program.model.data.*
 import ghidra.program.model.data.DataOrganizationImpl.getAlignedOffset
 import ghidra.program.model.gclass.ClassUtils
-import ghidrakt.componentsOverlapping
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
-import ghistabs.index.LocatedType
-import ghistabs.index.TypeGraph
-import ghistabs.index.demangledClassPath
-import ghistabs.index.firstPolymorphicBase
-import ghistabs.index.inheritanceDepth
-import ghistabs.index.virtualBases
+import ghistabs.index.*
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl

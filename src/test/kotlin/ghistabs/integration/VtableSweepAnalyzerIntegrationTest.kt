@@ -14,10 +14,8 @@ import ghidra.program.model.reloc.Relocation
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.DtmRegistry
-import ghidrakt.buildClassNamespaces
+import ghidrakt.*
 import ghidrakt.diagnose.CountingSink
-import ghidrakt.runTransaction
 import ghidrakt.test.must
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustNot

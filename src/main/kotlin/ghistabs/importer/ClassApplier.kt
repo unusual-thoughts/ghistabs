@@ -2,15 +2,10 @@ package ghistabs.importer
 
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
-import ghicpp.abi.CxxAbi
+import ghicpp.abi.*
 import ghicpp.abi.CxxAbi.Companion.prevailingAbi
-import ghicpp.abi.VftableBuilder
-import ghicpp.abi.VtableRecord
-import ghicpp.abi.definedVtableRecord
-import ghicpp.abi.primaryVtableOf
 import ghicpp.recover.VtableSweepPass
 import ghidra.app.util.NamespaceUtils
-import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address

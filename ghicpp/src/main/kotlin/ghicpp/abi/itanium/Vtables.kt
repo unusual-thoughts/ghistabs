@@ -1,13 +1,13 @@
 package ghicpp.abi.itanium
 
 import ghicpp.ClassNaming
-import ghicpp.abi.CxxAbi
 import ghicpp.abi.VtableRecord
 import ghicpp.abi.functionSlots
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
+import ghidra.program.model.symbol.SourceType
 import ghidrakt.*
 import kotlin.math.abs
 
@@ -52,8 +52,8 @@ fun DataTypeManager.vtableHeaderLayout(prefixWords: Int): StructureDataType {
  */
 fun Program.isPrimaryRecordAt(addr: Address, header: Structure): Boolean {
     val record = addr.takeIf(::isData)?.let { dataAt(it, header) } ?: return false
-    if (record.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value != 0L) return false
-    return runCatching { addr.addNoWrap(record.length.toLong()) }.getOrNull()?.let(::startsSlots) == true
+    return record.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value == 0L &&
+        runCatching { addr.addNoWrap(record.length.toLong()) }.getOrNull()?.let(::startsSlots) == true
 }
 
 /**
@@ -88,8 +88,9 @@ private fun Program.headerAt(start: Address, rttiSlot: Address?): StructureDataT
 
 /**
  * The record at [ztv], its header ending at the first word pointing at a typeinfo: a class with virtual
- * bases has vbase/vcall offsets before `offset_to_top`. Without one before the first slot, the header is
- * the bare two words, so the search never reaches the next record's.
+ * bases has vbase/vcall offsets before `offset_to_top`. Without one before the first slot, as under
+ * `-fno-rtti`, where the rtti word is 0, the header ends where the slots start ([rttiWordBeforeSlots]); a
+ * table with no slots of its own keeps the bare two words, so the search never reaches the next record's.
  */
 internal fun Program.itaniumVtableRecord(ztv: Address): VtableRecord {
     val ptr = defaultPointerSize.toLong()
@@ -100,7 +101,29 @@ internal fun Program.itaniumVtableRecord(ztv: Address): VtableRecord {
         .take(MAX_VTABLE_PREFIX_WORDS)
         .takeWhile { holdsTypeinfo(it) || pointerAt(it)?.let(::isCode) != true }
         .firstOrNull(::holdsTypeinfo)
+        ?: rttiWordBeforeSlots(ztv)
     return VtableRecord(ztv, headerAt(ztv, rttiSlot), Itanium)
+}
+
+/**
+ * The rtti word of the primary record at [ztv] that has no typeinfo to point at: the word before its first
+ * slot ([startsSlots]), which is 0, after an `offset_to_top` of 0. Walking forward from the record's start
+ * rather than back from `offset_to_top`, a vcall or vbase offset of 0 can't end the header early. Null where
+ * the first slots are a secondary's, whose `offset_to_top` is not 0, or past the next symbol: the primary
+ * has no slots of its own.
+ */
+private fun Program.rttiWordBeforeSlots(ztv: Address): Address? {
+    val ptr = defaultPointerSize.toLong()
+    val word = IntegerDataType.getSignedDataType(defaultPointerSize, null)
+    fun signedAt(at: Address) = valueAt<Scalar>(at, word)?.signedValue
+    val slot0 = generateSequence(ztv.addNoWrap(2 * ptr)) { runCatching { it.addNoWrap(ptr) }.getOrNull() }
+        .take(MAX_VTABLE_PREFIX_WORDS)
+        // Nor into the next symbol's: a record with no slots would take the next one's for its own.
+        .takeWhile { at -> symbolTable.getSymbols(at).none { it.source != SourceType.DEFAULT } }
+        .firstOrNull { pointerAt(it)?.let(::isCode) == true } ?: return null
+    if (!startsSlots(slot0)) return null
+    val rtti = slot0.subtract(ptr)
+    return rtti.takeIf { signedAt(it) == 0L && signedAt(rtti.subtract(ptr)) == 0L }
 }
 
 /** A record in a vtable group, and the functions its slots point at. */

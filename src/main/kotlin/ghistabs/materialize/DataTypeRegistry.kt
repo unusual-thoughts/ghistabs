@@ -6,13 +6,10 @@ import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.Structure
 import ghidra.util.task.TaskMonitor
-import ghidrakt.Demangler
-import ghidrakt.DtmRegistry
-import ghidrakt.demanglerPath
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.harvest.Type
 import ghistabs.index.*
-import ghistabs.index.StabsDiagnostics
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId

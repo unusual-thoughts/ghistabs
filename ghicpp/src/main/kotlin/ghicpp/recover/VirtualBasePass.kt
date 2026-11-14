@@ -8,9 +8,9 @@ import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.SourceType
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.path
-import ghidrakt.toCategoryPath
 
 /**
  * Places the virtual bases a class struct lacks where its [abi]'s records say they are
@@ -36,13 +36,13 @@ class VirtualBasePass(private val program: Program, private val abi: CxxAbi, sin
         val struct = structFor(cls) ?: return@sumOf 0
         val vbases = cls.virtualBases
         val count = struct.definedComponents.count { it.isBaseField() } + vbases.size
-        vbases.count { struct.place(it, count) }
+        vbases.count { struct.place(it, count, unbuilt = cls.vftables.isEmpty()) }
     }
 
-    private fun Structure.place(vbase: ClassBase, count: Int): Boolean {
+    private fun Structure.place(vbase: ClassBase, count: Int, unbuilt: Boolean): Boolean {
         val name = vbase.cls.qualifiedName
         val at = pathName.member(name)
-        val vbaseAt = vbase.offset?.toInt().takeIf { isInside(it, at) } ?: return false
+        val vbaseAt = vbase.offset?.toInt().takeIf { isInside(it, at, unbuilt) } ?: return false
 
         val (found, foundWithin) = definedPart(vbase.cls) ?: return false.also {
             degradation("vbase-undefined", at, "nothing defines it or a base of it")
@@ -66,7 +66,7 @@ class VirtualBasePass(private val program: Program, private val abi: CxxAbi, sin
             isVirtual = true,
             "${vbase.access.name.lowercase()} virtual $name at +0x${vbaseAt.toString(
                 16,
-            )}, by the ${abi.virtualBaseRecord}$part",
+            )}, by ${vbase.offsetSourceName()}$part",
             ClassNaming.baseFieldName(true, dt.name, count),
             at,
         )
@@ -97,8 +97,11 @@ class VirtualBasePass(private val program: Program, private val abi: CxxAbi, sin
         ) as? Structure
     }
 
+    private fun ClassBase.offsetSourceName() =
+        if (offsetSource == SourceType.ANALYSIS) "its vftables" else "the ${abi.virtualBaseRecord}"
+
     /** Whether [vbaseAt] puts a virtual base inside [this], logging why not where it doesn't. */
-    private fun Structure.isInside(vbaseAt: Int?, at: String): Boolean = when (vbaseAt) {
+    private fun Structure.isInside(vbaseAt: Int?, at: String, unbuilt: Boolean): Boolean = when (vbaseAt) {
         // A nearly-empty virtual base can be the primary one, sharing the class's vptr: nothing to place.
         0 -> false.also { debug("vbase-primary-from-vtable") }
 
@@ -106,6 +109,10 @@ class VirtualBasePass(private val program: Program, private val abi: CxxAbi, sin
 
         // Right past the end: this struct is only a base subobject; the deriving class places the virtual base.
         length -> false.also { debug("vbase-past-base-subobject", at) }
+
+        // No object of a class with no vftable here is built here, as a dllimported std::basic_iostream<char>:
+        // nothing stores its vbtable, and the classes deriving from it place the virtual base themselves.
+        null if unbuilt -> false.also { debug("vbase-offset-unknown-unbuilt", at) }
 
         else -> false.also {
             degradation("vbase-offset-unreadable", at, "the ${abi.virtualBaseRecord} reads ${vbaseAt ?: "nothing"}")

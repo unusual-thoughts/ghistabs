@@ -18,8 +18,8 @@ import ghidra.program.model.listing.FlowOverride
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.MessageLogSink
-import ghidrakt.runTransaction
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeA
 import ghidrakt.test.mustBeNull
@@ -118,7 +118,7 @@ class SjljContextAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest
      */
     private fun repairAfterTheThrow() = program.runTransaction("no-return") {
         program.functionManager.getFunctionAt(addr(thrower)).setNoReturn(true)
-        program.listing.getInstructionAt(addr(receiver - 8)).setFlowOverride(FlowOverride.CALL_RETURN)
+        program.listing.getInstructionAt(addr(receiver - 8)).flowOverride = FlowOverride.CALL_RETURN
         ClearFlowAndRepairCmd(AddressSet(addr(receiver - 3)), null, true, false, true)
             .applyTo(program, TaskMonitor.DUMMY)
         val f = program.functionManager.getFunctionAt(addr(fn))

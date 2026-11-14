@@ -5,10 +5,8 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.Level
-import ghidrakt.runTransaction
-import ghidrakt.set
-import ghidrakt.withProgram
 import ghistabs.importer.ImportOptions.Companion.LOG_LEVEL
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.SOURCE_ROOTS

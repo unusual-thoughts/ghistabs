@@ -1,19 +1,10 @@
 package ghistabs.render
 
-import ghidrakt.test.*
+import ghidrakt.test.mustBe
 import ghistabs.harvest.NameBinding
 import ghistabs.harvest.Type
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.Globalizer
-import ghistabs.parse.LocalTypeId
-import ghistabs.parse.Parser
-import ghistabs.parse.SourceFile
-import ghistabs.parse.SymbolDecl
-import ghistabs.parse.TypeDecl
-import ghistabs.parse.TypeNameKind
-import ghistabs.parse.globalize
-import ghistabs.parse.mustBeOk
-import ghistabs.test.*
+import ghistabs.parse.*
+import ghistabs.test.typesOf
 import org.junit.jupiter.api.Test
 
 /**

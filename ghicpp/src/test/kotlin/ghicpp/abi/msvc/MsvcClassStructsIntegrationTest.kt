@@ -1,8 +1,11 @@
 package ghicpp.abi.msvc
 
+import ghicpp.ClassDecl
 import ghicpp.ClassStructsFixtureTest
+import ghicpp.abi.isPrimaryTableSymbol
 import ghicpp.analyzers.MsvcClassAnalyzer
 import ghicpp.hierarchy.*
+import ghicpp.qualifiedName
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.FunctionDefinition
 import ghidra.program.model.data.IntegerDataType
@@ -12,7 +15,8 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghidrakt.runTransaction
+import ghidrakt.*
+import ghidrakt.diagnose.DummySink
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeNull
 import ghidrakt.test.mustBeTrue
@@ -40,6 +44,25 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
     }
 
     @Test
+    fun `of a class's qualified vftable symbols, the one its locator gives offset 0 is its own`() {
+        // `Label`'s tables, for `Rect` at +0 and `Named` at +24.
+        val tables = MsvcRttiParser(program, DummySink).parse(TaskMonitor.DUMMY).recorded
+            .single { it.qualifiedName == "Label" }.vftables.sortedBy { it.vfptrOffset(program) }
+        tables.map { it.vfptrOffset(program) } mustBe listOf(0L, 24L)
+        val symbols = program.runTransaction {
+            tables.zip(listOf("Rect", "Named")).map { (table, base) ->
+                program.symbolTable.createLabel(table.addressPoint, "??_7Label@@6B$base@@@", SourceType.IMPORTED)
+            }
+        }
+        try {
+            symbols.map { Msvc.isPrimaryVtable(it.name) } mustBe listOf(false, false)
+            symbols.map { isPrimaryTableSymbol(it, Msvc) } mustBe listOf(true, false)
+        } finally {
+            program.runTransaction { symbols.forEach { it.delete() } }
+        }
+    }
+
+    @Test
     fun `a class's own fields are where its constructors store them`() {
         program.classStruct("Rect_data").definedComponents.map { it.offset to it.fieldName } mustBe
             listOf(0 to "field_0x10", 4 to "field_0x14")
@@ -58,6 +81,25 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
             28 to "vfptr: Both_vftable_for_Core *",
             32 to "_vbase_Core: Core_fields_4_8",
         )
+    }
+
+    @Test
+    fun `the vftables put each virtual base where the vbtable does`() {
+        // What a class no function here builds, so that no vbtable is found, has its virtual bases placed by.
+        val classes = MsvcRttiParser(program, DummySink).parse(TaskMonitor.DUMMY).recorded
+        fun ClassDecl.tables() = vftables.map { it.vfptrOffset(program)!! to it.slots(program).size }
+        val placed = classes.filter { c -> c.virtualBases.none { it.cls.vbptrs.any() } }.mapNotNull { c ->
+            val vbases = c.virtualBases.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            vbaseOffsetsByVftables(vbases.map { it.cls.tables() }, c.tables())?.let { c.qualifiedName to it }
+        }.toMap()
+        // `Left` and `Right`'s `Base` has no vftable, to say where it sits. The others' vbtables, which the
+        // analysis read, put it where the tests above see it laid.
+        placed mustBe mapOf("Up" to listOf(12L), "Down" to listOf(12L), "Both" to listOf(28L))
+        for (cls in placed.keys) {
+            val vbase = (program.dataTypeManager.getDataType("/ClassDataTypes/$cls/$cls") as Structure)
+                .definedComponents.single { it.fieldName.startsWith("_vbase_") }
+            vbase.comment.orEmpty().contains("by the vbtable") mustBe true
+        }
     }
 
     @Test

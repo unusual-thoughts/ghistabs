@@ -13,10 +13,7 @@ import ghicpp.analyzers.ItaniumClassAnalyzer
 import ghicpp.analyzers.MsvcClassAnalyzer
 import ghicpp.hierarchy.BaseEdit
 import ghicpp.hierarchy.ClassHierarchy
-import ghicpp.hierarchy.ClassHierarchy.ClassView
-import ghicpp.hierarchy.ClassHierarchy.Member
-import ghicpp.hierarchy.ClassHierarchy.MemberKind
-import ghicpp.hierarchy.ClassHierarchy.Origin
+import ghicpp.hierarchy.ClassHierarchy.*
 import ghicpp.hierarchy.reclause
 import ghidra.app.context.ProgramSymbolActionContext
 import ghidra.app.services.GoToService

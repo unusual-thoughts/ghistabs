@@ -3,9 +3,7 @@ package ghicpp.score
 import ghicpp.VirtKind
 import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.hierarchy.ClassHierarchy
-import ghicpp.hierarchy.ClassHierarchy.ClassView
-import ghicpp.hierarchy.ClassHierarchy.MemberKind
-import ghicpp.hierarchy.ClassHierarchy.Origin
+import ghicpp.hierarchy.ClassHierarchy.*
 
 /** True positives, false positives and false negatives of one thing a recovery claims. */
 data class Tally(val tp: Int = 0, val fp: Int = 0, val fn: Int = 0) {
@@ -225,11 +223,11 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     }
 
     /** The truth class a subject base names: through its own class's match, else by name. */
-    private fun ClassHierarchy.BaseRef.truthKey(): String = targetId?.let(truthOf::get)?.let { "#$it" }
+    private fun BaseRef.truthKey(): String = targetId?.let(truthOf::get)?.let { "#$it" }
         ?: truthByName[name]?.firstOrNull()?.let { "#${it.id}" }
         ?: "?$name"
 
-    private fun ClassHierarchy.BaseRef.ownKey(): String = targetId?.let { "#$it" } ?: truthByName[name]?.firstOrNull()
+    private fun BaseRef.ownKey(): String = targetId?.let { "#$it" } ?: truthByName[name]?.firstOrNull()
         ?.let { "#${it.id}" } ?: "?$name"
 
     private fun keyName(key: String) = key.removePrefix("#").toLongOrNull()?.let { t[it]?.qualifiedName } ?: key
@@ -313,11 +311,7 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
      * The functions each class claims that [pick] keeps, by address, against the truth's. A function an
      * unmatched or duplicate class claims is false too: it belongs to no class the recovery found.
      */
-    private fun methods(
-        label: String,
-        actualPick: (ClassView, ClassHierarchy.Member) -> Boolean,
-        pick: (ClassHierarchy.Member) -> Boolean,
-    ): Tally {
+    private fun methods(label: String, actualPick: (ClassView, Member) -> Boolean, pick: (Member) -> Boolean): Tally {
         var total = Tally()
         for ((tc, sc) in scoredPairs) {
             val claimed = sc.functions().filter(pick).map { address(it.address) }.filter { it !in truthThunks }
@@ -343,7 +337,7 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
      * A truth member that is virtual. Some stabs mark only the deleting variant of a virtual destructor so; the
      * complete one, which an Itanium vtable holds too, comes out plain. The base-object one no vtable holds.
      */
-    private fun isTrulyVirtual(cls: ClassView, m: ClassHierarchy.Member) = m.attrs?.virt == VirtKind.VIRTUAL ||
+    private fun isTrulyVirtual(cls: ClassView, m: Member) = m.attrs?.virt == VirtKind.VIRTUAL ||
         (
             m.name.startsWith("~") && m.variants.any { it != ItaniumStructor.BASE_DTOR } &&
                 cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL }
@@ -353,7 +347,7 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     private fun ClassView.isStructorName(member: String) = member.removePrefix("~").substringBefore('<') ==
         name.substringBefore('<')
 
-    private fun ClassView.isStructor(m: ClassHierarchy.Member) =
+    private fun ClassView.isStructor(m: Member) =
         isStructorName(m.name) || m.variants.isNotEmpty() || m.msvcStructor != null
 
     private fun structors(): Tally = scoredPairs.fold(Tally()) { acc, (tc, sc) ->

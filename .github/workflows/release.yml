@@ -39,8 +39,11 @@ jobs:
           java-version: ${{ matrix.java }}
           repo: ${{ matrix.repo }}
 
+      # Annotates compile errors and warnings, so a build that fails on an older Ghidra points at the line.
       - name: Test and build zips
-        run: ./gradlew test buildExtension packageCli
+        uses: ./.github/actions/gradle-annotated
+        with:
+          arguments: test buildExtension packageCli
 
       - name: Publish to the release
         if: startsWith(github.ref, 'refs/tags/v')

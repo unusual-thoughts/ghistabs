@@ -1,0 +1,24 @@
+name: Gradle, annotated
+description: >
+  Run ./gradlew with --warning-mode all under a problem matcher, so its compile errors and compiler
+  warnings are annotated on the PR's diff at their line, and Gradle's own deprecations on the run.
+
+inputs:
+  arguments:
+    description: Arguments to ./gradlew (tasks and flags).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # gradle-matcher.json: Kotlin's `e:`/`w:` lines (with a file, or about the whole build), javac's
+    # `error:`/`warning:` lines, and Gradle's "has been deprecated" ones.
+    - name: Run Gradle
+      shell: bash
+      env:
+        ARGS: ${{ inputs.arguments }}
+      run: |
+        echo "::add-matcher::$GITHUB_ACTION_PATH/gradle-matcher.json"
+        trap 'for o in kotlin-error kotlin-warning kotlin-build-error kotlin-build-warning javac gradle-deprecation; do echo "::remove-matcher owner=$o::"; done' EXIT
+        # Word-split on purpose: ARGS is a task list.
+        ./gradlew --warning-mode all $ARGS

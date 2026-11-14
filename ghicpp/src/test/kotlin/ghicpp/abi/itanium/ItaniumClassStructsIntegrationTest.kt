@@ -16,7 +16,7 @@ import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeTrue
 import org.junit.jupiter.api.Test

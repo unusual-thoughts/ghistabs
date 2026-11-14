@@ -15,7 +15,7 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
 import ghidra.program.util.GhidraProgramUtilities
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.analyzeAfterImport
 import ghistabs.importer.ImportArtifacts
