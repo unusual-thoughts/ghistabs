@@ -21,12 +21,19 @@ import ghidrakt.*
 /** Where `this` comes in: ECX under x86 `__thiscall`, the first argument register elsewhere. */
 fun Program.thisStorage(): Address? {
     val model = functionManager.getCallingConvention(THISCALL) ?: compilerSpec.defaultCallingConvention
-    return model.argLocation(0, PointerDataType(dataTypeManager), this).firstVarnode?.address
+    val signature = arrayOf<DataType>(VoidDataType.dataType, PointerDataType(dataTypeManager))
+    return model.getStorageLocations(this, signature, false, false)[1].firstVarnode?.address
 }
 
-/** Where [this]'s [i]th argument comes in, a pointer, under its calling convention or the program's default. */
-fun Function.argumentAt(i: Int): Address? = (callingConvention ?: program.compilerSpec.defaultCallingConvention)
-    .argLocation(i, PointerDataType(program.dataTypeManager), program).firstVarnode?.address
+/**
+ * Where [this]'s [i]th argument comes in, a pointer, under its calling convention or the program's default:
+ * the ones before it taken as pointers too, as a hidden return pointer ahead of `this` is.
+ */
+fun Function.argumentAt(i: Int): Address? {
+    val signature = arrayOf<DataType>(VoidDataType.dataType) + Array(i + 1) { PointerDataType(program.dataTypeManager) }
+    return (callingConvention ?: program.compilerSpec.defaultCallingConvention)
+        .getStorageLocations(program, signature, false, false).last().firstVarnode?.address
+}
 
 /**
  * Whether [this]'s first argument comes in at [thisStorage], where a method's `this` does: not a `cdecl`
@@ -85,7 +92,7 @@ private fun Function.returnTypeUnder(model: PrototypeModel): DataType? {
         now.dataType
     }
     if (now.variableStorage.isVoidStorage || now.variableStorage.isUnassignedStorage) return type
-    val then = model.returnLocation(type, program)
+    val then = model.getStorageLocations(program, arrayOf(type), false, false)[0]
     val keepsReturn = !then.isForcedIndirect && then.firstVarnode?.address == now.variableStorage.firstVarnode?.address
     return type.takeIf { keepsReturn }
 }
@@ -144,10 +151,11 @@ fun Function.thiscallFromDefaultConvention(): Boolean {
     }
     if (signatureSource.isHigherPriorityThan(SourceType.ANALYSIS)) return false
     val pointer = PointerDataType(program.dataTypeManager)
-    val thisAt = thiscall.argLocation(0, pointer, program)
+    val signature = arrayOf<DataType>(VoidDataType.dataType, pointer)
+    val thisAt = thiscall.getStorageLocations(program, signature, false, false)[1]
     val params = parameters.filterNot { it.isAutoParameter }
     val rest = when {
-        current.argLocation(0, pointer, program) == thisAt ->
+        current.getStorageLocations(program, signature, false, false)[1] == thisAt ->
             if (params.firstOrNull()?.variableStorage == thisAt) params.drop(1) else params
 
         // An analysis's signature only: a function just made has none yet, and its registers may yet show EDX.
