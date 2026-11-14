@@ -9,7 +9,8 @@ on:
   pull_request:
     branches: [ "main" ]
     paths:
-      - ghicpp/ghidra_scripts/MsvcStlArchiveScript.java
+      - ghicpp/src/main/kotlin/ghicpp/stl/**
+      - ghicpp/src/main/kotlin/ghicpp/BaseSplitter.kt
       - ghicpp/data/typeinfo/msvc/**
       - tools/stl-archives/**
       - .github/workflows/stl-archives.yml
@@ -129,6 +130,13 @@ jobs:
           path: layouts/*.txt
           if-no-files-found: error
 
+      # As built here, for the direct job: whether older Ghidra opens them as they are.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: built-archives
+          path: archives/*.gdt
+          if-no-files-found: error
+
       # The classes' bases and vftable slots, which no data type holds: ghicpp ships them beside the archives.
       - uses: actions/upload-artifact@v7
         with:
@@ -209,6 +217,50 @@ jobs:
           path: archives/msvcp90_x64.gdt
           archive: false
           if-no-files-found: error
+
+  # Whether the oldest releases ghicpp supports open the archives as the newest Ghidra writes them. If
+  # they do, the text round trip through the portable job can go. Informational until then.
+  direct:
+    needs: archives
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ghidra: '10.4'
+            java: '17'
+          - ghidra: '11.4.3'
+            java: '21'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: ${{ matrix.ghidra }}
+          java-version: ${{ matrix.java }}
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: layouts
+          path: layouts
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: built-archives
+          path: archives
+
+      - name: Read the archives as built
+        run: |
+          mkdir -p readback
+          status=0
+          for txt in layouts/*.txt; do
+            name=$(basename "$txt" .txt)
+            tools/stl-archives/run.sh layouts ghicpp/src/test/resources/binaries/features/hello_msvc.exe archives/$name.gdt readback/$name.txt ||
+              { echo "::warning::$name.gdt does not open on Ghidra ${{ matrix.ghidra }}"; status=1; continue; }
+            cmp -s "$txt" readback/$name.txt || { echo "::warning::$name reads differently on Ghidra ${{ matrix.ghidra }}"; diff -u "$txt" readback/$name.txt | head -40; status=1; }
+          done
+          exit $status
 
   # Every newer Ghidra opens the 10.4 archives and reads the same layouts out of them.
   compat:

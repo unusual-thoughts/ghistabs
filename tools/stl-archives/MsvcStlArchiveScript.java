@@ -16,7 +16,7 @@ import java.io.File;
 import java.util.*;
 
 import ghicpp.stl.MsvcPdbClasses;
-import ghicpp.stl.StlVftables;
+import ghicpp.stl.StlShape;
 import ghicpp.stl.StdClasses;
 import ghidra.app.script.GhidraScript;
 import ghidra.app.util.bin.format.pdb2.pdbreader.*;
@@ -92,15 +92,17 @@ public class MsvcStlArchiveScript extends GhidraScript {
 				int pointerSize = currentProgram.getDefaultPointerSize();
 				int vfptrs = fixVfptrs(dtm, pointerSize);
 				// Before pruning, so the slots' function types are reached and kept.
-				int vftables = StlVftables.lay(dtm, read[0].getClasses().getClasses(), pointerSize,
+				// ghicpp's names and SPLIT_BASE shape, so its class passes read the layouts as their own.
+				StlShape.Result shape = StlShape.apply(dtm, read[0].getClasses().getClasses(), pointerSize,
 					(cls, slot) -> read[0].typeOf(cls, slot));
 				int dropped = prune(dtm, pdbRoot);
 				int typedefs = addTypedefs(dtm);
 				println(String.format(
 					"%s: %d std types filed by their unique names, %d unrelated types dropped, " +
-						"%d typedefs, %d vfptrs sized, %d vftables; %d method classes resolve to an " +
+						"%d typedefs, %d vfptrs sized, %d bases named, %d own vftables, %d classes split around one; " +
+						"%d method classes resolve to an " +
 						"archive type; %d classes with bases",
-					out.getName(), moved, dropped, typedefs, vfptrs, vftables, methods,
+					out.getName(), moved, dropped, typedefs, vfptrs, shape.getBases(), shape.getVftables(), shape.getSplit(), methods,
 					read[0].getClasses().getClasses().stream().filter(c -> !c.getBases().isEmpty()).count()));
 			});
 			read[0].getClasses().write(new File(out.getPath().replaceAll("\\.gdt$", "") + StdClasses.SUFFIX));
@@ -131,7 +133,7 @@ public class MsvcStlArchiveScript extends GhidraScript {
 	}
 
 	/**
-	 * Gives each `vfptr` the applicator lays a pointer of [size] bytes, named `{vfptr}` as Ghidra's class
+	 * Gives each `vfptr` the applicator lays a pointer of [size] bytes, named `vfptr` as Ghidra's class
 	 * tools name it: it points at a vtable shape the archive has no type for, and without an architecture
 	 * a pointer to nothing defaults to 4 bytes. Returns how many it fixed.
 	 */
@@ -148,11 +150,11 @@ public class MsvcStlArchiveScript extends GhidraScript {
 				if (!"vfptr".equals(name) && !"{vfptr}".equals(name) || !(c.getDataType() instanceof Pointer p)) {
 					continue;
 				}
-				if (p.getLength() == size && "{vfptr}".equals(name)) {
+				if (p.getLength() == size && "vfptr".equals(name)) {
 					continue;
 				}
 				s.replaceAtOffset(c.getOffset(), new PointerDataType(p.getDataType(), size, dtm), size,
-					"{vfptr}", c.getComment());
+					"vfptr", c.getComment());
 				fixed++;
 			}
 		}
