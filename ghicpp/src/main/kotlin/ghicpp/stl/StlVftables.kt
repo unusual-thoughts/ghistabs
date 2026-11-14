@@ -39,11 +39,7 @@ object StlVftables {
         if (cls.slots.isEmpty() || vfptr == null) return@count false
         val length = cls.slots.maxOf { it.offset }.toInt() + pointerSize
         val table = StructureDataType(CategoryPath(cls.path), struct.name + SUFFIX, length, dtm)
-        val names = mutableMapOf<String, Int>()
-        for (slot in cls.slots.sortedBy { it.offset }) {
-            // Overloads share a name; the later ones take a count after it.
-            val seen = names.merge(slot.name, 1, Int::plus)!!
-            val name = if (seen == 1) slot.name else "${slot.name}_${seen - 1}"
+        for ((slot, name) in slotNames(cls.slots)) {
             val target = typeOf(cls, slot)?.let { dtm.resolve(it, DataTypeConflictHandler.DEFAULT_HANDLER) }
             val pointer = PointerDataType(target, pointerSize, dtm)
             table.replaceAtOffset(slot.offset.toInt(), pointer, pointerSize, name, null)
@@ -57,6 +53,15 @@ object StlVftables {
             vfptr.comment,
         )
         true
+    }
+
+    /** [slots] in vftable order, each with its field name: overloads share one, the later taking a count after it. */
+    fun slotNames(slots: List<StdSlot>): List<Pair<StdSlot, String>> {
+        val names = mutableMapOf<String, Int>()
+        return slots.sortedBy { it.offset }.map { slot ->
+            val seen = names.merge(slot.name, 1, Int::plus)!!
+            slot to if (seen == 1) slot.name else "${slot.name}_${seen - 1}"
+        }
     }
 
     /** The vftable a `{vfptr}` [pointer] points at, if [StlVftables] laid one. */

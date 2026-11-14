@@ -9,7 +9,12 @@ import ghidrakt.diagnose.DiagnosticSink
  * Splits a polymorphic base subobject around the vptr a deriving class takes over, whatever laid the
  * class: the stabs import's vfptr placement, or a class pass off the RTTI and the constructors.
  */
-class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : DiagnosticSink by sink {
+class BaseSplitter(
+    private val registry: DtmRegistry,
+    sink: DiagnosticSink,
+    /** A vptr's size: the data organization's, unless that has none of its own (an archive with no architecture). */
+    private val pointerSize: Int = registry.dtm.dataOrganization.pointerSize,
+) : DiagnosticSink by sink {
     private val dtm = registry.dtm
 
     /** {vfptr} points at the function-pointer array at the vtable's address point, not at the record. */
@@ -37,7 +42,7 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
     ): Boolean {
         val className = classPath.last()
         val baseDt = baseComp?.dataType as? Structure ?: return false
-        val ptr = dtm.dataOrganization.pointerSize
+        val ptr = pointerSize
         val vptrInBase = vptrInBase(baseDt, vptrOffset - baseComp.offset)
         val split = splitAround(baseDt.length, vptrInBase, ptr) ?: return false
         val baseOff = baseComp.offset
