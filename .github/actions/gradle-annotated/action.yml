@@ -1,7 +1,7 @@
 name: Gradle, annotated
 description: >
-  Run ./gradlew with --warning-mode all and annotate what it printed: compile errors and compiler
-  warnings on the PR's diff at their line, Gradle's own deprecations on the run. Fails when Gradle does.
+  Run ./gradlew with --warning-mode all under a problem matcher, so its compile errors and compiler
+  warnings are annotated on the PR's diff at their line, and Gradle's own deprecations on the run.
 
 inputs:
   arguments:
@@ -11,25 +11,14 @@ inputs:
 runs:
   using: composite
   steps:
+    # gradle-matcher.json: Kotlin's `e:`/`w:` lines (with a file, or about the whole build), javac's
+    # `error:`/`warning:` lines, and Gradle's "has been deprecated" ones.
     - name: Run Gradle
       shell: bash
       env:
         ARGS: ${{ inputs.arguments }}
-      # Word-split on purpose: ARGS is a task list.
-      run: ./gradlew --warning-mode all $ARGS 2>&1 | tee "$RUNNER_TEMP/gradle-annotated.log"
-
-    # One step per kind: GitHub keeps 10 error and 10 warning annotations per step.
-    - name: Annotate compile errors
-      if: failure()
-      shell: bash
-      run: python3 "$GITHUB_WORKSPACE/.github/scripts/build_warnings.py" "$RUNNER_TEMP/gradle-annotated.log" --kind error
-
-    - name: Annotate compiler warnings
-      if: success() || failure()
-      shell: bash
-      run: python3 "$GITHUB_WORKSPACE/.github/scripts/build_warnings.py" "$RUNNER_TEMP/gradle-annotated.log" --kind compiler
-
-    - name: Annotate Gradle deprecations
-      if: success() || failure()
-      shell: bash
-      run: python3 "$GITHUB_WORKSPACE/.github/scripts/build_warnings.py" "$RUNNER_TEMP/gradle-annotated.log" --kind gradle
+      run: |
+        echo "::add-matcher::$GITHUB_ACTION_PATH/gradle-matcher.json"
+        trap 'for o in kotlin-error kotlin-warning kotlin-build-error kotlin-build-warning javac gradle-deprecation; do echo "::remove-matcher owner=$o::"; done' EXIT
+        # Word-split on purpose: ARGS is a task list.
+        ./gradlew --warning-mode all $ARGS

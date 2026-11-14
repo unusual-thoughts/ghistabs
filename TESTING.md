@@ -163,5 +163,5 @@ the cancelled one as a warning. It fails when every selected suite was cancelled
 
 The `build` job and the release builds also annotate every compile error and compiler warning on the
 PR's diff at its line, and Gradle's own
-deprecations on the run (`.github/scripts/build_warnings.py`). Warnings never fail the job. All jobs run on `ubuntu-26.04`, pinned rather than
+deprecations on the run, through a problem matcher (`.github/actions/gradle-annotated`). Warnings never fail the job. All jobs run on `ubuntu-26.04`, pinned rather than
 `ubuntu-latest`.
