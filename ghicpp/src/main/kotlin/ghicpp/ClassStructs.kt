@@ -117,8 +117,9 @@ private const val GHIDRA_PLACEHOLDER = "PlaceHolder Class Structure"
  * class passes take as it is, rather than size and fill a struct of their own.
  */
 fun Program.knownLayout(ns: GhidraClass): Structure? {
-    val path = ns.getPathList(true)
-    val struct = dataTypeManager.getDataType(CategoryPath(CategoryPath.ROOT, path.dropLast(1)), ns.name)
+    val scopes = ns.getPathList(true).dropLast(1)
+    val category = if (scopes.isEmpty()) CategoryPath.ROOT else CategoryPath(CategoryPath.ROOT, scopes)
+    val struct = dataTypeManager.getDataType(category, ns.name)
     return (struct as? Structure)?.takeIf { it.isKnownLayout() }
 }
 
