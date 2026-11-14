@@ -107,6 +107,21 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun `a member's constructor Ghidra took for a __fastcall becomes the __thiscall it is`() {
+        build()
+        // Ghidra calls a function whose only argument comes in ECX a `__fastcall`.
+        program.runTransaction("fastcall") {
+            program.functionManager.getFunctionAt(addr(MEMBER_CTOR)).setCallingConvention("__fastcall")
+        }
+        program.runTransaction("recover") {
+            GenericVftableFinder(program).seed() mustBe 1
+            val found = ClassPass(program, PlainVtableParser(program), DummySink).run(TaskMonitor.DUMMY).found!!
+            MemberObjectPass(program, DummySink).run(found) mustBe 1
+        }
+        program.functionManager.getFunctionAt(addr(MEMBER_CTOR)).callingConventionName mustBe "__thiscall"
+    }
+
+    @Test
     fun `a member is laid over a plain field its holder's constructor stores inside it`() {
         // mov [esi+4], eax; mov [esi+0xc], eax; nop; nop: the holder's constructor stores a word of its own before
         // the member, so its own fields' struct holds the member's offset, and sets the member's second word itself.
