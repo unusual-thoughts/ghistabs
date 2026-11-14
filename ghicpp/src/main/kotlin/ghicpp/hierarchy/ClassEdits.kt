@@ -1,6 +1,7 @@
 package ghicpp.hierarchy
 
 import ghicpp.Access
+import ghicpp.BaseSplitter
 import ghicpp.ClassHierarchyRecords
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassEdit
@@ -8,6 +9,7 @@ import ghicpp.ClassNaming
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.slotDefinition
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghicpp.holdsVfptrAt
 import ghicpp.recover.updateFieldTypes
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
@@ -20,6 +22,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolType
 import ghidra.util.task.TaskMonitor
 import ghidrakt.*
+import ghidrakt.diagnose.DummySink
 
 sealed interface Drop {
     data class MoveBase(val detach: BaseEdit?, val attach: BaseEdit? = null) : Drop
@@ -150,19 +153,34 @@ fun Program.embeddingOf(base: ClassView): Structure? {
 internal fun Program.structOf(cls: ClassView): Structure? =
     cls.structId?.let(dataTypeManager::getDataType) as? Structure
 
-/** The fields of [cls]'s struct that [base] placed at [offset] would overwrite. */
+/**
+ * The fields of [cls]'s struct that [base] placed at [offset] would overwrite. Not the class's own
+ * `{vfptr}` where the base holds one at the same place: [placeBase] keeps it, splitting the base around it.
+ */
 fun Program.overwrittenBy(cls: ClassView, base: ClassView, offset: Int): List<DataTypeComponent> {
     val struct = structOf(cls) ?: return emptyList()
     val part = embeddingOf(base) ?: return emptyList()
+    val kept = struct.vfptrKeptOver(part, offset)
     return struct.componentsOverlapping(offset, part.length)
         .filterNot { it.offset == offset && it.dataType.isEquivalent(part) }
+        .filterNot { it.offset == kept?.offset }
 }
+
+/**
+ * This struct's own `{vfptr}` that [part] laid at [offset] would cover with a vptr of its own, at the same
+ * place: the class owns its vptr ([ghicpp.VfptrModel.SPLIT_BASE]'s shape), so the base splits around it.
+ */
+private fun Structure.vfptrKeptOver(part: Structure, offset: Int): DataTypeComponent? =
+    componentsOverlapping(offset, part.length).firstOrNull {
+        it.fieldName == ClassUtils.VFPTR && it.offset >= offset && part.holdsVfptrAt(it.offset - offset)
+    }
 
 /**
  * Embeds [base] in [cls]'s struct at [offset], over whatever is there, growing the struct to hold it.
  * Named as the import names a base field: `_base_` alone while the class has one base, else
  * `_base_<Base>` (`_vbase_` for a virtual one), and a lone `_base_` already there takes its type's name
- * once [baseCount] makes it one of several. Returns why it couldn't, or null.
+ * once [baseCount] makes it one of several. Where the class owns the `{vfptr}` the base's vptr would cover,
+ * the base goes in split around it, as its `<Base>_fields_…` runs. Returns why it couldn't, or null.
  */
 fun Program.placeBase(cls: ClassView, base: ClassView, offset: Int, isVirtual: Boolean, baseCount: Int): String? {
     val struct = structOf(cls) ?: return "${cls.qualifiedName} has no struct"
@@ -175,7 +193,14 @@ fun Program.placeBase(cls: ClassView, base: ClassView, offset: Int, isVirtual: B
     }
     val name = ClassNaming.baseFieldName(isVirtual, base.name, baseCount)
     val comment = (if (isVirtual) "virtual " else "") + "base, placed by hand"
-    struct.lay(offset, part, name, comment)
+    // A class owning its vptr keeps it: the base goes in as its fields around it, as a class pass splits it.
+    val kept = struct.vfptrKeptOver(part, offset)?.let { it.offset to it.dataType }
+    val laid = struct.lay(offset, part, name, comment)
+    // Where it can't be (no fields either side of the vptr), the base stays whole and its vptr serves, as
+    // a class pass leaves it.
+    kept?.let { (at, vfptr) ->
+        BaseSplitter(DtmRegistry(dataTypeManager), DummySink).splitBase(struct, listOf(cls.name), at, laid, vfptr)
+    }
     return null
 }
 
