@@ -17,9 +17,8 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghidrakt.buildClassNamespaces
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.toClass
 
 /**
  * The classes with no vtable that the classes a class pass found hold as members. What a constructor calls first

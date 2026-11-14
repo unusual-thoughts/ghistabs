@@ -1,13 +1,7 @@
 package ghicpp.score
 
 import ghicpp.ClassRecordSource
-import ghicpp.analyzers.GenericVftableAnalyzer
-import ghicpp.analyzers.ItaniumClassAnalyzer
-import ghicpp.analyzers.MsvcClassAnalyzer
-import ghicpp.analyzers.RttiSymbolAnalyzer
-import ghicpp.analyzers.TypeinfoLayoutAnalyzer
-import ghicpp.analyzers.VirtualBaseAnalyzer
-import ghicpp.analyzers.VtableSweepAnalyzer
+import ghicpp.analyzers.*
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.MemberKind
 import ghicpp.score.Truth.Companion.withBasesOf
@@ -22,8 +16,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.loadProgram
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.TestBinaries
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer

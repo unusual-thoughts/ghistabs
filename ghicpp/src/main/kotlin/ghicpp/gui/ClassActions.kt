@@ -7,16 +7,8 @@ import docking.action.ToggleDockingAction
 import docking.action.ToolBarData
 import docking.widgets.dialogs.InputDialog
 import generic.theme.GIcon
+import ghicpp.hierarchy.*
 import ghicpp.hierarchy.ClassHierarchy.*
-import ghicpp.hierarchy.VirtualSlot
-import ghicpp.hierarchy.VirtualSlots
-import ghicpp.hierarchy.applySignatureToSlots
-import ghicpp.hierarchy.functionOf
-import ghicpp.hierarchy.relocateNamespace
-import ghicpp.hierarchy.renameClass
-import ghicpp.hierarchy.resolve
-import ghicpp.hierarchy.slotDefinitionsOf
-import ghicpp.hierarchy.updateFieldTypes
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.app.context.ProgramSymbolActionContext
 import ghidra.app.plugin.core.navigation.locationreferences.LocationReferencesService
@@ -36,8 +28,7 @@ import ghidra.util.HelpLocation
 import ghidra.util.Msg
 import ghidra.util.task.MonitoredRunnable
 import ghidra.util.task.TaskLauncher
-import ghidrakt.namespaceAt
-import ghidrakt.runTransaction
+import ghidrakt.*
 import resources.Icons
 
 private val STRUCT_ICON = GIcon("icon.plugin.datatypes.structure")

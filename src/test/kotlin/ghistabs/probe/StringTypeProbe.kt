@@ -6,15 +6,13 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.diagnose.Level
-import ghidrakt.runTransaction
-import ghidrakt.withProgram
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportProbe
-import ghistabs.importer.import
 import ghistabs.materialize.isUndefined
 import ghistabs.test.disableWindowsResourceAnalyzer
 import ghistabs.test.importAndAnalyze

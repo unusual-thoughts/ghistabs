@@ -7,7 +7,8 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
-import ghidrakt.byteProvider
+import ghidrakt.*
+import ghistabs.parse.StabReader.Companion.SOURCES
 
 /**
  * Reads stab records from raw record/string bytes, tracking per-CU offsets ([Layout.SECTION]) and

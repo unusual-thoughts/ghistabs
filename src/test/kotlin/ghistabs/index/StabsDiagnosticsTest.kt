@@ -1,6 +1,6 @@
 package ghistabs.index
 
-import ghidrakt.diagnose.*
+import ghidrakt.diagnose.CapturingSink
 import ghidrakt.test.must
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeIn

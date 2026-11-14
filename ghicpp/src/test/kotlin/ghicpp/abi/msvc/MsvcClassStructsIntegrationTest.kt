@@ -14,8 +14,8 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.DummySink
-import ghidrakt.runTransaction
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeNull
 import ghidrakt.test.mustBeTrue

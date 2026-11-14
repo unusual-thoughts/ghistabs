@@ -1,12 +1,10 @@
 package ghistabs.cli
 
-import ghidrakt.test.*
+import ghidrakt.test.mustBeIn
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.Parser
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.mustBeOk
-import ghistabs.test.*
-import kotlinx.serialization.encodeToString
 import org.junit.jupiter.api.Test
 
 class DumpsTest {

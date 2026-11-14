@@ -6,7 +6,6 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
 import ghidrakt.test.*
 import ghistabs.parse.TypeDecl
-import ghistabs.test.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource

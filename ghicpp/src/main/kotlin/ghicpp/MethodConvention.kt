@@ -9,9 +9,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
-import ghidrakt.getStorageLocations
-import ghidrakt.isInjected
-import ghidrakt.isMethod
+import ghidrakt.*
 
 /** Where `this` comes in: ECX under x86 `__thiscall`, the first argument register elsewhere. */
 fun Program.thisStorage(): Address? {

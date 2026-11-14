@@ -2,7 +2,7 @@ package ghicpp
 
 import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
-import ghidrakt.loadProgram
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeEmpty
 import ghidrakt.test.mustNotBeEmpty

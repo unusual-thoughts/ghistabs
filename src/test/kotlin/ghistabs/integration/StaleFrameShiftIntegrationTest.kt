@@ -6,16 +6,14 @@ import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.runTransaction
-import ghidrakt.test.*
+import ghidrakt.*
 import ghidrakt.test.TestBinaries
-import ghidrakt.withProgram
-import ghistabs.test.*
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeIn
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
-import java.io.File
 
 /**
  * From gcc 4.8, a stab local's offset counts from the frame gcc laid before register allocation, which saved

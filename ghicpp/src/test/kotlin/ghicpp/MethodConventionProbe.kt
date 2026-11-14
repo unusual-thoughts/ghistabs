@@ -5,9 +5,7 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.program.model.listing.Function
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.isMethod
-import ghidrakt.loadProgram
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.TestBinaries
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag

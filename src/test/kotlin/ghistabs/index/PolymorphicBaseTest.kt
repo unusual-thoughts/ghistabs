@@ -7,7 +7,10 @@ import ghidrakt.test.mustBe
 import ghidrakt.test.mustNot
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
-import ghistabs.parse.*
+import ghistabs.parse.AggrKind
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SourceFile
+import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.test.typesOf

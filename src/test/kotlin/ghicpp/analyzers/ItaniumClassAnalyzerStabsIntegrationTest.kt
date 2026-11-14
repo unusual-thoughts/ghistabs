@@ -2,12 +2,11 @@ package ghicpp.analyzers
 
 import ghicpp.ClassRecordSource
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.loadProgram
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import ghistabs.integration.FeatureFixtureTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import java.io.File
 
 /**
  * The Itanium class analyzer leaves a binary with stabs to them, told through a [ClassRecordSource] found by

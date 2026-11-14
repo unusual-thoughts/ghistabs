@@ -11,9 +11,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.LoadedProgram
-import ghidrakt.loadProgram
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.TestBinaries
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeTrue

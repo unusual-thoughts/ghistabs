@@ -1,8 +1,7 @@
 package ghistabs.integration
 
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.LoadedProgram
-import ghidrakt.loadProgram
+import ghidrakt.*
 import ghidrakt.test.TestBinaries
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportOptions

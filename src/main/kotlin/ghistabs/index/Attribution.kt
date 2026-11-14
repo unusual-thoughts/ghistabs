@@ -2,8 +2,7 @@ package ghistabs.index
 
 import ghicpp.abi.gcc2.Gcc2
 import ghidra.program.model.data.CategoryPath
-import ghidrakt.Demangler
-import ghidrakt.toCategoryPath
+import ghidrakt.*
 import ghistabs.harvest.*
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile

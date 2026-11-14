@@ -2,7 +2,10 @@ package ghistabs.harvest
 
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.DiagnosticSink
-import ghistabs.parse.*
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.StabRecord
+import ghistabs.parse.StabType
+import ghistabs.parse.SymbolDecl
 
 /**
  * Harvest typed symbols and ASTs from a flat stab record stream. [cursor] holds the stream

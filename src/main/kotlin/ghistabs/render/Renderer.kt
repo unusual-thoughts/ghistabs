@@ -9,7 +9,6 @@ import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.runTransaction
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.Type
@@ -28,7 +27,6 @@ import ghistabs.scan.Preprocessed
 import ghistabs.scan.SourceIndexes
 import java.io.Closeable
 import java.io.File
-import java.util.*
 
 /**
  * The decompilation and render state shared by every file of one render, and the owner of the

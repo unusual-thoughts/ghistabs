@@ -2,8 +2,7 @@ package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.cursorAt
-import ghidrakt.nextPointer
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach

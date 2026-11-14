@@ -14,7 +14,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.must
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeEmpty

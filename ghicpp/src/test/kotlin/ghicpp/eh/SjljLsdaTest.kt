@@ -3,8 +3,7 @@ package ghicpp.eh
 import ghicpp.eh.SjljLsda.Kind
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.minus
-import ghidrakt.plus
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeEmpty
 import ghidrakt.test.mustBeNull
