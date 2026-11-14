@@ -20,9 +20,9 @@
     "structors-fn": 10,
     "structors-fp": 2,
     "structors-tp": 23,
-    "vftables-fn": 3,
-    "vftables-fp": 3,
-    "vftables-tp": 8,
+    "vftables-fn": 0,
+    "vftables-fp": 0,
+    "vftables-tp": 11,
     "virtual-methods-fn": 6,
     "virtual-methods-fp": 6,
     "virtual-methods-tp": 23
