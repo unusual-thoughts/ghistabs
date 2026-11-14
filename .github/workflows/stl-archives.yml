@@ -108,12 +108,21 @@ jobs:
             tools/stl-archives/run.sh layouts $program ghicpp/data/typeinfo/msvc/$name.gdt bundled/$name.txt
             cmp -s layouts/$name.txt bundled/$name.txt ||
               echo "::warning::$name.gdt built here differs from ghicpp's bundled copy; refresh it from this run's artifacts"
+            cmp -s archives/$name.classes ghicpp/data/typeinfo/msvc/$name.classes ||
+              echo "::warning::$name.classes built here differs from ghicpp's bundled copy; refresh it from the classes artifact"
           done
 
       - uses: actions/upload-artifact@v7
         with:
           name: layouts
           path: layouts/*.txt
+          if-no-files-found: error
+
+      # The classes' bases, which no data type holds, as text: ghicpp ships them beside the archives.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: classes
+          path: archives/*.classes
           if-no-files-found: error
 
   # A .gdt opens on the Ghidra that wrote it and newer ones, so the published archives are rebuilt from
