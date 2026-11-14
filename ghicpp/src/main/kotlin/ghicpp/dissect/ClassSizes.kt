@@ -6,6 +6,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.util.task.TaskMonitor
+import ghidrakt.alignedTo
 import ghidrakt.diagnose.DiagnosticSink
 
 /**
@@ -31,9 +32,6 @@ fun sizeBounds(
     val placed = classes.associateWith { cls ->
         cls.bases.filterNot { it.isVirtual }.mapNotNull { b -> b.offset?.let { b.cls to it } }
     }
-    fun vbasesOf(k: ClassDecl) = (k.virtualBases + k.bases.filter { it.isVirtual }).distinctBy { it.cls }
-    fun hasVirtualBases(k: ClassDecl) = vbasesOf(k).isNotEmpty() || k.vbaseOffsets.isNotEmpty()
-
     // Each base, as the classes holding it place it: from its offset to the next base's, or the holder's end.
     val holders = mutableMapOf<ClassDecl, MutableList<Pair<ClassDecl, Long?>>>()
     for ((holder, held) in placed) {
@@ -47,7 +45,7 @@ fun sizeBounds(
     val dynamic = mutableMapOf<ClassDecl, Boolean>()
     fun isDynamic(k: ClassDecl, depth: Int = 0): Boolean = dynamic.getOrPut(k) {
         depth <= MAX_DEPTH && (
-            k in vptrs || hasVirtualBases(k) || placed[k].orEmpty().any { (b, _) -> isDynamic(b, depth + 1) }
+            k in vptrs || k.hasVirtualBases || placed[k].orEmpty().any { (b, _) -> isDynamic(b, depth + 1) }
             )
     }
 
@@ -60,9 +58,8 @@ fun sizeBounds(
             stored[k],
             placed[k].orEmpty().maxOfOrNull { (b, at) -> at + atLeast(b, depth + 1) },
         ).maxOrNull() ?: 0
-        val vbases = vbasesOf(k)
-        val offsets = vbases.mapNotNull { it.offset } + k.vbaseOffsets
-        val pastVbases = if (offsets.isEmpty() && vbases.isNotEmpty()) {
+        val vbases = k.allVirtualBases
+        val pastVbases = if (k.nonVirtualSize == null && vbases.isNotEmpty()) {
             // Laid out past the non-virtual part, which fills what its holders leave it.
             val room = holders[k].orEmpty().mapNotNull { it.second }.minOrNull() ?: 0
             vbases.fold(maxOf(nonVirtual, room)) { at, v -> at.alignedTo(ptrSize) + vbaseLeast(v.cls) }
@@ -78,7 +75,7 @@ fun sizeBounds(
     fun atMost(k: ClassDecl, depth: Int = 0): Long? = if (k in most) {
         most[k]
     } else {
-        val bounds = holders[k].orEmpty().takeUnless { hasVirtualBases(k) }.orEmpty().mapNotNull { (holder, room) ->
+        val bounds = holders[k].orEmpty().takeUnless { k.hasVirtualBases }.orEmpty().mapNotNull { (holder, room) ->
             room ?: run {
                 val end = allocated[holder] ?: atMost(holder, depth + 1).takeIf { depth < MAX_DEPTH }
                 val at = placed.getValue(holder).first { it.first == k }.second
@@ -92,8 +89,6 @@ fun sizeBounds(
         allocated[k]?.let { it..it } ?: atLeast(k)..(atMost(k) ?: Long.MAX_VALUE)
     }
 }
-
-private fun Long.alignedTo(n: Long) = if (n <= 0) this else (this + n - 1) / n * n
 
 /** Each class's furthest vptr, off its [ClassDecl.vftables]; none for a class whose vftables don't say. */
 fun vptrOffsets(classes: Collection<ClassDecl>, program: Program): Map<ClassDecl, Long> =

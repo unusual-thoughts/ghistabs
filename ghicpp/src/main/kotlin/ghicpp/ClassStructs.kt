@@ -223,6 +223,10 @@ fun Structure.ownData(): List<Pair<Int, Structure>> = definedComponents.flatMap 
     }
 }
 
+/** The bytes from [offset] to the next defined component or the end. */
+fun Structure.roomAt(offset: Int) =
+    (definedComponents.map { it.offset }.filter { it > offset }.minOrNull() ?: length) - offset
+
 /** Why [dt] can't go at [at] in this over undefined bytes alone, or null where it can. */
 fun Structure.layoutProblem(at: Int, dt: DataType): String? = when {
     at + dt.length > length -> "${dt.name} (${dt.length}b) at +$at overruns $length"

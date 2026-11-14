@@ -112,11 +112,7 @@ class GenericVftableFinder(
         }
     }
 
-    /** The signed word [words] words before [this]. */
-    private fun Address.wordBefore(words: Int): Long? = runCatching {
-        val at = subtractNoWrap(words * ptr)
-        if (ptr == 8L) program.memory.getLong(at) else program.memory.getInt(at).toLong()
-    }.getOrNull()
+    private fun Address.wordBefore(words: Int) = signedWordBefore(program, words)
 
     /** An rtti word: 0, with no RTTI, or a pointer to data, a typeinfo. */
     private fun isRttiWord(word: Long) = word == 0L || runCatching {
