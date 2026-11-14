@@ -69,9 +69,6 @@ interface CxxAbi :
     /** The record that says where an object's virtual bases sit: Itanium's vtable, MSVC's vbtable. */
     val virtualBaseRecord: String get() = "vtable"
 
-    /** What this ABI calls a class's table of virtual functions: Itanium's vtable, MSVC's vftable. */
-    val vtableName: String get() = "vtable"
-
     /**
      * Whether the table whose address point is [vftable] is one of this ABI's records, by the record's symbols.
      * By default a record starts at its address point, so its vtable symbol is there, as gcc 2.x's is.

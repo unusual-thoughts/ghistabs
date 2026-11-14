@@ -99,7 +99,7 @@ class VirtualBasePass(private val program: Program, private val abi: CxxAbi, sin
     }
 
     private fun ClassBase.offsetSourceName() =
-        if (offsetSource == SourceType.ANALYSIS) "its ${abi.vtableName}s" else "the ${abi.virtualBaseRecord}"
+        if (offsetSource == SourceType.ANALYSIS) "its vftables" else "the ${abi.virtualBaseRecord}"
 
     /** Whether [vbaseAt] puts a virtual base inside [this], logging why not where it doesn't. */
     private fun Structure.isInside(vbaseAt: Int?, at: String, unbuilt: Boolean): Boolean = when (vbaseAt) {
