@@ -25,7 +25,7 @@ running the same probe.
 ## Building one yourself
 
 [`build/MsvcStlArchiveScript.java`](build/MsvcStlArchiveScript.java) builds one. It uses ghicpp's classes and Ghidra 12.2+ APIs, so it needs the
-ghicpp extension installed. It sits in its own folder because Ghidra compiles a script folder as one bundle, and the other scripts here also run on 10.4, where this one cannot compile. Add that folder to the Script Manager's paths and run it on any program of the
+ghicpp extension installed. It sits in its own folder, beside `scripts/` rather than above it, because Ghidra compiles a script folder and its subfolders as one bundle, and the scripts in `scripts/` also run on 10.4, where this one cannot compile. Add that folder to the Script Manager's paths and run it on any program of the
 right architecture, pointing it at a PDB with type information, or headless:
 
 ```
@@ -67,7 +67,7 @@ builder (`StdClasses`, `StlVftables`, `StlApplier`, `StlArchives`) say nothing o
 A member function's access, and whether it is virtual or static, need no PDB: an MSVC name spells them,
 and the Class Hierarchy window reads them off the imported or mangled name.
 
-The archives travel between Ghidra versions as text: [`ExportStlLayouts.java`](ExportStlLayouts.java)
+The archives travel between Ghidra versions as text: [`ExportStlLayouts.java`](scripts/ExportStlLayouts.java)
 writes it (`run.sh layouts <program> <archive> <out.txt>`) and describes the format, and
-[`LayoutsToGdt.java`](LayoutsToGdt.java) turns it back into a `.gdt` on whichever Ghidra runs it
+[`LayoutsToGdt.java`](scripts/LayoutsToGdt.java) turns it back into a `.gdt` on whichever Ghidra runs it
 (`run.sh gdt <program> <layouts.txt> <out.gdt>`).
