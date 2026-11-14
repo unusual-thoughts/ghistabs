@@ -36,6 +36,8 @@ data class ClassBase(
     override val isVirtual: Boolean,
     override val access: Access,
     override val offset: Long?,
+    /** Where a virtual base's [offset] is from: IMPORTED its ABI record, ANALYSIS its vtables, DEFAULT nowhere. */
+    val offsetSource: SourceType = SourceType.IMPORTED,
 ) : BaseDecl
 
 /**

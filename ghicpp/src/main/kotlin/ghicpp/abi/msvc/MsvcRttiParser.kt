@@ -16,6 +16,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.pointerAt
@@ -121,7 +122,26 @@ class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
             .map { (descriptor, entries) ->
                 val at = entries.firstNotNullOfOrNull { e -> e.vbtableSlot?.let { vbaseOffset(it, e.offset) } }
                 ClassBase(classAt(descriptor), isVirtual = true, entries.first().access, at)
-            }
+            }.let { placedByVftables(it) }
+    }
+
+    /**
+     * [vbases], those no vbtable was found for placed by the class's vftables ([vbaseOffsetsByVftables]), as
+     * where the linker drops an unused class's constructors and keeps its vftables. Not where a virtual base
+     * has virtual bases of its own, whose tables the class shares rather than repeats.
+     */
+    private fun ClassDecl.placedByVftables(vbases: List<ClassBase>): List<ClassBase> {
+        if (vbases.all { it.offset != null }) return vbases
+        fun ClassDecl.tables() = vftables.mapNotNull { r ->
+            r.vfptrOffset(program)?.let { it to r.slots(program).size }
+        }
+        val at = vbases.takeIf { all -> all.none { it.cls.vbptrs.isNotEmpty() } }
+            ?.let { all -> vbaseOffsetsByVftables(all.map { it.cls.tables() }, tables()) }
+        val source = if (at != null) SourceType.ANALYSIS else SourceType.DEFAULT
+        return vbases.mapIndexed { i, b ->
+            b.takeIf { it.offset != null }
+                ?: b.copy(offset = at?.get(i), offsetSource = source)
+        }
     }
 
     /** Where a virtual base [mdisp] past what [slot] reads sits in the class, once its vbtable is known. */
@@ -197,6 +217,27 @@ class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
     private fun typeDescriptorClass(at: Address) = symbols.getSymbols(at)
         .firstOrNull { it.name == Msvc.TYPE_DESCRIPTOR && !it.parentNamespace.isGlobal }
         ?.parentNamespace?.toClass()
+}
+
+/**
+ * Where each of [vbases] sits in a class with [tables], off the vftables alone. Each table is its vptr's
+ * offset in its class and its slot count. MSVC lays the virtual bases last, in the order the Base Class Array
+ * first lists them, and never adds a slot to a virtual base's tables: the class's last tables are its virtual
+ * bases' own, as many and as long, each moved by where its base sits. Null where they are not, or a virtual
+ * base has no table, which leaves where it sits to its vbtable alone.
+ */
+fun vbaseOffsetsByVftables(vbases: List<List<Pair<Long, Int>>>, tables: List<Pair<Long, Int>>): List<Long>? {
+    if (vbases.any { it.isEmpty() }) return null
+    val sorted = tables.sortedBy { it.first }
+    var next = sorted.size - vbases.sumOf { it.size }
+    if (next < 0) return null
+    return vbases.map { own ->
+        val base = own.sortedBy { it.first }
+        val moved = sorted.subList(next, next + base.size).also { next += base.size }
+        val at = moved.first().first - base.first().first
+        if (moved.zip(base).any { (t, b) -> t.first - b.first != at || t.second != b.second } || at <= 0) return null
+        at
+    }
 }
 
 /** The Base Class Array a Class Hierarchy Descriptor points at: the class itself first, then its bases. */
