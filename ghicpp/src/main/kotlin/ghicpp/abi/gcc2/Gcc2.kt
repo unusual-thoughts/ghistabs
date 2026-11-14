@@ -4,8 +4,6 @@ import ghicpp.MemberDecl
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.Structor
 import ghicpp.abi.VtableRecord
-import ghicpp.abi.gcc2.Gcc2.DEMANGLED_VTABLE_SUFFIX
-import ghicpp.abi.itanium.Itanium
 import ghicpp.leafName
 import ghicpp.nameSegments
 import ghicpp.qualifiedName

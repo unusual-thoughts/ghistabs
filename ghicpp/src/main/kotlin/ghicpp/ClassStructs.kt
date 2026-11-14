@@ -1,22 +1,11 @@
 package ghicpp
 
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeComponent
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidrakt.*
-import ghidrakt.componentsOverlapping
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.holds
-import ghidrakt.includes
-import ghidrakt.lay
-import ghidrakt.range
-import ghidrakt.stretch
-import ghidrakt.withLength
 
 /**
  * Describes this struct as [owner]'s [table], led by the offset tag Ghidra 12.1's `ClassUtils.isVTable`

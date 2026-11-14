@@ -53,8 +53,8 @@ fun DataTypeManager.vtableHeaderLayout(prefixWords: Int): StructureDataType {
  */
 fun Program.isPrimaryRecordAt(addr: Address, header: Structure): Boolean {
     val record = addr.takeIf(::isData)?.let { dataAt(it, header) } ?: return false
-    if (record.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value != 0L) return false
-    return runCatching { addr.addNoWrap(record.length.toLong()) }.getOrNull()?.let(::startsSlots) == true
+    return record.valueOf<Scalar>(Itanium.OFFSET_TO_TOP)?.value == 0L &&
+        runCatching { addr.addNoWrap(record.length.toLong()) }.getOrNull()?.let(::startsSlots) == true
 }
 
 /**

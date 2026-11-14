@@ -1,22 +1,17 @@
 package ghicpp
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DoubleDataType
-import ghidra.program.model.data.Float10DataType
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.VoidDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.lang.PrototypeModel
+import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.Parameter
-import ghidra.program.model.listing.ParameterImpl
-import ghidra.program.model.listing.Program
-import ghidra.program.model.listing.ReturnParameterImpl
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
-import ghidrakt.*
+import ghidrakt.getStorageLocations
+import ghidrakt.isInjected
+import ghidrakt.isMethod
 
 /** Where `this` comes in: ECX under x86 `__thiscall`, the first argument register elsewhere. */
 fun Program.thisStorage(): Address? {
