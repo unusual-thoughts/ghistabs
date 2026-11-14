@@ -1,0 +1,33 @@
+{
+  "problemMatcher": [
+    {
+      "owner": "kotlin-error",
+      "severity": "error",
+      "pattern": [{ "regexp": "^e: (?:file://)?(/[^:]+):(\\d+):(\\d+) (.+)$", "file": 1, "line": 2, "column": 3, "message": 4 }]
+    },
+    {
+      "owner": "kotlin-warning",
+      "severity": "warning",
+      "pattern": [{ "regexp": "^w: (?:file://)?(/[^:]+):(\\d+):(\\d+) (.+)$", "file": 1, "line": 2, "column": 3, "message": 4 }]
+    },
+    {
+      "owner": "kotlin-build-error",
+      "severity": "error",
+      "pattern": [{ "regexp": "^e: (?!file://|/)(.+)$", "message": 1 }]
+    },
+    {
+      "owner": "kotlin-build-warning",
+      "severity": "warning",
+      "pattern": [{ "regexp": "^w: (?!file://|/)(.+)$", "message": 1 }]
+    },
+    {
+      "owner": "javac",
+      "pattern": [{ "regexp": "^(/.+\\.java):(\\d+): (warning|error): (.+)$", "file": 1, "line": 2, "severity": 3, "message": 4 }]
+    },
+    {
+      "owner": "gradle-deprecation",
+      "severity": "warning",
+      "pattern": [{ "regexp": "^(?![we]: )(.*\\bhas been deprecated\\b.*)$", "message": 1 }]
+    }
+  ]
+}
