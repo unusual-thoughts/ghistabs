@@ -1,8 +1,11 @@
 package ghicpp.abi.generic
 
 import ghicpp.*
-import ghicpp.abi.*
+import ghicpp.abi.CxxAbi
+import ghicpp.abi.RttiParser
+import ghicpp.abi.VtableRecord
 import ghicpp.abi.msvc.Msvc
+import ghicpp.abi.slotFunction
 import ghicpp.dissect.DissectingParser
 import ghicpp.dissect.DissectionCache
 import ghicpp.dissect.Dissections
