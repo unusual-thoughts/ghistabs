@@ -13,11 +13,11 @@ import ghidra.program.model.data.AlignmentDataType
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghidrakt.addressesBefore
 import ghidrakt.diagnose.report
 import ghidrakt.forceCreateData
 import ghidrakt.instructionAt
 import ghidrakt.plus
+import ghidrakt.undefinedRangesIn
 
 /**
  * Marks compiler alignment padding in executable memory as [AlignmentDataType], so downstream passes
@@ -55,9 +55,7 @@ class FillerByteAnalyzer :
 
         var marked = 0
         monitor.initialize(target.numAddresses, "Collapsing filler bytes")
-        for (range in listing.getUndefinedRanges(target, false, monitor)) {
-            monitor.checkCancelled()
-            monitor.progress = target.addressesBefore(range.minAddress)
+        for (range in listing.undefinedRangesIn(target, monitor)) {
             for ((at, len) in program.fillSpans(code, range)) {
                 if (runCatching { program.forceCreateData(at, AlignmentDataType(), len.toInt()) }.isSuccess) {
                     bookmarks.setBookmark(at, BookmarkType.ANALYSIS, NAME, "collapsed $len filler bytes")
