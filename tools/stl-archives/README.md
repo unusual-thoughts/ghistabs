@@ -46,13 +46,14 @@ path. Only those types are resolved, with what they depend on, and they stay lin
 refresh the copies, download this workflow's `.gdt` artifacts into that folder; the workflow warns when a
 fresh build no longer matches them.
 
-Beside each archive is a `.classes.json` file (the `classes` artifact) with each class's direct bases off the
+Beside each archive is a `.classes.xml.gz` file (the `classes` artifact) with each class's direct bases off the
 PDB: their access, virtuality and offset, which a struct cannot say, and the empty bases it has no bytes
 for. The analyzer records them for each std class the program has a class namespace for, so the Class
 Hierarchy window shows the library's classes and how the program's own derive from them. ghicpp's class
 passes take an archive type at a class's namespace path as that class's struct, as it is: they lay it as
 the base of the classes deriving from it, and neither size nor fill it. The file is ghicpp's own model of
-the classes (`ghicpp.stl.StdClasses`) saved as JSON, so [`MsvcStlArchiveScript`](../../ghicpp/ghidra_scripts/MsvcStlArchiveScript.java)
+the classes (`ghicpp.stl.StdClasses`), encoded by the same `GPropertiesFormat` as its class hierarchy
+record and saved as gzipped GProperties XML, so [`MsvcStlArchiveScript`](../../ghicpp/ghidra_scripts/MsvcStlArchiveScript.java)
 needs the ghicpp extension installed; the workflow builds and installs it first.
 
 The file also lists the virtual functions each class introduces, by vftable offset, and the archive gives

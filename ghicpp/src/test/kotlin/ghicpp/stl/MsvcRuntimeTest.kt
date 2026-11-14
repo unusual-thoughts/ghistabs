@@ -4,6 +4,7 @@ import ghicpp.Access
 import ghidra.program.model.data.CategoryPath
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
+import java.io.File
 
 class MsvcRuntimeTest {
     @Test
@@ -51,7 +52,9 @@ class MsvcRuntimeTest {
                 StdClass("/std/_Container_base0"),
             ),
         )
-        StdClasses.fromJson(classes.toJson()) mustBe classes
+        val file = File.createTempFile("std", StdClasses.SUFFIX).apply { deleteOnExit() }
+        classes.write(file)
+        StdClasses.read(file.inputStream()) mustBe classes
         StdClass("/std/basic_ios<char>").segments mustBe listOf("std", "basic_ios<char>")
     }
 }

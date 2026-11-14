@@ -6,8 +6,9 @@
 // the PDB belongs to: script arguments are the PDB and the .gdt to write; without them it asks.
 //
 // Beside the archive it writes the classes' bases, which a data type cannot hold (an empty base takes
-// no bytes, and the struct says nothing of access or virtuality), as `<archive>.classes.json`: ghicpp's
-// own model of them (ghicpp.stl.StdClasses, read by ghicpp.stl.MsvcPdbClasses), so this needs the ghicpp extension installed.
+// no bytes, and the struct says nothing of access or virtuality), with the virtual functions each introduces,
+// as `<archive>.classes.xml.gz`: ghicpp's own model of them (ghicpp.stl.StdClasses, read by
+// ghicpp.stl.MsvcPdbClasses), so this needs the ghicpp extension installed.
 // @category Data Types
 // @runtime Java
 
