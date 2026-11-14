@@ -2,6 +2,7 @@ package ghicpp.abi.msvc
 
 import ghicpp.ClassDecl
 import ghicpp.ClassStructsFixtureTest
+import ghicpp.abi.isPrimaryTableSymbol
 import ghicpp.analyzers.MsvcClassAnalyzer
 import ghicpp.hierarchy.*
 import ghicpp.qualifiedName
@@ -40,6 +41,25 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
         )
         program.classStruct("Rect_vftable").definedComponents.map { it.fieldName } mustBe
             listOf(rectDeletingDestructor, "vfunction2", "vfunction3", "vfunction4")
+    }
+
+    @Test
+    fun `of a class's qualified vftable symbols, the one its locator gives offset 0 is its own`() {
+        // `Label`'s tables, for `Rect` at +0 and `Named` at +24.
+        val tables = MsvcRttiParser(program, DummySink).parse(TaskMonitor.DUMMY).recorded
+            .single { it.qualifiedName == "Label" }.vftables.sortedBy { it.vfptrOffset(program) }
+        tables.map { it.vfptrOffset(program) } mustBe listOf(0L, 24L)
+        val symbols = program.runTransaction {
+            tables.zip(listOf("Rect", "Named")).map { (table, base) ->
+                program.symbolTable.createLabel(table.addressPoint, "??_7Label@@6B$base@@@", SourceType.IMPORTED)
+            }
+        }
+        try {
+            symbols.map { Msvc.isPrimaryVtable(it.name) } mustBe listOf(false, false)
+            symbols.map { isPrimaryTableSymbol(it, Msvc) } mustBe listOf(true, false)
+        } finally {
+            program.runTransaction { symbols.forEach { it.delete() } }
+        }
     }
 
     @Test
