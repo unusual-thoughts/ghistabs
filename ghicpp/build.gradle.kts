@@ -22,7 +22,7 @@ dependencies {
 // The STL archives ship in data/typeinfo/msvc, where Ghidra lists them, and in the jar for builds that
 // bundle only the jar (MsvcStlArchives falls back to those).
 tasks.processResources {
-    from("data/typeinfo/msvc") { into("ghicpp/stl") }
+    from("data/typeinfo") { into("ghicpp/stl") }
 }
 
 // Don't copy `binaries/` into build/resources/test/.

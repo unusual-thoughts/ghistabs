@@ -113,7 +113,7 @@ private const val GHIDRA_PLACEHOLDER = "PlaceHolder Class Structure"
  * its size: it is the base's, which grew none.
 =======
  * The layout an archive gives the class, at its namespace path (`/std/basic_streambuf<…>` for
- * `std::basic_streambuf<…>`), as the bundled MSVC runtime archives do ([ghicpp.stl.MsvcStlApplier]): what the
+ * `std::basic_streambuf<…>`), as the bundled MSVC runtime archives do ([ghicpp.stl.StlApplier]): what the
  * class passes take as it is, rather than size and fill a struct of their own.
  */
 fun Program.knownLayout(ns: GhidraClass): Structure? {
