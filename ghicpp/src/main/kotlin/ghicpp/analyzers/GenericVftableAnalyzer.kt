@@ -8,6 +8,7 @@ import ghicpp.recover.ClassPass.Companion.INLINED_CONSTRUCTORS
 import ghicpp.recover.GenericVftableFinder
 import ghicpp.recover.MemberObjectPass
 import ghicpp.recover.MethodClassPass
+import ghicpp.recover.MethodClassPass.Companion.TRUST_GUESSES
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -49,7 +50,7 @@ class GenericVftableAnalyzer :
     }
 
     override fun registerOptions(options: Options, program: Program) =
-        options.register(VfptrModel.OPTION, FILL_ARRAYS, INLINED_CONSTRUCTORS, MEMBER_OBJECTS)
+        options.register(VfptrModel.OPTION, FILL_ARRAYS, INLINED_CONSTRUCTORS, MEMBER_OBJECTS, TRUST_GUESSES)
 
     override fun canAnalyze(program: Program) = program.compilerSpec.callingConventions.any { it.hasThisPointer() }
 
@@ -61,7 +62,7 @@ class GenericVftableAnalyzer :
         val result = pass.run(monitor)
         val members = result.found?.takeIf { options[MEMBER_OBJECTS] }
             ?.let { MemberObjectPass(program, sink, pass.fillArrays).run(it, monitor) } ?: 0
-        val guessed = MethodClassPass(program, sink).run(monitor)
+        val guessed = MethodClassPass(program, sink, options[TRUST_GUESSES]).run(monitor)
         report(
             "$seeded vftable(s) seeded; ${result.classes} class(es), ${result.owned} virtual function(s) owned, " +
                 "${result.structors} constructor(s) and destructor(s) named, $members member object class(es), " +

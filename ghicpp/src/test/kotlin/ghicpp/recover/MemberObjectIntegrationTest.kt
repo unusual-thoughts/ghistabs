@@ -26,15 +26,18 @@ import org.junit.jupiter.api.Test
 /**
  * An x86 program with no RTTI: a constructor storing its class's table, which builds a member with no vtable at
  * `this` + 8, whose constructor stores two words, calls a method on that member, and zeroes four words from
- * `this` + 0x10 with `rep stosd`.
+ * `this` + 0x10 with `rep stosd`. Where chained, that method calls a helper on its own `this`.
  */
 @Tag("integration")
 class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var builder: ProgramBuilder
     private val program: Program get() = builder.program
 
-    /** Builds the program, with [afterMember] the 8 bytes of the constructor after it builds the member. */
-    private fun build(afterMember: String = CALL_MEMBER_METHOD) {
+    /**
+     * Builds the program, with [afterMember] the 8 bytes of the constructor after it builds the member, and, where
+     * [chained], the member's method calling [HELPER] on its own `this`.
+     */
+    private fun build(afterMember: String = CALL_MEMBER_METHOD, chained: Boolean = false) {
         builder = ProgramBuilder("member-objects", ProgramBuilder._X86)
         builder.setExecute(builder.createMemory(".text", "0x401000", 0x200), true)
         builder.createMemory(".data", "0x402000", 0x100)
@@ -50,17 +53,26 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
         // mov eax, ecx; mov dword ptr [eax], 0; mov dword ptr [eax+4], 0; ret
         builder.setBytes(MEMBER_CTOR, "8b c1 c7 00 00 00 00 00 c7 40 04 00 00 00 00 c3")
-        // mov eax, ecx; mov dword ptr [eax+4], 1; ret
-        builder.setBytes(MEMBER_METHOD, "8b c1 c7 40 04 01 00 00 00 c3")
+        // mov eax, ecx; mov dword ptr [eax+4], 1; (mov ecx, eax; call HELPER;) ret
+        builder.setBytes(
+            MEMBER_METHOD,
+            "8b c1 c7 40 04 01 00 00 00" + (if (chained) " 8b c8 e8 10 00 00 00" else "") + " c3",
+        )
+        // mov eax, ecx; mov dword ptr [eax], 2; ret
+        if (chained) builder.setBytes(HELPER, "8b c1 c7 00 02 00 00 00 c3")
         builder.setBytes(VF1, "c3")
         builder.setBytes(TABLE, "00 11 40 00")
 
         builder.disassemble(CTOR, 0x2b)
         builder.disassemble(MEMBER_CTOR, 0x10)
-        builder.disassemble(MEMBER_METHOD, 0x0a)
+        val methodLength = if (chained) 0x11 else 0x0a
+        builder.disassemble(MEMBER_METHOD, methodLength)
+        if (chained) builder.disassemble(HELPER, 0x09)
         builder.createMemoryReference(TABLE_STORE, TABLE, RefType.DATA, SourceType.ANALYSIS, 0)
         builder.withTransaction {
-            for ((at, length) in listOf(CTOR to 0x2b, MEMBER_CTOR to 0x10, MEMBER_METHOD to 0x0a)) {
+            val bodies = listOf(CTOR to 0x2b, MEMBER_CTOR to 0x10, MEMBER_METHOD to methodLength) +
+                (if (chained) listOf(HELPER to 0x09) else emptyList())
+            for ((at, length) in bodies) {
                 val functions = program.functionManager
                 val body = AddressSet(addr(at), addr(at).add(length - 1L))
                 val func =
@@ -104,6 +116,39 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // What the holder's constructor calls next on the member is the member's method.
         program.runTransaction("guess") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) mustBe 1 }
         program.functionManager.getFunctionAt(addr(MEMBER_METHOD)).parentNamespace.name mustBe member
+    }
+
+    @Test
+    fun `a method called on a guessed method's this is guessed too where guesses are trusted`() {
+        build(chained = true)
+        program.runTransaction("recover") {
+            GenericVftableFinder(program).seed() mustBe 1
+            val found = ClassPass(program, PlainVtableParser(program), DummySink).run(TaskMonitor.DUMMY).found!!
+            MemberObjectPass(program, DummySink).run(found) mustBe 1
+        }
+        val member = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
+        // Untrusted, the member's method is guessed off its holder's constructor, the helper off nothing.
+        program.runTransaction("guess") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) mustBe 1 }
+        program.functionManager.getFunctionAt(addr(HELPER)).parentNamespace.isGlobal mustBe true
+        // Trusted, the method's guess is evidence, from this run's guesses or, as here, an earlier run's.
+        program.runTransaction("trust") {
+            MethodClassPass(program, DummySink, trustGuesses = true).run(TaskMonitor.DUMMY) mustBe 1
+        }
+        program.functionManager.getFunctionAt(addr(HELPER)).parentNamespace.name mustBe member
+    }
+
+    @Test
+    fun `guesses trusted from the start chain within one run`() {
+        build(chained = true)
+        program.runTransaction("recover") {
+            GenericVftableFinder(program).seed() mustBe 1
+            val found = ClassPass(program, PlainVtableParser(program), DummySink).run(TaskMonitor.DUMMY).found!!
+            MemberObjectPass(program, DummySink).run(found) mustBe 1
+            MethodClassPass(program, DummySink, trustGuesses = true).run(TaskMonitor.DUMMY) mustBe 2
+        }
+        val member = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
+        program.functionManager.getFunctionAt(addr(MEMBER_METHOD)).parentNamespace.name mustBe member
+        program.functionManager.getFunctionAt(addr(HELPER)).parentNamespace.name mustBe member
     }
 
     @Test
@@ -168,6 +213,7 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         const val TABLE_STORE = "0x401014"
         const val MEMBER_CTOR = "0x401080"
         const val MEMBER_METHOD = "0x4010a0"
+        const val HELPER = "0x4010c0"
         const val VF1 = "0x401100"
         const val TABLE = "0x402010"
     }
