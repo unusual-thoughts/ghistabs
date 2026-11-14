@@ -147,7 +147,9 @@ class MemberObjectPass(
         for ((sub, what) in objects.subobjects) {
             monitor.increment()
             val member = what.decl?.let(::structOf)?.takeUnless { it.isZeroLength } ?: continue
-            sub.container.decl?.let(::structOf)?.let { placeMember(it, sub.offset.toInt(), member) }
+            // A runtime's layout ([knownLayout]) holds its members already.
+            sub.container.decl?.let(::structOf)?.takeUnless { it.isKnownLayout() }
+                ?.let { placeMember(it, sub.offset.toInt(), member) }
         }
         // The members grew the classes they went past the end of, and with them those deriving from them.
         dtm.growToHoldBases(classStructs())
@@ -338,7 +340,7 @@ class MemberObjectPass(
      * vtable's.
      */
     private fun describe(ns: GhidraClass, structor: Function, role: StructorRole) {
-        val struct = program.classStruct(ns)?.takeIf { it.description.isNullOrEmpty() } ?: return
+        val struct = program.classStruct(ns)?.takeIf { it.description.isNullOrEmpty() && !it.isKnownLayout() } ?: return
         val what = if (role == CONSTRUCTOR) "constructor" else "destructor"
         struct.description = "No vtable: named after its first $what, at ${structor.entryPoint}"
     }

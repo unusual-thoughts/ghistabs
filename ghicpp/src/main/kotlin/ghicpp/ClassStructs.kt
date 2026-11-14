@@ -77,11 +77,15 @@ fun DiagnosticSink.placeBase(
         }
 }
 
-/** The class's struct where `RecoverClassesFromRTTIScript` files it. */
+/**
+ * The class's struct: its [knownLayout] where an archive gives one, else where `RecoverClassesFromRTTIScript`
+ * files it.
+ */
 fun Program.classStruct(ns: GhidraClass) =
-    dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
+    knownLayout(ns) ?: dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
 
 /**
+<<<<<<< HEAD
  * Gives [ns] an empty [classStruct] where it has none. Done before any function moves into [ns]: a `__thiscall`
  * method of a class with no struct makes Ghidra add an empty placeholder to type its `this` with, in the class's
  * parent category (`/<Class>` for a global one), and its lookup (`findExistingClassStruct`) then takes that one over
@@ -107,6 +111,27 @@ private const val GHIDRA_PLACEHOLDER = "PlaceHolder Class Structure"
  * `<Class>_data` structs, or, split around a deriving class's vptr, its own `_fields` run ending in one, that grows
  * with it, so the fields its constructors store past the old end are refilled there. A base's `_fields` part keeps
  * its size: it is the base's, which grew none.
+=======
+ * The layout an archive gives the class, at its namespace path (`/std/basic_streambuf<…>` for
+ * `std::basic_streambuf<…>`), as the bundled MSVC runtime archives do ([ghicpp.stl.MsvcStlApplier]): what the
+ * class passes take as it is, rather than size and fill a struct of their own.
+ */
+fun Program.knownLayout(ns: GhidraClass): Structure? {
+    val path = ns.getPathList(true)
+    val struct = dataTypeManager.getDataType(CategoryPath(CategoryPath.ROOT, path.dropLast(1)), ns.name)
+    return (struct as? Structure)?.takeIf { it.isKnownLayout() }
+}
+
+/** Whether this struct is a defined one linked to an archive ([knownLayout]), which no class pass changes. */
+fun Structure.isKnownLayout() = !isNotYetDefined &&
+    sourceArchive?.archiveType.let { it == ArchiveType.FILE || it == ArchiveType.PROJECT }
+
+/**
+ * Gives [ns] a [classStruct] of [size] bytes, or grows its own to them; a [knownLayout] stays as it is. Where its
+ * last field is one of its own `<Class>_data` structs, or, split around a deriving class's vptr, its own `_fields`
+ * run ending in one, that grows with it, so the fields its constructors store past the old end are refilled there.
+ * A base's `_fields` part keeps its size: it is the base's, which grew none.
+>>>>>>> 61d04661 (feat(ghicpp): class passes keep the runtime's std layouts, with the PDB's bases)
  */
 fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
     if (size <= 0) return
@@ -115,6 +140,8 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
             StructureDataType(ClassNaming.vftableCategory(ns), ns.name, size),
             DataTypeConflictHandler.KEEP_HANDLER,
         )
+
+        else if struct.isKnownLayout() -> Unit
 
         else if struct.isZeroLength -> struct.growStructure(size)
 
