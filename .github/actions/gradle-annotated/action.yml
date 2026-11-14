@@ -1,0 +1,35 @@
+name: Gradle, annotated
+description: >
+  Run ./gradlew with --warning-mode all and annotate what it printed: compile errors and compiler
+  warnings on the PR's diff at their line, Gradle's own deprecations on the run. Fails when Gradle does.
+
+inputs:
+  arguments:
+    description: Arguments to ./gradlew (tasks and flags).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Run Gradle
+      shell: bash
+      env:
+        ARGS: ${{ inputs.arguments }}
+      # Word-split on purpose: ARGS is a task list.
+      run: ./gradlew --warning-mode all $ARGS 2>&1 | tee "$RUNNER_TEMP/gradle-annotated.log"
+
+    # One step per kind: GitHub keeps 10 error and 10 warning annotations per step.
+    - name: Annotate compile errors
+      if: failure()
+      shell: bash
+      run: python3 "$GITHUB_WORKSPACE/.github/scripts/build_warnings.py" "$RUNNER_TEMP/gradle-annotated.log" --kind error
+
+    - name: Annotate compiler warnings
+      if: success() || failure()
+      shell: bash
+      run: python3 "$GITHUB_WORKSPACE/.github/scripts/build_warnings.py" "$RUNNER_TEMP/gradle-annotated.log" --kind compiler
+
+    - name: Annotate Gradle deprecations
+      if: success() || failure()
+      shell: bash
+      run: python3 "$GITHUB_WORKSPACE/.github/scripts/build_warnings.py" "$RUNNER_TEMP/gradle-annotated.log" --kind gradle

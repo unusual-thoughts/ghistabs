@@ -39,23 +39,11 @@ jobs:
           java-version: ${{ matrix.java }}
           repo: ${{ matrix.repo }}
 
-      # Teed, so the steps below can annotate what the compiler said.
+      # Annotates compile errors and warnings, so a build that fails on an older Ghidra points at the line.
       - name: Test and build zips
-        shell: bash
-        run: ./gradlew --warning-mode all test buildExtension packageCli 2>&1 | tee "$RUNNER_TEMP/build.log"
-
-      # Compile errors first, then warnings, each in a step of its own: GitHub keeps 10 of each per step.
-      - name: Annotate compile errors
-        if: failure()
-        run: python3 .github/scripts/build_warnings.py "$RUNNER_TEMP/build.log" --kind error
-
-      - name: Annotate compiler warnings
-        if: success() || failure()
-        run: python3 .github/scripts/build_warnings.py "$RUNNER_TEMP/build.log" --kind compiler
-
-      - name: Annotate Gradle deprecations
-        if: success() || failure()
-        run: python3 .github/scripts/build_warnings.py "$RUNNER_TEMP/build.log" --kind gradle
+        uses: ./.github/actions/gradle-annotated
+        with:
+          arguments: test buildExtension packageCli
 
       - name: Publish to the release
         if: startsWith(github.ref, 'refs/tags/v')
