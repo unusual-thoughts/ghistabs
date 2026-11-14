@@ -1,0 +1,253 @@
+name: MSVC STL archives
+
+# Builds Ghidra data type archives of the MSVC standard library layouts. msvcp140 comes from a probe
+# compiled here against the runner's own Visual Studio, for x86 and x64 and the release and debug
+# CRTs, and is checked against the layouts in Microsoft's public msvcp140 PDB. msvcp90 has no
+# toolchain on the runners, so it comes from the typed public PDB of its last security rebuild.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - ghicpp/ghidra_scripts/MsvcStlArchiveScript.java
+      - ghicpp/data/typeinfo/msvc/**
+      - tools/stl-archives/**
+      - .github/workflows/stl-archives.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ x86, x64 ]
+        crt: [ release, debug ]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch == 'x86' && 'x86' || 'amd64' }}
+
+      # The debug CRT is what sets _ITERATOR_DEBUG_LEVEL=2, the layout msvcp140d.dll programs use.
+      - name: Build the probe
+        working-directory: tools/stl-archives
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /Zi /Od ${{ matrix.crt == 'debug' && '/MDd' || '/MD' }} stl_probe.cpp /Fe:stl_probe.exe /link /DEBUG:FULL
+
+      # The runtime this toolset ships, whose public PDB is the reference the archives are checked against.
+      - name: Keep the matching msvcp140.dll
+        if: matrix.crt == 'release'
+        shell: bash
+        run: cp "$(cygpath -u "$VCToolsRedistDir")"/${{ matrix.arch }}/Microsoft.VC*.CRT/msvcp140.dll tools/stl-archives/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-${{ matrix.arch }}-${{ matrix.crt }}
+          path: |
+            tools/stl-archives/stl_probe.exe
+            tools/stl-archives/stl_probe.pdb
+            tools/stl-archives/msvcp140.dll
+          if-no-files-found: error
+
+  archives:
+    needs: probe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: '12.3'
+          repo: unusual-thoughts/ghidra
+
+      - uses: actions/download-artifact@v7
+        with:
+          path: probes
+
+      - name: Fetch Microsoft's runtime PDBs
+        run: |
+          pip install --quiet pefile
+          mkdir -p refs
+          for arch in x86 x64; do
+            curl -fsSL -o refs/msvcp140_$arch.pdb "$(python3 tools/stl-archives/pdb_url.py probes/probe-$arch-release/msvcp140.dll)"
+          done
+          # msvcp90 9.0.30729.9619, the last security rebuild; earlier builds' public PDBs are stripped.
+          curl -fsSL -o refs/msvcp90_x86.pdb https://msdl.microsoft.com/download/symbols/msvcp90.i386.pdb/D026F453A2FD4DF99FD5EF360ECF33FE1/msvcp90.i386.pdb
+          curl -fsSL -o refs/msvcp90_x64.pdb https://msdl.microsoft.com/download/symbols/msvcp90.amd64.pdb/0AFF865471F54307A698437C27803A3A1/msvcp90.amd64.pdb
+
+      # MsvcStlArchiveScript writes the classes' bases with ghicpp's own model of them.
+      - name: Install ghicpp
+        run: |
+          ./gradlew --build-cache :ghicpp:buildExtension
+          props=/opt/ghidra/Ghidra/application.properties
+          version=$(sed -n 's/^application.version=//p' $props)
+          release=$(sed -n 's/^application.release.name=//p' $props)
+          extensions=~/.config/ghidra/ghidra_${version}_${release}/Extensions
+          mkdir -p "$extensions"
+          unzip -q ghicpp/dist/*.zip -d "$extensions"
+
+      - name: Build the archives
+        run: |
+          run=tools/stl-archives/run.sh
+          for arch in x86 x64; do
+            $run archive archives/msvcp140_$arch.gdt probes/probe-$arch-release/stl_probe.exe probes/probe-$arch-release/stl_probe.pdb
+            $run archive archives/msvcp140d_$arch.gdt probes/probe-$arch-debug/stl_probe.exe probes/probe-$arch-debug/stl_probe.pdb
+            $run archive archives/msvcp90_$arch.gdt probes/probe-$arch-release/stl_probe.exe refs/msvcp90_$arch.pdb
+            $run archive refs/msvcp140_$arch.gdt probes/probe-$arch-release/stl_probe.exe refs/msvcp140_$arch.pdb
+          done
+
+      - name: Check against Microsoft's msvcp140 layouts
+        run: |
+          for arch in x86 x64; do
+            tools/stl-archives/run.sh compare probes/probe-$arch-release/stl_probe.exe archives/msvcp140_$arch.gdt refs/msvcp140_$arch.gdt
+          done
+
+      # A .gdt written here opens only on this Ghidra or a newer one, so the archives are carried to
+      # the portable job as text. ghicpp's bundled copies (built there earlier) should read the same.
+      - name: Export the layouts
+        run: |
+          mkdir -p layouts bundled
+          program=ghicpp/src/test/resources/binaries/features/hello_msvc.exe
+          for gdt in archives/*.gdt; do
+            name=$(basename "$gdt" .gdt)
+            tools/stl-archives/run.sh layouts $program "$gdt" layouts/$name.txt
+            tools/stl-archives/run.sh layouts $program ghicpp/data/typeinfo/msvc/$name.gdt bundled/$name.txt
+            cmp -s layouts/$name.txt bundled/$name.txt ||
+              echo "::warning::$name.gdt built here differs from ghicpp's bundled copy; refresh it from this run's artifacts"
+            cmp -s archives/$name.classes.json ghicpp/data/typeinfo/msvc/$name.classes.json ||
+              echo "::warning::$name.classes.json built here differs from ghicpp's bundled copy; refresh it from the classes artifact"
+          done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: layouts
+          path: layouts/*.txt
+          if-no-files-found: error
+
+      # The classes' bases, which no data type holds, as text: ghicpp ships them beside the archives.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: classes
+          path: archives/*.classes.json
+          if-no-files-found: error
+
+  # A .gdt opens on the Ghidra that wrote it and newer ones, so the published archives are rebuilt from
+  # the layouts on the oldest release ghicpp supports, and must read back to the same text.
+  portable:
+    needs: archives
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: '10.4'
+          java-version: '17'
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: layouts
+          path: layouts
+
+      - name: Build the archives on Ghidra 10.4
+        run: |
+          mkdir -p archives readback
+          program=ghicpp/src/test/resources/binaries/features/hello_msvc.exe
+          for txt in layouts/*.txt; do
+            name=$(basename "$txt" .txt)
+            tools/stl-archives/run.sh gdt $program "$txt" archives/$name.gdt
+            tools/stl-archives/run.sh layouts $program archives/$name.gdt readback/$name.txt
+            diff -u "$txt" readback/$name.txt | head -40
+            cmp -s "$txt" readback/$name.txt
+          done
+
+      # Zipped, for the compat job: download-artifact cannot fetch the unzipped ones below.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: portable-archives
+          path: archives/*.gdt
+          if-no-files-found: error
+
+      # One unzipped artifact per archive, so each downloads as its .gdt file.
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp140_x86.gdt
+          archive: false
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp140_x64.gdt
+          archive: false
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp140d_x86.gdt
+          archive: false
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp140d_x64.gdt
+          archive: false
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp90_x86.gdt
+          archive: false
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/msvcp90_x64.gdt
+          archive: false
+          if-no-files-found: error
+
+  # Every newer Ghidra opens the 10.4 archives and reads the same layouts out of them.
+  compat:
+    needs: portable
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ghidra: '11.4.3'
+          - ghidra: '12.0.4'
+          - ghidra: '12.1.3'
+          - ghidra: '12.3'
+            repo: unusual-thoughts/ghidra
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: ${{ matrix.ghidra }}
+          repo: ${{ matrix.repo }}
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: layouts
+          path: layouts
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: portable-archives
+          path: archives
+
+      - name: Read the archives
+        run: |
+          mkdir -p readback
+          status=0
+          for txt in layouts/*.txt; do
+            name=$(basename "$txt" .txt)
+            tools/stl-archives/run.sh layouts ghicpp/src/test/resources/binaries/features/hello_msvc.exe archives/$name.gdt readback/$name.txt
+            cmp -s "$txt" readback/$name.txt || { echo "::error::$name reads differently"; diff -u "$txt" readback/$name.txt | head -40; status=1; }
+          done
+          exit $status

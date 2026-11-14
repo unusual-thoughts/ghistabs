@@ -108,9 +108,12 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         override val offset: Long? = null,
     ) : BaseDecl
 
-    /** A class's struct by datatype id, and its direct bases in order. */
+    /**
+     * A class's struct by datatype id, and its direct bases in order; [archive] names the data type archive
+     * whose classes file said them ([ghicpp.stl.StlApplier]), where one did.
+     */
     @Serializable
-    data class Entry(val structId: Long?, val bases: List<Base>)
+    data class Entry(val structId: Long?, val bases: List<Base>, val archive: String? = null)
 
     override fun readState(properties: GProperties) {
         classes = GPropertiesFormat.decode<ClassHierarchyRecords>(properties).classes
