@@ -24,8 +24,9 @@ running the same probe.
 
 ## Building one yourself
 
-`ghicpp/ghidra_scripts/MsvcStlArchiveScript.java` ships with the ghicpp extension. Run it from the Script Manager on
-any program of the right architecture and point it at a PDB with type information, or headless:
+[`MsvcStlArchiveScript.java`](MsvcStlArchiveScript.java) builds one. It uses ghicpp's classes, so it needs the
+ghicpp extension installed; add this folder to the Script Manager's paths and run it on any program of the
+right architecture, pointing it at a PDB with type information, or headless:
 
 ```
 tools/stl-archives/run.sh archive out.gdt <program> <pdb>
@@ -53,7 +54,7 @@ Hierarchy window shows the library's classes and how the program's own derive fr
 passes take an archive type at a class's namespace path as that class's struct, as it is: they lay it as
 the base of the classes deriving from it, and neither size nor fill it. The file is ghicpp's own model of
 the classes (`ghicpp.stl.StdClasses`), encoded by the same `GPropertiesFormat` as its class hierarchy
-record and saved as gzipped GProperties XML, so [`MsvcStlArchiveScript`](../../ghicpp/ghidra_scripts/MsvcStlArchiveScript.java)
+record and saved as gzipped GProperties XML, so [`MsvcStlArchiveScript`](MsvcStlArchiveScript.java)
 needs the ghicpp extension installed; the workflow builds and installs it first.
 
 The file also lists the virtual functions each class introduces, by vftable offset, and the archive gives
