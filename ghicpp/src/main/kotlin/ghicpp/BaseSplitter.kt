@@ -38,13 +38,7 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
         val className = classPath.last()
         val baseDt = baseComp?.dataType as? Structure ?: return false
         val ptr = dtm.dataOrganization.pointerSize
-        // Where the vptr sits *within* the base, read off the base itself rather than assumed: the
-        // Itanium ABI puts it at 0, gcc 2.x appends it after the class's own fields. Classes are
-        // built bases-first, so a polymorphic base already carries its own placed {vfptr}. A base
-        // that carries none — reached through the base-field branch of chooseVfptrAction, where
-        // polymorphism was never proven — falls back to where this class says its vptr is.
-        val vptrInBase = baseDt.definedComponents.firstOrNull { it.fieldName == ClassUtils.VFPTR }?.offset
-            ?: (vptrOffset - baseComp.offset)
+        val vptrInBase = vptrInBase(baseDt, vptrOffset - baseComp.offset)
         val split = splitAround(baseDt.length, vptrInBase, ptr) ?: return false
         val baseOff = baseComp.offset
         val tailFrom = vptrInBase + ptr
@@ -87,16 +81,18 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
     /**
      * The span of [run] holding [baseDt]'s own data members: everything in it but `{vfptr}` and the
      * base subobjects, which stay where the class's inheritance is read off. The whole run when it
-     * holds no base subobject, so the base and its deriving classes hold one struct. Null when there
-     * are no own members, or when a base subobject sits between two of them and no one struct can
-     * hold them alone.
+     * holds neither, so the base and its deriving classes hold one struct. Null when there are no own
+     * members, or when one of those sits between two of them and no one struct can hold them alone.
+     * A `{vfptr}` is in a run where the base has one past its first, as `RunFunctionTaskBase<T>` has
+     * for `QRunnable`, which the base keeps in sight.
      */
     private fun ownSpan(baseDt: Structure, run: IntRange): IntRange? {
         val inRun = baseDt.definedComponents.filter(run::holds)
-        val own = inRun.filterNot { it.isBaseField() || it.fieldName == ClassUtils.VFPTR }.ifEmpty { return null }
-        if (inRun.none { it.isBaseField() }) return run
+        fun DataTypeComponent.isKept() = isBaseField() || fieldName == ClassUtils.VFPTR
+        val own = inRun.filterNot { it.isKept() }.ifEmpty { return null }
+        if (inRun.none { it.isKept() }) return run
         val span = own.minOf { it.offset }..<own.maxOf { it.offset + it.length }
-        return span.takeUnless { inRun.any { it.isBaseField() && span.overlaps(it) } }
+        return span.takeUnless { inRun.any { it.isKept() && span.overlaps(it) } }
     }
 
     /**
@@ -160,6 +156,18 @@ fun DtmRegistry.vftableOf(classPath: List<String>) = ClassNaming.vftablePath(cla
         StructureDataType(dtPath.categoryPath, dtPath.dataTypeName, 0, dtm)
     }
 }
+
+/**
+ * Where the vptr a deriving class says is [expected] bytes into [base] sits *within* it, read off the base
+ * rather than assumed. Classes are built bases-first, so a polymorphic base already carries its placed
+ * `{vfptr}`: at [expected] itself, or in a base subobject there, as MSVC's `RunFunctionTaskBase<T>` holds its
+ * first vptr in `QFutureInterface<T>` and its own `{vfptr}` past it, for `QRunnable`. Else at the base's first
+ * `{vfptr}` ([vfptrOffset]), where gcc 2.x appends it after the class's own fields, and the deriving class's
+ * offset can differ.
+ * A base that carries none, reached where polymorphism was never proven, falls back to [expected].
+ */
+fun vptrInBase(base: Structure, expected: Int): Int =
+    expected.takeIf { base.holdsVfptrAt(it) } ?: base.vfptrOffset() ?: expected
 
 /** What a vptr leaves of a base subobject: the fields before it and the fields after it. */
 data class BaseSplit(val head: IntRange?, val tail: IntRange?)
