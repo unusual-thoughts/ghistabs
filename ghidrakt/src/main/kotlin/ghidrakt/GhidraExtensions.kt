@@ -16,6 +16,7 @@ import ghidra.app.util.opinion.LoaderTier
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.*
 import ghidra.program.model.data.*
+import ghidra.program.model.lang.PrototypeModel
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
@@ -127,6 +128,20 @@ fun FunctionManager.getFunctionWrapping(addr: Address) = getFunctionContaining(a
 fun FunctionManager.inHull(addr: Address) = getFunctionWrapping(addr) != null
 
 val Function.isMethod get() = parentNamespace is GhidraClass
+
+/**
+ * Where [model][PrototypeModel] passes argument [index] of [dataType], each one before it taken as a byte, the
+ * return as `void`: what Ghidra's `getArgLocation` gave for no existing parameters, deprecated in 12.2.
+ */
+fun PrototypeModel.argLocation(index: Int, dataType: DataType, program: Program): VariableStorage {
+    val types = arrayOf<DataType>(VoidDataType.dataType) + Array(index) { Undefined1DataType.dataType } +
+        dataType.clone(program.dataTypeManager)
+    return getStorageLocations(program, types, false, false).last()
+}
+
+/** Where [model][PrototypeModel] returns a [dataType]: what Ghidra's `getReturnLocation` gave, deprecated in 12.2. */
+fun PrototypeModel.returnLocation(dataType: DataType, program: Program): VariableStorage =
+    getStorageLocations(program, arrayOf(dataType.clone(program.dataTypeManager)), false, false)[0]
 
 fun Namespace.toClass(): GhidraClass? = this as? GhidraClass
     ?: runCatching { NamespaceUtils.convertNamespaceToClass(this) }.getOrNull()

@@ -440,7 +440,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         val callee = flows.firstOrNull()?.let { funMgr.getFunctionAt(it) }
         val storage = callee?.getReturn()?.takeUnless { callee.returnType is VoidDataType }?.variableStorage
             ?: ctx.program.compilerSpec.defaultCallingConvention
-                ?.getReturnLocation(Undefined4DataType.dataType, ctx.program)
+                ?.returnLocation(Undefined4DataType.dataType, ctx.program)
         return storage?.registers.orEmpty().any { it.baseRegister == reg.baseRegister }
     }
 
