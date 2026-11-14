@@ -107,10 +107,12 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val program = builder.program
             lateinit var filebuf: GhidraClass
             lateinit var streambuf: GhidraClass
+            lateinit var global: GhidraClass
             builder.withTransaction {
                 val std = program.symbolTable.createNameSpace(null, "std", SourceType.IMPORTED)
                 filebuf = program.symbolTable.createClass(std, FILEBUF, SourceType.IMPORTED)
                 streambuf = program.symbolTable.createClass(std, STREAMBUF, SourceType.IMPORTED)
+                global = program.symbolTable.createClass(null, "Probe", SourceType.IMPORTED)
             }
             // A placeholder for the class, so the applier resolves its layout.
             builder.withTransaction {
@@ -128,6 +130,8 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 builder.withTransaction { result = MsvcStlApplier(program, archive, classes).apply() }
                 result.recorded mustBe 2
 
+                // A class in no namespace has no archive path, and nothing filed for it yet.
+                program.classStruct(global) mustBe null
                 val struct = program.classStruct(filebuf)!!
                 struct.pathName mustBe "/std/$FILEBUF"
                 struct.isKnownLayout() mustBe true

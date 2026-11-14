@@ -40,9 +40,10 @@ class MsvcStlAnalyzer :
         val archive = MsvcStlArchives.open(name)
         try {
             val result = MsvcStlApplier(program, archive, MsvcStlArchives.classes(name)).apply()
-            if (result.replaced + result.filled + result.recorded > 0) {
+            val laid = result.replaced + result.filled + result.laid
+            if (laid + result.recorded > 0) {
                 report(
-                    "laid out ${result.replaced + result.filled} std class(es) from $name.gdt, " +
+                    "laid out $laid std class(es) from $name.gdt, " +
                         "recorded the bases of ${result.recorded}",
                 )
             }
