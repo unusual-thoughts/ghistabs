@@ -22,17 +22,3 @@ fun annotationTestWarnings(): Int {
     return sum
 }
 
-fun annotationTestErrors() {
-    val e1: Int = "not an int 1"
-    val e2: Int = "not an int 2"
-    val e3: Int = "not an int 3"
-    val e4: Int = "not an int 4"
-    val e5: Int = "not an int 5"
-    val e6: Int = "not an int 6"
-    val e7: Int = "not an int 7"
-    val e8: Int = "not an int 8"
-    val e9: Int = "not an int 9"
-    val e10: Int = "not an int 10"
-    val e11: Int = "not an int 11"
-    val e12: Int = "not an int 12"
-}
