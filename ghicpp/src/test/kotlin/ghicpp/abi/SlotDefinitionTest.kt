@@ -1,3 +1,5 @@
+@file:UsesShims
+
 package ghicpp.abi
 
 import ghidra.program.model.data.CategoryPath
