@@ -74,15 +74,15 @@ interface CxxAbi :
      * By default a record starts at its address point, so its vtable symbol is there, as gcc 2.x's is.
      */
     fun ownsVftable(program: Program, vftable: Address): Boolean =
-        program.symbolTable.getSymbols(vftable).any { looksLikeVtable(it.name) }
+        program.symbolTable.getSymbols(vftable).any { looksLikeTableSymbol(it.name) }
 
     companion object {
         /** The ABI whose vtable symbol [symbolName] is, a gcc 2.x secondary's included; null if none. */
         fun ofVtableSymbol(symbolName: String): CxxAbi? = when {
-            Gcc2Thunks.looksLikeVtable(symbolName) -> Gcc2Thunks
-            Gcc2Plain.looksLikeVtable(symbolName) -> Gcc2Plain
-            Itanium.looksLikeVtable(symbolName) -> Itanium
-            Msvc.looksLikeVtable(symbolName) -> Msvc
+            Gcc2Thunks.looksLikeTableSymbol(symbolName) -> Gcc2Thunks
+            Gcc2Plain.looksLikeTableSymbol(symbolName) -> Gcc2Plain
+            Itanium.looksLikeTableSymbol(symbolName) -> Itanium
+            Msvc.looksLikeTableSymbol(symbolName) -> Msvc
             else -> null
         }
 

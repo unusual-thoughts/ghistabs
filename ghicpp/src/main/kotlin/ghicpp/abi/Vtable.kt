@@ -5,6 +5,7 @@ import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.TypeinfoReader
 import ghicpp.abi.itanium.startsVtableGroup
 import ghicpp.abi.itanium.vtableOffsetField
+import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.msvc.msvcSubobjectOffset
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.address.Address
@@ -21,14 +22,19 @@ import ghidrakt.*
 
 /** How an ABI spells a vtable's symbol, and which class one names. */
 interface VtableSymbols {
-    /** Whether [symbolName] is one of this ABI's vtable symbols. */
-    fun looksLikeVtable(symbolName: String): Boolean
+    /**
+     * Whether [symbolName] is one of this ABI's symbols for a class's table of virtual functions, primary or
+     * secondary. Where it sits is the ABI's: Itanium's `_ZTV` at the vtable's header, MSVC's `??_7` and gcc 2.x's
+     * `_vt` at the vftable's address point.
+     */
+    fun looksLikeTableSymbol(symbolName: String): Boolean
 
     /**
-     * Whether [symbolName] names a class's own table rather than a base's secondary one. Only gcc 2.x gives
-     * secondaries symbols of their own.
+     * Whether [symbolName] names a class's own table rather than a base's secondary one, by the name alone.
+     * gcc 2.x and MSVC give secondaries symbols of their own; MSVC qualifies all of a class's tables once it
+     * has several, its own too, so only [isPrimaryTableSymbol] can tell those apart.
      */
-    fun isPrimaryVtable(symbolName: String) = looksLikeVtable(symbolName)
+    fun isPrimaryVtable(symbolName: String) = looksLikeTableSymbol(symbolName)
 
     /** The symbols [className]'s vtable may have, most likely first; none for a template, which has no closed form. */
     fun vtableCandidates(className: String): List<String>
@@ -317,9 +323,16 @@ fun Program.vftableStructAt(label: Symbol): Structure? {
 fun Program.isVtableClaimed(record: VtableRecord): Boolean = symbolTable.getSymbols(record.addressPoint)
     .any { it.source == SourceType.IMPORTED && ClassNaming.isClassVftableLabel(it.name) }
 
+/**
+ * Whether [sym], one of [abi]'s table symbols, is its class's own table: by its name, else, for one of an MSVC
+ * class's several tables, by its complete object locator, which gives its own offset 0.
+ */
+fun isPrimaryTableSymbol(sym: Symbol, abi: CxxAbi): Boolean =
+    abi.isPrimaryVtable(sym.name) || (abi == Msvc && sym.program.msvcSubobjectOffset(sym.address) == 0)
+
 /** The class whose own vtable [sym] is, demangled, and its ABI; null for a secondary or any other symbol. */
 fun primaryVtableOf(sym: Symbol): Pair<String, CxxAbi>? = CxxAbi.ofVtableSymbol(sym.name)
-    ?.takeIf { it.isPrimaryVtable(sym.name) }
+    ?.takeIf { isPrimaryTableSymbol(sym, it) }
     ?.let { abi -> Demangler.of(sym.name)?.let(abi::demangledVtableClass)?.let { it to abi } }
 
 /**

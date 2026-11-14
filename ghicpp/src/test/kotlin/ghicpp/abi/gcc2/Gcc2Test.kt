@@ -2,6 +2,7 @@ package ghicpp.abi.gcc2
 
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.itanium.Itanium
+import ghicpp.abi.msvc.Msvc
 import ghidrakt.test.must
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeNull
@@ -16,13 +17,13 @@ import org.junit.jupiter.api.Test
 class Gcc2Test {
     @Test
     fun recognisesBothMarkersAndTheThunkSpelling() {
-        Gcc2.must { looksLikeVtable("_vt.9exception") }
-        Gcc2.must { looksLikeVtable($$"_vt$9exception") }
-        Gcc2.must { looksLikeVtable("__vt_9TiXmlNode") }
-        Gcc2.mustNot { looksLikeVtable("_ZTV10ThisStream") }
+        Gcc2.must { looksLikeTableSymbol("_vt.9exception") }
+        Gcc2.must { looksLikeTableSymbol($$"_vt$9exception") }
+        Gcc2.must { looksLikeTableSymbol("__vt_9TiXmlNode") }
+        Gcc2.mustNot { looksLikeTableSymbol("_ZTV10ThisStream") }
         // `_vt` with no marker is not the form, and neither is a name that merely contains it.
-        Gcc2.mustNot { looksLikeVtable("_vt9exception") }
-        Gcc2.mustNot { looksLikeVtable("x_vt.9exception") }
+        Gcc2.mustNot { looksLikeTableSymbol("_vt9exception") }
+        Gcc2.mustNot { looksLikeTableSymbol("x_vt.9exception") }
     }
 
     @Test
@@ -160,12 +161,18 @@ class Gcc2Test {
             "_._Q217__class_type_info9base_info"
     }
 
-    /** Only gcc 2.x separates a secondary out; Itanium must not inherit a "no" from the default. */
+    /**
+     * gcc 2.x and MSVC give a secondary a symbol of its own, though MSVC's name only tells a class's only table;
+     * Itanium must not inherit a "no" from the default.
+     */
     @Test
-    fun onlyGcc2HasSecondariesToScreenOut() {
+    fun gcc2AndMsvcScreenOutSecondariesByName() {
         Itanium.must { isPrimaryVtable("_ZTV10ThisStream") }
         Gcc2Plain.must { isPrimaryVtable("_vt.14CExposedStream") }
         Gcc2Plain.mustNot { isPrimaryVtable("_vt.14CExposedStream.11PRevertable") }
+        Msvc.must { isPrimaryVtable("??_7Foo@ns@@6B@") }
+        Msvc.mustNot { isPrimaryVtable("??_7Label@@6BNamed@@@") }
+        Msvc.mustNot { isPrimaryVtable("??0Foo@@QAE@XZ") }
     }
 
     /**

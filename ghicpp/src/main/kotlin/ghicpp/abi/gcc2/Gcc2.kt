@@ -52,7 +52,7 @@ object Gcc2 {
         symbolName.startsWith(THUNK_PREFIX) || symbolName.removePrefix(USER_LABEL_PREFIX).startsWith(THUNK_PREFIX)
 
     /** A gcc 2.x vtable symbol, with or without thunks, primary or secondary. */
-    fun looksLikeVtable(symbolName: String) = vtableTail(symbolName) != null
+    fun looksLikeTableSymbol(symbolName: String) = vtableTail(symbolName) != null
 
     /**
      * A gcc 2.x typeinfo object or the function returning it: `__ti` or `__tf` then the mangled type
@@ -256,7 +256,7 @@ sealed interface Gcc2Abi : CxxAbi {
 data object Gcc2Thunks : Gcc2Abi {
     override val entryWords get() = 1
 
-    override fun looksLikeVtable(symbolName: String) = Gcc2.looksLikeThunkVtable(symbolName)
+    override fun looksLikeTableSymbol(symbolName: String) = Gcc2.looksLikeThunkVtable(symbolName)
 
     override fun vtableCandidates(className: String) =
         listOf("${Gcc2.THUNK_VTABLE_PREFIX}${Gcc2.mangleClassName(className)}")
@@ -272,8 +272,8 @@ data object Gcc2Plain : Gcc2Abi {
     /** `delta` and `index` share one word, a `short` each (unless `-fhuge-objects`). */
     override val entryWords get() = 2
 
-    override fun looksLikeVtable(symbolName: String) =
-        Gcc2.looksLikeVtable(symbolName) && !Gcc2.looksLikeThunkVtable(symbolName)
+    override fun looksLikeTableSymbol(symbolName: String) =
+        Gcc2.looksLikeTableSymbol(symbolName) && !Gcc2.looksLikeThunkVtable(symbolName)
 
     override fun vtableCandidates(className: String) = Gcc2.mangleClassName(className).let { m ->
         Gcc2.CPLUS_MARKERS.flatMap { marker ->

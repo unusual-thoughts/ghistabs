@@ -119,7 +119,7 @@ object Itanium : CxxAbi {
     override fun ownsVftable(program: Program, vftable: Address): Boolean {
         val header = program.listing.getDataBefore(vftable)?.takeIf { it.maxAddress.next() == vftable } ?: return false
         return program.symbolTable.getSymbols(header.address).any {
-            looksLikeVtable(it.name) || it.name.endsWith(ClassNaming.VTABLE)
+            looksLikeTableSymbol(it.name) || it.name.endsWith(ClassNaming.VTABLE)
         }
     }
 
@@ -127,7 +127,7 @@ object Itanium : CxxAbi {
     override val mangledOperatorNew get() = setOf("_Znwj", "_Znwm")
     override val mangledOperatorDelete get() = setOf("_ZdlPv", "_ZdlPvj", "_ZdlPvm")
 
-    override fun looksLikeVtable(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
+    override fun looksLikeTableSymbol(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
 
     /** Templates have no closed form; [ghicpp.abi.primaryVtableOf] finds those. */
     override fun vtableCandidates(className: String) = mangleClassName(className).let {
@@ -312,7 +312,7 @@ val Symbol.typeinfoClass: String? get() = linkageNames.firstNotNullOfOrNull(Itan
     ?: classOfLabel(ClassNaming.TYPEINFO)
 
 /** The class this is the vtable of, as [typeinfoClass] reads a typeinfo. */
-val Symbol.vtableClass: String? get() = linkageNames.filter(Itanium::looksLikeVtable)
+val Symbol.vtableClass: String? get() = linkageNames.filter(Itanium::looksLikeTableSymbol)
     .firstNotNullOfOrNull { Demangler.of(it)?.let(Itanium::demangledVtableClass) }
     ?: classOfLabel(ClassNaming.VTABLE)
 

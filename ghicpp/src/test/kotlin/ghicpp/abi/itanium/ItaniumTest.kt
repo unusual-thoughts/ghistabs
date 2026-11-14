@@ -76,11 +76,11 @@ class ItaniumTest {
 
     @Test
     fun testLooksLikeZtv() {
-        Itanium.must { Itanium.looksLikeVtable("_ZTV10ThisStream") }
-        Itanium.must { Itanium.looksLikeVtable("__ZTV10ThisStream") }
-        Itanium.mustNot { Itanium.looksLikeVtable("ZTVbare") }
-        Itanium.mustNot { Itanium.looksLikeVtable("XYZ_ZTV9ThisStream") }
-        Itanium.mustNot { Itanium.looksLikeVtable("_ZN3FooC1Ev") }
+        Itanium.must { Itanium.looksLikeTableSymbol("_ZTV10ThisStream") }
+        Itanium.must { Itanium.looksLikeTableSymbol("__ZTV10ThisStream") }
+        Itanium.mustNot { Itanium.looksLikeTableSymbol("ZTVbare") }
+        Itanium.mustNot { Itanium.looksLikeTableSymbol("XYZ_ZTV9ThisStream") }
+        Itanium.mustNot { Itanium.looksLikeTableSymbol("_ZN3FooC1Ev") }
     }
 
     @Test
