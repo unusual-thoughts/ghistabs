@@ -10,6 +10,7 @@ import ghicpp.analyzers.VirtualBaseAnalyzer
 import ghicpp.analyzers.VtableSweepAnalyzer
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.MemberKind
+import ghicpp.ooa.OoFactExporter
 import ghicpp.score.Truth.Companion.withBasesOf
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.options.OptionType
@@ -110,10 +111,13 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         val truth = truthFor(case)
         val runtime = case.twin?.takeIf { case.labelled }?.let { truthOf(case, it).runtime }.orEmpty()
         assumeTrue(!case.labelled || runtime.isNotEmpty(), "the twin names no runtime function to label")
-        val subject = snapshotOf(subjectFile, case.compiler) { prepare(case.recovery, runtime) }
+        val out = File(OUTPUT_DIR, case.id).apply { mkdirs() }
+        val prolog = System.getProperty("ooprolog").orEmpty().takeIf { it.isNotEmpty() }?.let(::File)
+        // Decompiles every function of the subject, so only on request: -PooFacts, or -Pooprolog to solve them.
+        val facts = File(out, "ooanalyzer.facts").takeIf { prolog != null || System.getProperty("ooFacts") == "true" }
+        val subject = snapshotOf(subjectFile, case.compiler, facts) { prepare(case.recovery, runtime) }
         val card = Scorer(truth, subject).score()
 
-        val out = File(OUTPUT_DIR, case.id).apply { mkdirs() }
         val against = listOfNotNull(case.twin, case.source).joinToString(" + ")
         val labels = runtime.entries.joinToString("\n", "\n## Labelled before the analysis\n\n", "\n") {
             "- `${it.key}` at %x".format(it.value)
@@ -125,6 +129,58 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         File(out, "subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), subject))
         File(out, "truth.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), truth.snapshot))
         checkBaseline(case, card.counters())
+        if (prolog != null && facts != null) solve(case, truth, facts, prolog)
+        System.getProperty("pharosResults").orEmpty().takeIf { it.isNotEmpty() }?.let { dir ->
+            // A no-RTTI case takes the results of the same facts solved with `--rtti false`, where there are some.
+            val ran = listOfNotNull("no-rtti.".takeIf { case.recovery == Recovery.NO_RTTI }, "")
+                .map { File(dir, "${case.subject}.${it}results") }.firstOrNull { it.isFile } ?: return@let
+            score(truth, File(dir, "${case.subject}.facts"), ran, "pharos", "${case.id}: Pharos' ooanalyzer", out)
+        }
+    }
+
+    /**
+     * Runs OOAnalyzer's Prolog rules, from Pharos' `share/prolog` at [prolog], over the facts the subject's
+     * program gave, and scores the classes they recover as ours are, into `ooanalyzer-scorecard.md` beside
+     * ours. Not held to a baseline: what moves it is OOAnalyzer's rules and the facts' fidelity.
+     */
+    private fun solve(case: ScorecardCase, truth: Truth, facts: File, prolog: File) {
+        val out = facts.parentFile
+        val results = File(out, "ooanalyzer.results")
+        val log = File(out, "ooprolog.log")
+        val process = ProcessBuilder(
+            "swipl",
+            File(prolog, "oorules/ooprolog.pl").path,
+            "--library-path",
+            File(prolog, "oorules").path,
+            "--facts",
+            facts.path,
+            "--results",
+            results.path,
+            // A case recovered as if it had no RTTI has the solver ignore the RTTI facts the memory still gives.
+            "--rtti",
+            (case.recovery == Recovery.RTTI).toString(),
+        ).redirectErrorStream(true).redirectOutput(log).start()
+        val done = process.waitFor(OOPROLOG_TIMEOUT_MINUTES, java.util.concurrent.TimeUnit.MINUTES)
+        if (!done) process.destroyForcibly()
+        assumeTrue(done && results.isFile, "ooprolog gave no results for ${case.id}: see $log")
+        score(truth, facts, results, "ooanalyzer", "${case.id}: OOAnalyzer's rules over our facts", out)
+    }
+
+    /**
+     * OOAnalyzer's [results], from [facts], scored against [truth]: `<prefix>-scorecard.md`, its class view and
+     * its counters, in [out]. `-PpharosResults=<dir>` scores a Pharos `ooanalyzer` run's `<subject>.results`
+     * (with its `<subject>.facts`, `-F`) this way too, beside ours.
+     */
+    private fun score(truth: Truth, facts: File, results: File, prefix: String, title: String, out: File = OUTPUT_DIR) {
+        val text = facts.takeIf { it.isFile }?.readText().orEmpty()
+        val purecalls = PURECALL.findAll(text).map { it.groupValues[1].toLong(16) }.toSet()
+        val demangled = TYPE_DESCRIPTOR.findAll(text).associate { it.groupValues[1] to it.groupValues[2] }
+        val solved = OoResults(results.readText(), purecalls, demangled).snapshot(results.name)
+        val card = Scorer(truth, solved).score()
+        File(out, "$prefix-scorecard.md").writeText(card.markdown(title))
+        File(out, "$prefix-subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), solved))
+        File(out, "$prefix-counters.json")
+            .writeText(PRETTY.encodeToString(COUNTERS, card.counters().toSortedMap()) + "\n")
     }
 
     private fun truthFor(case: ScorecardCase): Truth {
@@ -177,7 +233,8 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
-    private fun snapshotOf(file: File, compiler: String, setup: Program.() -> Unit): Snapshot =
+    /** [file] analyzed after [setup], as a [Snapshot]; its OOAnalyzer facts written to [facts] too, if given. */
+    private fun snapshotOf(file: File, compiler: String, facts: File? = null, setup: Program.() -> Unit): Snapshot =
         loadProgram(file, compiler).use { loaded ->
             val program = loaded.program
             program.runTransaction("options") {
@@ -186,6 +243,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
             }
             program.setup()
             analyzeAll(program)
+            facts?.bufferedWriter()?.use { OoFactExporter(program).write(it) }
             program.snapshot(file.name)
         }
 
@@ -266,6 +324,10 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         private val PRETTY = Json { prettyPrint = true }
         private val COMPACT = Json { ignoreUnknownKeys = true }
         private val COUNTERS = MapSerializer(String.serializer(), Long.serializer())
+        private val PURECALL = Regex("""^purecall\(0x([0-9a-f]+)\)\.""", RegexOption.MULTILINE)
+        private val TYPE_DESCRIPTOR =
+            Regex("""^rTTITypeDescriptor\(\w+, \w+, '([^']*)', '([^']*)'\)\.""", RegexOption.MULTILINE)
+        private const val OOPROLOG_TIMEOUT_MINUTES = 30L
 
         /** `-Pfixture=<subject>[,…]` narrows the cases to those subjects. */
         private fun accepts(subject: String) = System.getProperty("fixtureFilter").orEmpty()
