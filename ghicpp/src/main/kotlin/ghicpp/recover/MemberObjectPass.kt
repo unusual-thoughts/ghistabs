@@ -120,7 +120,8 @@ class MemberObjectPass(
         for ((sub, cls) in laid) {
             monitor.increment()
             val member = cls?.let(::structOf)?.takeUnless { it.isZeroLength } ?: continue
-            containerOf(sub)?.let { placeMember(it, sub.offset.toInt(), member) }
+            // A runtime's layout ([knownLayout]) holds its members already.
+            containerOf(sub)?.takeUnless { it.isKnownLayout() }?.let { placeMember(it, sub.offset.toInt(), member) }
         }
         writeRecords(classes.mapNotNull { it.cls })
         return classes.size
@@ -258,7 +259,7 @@ class MemberObjectPass(
      * vtable's.
      */
     private fun describe(ns: GhidraClass, structor: Function, role: StructorRole) {
-        val struct = program.classStruct(ns)?.takeIf { it.description.isNullOrEmpty() } ?: return
+        val struct = program.classStruct(ns)?.takeIf { it.description.isNullOrEmpty() && !it.isKnownLayout() } ?: return
         val what = if (role == CONSTRUCTOR) "constructor" else "destructor"
         struct.description = "No vtable: named after its first $what, at ${structor.entryPoint}"
     }

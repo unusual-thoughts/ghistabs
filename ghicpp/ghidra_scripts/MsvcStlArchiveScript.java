@@ -4,6 +4,14 @@
 //
 // Run it on any program whose language matches the PDB (x86 or x64 Windows), typically the msvcp DLL
 // the PDB belongs to: script arguments are the PDB and the .gdt to write; without them it asks.
+//
+// Beside the archive it writes the classes' bases, which a data type cannot hold (an empty base takes
+// no bytes, and the struct says nothing of access or virtuality), to `<archive>.classes`, one class per
+// line and its bases on the indented lines after it, fields separated by tabs:
+//   C <path>                                   a class, at its path in the archive
+//     B <access> <offset> <path>               a direct non-virtual base, at its offset in the class
+//     V <access> <vbptr offset> <vbtable index> <path>   a direct virtual base
+// A base outside the archive's namespaces goes by its C++ name, `::` made `/`.
 // @category Data Types
 // @runtime Java
 
@@ -71,16 +79,20 @@ public class MsvcStlArchiveScript extends GhidraScript {
 			pdb.deserialize();
 			Map<String, DataTypePath> targets = demangledPaths(pdb);
 			int methods = checkAgainstMethods(pdb, targets);
+			File classesFile = new File(out.getPath().replaceAll("\\.gdt$", "") + ".classes");
+			int classes = writeClasses(pdb, targets, classesFile);
 			dtm.withTransaction("MSVC STL types", () -> {
 				applyTypes(pdb, dtm);
 				CategoryPath pdbRoot = new CategoryPath(CategoryPath.ROOT, pdbFile.getName());
 				int moved = refile(dtm, pdbRoot, targets);
 				int dropped = prune(dtm, pdbRoot);
 				int typedefs = addTypedefs(dtm);
+				int vfptrs = fixVfptrs(dtm, currentProgram.getDefaultPointerSize());
 				println(String.format(
 					"%s: %d std types filed by their unique names, %d unrelated types dropped, " +
-						"%d typedefs; %d method classes resolve to an archive type",
-					out.getName(), moved, dropped, typedefs, methods));
+						"%d typedefs, %d vfptrs sized; %d method classes resolve to an archive type; " +
+						"%d classes with bases",
+					out.getName(), moved, dropped, typedefs, vfptrs, methods, classes));
 			});
 			dtm.save();
 		}
@@ -106,6 +118,95 @@ public class MsvcStlArchiveScript extends GhidraScript {
 			}
 		}
 		return paths;
+	}
+
+	/**
+	 * Writes the direct bases of each class [targets] files, off its field list, to [file]; returns how
+	 * many classes have any. A class the PDB defines twice (one per compiland) is written once.
+	 */
+	private int writeClasses(AbstractPdb pdb, Map<String, DataTypePath> targets, File file)
+			throws Exception {
+		Map<String, List<String>> classes = new TreeMap<>();
+		TypeProgramInterface tpi = pdb.getTypeProgramInterface();
+		for (int i = tpi.getTypeIndexMin(); i < tpi.getTypeIndexMaxExclusive(); i++) {
+			monitor.checkCancelled();
+			AbstractMsType type = pdb.getTypeRecord(RecordNumber.typeRecordNumber(i));
+			if (!(type instanceof AbstractCompositeMsType c) || type instanceof AbstractUnionMsType ||
+				c.getMsProperty().isForwardReference()) {
+				continue;
+			}
+			DataTypePath path = targets.get(spelled(c.getName()));
+			if (path == null || classes.containsKey(path.getPath()) ||
+				!(c.getFieldDescriptorListType() instanceof AbstractFieldListMsType fields)) {
+				continue;
+			}
+			List<String> bases = new ArrayList<>();
+			for (MsTypeField field : fields.getBaseClassList()) {
+				if (field instanceof AbstractBaseClassMsType b) {
+					bases.add(String.join("\t", "B", access(b.getAttributes()), b.getOffset().toString(),
+						basePath(pdb, b.getBaseClassRecordNumber(), targets)));
+				}
+				else if (field instanceof AbstractVirtualBaseClassMsType v) {
+					bases.add(String.join("\t", "V", access(v.getAttributes()),
+						v.getBasePointerOffset().toString(), v.getBaseOffsetFromVbt().toString(),
+						basePath(pdb, v.getBaseClassRecordNumber(), targets)));
+				}
+			}
+			classes.put(path.getPath(), bases);
+		}
+		try (java.io.PrintWriter w = new java.io.PrintWriter(file, "UTF-8")) {
+			for (Map.Entry<String, List<String>> e : classes.entrySet()) {
+				w.println("C\t" + e.getKey());
+				for (String base : e.getValue()) {
+					w.println("\t" + base);
+				}
+			}
+		}
+		return (int) classes.values().stream().filter(b -> !b.isEmpty()).count();
+	}
+
+	private static String access(ClassFieldMsAttributes attributes) {
+		return switch (attributes.getAccess()) {
+			case PRIVATE -> "private";
+			case PROTECTED -> "protected";
+			default -> "public";
+		};
+	}
+
+	private String basePath(AbstractPdb pdb, RecordNumber record, Map<String, DataTypePath> targets) {
+		AbstractMsType type = pdb.getTypeRecord(record);
+		String name = type instanceof AbstractComplexMsType c ? c.getName() : type.getName();
+		DataTypePath path = targets.get(spelled(name));
+		return path != null ? path.getPath() : "/" + spelled(name).replace("::", "/");
+	}
+
+	/**
+	 * Gives each `vfptr` the applicator lays a pointer of [size] bytes, named `{vfptr}` as Ghidra's class
+	 * tools name it: it points at a vtable shape the archive has no type for, and without an architecture
+	 * a pointer to nothing defaults to 4 bytes. Returns how many it fixed.
+	 */
+	private int fixVfptrs(DataTypeManager dtm, int size) {
+		int fixed = 0;
+		List<DataType> types = new ArrayList<>();
+		dtm.getAllDataTypes(types);
+		for (DataType dt : types) {
+			if (!(dt instanceof Structure s)) {
+				continue;
+			}
+			for (DataTypeComponent c : s.getDefinedComponents()) {
+				String name = c.getFieldName();
+				if (!"vfptr".equals(name) && !"{vfptr}".equals(name) || !(c.getDataType() instanceof Pointer p)) {
+					continue;
+				}
+				if (p.getLength() == size && "{vfptr}".equals(name)) {
+					continue;
+				}
+				s.replaceAtOffset(c.getOffset(), new PointerDataType(p.getDataType(), size, dtm), size,
+					"{vfptr}", c.getComment());
+				fixed++;
+			}
+		}
+		return fixed;
 	}
 
 	/** The applicator names a type with its spaces made underscores; key both sides that way. */

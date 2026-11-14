@@ -189,6 +189,7 @@ class ClassNode private constructor(
             Origin.EDITED -> "bases set by hand"
             Origin.STABS -> "from the stabs"
             Origin.MSVC_RTTI -> "from its MSVC RTTI"
+            Origin.ARCHIVE -> "from the PDB of the runtime it comes from"
             Origin.ITANIUM_RTTI -> "from its Itanium RTTI"
             Origin.SWEPT_RTTI -> "from its typeinfo"
             Origin.INFERRED -> "bases inferred from its constructors and vftables"

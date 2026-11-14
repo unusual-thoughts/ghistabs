@@ -50,6 +50,9 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         /** Laid by Ghidra's RTTI analyzer, bases off its MSVC Class Hierarchy Descriptor ([MsvcRttiParser]). */
         MSVC_RTTI("from MSVC RTTI", SourceType.IMPORTED),
 
+        /** Recorded off the PDB of the runtime it comes from, beside its archive ([ghicpp.stl.MsvcStlApplier]). */
+        ARCHIVE("from the runtime's PDB", SourceType.IMPORTED),
+
         /** Recorded off its Itanium typeinfo by the class pass ([ItaniumRttiParser]), on a binary with no stabs. */
         ITANIUM_RTTI("from Itanium RTTI", SourceType.IMPORTED),
 
@@ -295,6 +298,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                     origin = when {
                         ns.id in edits -> Origin.EDITED
                         typeDescriptor != null && ns.id in record -> Origin.MSVC_RTTI
+                        record[ns.id]?.archive != null -> Origin.ARCHIVE
                         typeinfo != null && ns.id in record && !hasStabs -> Origin.ITANIUM_RTTI
                         ns.id in record && hasStabs -> Origin.STABS
                         ns.id in record -> Origin.INFERRED
@@ -431,16 +435,26 @@ data class ClassHierarchy(val classes: List<ClassView>) {
 
         /**
          * What the program shows of a member function the stabs don't describe: its cv-qualifiers off its
-         * mangled name (Itanium `_ZNK…`/`_ZNV…`, gcc 2.x `__C…`), virtual when one of its class's vtables
-         * holds it ([virtuals]). Neither says its access, nor static from plain.
+         * mangled name (Itanium `_ZNK…`/`_ZNV…`, gcc 2.x `__C…`, MSVC `?…`), virtual when one of its class's
+         * vtables holds it ([virtuals]). An MSVC name also says its access, and virtual or static: an
+         * imported one's is the name it was imported by.
          */
         fun Function.derivedAttrs(virtuals: Set<Address>): MemberAttrs {
-            val demangled = symtab.getSymbols(entryPoint)
-                .firstNotNullOfOrNull { Demangler.of(it.name) as? DemangledFunction }
+            val names = symtab.getSymbols(entryPoint).map { it.name } +
+                listOfNotNull(externalLocation?.originalImportedName)
+            val msvc = names.firstNotNullOfOrNull { Demangler.ofMsvc(it) as? DemangledFunction }
+            val demangled = msvc ?: names.firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
             // Ghidra's GNU parser flags a trailing const but not volatile, so read both off the text.
             val qualifiers = demangled?.originalDemangled?.substringAfterLast(')').orEmpty().split(' ')
+            val virt = when {
+                entryPoint in virtuals || msvc?.isVirtual == true -> VirtKind.VIRTUAL
+                msvc?.isStatic == true -> VirtKind.STATIC
+                msvc != null -> VirtKind.NORMAL
+                else -> null
+            }
             return MemberAttrs(
-                virt = VirtKind.VIRTUAL.takeIf { entryPoint in virtuals },
+                access = msvc?.visibility?.let { v -> Access.entries.firstOrNull { it.name.equals(v, true) } },
+                virt = virt,
                 isConst = "const" in qualifiers,
                 isVolatile = "volatile" in qualifiers,
             )

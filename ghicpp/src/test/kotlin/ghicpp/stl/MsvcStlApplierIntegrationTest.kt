@@ -1,5 +1,11 @@
 package ghicpp.stl
 
+import ghicpp.Access
+import ghicpp.ClassHierarchyRecords
+import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
+import ghicpp.classStruct
+import ghicpp.isKnownLayout
+import ghicpp.sizeClassStruct
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
@@ -10,6 +16,7 @@ import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Function
+import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
@@ -88,6 +95,64 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
+    /**
+     * A class of the runtime's that the program has a class for, as its RTTI or the demangler leaves it: the
+     * class passes take the archive's layout for its struct, as it is, and its bases come off the classes file.
+     */
+    @Test
+    fun `a std class takes the archive layout and its bases off the runtime's PDB`() {
+        val builder = ProgramBuilder("stl", ProgramBuilder._X64, "windows", this)
+        try {
+            builder.createMemory(".text", "0x140001000", 0x100)
+            val program = builder.program
+            lateinit var filebuf: GhidraClass
+            lateinit var streambuf: GhidraClass
+            builder.withTransaction {
+                val std = program.symbolTable.createNameSpace(null, "std", SourceType.IMPORTED)
+                filebuf = program.symbolTable.createClass(std, FILEBUF, SourceType.IMPORTED)
+                streambuf = program.symbolTable.createClass(std, STREAMBUF, SourceType.IMPORTED)
+            }
+            // A placeholder for the class, so the applier resolves its layout.
+            builder.withTransaction {
+                program.dataTypeManager.addDataType(
+                    StructureDataType(CategoryPath("/Demangler/std"), FILEBUF, 0),
+                    DataTypeConflictHandler.DEFAULT_HANDLER,
+                )
+            }
+            val classes = StdClass.parse(
+                "C\t/std/$FILEBUF\n\tB\tpublic\t0\t/std/$STREAMBUF\nC\t/std/$STREAMBUF\n",
+            )
+            val archive = MsvcStlArchives.open("msvcp140_x64")
+            try {
+                lateinit var result: MsvcStlApplier.Result
+                builder.withTransaction { result = MsvcStlApplier(program, archive, classes).apply() }
+                result.recorded mustBe 2
+
+                val struct = program.classStruct(filebuf)!!
+                struct.pathName mustBe "/std/$FILEBUF"
+                struct.isKnownLayout() mustBe true
+                // A class pass sizing it off its allocations leaves the runtime's layout as it is.
+                builder.withTransaction { program.sizeClassStruct(filebuf, struct.length + 16) }
+                program.classStruct(filebuf)!!.length mustBe struct.length
+
+                val record = program.readClassRecord()!!
+                record.getValue(filebuf.id) mustBe ClassHierarchyRecords.Entry(
+                    program.dataTypeManager.getID(struct),
+                    listOf(ClassHierarchyRecords.Base(streambuf.id, null, false, Access.PUBLIC, 0)),
+                    "msvcp140_x64",
+                )
+                // Resolved along with the class deriving from it, and recorded as having no bases.
+                record.getValue(streambuf.id).structId mustBe
+                    program.dataTypeManager.getID(program.classStruct(streambuf)!!)
+                record.getValue(streambuf.id).bases mustBe emptyList()
+            } finally {
+                archive.close()
+            }
+        } finally {
+            builder.dispose()
+        }
+    }
+
     private fun placeholders(program: Program) = program.dataTypeManager.allStructures.asSequence()
         .filter { it.isNotYetDefined && it.name.startsWith("basic_string<") }
         .map { it.pathName }.toList()
@@ -113,5 +178,7 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     companion object {
         const val STRING = "basic_string<char,std::char_traits<char>,std::allocator<char>_>"
+        const val FILEBUF = "basic_filebuf<char,std::char_traits<char>_>"
+        const val STREAMBUF = "basic_streambuf<char,std::char_traits<char>_>"
     }
 }

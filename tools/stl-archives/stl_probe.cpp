@@ -194,6 +194,28 @@ std::filesystem::path path_;
 std::filesystem::directory_entry directory_entry_;
 std::filesystem::directory_iterator directory_iterator_;
 
+// A program's own classes deriving from the library's, polymorphic so that their RTTI and vftables are
+// emitted: what class recovery lays over the runtime's layouts, for measuring it on this probe. Outside
+// std, they are no part of the archives.
+struct ProbeError : std::runtime_error {
+    explicit ProbeError(int code) : std::runtime_error("probe"), code(code) {}
+    int code;
+};
+
+class CountingBuf : public std::streambuf {
+public:
+    std::size_t written = 0;
+
+protected:
+    int_type overflow(int_type c) override {
+        ++written;
+        return c;
+    }
+};
+
+ProbeError probe_error_{1};
+CountingBuf counting_buf_;
+
 }  // namespace probe
 
 int main() {

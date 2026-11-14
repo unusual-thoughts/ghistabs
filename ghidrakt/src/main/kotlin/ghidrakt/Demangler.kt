@@ -9,6 +9,8 @@ import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.demangler.gnu.GnuDemanglerFormat
 import ghidra.app.util.demangler.gnu.GnuDemanglerOptions
 import ghidra.app.util.demangler.gnu.GnuDemanglerParser
+import ghidra.app.util.demangler.microsoft.MicrosoftDemangler
+import ghidra.app.util.demangler.microsoft.MicrosoftDemanglerOptions
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
@@ -85,6 +87,22 @@ object Demangler {
     /** One back end's answer. It *throws* on a name it cannot read as often as it returns null. */
     private fun attempt(o: GnuDemanglerOptions, mangled: String): DemangledObject? =
         runCatching { demangler.demangle(MangledContext(null, o, mangled, null)) }.getOrNull()
+
+    private val microsoft by lazy { MicrosoftDemangler() }
+    private val msvcCache = ConcurrentHashMap<String, Result<DemangledObject?>>()
+
+    /**
+     * An MSVC name (`?eback@?$basic_streambuf@…@std@@IEBAPEADXZ`) demangled, or null if it isn't one. Its
+     * [DemangledObject.getVisibility], `isStatic` and `isVirtual` are the member's, which MSVC spells into
+     * every member's name; the same sharing rule as [of] holds.
+     */
+    fun ofMsvc(mangled: String): DemangledObject? {
+        if (!mangled.startsWith("?")) return null
+        if (msvcCache.size > MAX_ENTRIES) msvcCache.clear()
+        return msvcCache.computeIfAbsent(mangled) { name ->
+            runCatching { microsoft.demangle(MangledContext(null, MicrosoftDemanglerOptions(), name, null)) }
+        }.getOrNull()
+    }
 
     /** Human-readable name for [mangled], falling back to [mangled] */
     fun name(mangled: String): String = of(mangled)?.demangledName ?: mangled

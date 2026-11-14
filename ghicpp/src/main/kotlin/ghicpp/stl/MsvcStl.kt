@@ -1,10 +1,15 @@
 package ghicpp.stl
 
 import generic.jar.ResourceFile
+import ghicpp.Access
+import ghicpp.ClassHierarchyRecords
+import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
+import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghidra.framework.Application
 import ghidra.program.database.data.DataTypeManagerDB
 import ghidra.program.database.data.replaceDataTypesBatched
 import ghidra.program.model.data.*
+import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import java.io.File
 
@@ -66,6 +71,17 @@ object MsvcStlArchives {
         return FileDataTypeManager.openFileArchive(file, false)
     }
 
+    /** The bases of the classes in archive [name], off the PDB it was built from; empty when none ship. */
+    fun classes(name: String): List<StdClass> {
+        require(name in MsvcRuntime.BUNDLED) { "no bundled archive $name" }
+        val shipped = runCatching { Application.findDataFileInAnyModule("typeinfo/msvc/$name.classes") }.getOrNull()
+        val text = shipped?.takeIf { it.exists() }?.inputStream?.use { String(it.readBytes(), Charsets.UTF_8) }
+            ?: MsvcStlArchives::class.java.getResourceAsStream("/ghicpp/stl/$name.classes")
+                ?.use { String(it.readBytes(), Charsets.UTF_8) }
+            ?: return emptyList()
+        return StdClass.parse(text)
+    }
+
     private val dir by lazy {
         File(System.getProperty("java.io.tmpdir"), "ghicpp-stl-${System.getProperty("user.name")}").apply { mkdirs() }
     }
@@ -87,6 +103,44 @@ object MsvcStlArchives {
     }
 }
 
+/** A direct base of a [StdClass]: the base at its archive [path], and how the class holds it. */
+data class StdBase(val path: String, val access: Access, val isVirtual: Boolean, val offset: Long?)
+
+/**
+ * A class as the runtime's PDB declares it, at its archive [path]: its direct [bases], which its struct alone
+ * loses (an empty base takes no bytes, and nothing there says access or virtuality).
+ */
+data class StdClass(val path: String, val bases: List<StdBase>) {
+    /** Its namespace path: `std`, `basic_streambuf<…>` for `/std/basic_streambuf<…>`. */
+    val segments: List<String> get() = CategoryPath(path).pathElements.toList()
+
+    companion object {
+        /**
+         * Reads the `.classes` text `MsvcStlArchiveScript` writes beside an archive (its header gives the
+         * format): `C <path>`, then a tab-indented `B <access> <offset> <path>` per non-virtual base and
+         * `V <access> <vbptr offset> <vbtable index> <path>` per virtual one.
+         */
+        fun parse(text: String): List<StdClass> {
+            val classes = mutableListOf<Pair<String, MutableList<StdBase>>>()
+            for (line in text.lineSequence().filter { it.isNotBlank() }) {
+                val fields = line.trimStart('\t').split('\t')
+                when {
+                    !line.startsWith('\t') && fields[0] == "C" -> classes += fields[1] to mutableListOf()
+
+                    fields[0] == "B" -> classes.last().second +=
+                        StdBase(fields[3], access(fields[1]), isVirtual = false, offset = fields[2].toLong())
+
+                    fields[0] == "V" -> classes.last().second +=
+                        StdBase(fields[4], access(fields[1]), isVirtual = true, offset = null)
+                }
+            }
+            return classes.map { (path, bases) -> StdClass(path, bases) }
+        }
+
+        private fun access(name: String) = Access.valueOf(name.uppercase())
+    }
+}
+
 /**
  * Fills the program's empty `std` structs from the runtime's [archive]. Ghidra's Microsoft demangler
  * makes an empty placeholder for each class a demangled method belongs to, at the class's namespace path
@@ -98,8 +152,12 @@ object MsvcStlArchives {
  *
  * Runs in the caller's transaction.
  */
-class MsvcStlApplier(private val program: Program, private val archive: DataTypeManager) {
-    data class Result(val replaced: Int, val filled: Int)
+class MsvcStlApplier(
+    private val program: Program,
+    private val archive: DataTypeManager,
+    private val classes: List<StdClass> = emptyList(),
+) {
+    data class Result(val replaced: Int, val filled: Int, val recorded: Int = 0)
 
     fun apply(): Result {
         val dtm = program.dataTypeManager
@@ -110,7 +168,7 @@ class MsvcStlApplier(private val program: Program, private val archive: DataType
             val layout = archive.getDataType(DataTypePath(path, stub.name)) as? Composite ?: return@forEach
             if (!layout.isNotYetDefined) stubs.add(stub to layout)
         }
-        if (stubs.isEmpty()) return Result(0, 0)
+        if (stubs.isEmpty()) return Result(0, 0, record())
 
         // An empty struct already at the archive's path is filled in place by the conflict handler; a
         // placeholder under /Demangler is swapped for the resolved type everywhere it is used.
@@ -120,7 +178,41 @@ class MsvcStlApplier(private val program: Program, private val archive: DataType
         val replacements = resolved.filter { (stub, type) -> stub !== type && dtm.contains(stub) }
             .map { (stub, type) -> stub as DataType to type }
         (dtm as DataTypeManagerDB).replaceDataTypesBatched(replacements)
-        return Result(replacements.size, stubs.size - replacements.size)
+        return Result(replacements.size, stubs.size - replacements.size, record())
+    }
+
+    /**
+     * Records the bases of each of [classes] the program has a class namespace for, where nothing recorded
+     * that class yet: an imported class's namespace, under its library, where the program defines none of
+     * its own. A base with no namespace goes by its qualified name. Returns how many it recorded.
+     */
+    private fun record(): Int {
+        if (classes.isEmpty()) return 0
+        val namespaces = program.symbolTable.classNamespaces.asSequence().toList()
+            .groupBy { it.getPathList(true) }
+            .mapValues { (_, group) -> group.firstOrNull { !it.isExternal } ?: group.first() }
+        val old = program.readClassRecord().orEmpty()
+        val dtm = program.dataTypeManager
+        val name = archive.name.removeSuffix(".gdt")
+        val entries = classes.mapNotNull { cls ->
+            val ns: GhidraClass = namespaces[cls.segments] ?: return@mapNotNull null
+            if (ns.id in old) return@mapNotNull null
+            val struct = dtm.getDataType(cls.path) as? Structure
+            val bases = cls.bases.map { base ->
+                val segments = StdClass(base.path, emptyList()).segments
+                val baseNs = namespaces[segments]
+                ClassHierarchyRecords.Base(
+                    baseNs?.id,
+                    if (baseNs == null) segments.joinToString("::") else null,
+                    base.isVirtual,
+                    base.access,
+                    base.offset,
+                )
+            }
+            ns.id to ClassHierarchyRecords.Entry(struct?.let(dtm::getID)?.takeIf { it >= 0 }, bases, name)
+        }
+        if (entries.isNotEmpty()) program.writeClassRecord(old + entries)
+        return entries.size
     }
 
     companion object {

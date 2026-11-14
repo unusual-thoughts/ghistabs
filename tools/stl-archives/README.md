@@ -46,6 +46,17 @@ path. Only those types are resolved, with what they depend on, and they stay lin
 refresh the copies, download this workflow's `.gdt` artifacts into that folder; the workflow warns when a
 fresh build no longer matches them.
 
+Beside each archive is a `.classes` file (the `classes` artifact) with each class's direct bases off the
+PDB: their access, virtuality and offset, which a struct cannot say, and the empty bases it has no bytes
+for. The analyzer records them for each std class the program has a class namespace for, so the Class
+Hierarchy window shows the library's classes and how the program's own derive from them. ghicpp's class
+passes take an archive type at a class's namespace path as that class's struct, as it is: they lay it as
+the base of the classes deriving from it, and neither size nor fill it. [`MsvcStlArchiveScript`](../../ghicpp/ghidra_scripts/MsvcStlArchiveScript.java)
+describes the format.
+
+A member function's access, and whether it is virtual or static, need no PDB: an MSVC name spells them,
+and the Class Hierarchy window reads them off the imported or mangled name.
+
 The archives travel between Ghidra versions as text: [`ExportStlLayouts.java`](ExportStlLayouts.java)
 writes it (`run.sh layouts <program> <archive> <out.txt>`) and describes the format, and
 [`LayoutsToGdt.java`](LayoutsToGdt.java) turns it back into a `.gdt` on whichever Ghidra runs it
