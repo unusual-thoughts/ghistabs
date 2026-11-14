@@ -2,7 +2,8 @@ package ghicpp.stl
 
 import generic.jar.ResourceFile
 import ghidra.framework.Application
-import ghidra.program.model.data.FileDataTypeManager
+import ghidrakt.OpenArchive
+import ghidrakt.openArchiveReadOnly
 import java.io.File
 
 /**
@@ -12,10 +13,11 @@ import java.io.File
  * uses the copies in the jar. Beside each `<name>.gdt` may be its classes ([StdClasses.SUFFIX]).
  */
 class StlArchives(private val dir: String, val bundled: Set<String>) {
-    fun open(name: String): FileDataTypeManager {
+    /** Archive [name], open read-only; closing it lets go of the archive. */
+    fun open(name: String): OpenArchive {
         require(name in bundled) { "no bundled archive $name" }
         val file = shipped("$name.gdt") ?: ResourceFile(copyOut("$name.gdt"))
-        return FileDataTypeManager.openFileArchive(file, false)
+        return openArchiveReadOnly(file)
     }
 
     /** The classes of archive [name], off the debug info it was built from; empty when none ship. */
