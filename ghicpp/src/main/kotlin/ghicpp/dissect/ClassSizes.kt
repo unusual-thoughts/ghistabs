@@ -6,6 +6,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.util.task.TaskMonitor
+import ghidrakt.alignedTo
 import ghidrakt.diagnose.DiagnosticSink
 
 /**
@@ -13,9 +14,13 @@ import ghidrakt.diagnose.DiagnosticSink
  * offsets, its furthest vptr ([vptrs]), the end of the furthest store its constructors make ([stored])
  * and its allocation sizes ([allocated]).
  *
- * A class is at least as large as its last vptr and each base's minimum, its virtual bases' included. A
- * base is at most as large as the gap to the next base, or to the end of the class holding it; but for a
- * base with virtual bases, which that gap holds the non-virtual part of alone.
+ * A class is at least as large as its last vptr and each base's minimum, its virtual bases' included: each
+ * virtual base takes a byte at least, past its offset ([ClassDecl.vbaseOffsets]), even one no class is known
+ * for. A class whose virtual bases' offsets no record states lays them out past its non-virtual part, which
+ * fills the gap the classes holding it leave it. A class with a vptr or virtual bases is pointer-aligned, so
+ * its size is a whole number of pointers. A base is at most as large as the gap to the next base, or to the
+ * end of the class holding it; but for a base with virtual bases, which that gap holds the non-virtual part
+ * of alone.
  */
 fun sizeBounds(
     classes: Collection<ClassDecl>,
@@ -27,18 +32,6 @@ fun sizeBounds(
     val placed = classes.associateWith { cls ->
         cls.bases.filterNot { it.isVirtual }.mapNotNull { b -> b.offset?.let { b.cls to it } }
     }
-    val least = mutableMapOf<ClassDecl, Long>()
-    fun atLeast(k: ClassDecl, depth: Int = 0): Long = least.getOrPut(k) {
-        if (depth > MAX_DEPTH) return 0
-        listOfNotNull(
-            allocated[k],
-            vptrs[k]?.plus(ptrSize),
-            stored[k],
-            placed[k].orEmpty().maxOfOrNull { (b, at) -> at + atLeast(b, depth + 1) },
-            k.virtualBases.mapNotNull { v -> v.offset?.plus(atLeast(v.cls, depth + 1)) }.maxOrNull(),
-        ).maxOrNull() ?: 0
-    }
-
     // Each base, as the classes holding it place it: from its offset to the next base's, or the holder's end.
     val holders = mutableMapOf<ClassDecl, MutableList<Pair<ClassDecl, Long?>>>()
     for ((holder, held) in placed) {
@@ -48,11 +41,41 @@ fun sizeBounds(
             holders.getOrPut(b) { mutableListOf() } += holder to next?.minus(at)
         }
     }
+
+    val dynamic = mutableMapOf<ClassDecl, Boolean>()
+    fun isDynamic(k: ClassDecl, depth: Int = 0): Boolean = dynamic.getOrPut(k) {
+        depth <= MAX_DEPTH && (
+            k in vptrs || k.hasVirtualBases || placed[k].orEmpty().any { (b, _) -> isDynamic(b, depth + 1) }
+            )
+    }
+
+    val least = mutableMapOf<ClassDecl, Long>()
+    fun atLeast(k: ClassDecl, depth: Int = 0): Long = least.getOrPut(k) {
+        if (depth > MAX_DEPTH) return 0
+        fun vbaseLeast(v: ClassDecl) = maxOf(1, atLeast(v, depth + 1))
+        val nonVirtual = listOfNotNull(
+            vptrs[k]?.plus(ptrSize),
+            stored[k],
+            placed[k].orEmpty().maxOfOrNull { (b, at) -> at + atLeast(b, depth + 1) },
+        ).maxOrNull() ?: 0
+        val vbases = k.allVirtualBases
+        val pastVbases = if (k.nonVirtualSize == null && vbases.isNotEmpty()) {
+            // Laid out past the non-virtual part, which fills what its holders leave it.
+            val room = holders[k].orEmpty().mapNotNull { it.second }.minOrNull() ?: 0
+            vbases.fold(maxOf(nonVirtual, room)) { at, v -> at.alignedTo(ptrSize) + vbaseLeast(v.cls) }
+        } else {
+            val named = vbases.mapNotNull { v -> v.offset?.plus(vbaseLeast(v.cls)) }
+            (named + k.vbaseOffsets.map { it + 1 }).maxOrNull()
+        }
+        val size = listOfNotNull(allocated[k], nonVirtual, pastVbases).max()
+        if (isDynamic(k)) size.alignedTo(ptrSize) else size
+    }
+
     val most = mutableMapOf<ClassDecl, Long?>()
     fun atMost(k: ClassDecl, depth: Int = 0): Long? = if (k in most) {
         most[k]
     } else {
-        val bounds = holders[k].orEmpty().takeIf { k.virtualBases.isEmpty() }.orEmpty().mapNotNull { (holder, room) ->
+        val bounds = holders[k].orEmpty().takeUnless { k.hasVirtualBases }.orEmpty().mapNotNull { (holder, room) ->
             room ?: run {
                 val end = allocated[holder] ?: atMost(holder, depth + 1).takeIf { depth < MAX_DEPTH }
                 val at = placed.getValue(holder).first { it.first == k }.second
