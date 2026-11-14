@@ -30,12 +30,17 @@ interface BaseDecl {
     val offset: Long?
 }
 
-/** A direct base of a class a recovery pass knows: the base's [cls], and how the class holds it. */
+/**
+ * A direct base of a class a recovery pass knows: the base's [cls], and how the class holds it. [offsetSource]
+ * says where a virtual base's [offset] comes from: [SourceType.IMPORTED] read off the ABI's virtual-base
+ * record, [SourceType.ANALYSIS] inferred from the class's vftables, [SourceType.DEFAULT] where it is unknown.
+ */
 data class ClassBase(
     val cls: ClassDecl,
     override val isVirtual: Boolean,
     override val access: Access,
     override val offset: Long?,
+    val offsetSource: SourceType = SourceType.IMPORTED,
 ) : BaseDecl
 
 /**

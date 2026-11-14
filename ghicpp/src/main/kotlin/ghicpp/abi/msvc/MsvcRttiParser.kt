@@ -16,6 +16,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.pointerAt
@@ -117,11 +118,32 @@ class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
             it.isVirtual
         }.mapNotNullTo(mutableSetOf()) { it.vbtableSlot?.pdisp }
 
-        override val virtualBases get() = array.drop(1).filter { it.isVirtual }.groupBy { it.descriptor }
-            .map { (descriptor, entries) ->
-                val at = entries.firstNotNullOfOrNull { e -> e.vbtableSlot?.let { vbaseOffset(it, e.offset) } }
-                ClassBase(classAt(descriptor), isVirtual = true, entries.first().access, at)
+        override val virtualBases: List<ClassBase> get() {
+            val entries = array.drop(1).filter { it.isVirtual }.groupBy { it.descriptor }.values
+            val byVftables by lazy { vftableVbaseOffsets(entries.map { classAt(it.first().descriptor) }) }
+            return entries.mapIndexed { i, sharing ->
+                val cls = classAt(sharing.first().descriptor)
+                val at = sharing.firstNotNullOfOrNull { e -> e.vbtableSlot?.let { vbaseOffset(it, e.offset) } }
+                if (at != null) return@mapIndexed ClassBase(cls, isVirtual = true, sharing.first().access, at)
+                val guessed = byVftables?.get(i)
+                val source = if (guessed != null) SourceType.ANALYSIS else SourceType.DEFAULT
+                ClassBase(cls, isVirtual = true, sharing.first().access, guessed, source)
             }
+        }
+    }
+
+    /**
+     * Where [vbases], this class's virtual bases in order, sit by its vftables ([vbaseOffsetsByVftables]), for
+     * when no vbtable was found: no function here builds the class, as the linker drops an unused mock's
+     * constructors and keeps its vftables. Null where a virtual base has virtual bases of its own, whose
+     * tables the class shares rather than repeats.
+     */
+    private fun RttiClass.vftableVbaseOffsets(vbases: List<RttiClass>): List<Long>? {
+        if (vbases.any { it.vbptrs.isNotEmpty() }) return null
+        fun RttiClass.tables() = vftables.mapNotNull { r ->
+            r.vfptrOffset(program)?.let { it to r.slots(program).size }
+        }
+        return vbaseOffsetsByVftables(vbases.map { it.tables() }, tables())
     }
 
     /** Where a virtual base [mdisp] past what [slot] reads sits in the class, once its vbtable is known. */
@@ -197,6 +219,27 @@ class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
     private fun typeDescriptorClass(at: Address) = symbols.getSymbols(at)
         .firstOrNull { it.name == Msvc.TYPE_DESCRIPTOR && !it.parentNamespace.isGlobal }
         ?.parentNamespace?.toClass()
+}
+
+/**
+ * Where each of [vbases] sits in a class with [tables], off the vftables alone. Each table is its vptr's
+ * offset in its class and its slot count. MSVC lays the virtual bases last, in the order the Base Class Array
+ * first lists them, and never adds a slot to a virtual base's tables: the class's last tables are its virtual
+ * bases' own, as many and as long, each moved by where its base sits. Null where they are not, or a virtual
+ * base has no table, which leaves where it sits to its vbtable alone.
+ */
+fun vbaseOffsetsByVftables(vbases: List<List<Pair<Long, Int>>>, tables: List<Pair<Long, Int>>): List<Long>? {
+    if (vbases.any { it.isEmpty() }) return null
+    val sorted = tables.sortedBy { it.first }
+    var next = sorted.size - vbases.sumOf { it.size }
+    if (next < 0) return null
+    return vbases.map { own ->
+        val base = own.sortedBy { it.first }
+        val moved = sorted.subList(next, next + base.size).also { next += base.size }
+        val at = moved.first().first - base.first().first
+        if (moved.zip(base).any { (t, b) -> t.first - b.first != at || t.second != b.second } || at <= 0) return null
+        at
+    }
 }
 
 /** The Base Class Array a Class Hierarchy Descriptor points at: the class itself first, then its bases. */
