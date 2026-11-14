@@ -70,4 +70,5 @@ and the Class Hierarchy window reads them off the imported or mangled name.
 The archives travel between Ghidra versions as text: [`ExportStlLayouts.java`](scripts/ExportStlLayouts.java)
 writes it (`run.sh layouts <program> <archive> <out.txt>`) and describes the format, and
 [`LayoutsToGdt.java`](scripts/LayoutsToGdt.java) turns it back into a `.gdt` on whichever Ghidra runs it
-(`run.sh gdt <program> <layouts.txt> <out.gdt>`).
+(`run.sh gdt <program> <layouts.txt> <out.gdt>`). The round trip is needed: Ghidra 10.4 and 11.4 refuse a
+`.gdt` that 12.3 wrote ("data created with newer version and can not be read").
