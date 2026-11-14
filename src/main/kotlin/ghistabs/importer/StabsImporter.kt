@@ -1,5 +1,6 @@
 package ghistabs.importer
 
+import ghicpp.hierarchy.typePureSlots
 import ghicpp.recover.VtableSweepPass.Companion.markVtablesSwept
 import ghidrakt.runTransaction
 import ghistabs.harvest.Harvest
@@ -97,7 +98,11 @@ internal fun ImportContext<*>.runOnRecords(stabs: StabReader.Result): ImportResu
                     else -> 0
                 },
             )
-        }.also { applyAfterSymbols(registry) }
+        }.also {
+            applyAfterSymbols(registry)
+            // The stabs type the pure virtuals they declare, not those of a base they don't describe.
+            if (options.buildClasses) program.typePureSlots(this)
+        }
     }
     // The class pass claimed its tables: a sweep from before this import has more to leave alone now.
     program.markVtablesSwept(false)

@@ -170,6 +170,16 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
         MsvcStructor.ofMangled("??_ECircle@@UAEPAXI@Z") mustBe MsvcStructor.VECTOR_DELETING_DESTRUCTOR
     }
 
+    /** `Shape::area` is pure: its slot holds `_purecall`, and is typed off `Circle`'s override instead. */
+    @Test
+    fun `a pure virtual slot is typed off an override, this its own class`() {
+        val slot = program.classStruct("Shape_vftable").getComponent(1)
+        val def = (slot.dataType as Pointer).dataType as FunctionDefinition
+        def.getPrototypeString(true) mustBe "double __thiscall vfunction2(Shape * this)"
+        slot.fieldName mustBe "vfunction2"
+        slot.comment mustBe "pure virtual, typed off Circle::vfunction2"
+    }
+
     @Test
     fun `renaming a virtual slot renames every override of it and its field in every vftable`() = program.rolledBack {
         val h = ClassHierarchy.of(program, hasStabs = false)
