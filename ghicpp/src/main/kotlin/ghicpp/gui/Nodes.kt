@@ -28,7 +28,8 @@ private val NAMESPACE_ICON: Icon = GIcon("icon.plugin.symboltree.node.namespace"
 private val ROOT_ICON: Icon = GIcon("icon.plugin.symboltree.node.category.classes.closed")
 
 /**
- * The program's classes, filed by namespace, with their members of the [memberKinds] shown. [inverted],
+ * The program's classes, filed by namespace, with their members of the [memberKinds] shown, and with
+ * [showInherited] the slots their vftables fill with a base's function among them. [inverted],
  * files only the basal classes, each expanding into the classes derived from it: a class with several
  * bases shows under each, and a virtual derivation is marked on the derived class.
  */
@@ -38,12 +39,16 @@ class ClassTreeRoot(
     val memberKinds: Set<MemberKind> = MemberKind.entries.toSet(),
     val inverted: Boolean = false,
     val showEmpty: Boolean = false,
+    val showInherited: Boolean = false,
 ) : GTreeNode() {
     init {
         val filed = (if (inverted) hierarchy.classes.filter(hierarchy::isBasal) else hierarchy.classes)
             .filter { showEmpty || !hierarchy.isEmpty(it) }
         val classNodes = filed.associate {
-            it.path to ClassNode(hierarchy, it, inverted).also { n -> n.memberKinds = memberKinds }
+            it.path to ClassNode(hierarchy, it, inverted).also { n ->
+                n.memberKinds = memberKinds
+                n.showInherited = showInherited
+            }
         }
         val folders = mutableMapOf<List<String>, NamespaceNode>()
         val children = mutableMapOf<List<String>, MutableList<GTreeNode>>()
@@ -137,7 +142,10 @@ class ClassNode private constructor(
 
     private fun linked(): List<ClassNode> = if (inverted) {
         info?.let(hierarchy::derivedOf).orEmpty().map {
-            ClassNode(hierarchy, it.cls, it.clause, true).also { n -> n.memberKinds = memberKinds }
+            ClassNode(hierarchy, it.cls, it.clause, true).also { n ->
+                n.memberKinds = memberKinds
+                n.showInherited = showInherited
+            }
         }
     } else {
         info?.bases.orEmpty().map { ClassNode(hierarchy, hierarchy[it], it, false) }
@@ -146,6 +154,9 @@ class ClassNode private constructor(
     /** The kinds of member it lists, as its root shows them. */
     internal var memberKinds: Set<MemberKind> = MemberKind.entries.toSet()
 
+    /** Whether it lists the slots a base's function fills, as its root shows them. */
+    internal var showInherited = false
+
     // Normally only the class filed under its namespace lists its members: under a base, they'd repeat.
     // Inverted, only the basal classes are filed, so every class lists them.
     private fun membersOf() = info?.members?.takeIf { edge == null || inverted }.orEmpty().filter {
@@ -153,7 +164,9 @@ class ClassNode private constructor(
             memberKinds
     }
 
-    override fun generateChildren(): List<GTreeNode> = linked() + membersOf().map(::MemberNode) + nested
+    private fun inheritedOf() = info?.inherited?.takeIf { showInherited && (edge == null || inverted) }.orEmpty()
+
+    override fun generateChildren(): List<GTreeNode> = linked() + withInherited(membersOf(), inheritedOf()) + nested
 
     private val qualifiers get() = edge?.let { e ->
         listOfNotNull("virtual".takeIf { e.isVirtual }, e.access?.takeIf { it != Access.PUBLIC }?.name?.lowercase())
@@ -212,7 +225,7 @@ class ClassNode private constructor(
 
     override fun isLeaf() =
         (if (inverted) info?.let(hierarchy::derivedOf).isNullOrEmpty() else info?.bases.isNullOrEmpty()) &&
-            membersOf().isEmpty() && nested.isEmpty()
+            membersOf().isEmpty() && inheritedOf().isEmpty() && nested.isEmpty()
 
     // Two bases of one class can share a name (a direct and an indirect `Base`); never merge them. But
     // a node is its filtered clone, which the tree finds again by equals to keep it selected once the
@@ -261,8 +274,45 @@ class MemberNode(val member: Member) : GTreeNode() {
     override fun hashCode() = identity.hashCode()
 }
 
+/**
+ * A slot of the class above it that a base's function fills, [InheritedSlot.label] spelling which:
+ * muted, the class's own members standing out among them.
+ */
+class InheritedSlotNode(val inherited: InheritedSlot) : GTreeNode() {
+    override fun getName() = inherited.label
+    override fun getIcon(expanded: Boolean): Icon = INHERITED_ICON
+    override fun getToolTip(): String = buildString {
+        append("<html>").append(escape(inherited.signature ?: inherited.label))
+        append("<br>inherited from ").append(escape(inherited.ownerPath.joinToString("::").ifEmpty { "no class" }))
+        append(", not overridden")
+        append("<br>").append(escape(inherited.slot.toString()))
+        append("<br>at ").append(inherited.address)
+    }
+
+    override fun isLeaf() = true
+
+    private val identity = Any()
+    override fun equals(other: Any?) = other is InheritedSlotNode && other.identity === identity
+    override fun hashCode() = identity.hashCode()
+}
+
+/**
+ * [members] with [inherited] among them by slot: each before the first function that has no slot or a
+ * later one, so the virtual functions read as the vftable lays them.
+ */
+private fun withInherited(members: List<Member>, inherited: List<InheritedSlot>): List<GTreeNode> {
+    val nodes = members.map(::MemberNode)
+    if (inherited.isEmpty()) return nodes
+    fun before(s: InheritedSlot) = members.indexOfFirst {
+        it.kind >= MemberKind.FUNCTION && (it.slot == null || it.slot > s.slot)
+    }.let { if (it < 0) members.size else it }
+    val placed = nodes.mapIndexed { i, n -> i * 2 + 1 to n } + inherited.map { before(it) * 2 to InheritedSlotNode(it) }
+    return placed.sortedBy { it.first }.map { it.second }
+}
+
 /** Where going to [node] goes. */
 internal val GTreeNode.address: String? get() = when (this) {
+    is InheritedSlotNode -> inherited.address
     is MemberNode -> member.address
     is ClassNode -> info?.address
     else -> null
@@ -450,6 +500,22 @@ private val IMPORTED_COLOR: Color = GColor("color.palette.orange")
 private const val PRIVATE_SHADE = 0.4
 private const val PROTECTED_TINT = 0.45
 
+// An inherited slot: a virtual function's blue, most of the way to grey, its icon paled the same.
+private const val INHERITED_MUTE = 0.6
+private val inheritedColor: Color get() = VIRT_COLORS.getValue(VirtKind.VIRTUAL).mix(UNKNOWN_COLOR, INHERITED_MUTE)
+
+/** The function icon in a virtual function's hue, muted toward grey and paled, as [inheritedColor]. */
+internal val INHERITED_ICON: Icon by lazy {
+    val (base, from) = MEMBER_ICONS.getValue(MemberKind.FUNCTION)
+    val blue = VIRT_COLORS.getValue(VirtKind.VIRTUAL).let { Color.RGBtoHSB(it.red, it.green, it.blue, null)[0] }
+    base.centered().hueShifted(from, blue).recolored { r, g, b ->
+        val (hue, sat, bright) = Color.RGBtoHSB(r, g, b, null)
+        val v = bright + (1 - bright) * INHERITED_MUTE.toFloat() / 2
+        val rgb = Color.HSBtoRGB(hue, sat * (1 - INHERITED_MUTE.toFloat()), v)
+        Triple(rgb shr 16 and 0xff, rgb shr 8 and 0xff, rgb and 0xff)
+    }
+}
+
 /** [this] colour moved [amount] of the way to [other]. */
 private fun Color.mix(other: Color, amount: Double): Color {
     fun channel(a: Int, b: Int) = (a + (b - a) * amount).toInt()
@@ -476,7 +542,10 @@ internal class ClassTreeRenderer : GTreeRenderer() {
         hasFocus: Boolean,
     ): Component {
         super.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus)
-        if (!selected) (value as? MemberNode)?.color?.let { foreground = it }
+        if (!selected) {
+            (value as? MemberNode)?.color?.let { foreground = it }
+            if (value is InheritedSlotNode) foreground = inheritedColor
+        }
         return this
     }
 }

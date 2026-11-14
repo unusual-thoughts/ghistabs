@@ -123,6 +123,22 @@ data class ClassHierarchy(val classes: List<ClassView>) {
             symbolId != null && library == null && kind != MemberKind.VTABLE && kind != MemberKind.ABI
     }
 
+    /**
+     * A slot of the class's own vftables that still holds a base's function, the class not overriding it:
+     * [name], a function of the class at [ownerPath], at [address]. Never a pure virtual slot.
+     */
+    @Serializable
+    data class InheritedSlot(
+        val ownerPath: List<String>,
+        val name: String,
+        val address: String,
+        val slot: VirtualSlot,
+        val signature: String? = null,
+    ) {
+        /** `Base::f`, by the class's own name: the tooltip has the rest. */
+        val label: String get() = (ownerPath.lastOrNull()?.let { "$it::" }.orEmpty()) + name
+    }
+
     enum class MemberKind {
         /**
          * A vtable: our `vftable` / `internal_vftable` / `vftable_for_<Base>` and their `construction-`
@@ -165,6 +181,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val bases: List<BaseRef>,
         /** Its size, as its struct has it, while that struct is not an empty stub. */
         val size: Long? = null,
+        /** The slots of its vftables a base's function fills, in slot order, each function once. */
+        val inherited: List<InheritedSlot> = emptyList(),
     ) {
         val name: String get() = path.last()
         val qualifiedName: String get() = path.joinToString("::")
@@ -312,7 +330,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                     members = membersOf(ns, group - ns),
                     bases = basesOf(ns, typeinfo, idOf) { path -> byPath[path]?.id },
                     size = struct?.takeUnless { it.isZeroLength }?.length?.toLong(),
-                )
+                ).let { it.copy(inherited = program.inheritedOf(it, ns)) }
             }
             return ClassHierarchy(classes.sortedBy { it.qualifiedName })
         }

@@ -108,6 +108,7 @@ class ClassTree(plugin: Plugin) :
     internal var inverted = false
     internal var expandAll = false
     internal var showEmpty = false
+    internal var showInherited = false
     internal lateinit var navigateIncoming: ToggleDockingAction
     internal lateinit var navigateOutgoing: ToggleDockingAction
     internal var lastLocation: ProgramLocation? = null
@@ -192,7 +193,7 @@ class ClassTree(plugin: Plugin) :
     internal fun reshow() {
         val p = program ?: return
         val h = shown ?: return
-        val root = ClassTreeRoot(p.name, h, memberKinds, inverted, showEmpty)
+        val root = ClassTreeRoot(p.name, h, memberKinds, inverted, showEmpty, showInherited)
         tree.replaceRoot(root)
         if (expandAll) tree.expandAll()
         reveal?.let { (steps, names) ->
