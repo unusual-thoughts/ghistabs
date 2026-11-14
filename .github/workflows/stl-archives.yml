@@ -80,6 +80,17 @@ jobs:
           curl -fsSL -o refs/msvcp90_x86.pdb https://msdl.microsoft.com/download/symbols/msvcp90.i386.pdb/D026F453A2FD4DF99FD5EF360ECF33FE1/msvcp90.i386.pdb
           curl -fsSL -o refs/msvcp90_x64.pdb https://msdl.microsoft.com/download/symbols/msvcp90.amd64.pdb/0AFF865471F54307A698437C27803A3A1/msvcp90.amd64.pdb
 
+      # MsvcStlArchiveScript writes the classes' bases with ghicpp's own model of them.
+      - name: Install ghicpp
+        run: |
+          ./gradlew --build-cache :ghicpp:buildExtension
+          props=/opt/ghidra/Ghidra/application.properties
+          version=$(sed -n 's/^application.version=//p' $props)
+          release=$(sed -n 's/^application.release.name=//p' $props)
+          extensions=~/.config/ghidra/ghidra_${version}_${release}/Extensions
+          mkdir -p "$extensions"
+          unzip -q ghicpp/dist/*.zip -d "$extensions"
+
       - name: Build the archives
         run: |
           run=tools/stl-archives/run.sh
@@ -108,8 +119,8 @@ jobs:
             tools/stl-archives/run.sh layouts $program ghicpp/data/typeinfo/msvc/$name.gdt bundled/$name.txt
             cmp -s layouts/$name.txt bundled/$name.txt ||
               echo "::warning::$name.gdt built here differs from ghicpp's bundled copy; refresh it from this run's artifacts"
-            cmp -s archives/$name.classes ghicpp/data/typeinfo/msvc/$name.classes ||
-              echo "::warning::$name.classes built here differs from ghicpp's bundled copy; refresh it from the classes artifact"
+            cmp -s archives/$name.classes.json ghicpp/data/typeinfo/msvc/$name.classes.json ||
+              echo "::warning::$name.classes.json built here differs from ghicpp's bundled copy; refresh it from the classes artifact"
           done
 
       - uses: actions/upload-artifact@v7
@@ -122,7 +133,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: classes
-          path: archives/*.classes
+          path: archives/*.classes.json
           if-no-files-found: error
 
   # A .gdt opens on the Ghidra that wrote it and newer ones, so the published archives are rebuilt from

@@ -110,7 +110,7 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
 
     /**
      * A class's struct by datatype id, and its direct bases in order; [archive] names the data type archive
-     * whose classes file said them ([ghicpp.stl.MsvcStlApplier]), where one did.
+     * whose classes file said them ([ghicpp.stl.StlApplier]), where one did.
      */
     @Serializable
     data class Entry(val structId: Long?, val bases: List<Base>, val archive: String? = null)

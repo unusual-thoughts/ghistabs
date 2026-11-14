@@ -75,9 +75,9 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             }
             placeholders(program) mustBe listOf("/Demangler/std/$STRING")
 
-            val archive = MsvcStlArchives.open(archiveName)
+            val archive = MsvcRuntime.ARCHIVES.open(archiveName)
             try {
-                builder.withTransaction { MsvcStlApplier(program, archive).apply() }
+                builder.withTransaction { StlApplier(program, archive).apply() }
 
                 placeholders(program) mustBe emptyList()
                 val self = program.functionManager.getFunctionAt(fn.entryPoint).getParameter(0).dataType
@@ -121,13 +121,14 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     DataTypeConflictHandler.DEFAULT_HANDLER,
                 )
             }
-            val classes = StdClass.parse(
-                "C\t/std/$FILEBUF\n\tB\tpublic\t0\t/std/$STREAMBUF\nC\t/std/$STREAMBUF\n",
+            val classes = listOf(
+                StdClass("/std/$FILEBUF", listOf(StdBase("/std/$STREAMBUF", Access.PUBLIC, offset = 0))),
+                StdClass("/std/$STREAMBUF"),
             )
-            val archive = MsvcStlArchives.open("msvcp140_x64")
+            val archive = MsvcRuntime.ARCHIVES.open("msvcp140_x64")
             try {
-                lateinit var result: MsvcStlApplier.Result
-                builder.withTransaction { result = MsvcStlApplier(program, archive, classes).apply() }
+                lateinit var result: StlApplier.Result
+                builder.withTransaction { result = StlApplier(program, archive, classes).apply() }
                 result.recorded mustBe 2
 
                 // A class in no namespace has no archive path, and nothing filed for it yet.
@@ -171,11 +172,11 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             "msvcp140d_x86" to 28,
             "msvcp140d_x64" to 40,
         ).forEach { (name, size) ->
-            val archive = MsvcStlArchives.open(name)
+            val archive = MsvcRuntime.ARCHIVES.open(name)
             try {
                 archive.getDataType(DataTypePath(CategoryPath("/std"), STRING))?.length mustBe size
                 // Its classes' bases ship beside it: basic_iostream's two direct bases, say.
-                MsvcStlArchives.classes(name).single { it.path.startsWith("/std/basic_iostream<char,") }
+                MsvcRuntime.ARCHIVES.classes(name).single { it.path.startsWith("/std/basic_iostream<char,") }
                     .bases.size mustBe 2
             } finally {
                 archive.close()

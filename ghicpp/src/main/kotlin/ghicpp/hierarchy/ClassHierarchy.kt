@@ -47,8 +47,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         /** Laid by Ghidra's RTTI analyzer, bases off its MSVC Class Hierarchy Descriptor ([MsvcRttiParser]). */
         MSVC_RTTI("from MSVC RTTI", SourceType.IMPORTED),
 
-        /** Recorded off the PDB of the runtime it comes from, beside its archive ([ghicpp.stl.MsvcStlApplier]). */
-        ARCHIVE("from the runtime's PDB", SourceType.IMPORTED),
+        /** Recorded off the debug info of the runtime it comes from, beside its archive ([ghicpp.stl.StlApplier]). */
+        ARCHIVE("from the runtime's debug info", SourceType.IMPORTED),
 
         /** Recorded off its Itanium typeinfo by the class pass ([ItaniumRttiParser]), on a binary with no stabs. */
         ITANIUM_RTTI("from Itanium RTTI", SourceType.IMPORTED),

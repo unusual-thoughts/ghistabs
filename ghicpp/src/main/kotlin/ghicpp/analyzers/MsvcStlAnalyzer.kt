@@ -1,8 +1,7 @@
 package ghicpp.analyzers
 
 import ghicpp.stl.MsvcRuntime
-import ghicpp.stl.MsvcStlApplier
-import ghicpp.stl.MsvcStlArchives
+import ghicpp.stl.StlApplier
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -14,7 +13,7 @@ import ghidrakt.diagnose.report
 
 /**
  * Lays out the standard library classes a program uses from the MSVC runtime it imports, off the archive
- * of that runtime bundled with ghicpp ([MsvcStlApplier]): the demangler knows a
+ * of that runtime bundled with ghicpp ([StlApplier]): the demangler knows a
  * `std::basic_string<char,…>` method's `this` only as an empty struct.
  *
  * After the Microsoft demangler, which makes those placeholders, and before the class passes.
@@ -37,9 +36,9 @@ class MsvcStlAnalyzer :
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val name = archiveFor(program) ?: return false
-        val archive = MsvcStlArchives.open(name)
+        val archive = MsvcRuntime.ARCHIVES.open(name)
         try {
-            val result = MsvcStlApplier(program, archive, MsvcStlArchives.classes(name)).apply()
+            val result = StlApplier(program, archive, MsvcRuntime.ARCHIVES.classes(name)).apply()
             val laid = result.replaced + result.filled + result.laid
             if (laid + result.recorded > 0) {
                 report(

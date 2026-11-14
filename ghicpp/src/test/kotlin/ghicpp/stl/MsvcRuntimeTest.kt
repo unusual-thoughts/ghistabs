@@ -28,36 +28,30 @@ class MsvcRuntimeTest {
 
     @Test
     fun `a placeholder stands for the archive type at its path without Demangler`() {
-        MsvcStlApplier.archivePath(CategoryPath("/Demangler/std")) mustBe CategoryPath("/std")
-        MsvcStlApplier.archivePath(CategoryPath("/Demangler/std/basic_ios<char,std::char_traits<char>_>")) mustBe
+        StlApplier.archivePath(CategoryPath("/Demangler/std")) mustBe CategoryPath("/std")
+        StlApplier.archivePath(CategoryPath("/Demangler/std/basic_ios<char,std::char_traits<char>_>")) mustBe
             CategoryPath("/std/basic_ios<char,std::char_traits<char>_>")
-        MsvcStlApplier.archivePath(CategoryPath("/std")) mustBe CategoryPath("/std")
-        MsvcStlApplier.archivePath(CategoryPath("/Demangler/Foo")) mustBe null
-        MsvcStlApplier.archivePath(CategoryPath("/Demangler")) mustBe null
+        StlApplier.archivePath(CategoryPath("/std")) mustBe CategoryPath("/std")
+        StlApplier.archivePath(CategoryPath("/Demangler/Foo")) mustBe null
+        StlApplier.archivePath(CategoryPath("/Demangler")) mustBe null
     }
 
     @Test
-    fun `a classes file gives each class its bases in order`() {
-        val text = "C\t/std/basic_iostream<char>\n" +
-            "\tB\tpublic\t0\t/std/basic_istream<char>\n" +
-            "\tB\tpublic\t16\t/std/basic_ostream<char>\n" +
-            "C\t/std/basic_istream<char>\n" +
-            "\tV\tprotected\t0\t1\t/std/basic_ios<char>\n" +
-            "C\t/std/_Container_base0\n"
-        StdClass.parse(text) mustBe listOf(
-            StdClass(
-                "/std/basic_iostream<char>",
-                listOf(
-                    StdBase("/std/basic_istream<char>", Access.PUBLIC, isVirtual = false, offset = 0),
-                    StdBase("/std/basic_ostream<char>", Access.PUBLIC, isVirtual = false, offset = 16),
+    fun `a classes file reads back what was written, bases in order`() {
+        val classes = StdClasses(
+            listOf(
+                StdClass(
+                    "/std/basic_iostream<char>",
+                    listOf(
+                        StdBase("/std/basic_istream<char>", Access.PUBLIC, offset = 0),
+                        StdBase("/std/basic_ostream<char>", Access.PUBLIC, offset = 16),
+                    ),
                 ),
+                StdClass("/std/basic_istream<char>", listOf(StdBase("/std/basic_ios<char>", Access.PROTECTED, true))),
+                StdClass("/std/_Container_base0"),
             ),
-            StdClass(
-                "/std/basic_istream<char>",
-                listOf(StdBase("/std/basic_ios<char>", Access.PROTECTED, isVirtual = true, offset = null)),
-            ),
-            StdClass("/std/_Container_base0", emptyList()),
         )
-        StdClass("/std/basic_ios<char>", emptyList()).segments mustBe listOf("std", "basic_ios<char>")
+        StdClasses.fromJson(classes.toJson()) mustBe classes
+        StdClass("/std/basic_ios<char>").segments mustBe listOf("std", "basic_ios<char>")
     }
 }
