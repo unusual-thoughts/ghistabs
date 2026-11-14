@@ -126,7 +126,7 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
  * But for [owner]'s own vptr right where it goes: one of a class's vptrs past its start is a secondary one, and what
  * its constructors build there is the base subobject holding it, as a member couldn't. It goes over that vptr, then
  * gives it back to [owner], split around it as a base is ([BaseSplitter.splitBase]), where the member has a vptr
- * of its own there; one known only from its constructors, which store the vptr as a plain field, keeps it whole.
+ * there; one known only from its constructors, which store the vptr as a plain field, keeps it whole.
  */
 internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Structure) {
     if (member == owner) return
@@ -180,9 +180,12 @@ internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Struc
         .onFailure { degradation("member-unplaced", "${owner.name}::$field", it.message) }
 }
 
-/** Whether this struct's own `{vfptr}` sits at [at]. */
-private fun Structure.holdsVfptrAt(at: Int) =
-    definedComponents.any { it.offset == at && it.fieldName == ClassUtils.VFPTR }
+/** Whether a `{vfptr}` starts at [at] in this struct, its own or one inherited through the base subobject there. */
+fun Structure.holdsVfptrAt(at: Int): Boolean {
+    val holder = takeIf { at in 0..<length }?.getComponentContaining(at) ?: return false
+    if (holder.fieldName == ClassUtils.VFPTR) return holder.offset == at
+    return holder.isBaseField() && (holder.dataType as? Structure)?.holdsVfptrAt(at - holder.offset) == true
+}
 
 /** Whether this is [member] laid at [at] already. */
 private fun DataTypeComponent.isAt(at: Int, member: Structure) = dataType == member && offset == at
