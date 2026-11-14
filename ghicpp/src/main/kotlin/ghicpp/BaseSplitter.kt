@@ -56,7 +56,8 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
             .forEachIndexed { i, own ->
                 val name = ClassNaming.FIELDS + "_tail".takeIf { i > 0 }.orEmpty()
                 val run = own.baseFieldsRun(baseDt) ?: return@forEachIndexed
-                layouts.forEach { embed(it, own, run, name) }
+                // A runtime's layout stays as the archive has it: its deriving classes hold a copy.
+                layouts.filterNot { it.isKnownLayout() }.forEach { embed(it, own, run, name) }
             }
 
         val head = split.head?.baseFieldsRun(baseDt)
