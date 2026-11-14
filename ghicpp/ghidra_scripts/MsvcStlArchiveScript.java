@@ -6,18 +6,17 @@
 // the PDB belongs to: script arguments are the PDB and the .gdt to write; without them it asks.
 //
 // Beside the archive it writes the classes' bases, which a data type cannot hold (an empty base takes
-// no bytes, and the struct says nothing of access or virtuality), to `<archive>.classes`, one class per
-// line and its bases on the indented lines after it, fields separated by tabs:
-//   C <path>                                   a class, at its path in the archive
-//     B <access> <offset> <path>               a direct non-virtual base, at its offset in the class
-//     V <access> <vbptr offset> <vbtable index> <path>   a direct virtual base
-// A base outside the archive's namespaces goes by its C++ name, `::` made `/`.
+// no bytes, and the struct says nothing of access or virtuality), as `<archive>.classes.json`: ghicpp's
+// own model of them (ghicpp.stl.StdClasses, read by ghicpp.stl.MsvcPdbClasses), so this needs the ghicpp extension installed.
 // @category Data Types
 // @runtime Java
 
 import java.io.File;
 import java.util.*;
 
+import ghicpp.stl.MsvcPdbClasses;
+import ghicpp.stl.StlVftables;
+import ghicpp.stl.StdClasses;
 import ghidra.app.script.GhidraScript;
 import ghidra.app.util.bin.format.pdb2.pdbreader.*;
 import ghidra.app.util.bin.format.pdb2.pdbreader.symbol.AbstractPublicMsSymbol;
@@ -79,21 +78,27 @@ public class MsvcStlArchiveScript extends GhidraScript {
 			pdb.deserialize();
 			Map<String, DataTypePath> targets = demangledPaths(pdb);
 			int methods = checkAgainstMethods(pdb, targets);
-			File classesFile = new File(out.getPath().replaceAll("\\.gdt$", "") + ".classes");
-			int classes = writeClasses(pdb, targets, classesFile);
+			MsvcPdbClasses.Read[] read = new MsvcPdbClasses.Read[1];
 			dtm.withTransaction("MSVC STL types", () -> {
-				applyTypes(pdb, dtm);
+				DefaultPdbApplicator applicator = applyTypes(pdb, dtm);
+				read[0] = MsvcPdbClasses.read(pdb, targets, applicator);
 				CategoryPath pdbRoot = new CategoryPath(CategoryPath.ROOT, pdbFile.getName());
 				int moved = refile(dtm, pdbRoot, targets);
+				int pointerSize = currentProgram.getDefaultPointerSize();
+				int vfptrs = fixVfptrs(dtm, pointerSize);
+				// Before pruning, so the slots' function types are reached and kept.
+				int vftables = StlVftables.lay(dtm, read[0].getClasses().getClasses(), pointerSize,
+					(cls, slot) -> read[0].typeOf(cls, slot));
 				int dropped = prune(dtm, pdbRoot);
 				int typedefs = addTypedefs(dtm);
-				int vfptrs = fixVfptrs(dtm, currentProgram.getDefaultPointerSize());
 				println(String.format(
 					"%s: %d std types filed by their unique names, %d unrelated types dropped, " +
-						"%d typedefs, %d vfptrs sized; %d method classes resolve to an archive type; " +
-						"%d classes with bases",
-					out.getName(), moved, dropped, typedefs, vfptrs, methods, classes));
+						"%d typedefs, %d vfptrs sized, %d vftables; %d method classes resolve to an " +
+						"archive type; %d classes with bases",
+					out.getName(), moved, dropped, typedefs, vfptrs, vftables, methods,
+					read[0].getClasses().getClasses().stream().filter(c -> !c.getBases().isEmpty()).count()));
 			});
+			read[0].getClasses().write(new File(out.getPath().replaceAll("\\.gdt$", "") + StdClasses.SUFFIX));
 			dtm.save();
 		}
 		finally {
@@ -118,66 +123,6 @@ public class MsvcStlArchiveScript extends GhidraScript {
 			}
 		}
 		return paths;
-	}
-
-	/**
-	 * Writes the direct bases of each class [targets] files, off its field list, to [file]; returns how
-	 * many classes have any. A class the PDB defines twice (one per compiland) is written once.
-	 */
-	private int writeClasses(AbstractPdb pdb, Map<String, DataTypePath> targets, File file)
-			throws Exception {
-		Map<String, List<String>> classes = new TreeMap<>();
-		TypeProgramInterface tpi = pdb.getTypeProgramInterface();
-		for (int i = tpi.getTypeIndexMin(); i < tpi.getTypeIndexMaxExclusive(); i++) {
-			monitor.checkCancelled();
-			AbstractMsType type = pdb.getTypeRecord(RecordNumber.typeRecordNumber(i));
-			if (!(type instanceof AbstractCompositeMsType c) || type instanceof AbstractUnionMsType ||
-				c.getMsProperty().isForwardReference()) {
-				continue;
-			}
-			DataTypePath path = targets.get(spelled(c.getName()));
-			if (path == null || classes.containsKey(path.getPath()) ||
-				!(c.getFieldDescriptorListType() instanceof AbstractFieldListMsType fields)) {
-				continue;
-			}
-			List<String> bases = new ArrayList<>();
-			for (MsTypeField field : fields.getBaseClassList()) {
-				if (field instanceof AbstractBaseClassMsType b) {
-					bases.add(String.join("\t", "B", access(b.getAttributes()), b.getOffset().toString(),
-						basePath(pdb, b.getBaseClassRecordNumber(), targets)));
-				}
-				else if (field instanceof AbstractVirtualBaseClassMsType v) {
-					bases.add(String.join("\t", "V", access(v.getAttributes()),
-						v.getBasePointerOffset().toString(), v.getBaseOffsetFromVbt().toString(),
-						basePath(pdb, v.getBaseClassRecordNumber(), targets)));
-				}
-			}
-			classes.put(path.getPath(), bases);
-		}
-		try (java.io.PrintWriter w = new java.io.PrintWriter(file, "UTF-8")) {
-			for (Map.Entry<String, List<String>> e : classes.entrySet()) {
-				w.println("C\t" + e.getKey());
-				for (String base : e.getValue()) {
-					w.println("\t" + base);
-				}
-			}
-		}
-		return (int) classes.values().stream().filter(b -> !b.isEmpty()).count();
-	}
-
-	private static String access(ClassFieldMsAttributes attributes) {
-		return switch (attributes.getAccess()) {
-			case PRIVATE -> "private";
-			case PROTECTED -> "protected";
-			default -> "public";
-		};
-	}
-
-	private String basePath(AbstractPdb pdb, RecordNumber record, Map<String, DataTypePath> targets) {
-		AbstractMsType type = pdb.getTypeRecord(record);
-		String name = type instanceof AbstractComplexMsType c ? c.getName() : type.getName();
-		DataTypePath path = targets.get(spelled(name));
-		return path != null ? path.getPath() : "/" + spelled(name).replace("::", "/");
 	}
 
 	/**
@@ -211,7 +156,7 @@ public class MsvcStlArchiveScript extends GhidraScript {
 
 	/** The applicator names a type with its spaces made underscores; key both sides that way. */
 	private static String spelled(String cxxName) {
-		return cxxName.replace(' ', '_');
+		return MsvcPdbClasses.spelled(cxxName);
 	}
 
 	/** `V?$basic_string@D…@std@@` as the demangler names it: category `/std`, the class its name. */
@@ -292,14 +237,16 @@ public class MsvcStlArchiveScript extends GhidraScript {
 		}
 	}
 
-	private void applyTypes(AbstractPdb pdb, DataTypeManager dtm) throws Exception {
+	private DefaultPdbApplicator applyTypes(AbstractPdb pdb, DataTypeManager dtm) throws Exception {
 		PdbApplicatorOptions options = new PdbApplicatorOptions();
 		options.setProcessingControl(PdbApplicatorControl.DATA_TYPES_ONLY);
 		options.setRemapAddressUsingExistingPublicSymbols(false);
 		options.setCompositeLayout(ObjectOrientedClassLayout.CLASS_HIERARCHY);
 		MessageLog log = new MessageLog();
-		new DefaultPdbApplicator(pdb, currentProgram, dtm, currentProgram.getImageBase(), options,
-			monitor, log).applyNoAnalysisState();
+		DefaultPdbApplicator applicator = new DefaultPdbApplicator(pdb, currentProgram, dtm,
+			currentProgram.getImageBase(), options, monitor, log);
+		applicator.applyNoAnalysisState();
+		return applicator;
 	}
 
 	/**
