@@ -3,7 +3,6 @@ package ghicpp.stl
 import generic.jar.ResourceFile
 import ghidra.framework.Application
 import ghidrakt.OpenArchive
-import ghidrakt.openArchiveReadOnly
 import java.io.File
 
 /**
@@ -17,7 +16,7 @@ class StlArchives(private val dir: String, val bundled: Set<String>) {
     fun open(name: String): OpenArchive {
         require(name in bundled) { "no bundled archive $name" }
         val file = shipped("$name.gdt") ?: ResourceFile(copyOut("$name.gdt"))
-        return openArchiveReadOnly(file)
+        return OpenArchive.readOnly(file)
     }
 
     /** The classes of archive [name], off the debug info it was built from; empty when none ship. */

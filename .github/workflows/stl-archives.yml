@@ -174,47 +174,30 @@ jobs:
             cmp -s "$txt" readback/$name.txt
           done
 
-      # Zipped, for the compat job: download-artifact cannot fetch the unzipped ones below.
+      # Zipped, for the compat and publish jobs: download-artifact cannot fetch unzipped ones.
       - uses: actions/upload-artifact@v7
         with:
           name: portable-archives
           path: archives/*.gdt
           if-no-files-found: error
 
-      # One unzipped artifact per archive, so each downloads as its .gdt file.
-      - uses: actions/upload-artifact@v7
+  # One unzipped artifact per archive, so each downloads as its .gdt file: upload-artifact takes a
+  # single file when it does not zip.
+  publish:
+    needs: portable
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp90_x86, msvcp90_x64]
+    steps:
+      - uses: actions/download-artifact@v7
         with:
-          path: archives/msvcp140_x86.gdt
-          archive: false
-          if-no-files-found: error
+          name: portable-archives
+          path: archives
 
       - uses: actions/upload-artifact@v7
         with:
-          path: archives/msvcp140_x64.gdt
-          archive: false
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v7
-        with:
-          path: archives/msvcp140d_x86.gdt
-          archive: false
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v7
-        with:
-          path: archives/msvcp140d_x64.gdt
-          archive: false
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v7
-        with:
-          path: archives/msvcp90_x86.gdt
-          archive: false
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v7
-        with:
-          path: archives/msvcp90_x64.gdt
+          path: archives/${{ matrix.name }}.gdt
           archive: false
           if-no-files-found: error
 
