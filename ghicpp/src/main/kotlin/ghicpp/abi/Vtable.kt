@@ -225,7 +225,7 @@ internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function
  * as a null slot, and its typeinfo pointer, or a VTT's pointers at other tables, as functions. An a.out
  * object loads its text and data as one writable block, where a slot does point into its own block.
  */
-private fun Program.isSlotCode(pfn: Address, target: Address): Boolean =
+internal fun Program.isSlotCode(pfn: Address, target: Address): Boolean =
     isCode(target) && memory.getBlock(pfn).let { it == null || it.isWrite || it != memory.getBlock(target) }
 
 /**
