@@ -161,6 +161,7 @@ GitHub cancels whole runs, never one job, so to drop a slow suite, cancel the ru
 finished: `baselines` still runs and checks the finished suite's results and baselines, and reports
 the cancelled one as a warning. It fails when every selected suite was cancelled.
 
-The `build` job also annotates every compiler warning on the PR's diff at its line, and Gradle's own
+The `build` job and the release builds also annotate every compile error and compiler warning on the
+PR's diff at its line, and Gradle's own
 deprecations on the run (`.github/scripts/build_warnings.py`). Warnings never fail the job. All jobs run on `ubuntu-26.04`, pinned rather than
 `ubuntu-latest`.

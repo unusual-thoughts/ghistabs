@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Annotate the warnings in a Gradle log on the GitHub Actions run.
+"""Annotate the compile errors and warnings in a Gradle log on the GitHub Actions run.
 
 Reads the console output of a build (the CI tees its compile step into a file) and collects:
-  * Kotlin compiler warnings:  `w: file:///abs/path/Foo.kt:12:5 message`
-  * javac warnings:            `/abs/path/Foo.java:12: warning: [deprecation] message`
+  * Kotlin compiler errors and warnings: `e: file:///abs/path/Foo.kt:12:5 message` (`w:` for a warning)
+  * javac errors and warnings: `/abs/path/Foo.java:12: warning: [deprecation] message` (`error:`)
   * Kotlin warnings about the whole build: `w: API version 1.9 is deprecated…`
   * Gradle's own deprecations: `... has been deprecated. ...` lines, with --warning-mode all
 
-and prints one `::warning` workflow command per distinct warning. One with a file and line (a compiler
+and prints one `::error` or `::warning` workflow command per distinct one. One with a file and line (a compiler
 warning, or a Gradle deprecation that names its build file) shows on the PR's diff at that line; one
-without shows on the run and the PR's checks. GitHub keeps only 10 warning annotations per step, so
-`--kind compiler` and `--kind gradle` let the CI give each its own step. It never fails the job.
+without shows on the run and the PR's checks. GitHub keeps only 10 warning annotations, and 10 errors, per
+step, so `--kind error`, `--kind compiler` and `--kind gradle` let the CI give each its own step. It never fails the job.
 
-Usage: build_warnings.py LOG [--root DIR] [--kind compiler|gradle|all]
+Usage: build_warnings.py LOG [--root DIR] [--kind compiler|error|gradle|all]
        build_warnings.py --self-test
 """
 import argparse
@@ -20,10 +20,10 @@ import os
 import re
 import sys
 
-KOTLIN = re.compile(r"^w: (?:file://)?(?P<path>/[^:]+\.kts?):(?P<line>\d+):(?P<col>\d+) (?P<msg>.+)$")
+KOTLIN = re.compile(r"^(?P<level>[we]): (?:file://)?(?P<path>/[^:]+\.kts?):(?P<line>\d+):(?P<col>\d+) (?P<msg>.+)$")
 # A warning about the build as a whole, with no source position: `w: API version 1.9 is deprecated…`.
-KOTLIN_GLOBAL = re.compile(r"^w: (?!file://|/)(?P<msg>.+)$")
-JAVAC = re.compile(r"^(?P<path>/[^:]+\.java):(?P<line>\d+): warning: (?P<msg>.+)$")
+KOTLIN_GLOBAL = re.compile(r"^(?P<level>[we]): (?!file://|/)(?P<msg>.+)$")
+JAVAC = re.compile(r"^(?P<path>/[^:]+\.java):(?P<line>\d+): (?P<level>warning|error): (?P<msg>.+)$")
 GRADLE = re.compile(r"(?P<msg>.*\bhas been deprecated\b.*)$")
 # Where Gradle says a deprecation comes from, when it does: `Build file '/abs/build.gradle.kts': line 12`.
 GRADLE_WHERE = re.compile(r"(?:Build|Settings|Init) (?:file|script) '(?P<path>[^']+)': line (?P<line>\d+)")
@@ -47,11 +47,12 @@ def parse(lines, root):
             path = m["path"]
             path = path[len(root):] if path.startswith(root) else path
             msg = m["msg"].strip()
-            kind = "deprecation" if is_deprecation(msg) else "other"
+            kind = "error" if m["level"] in ("e", "error") else "deprecation" if is_deprecation(msg) else "other"
             entry = (kind, path, int(m["line"]), int(m.groupdict().get("col") or 0), msg)
         elif m := KOTLIN_GLOBAL.match(line):
             msg = m["msg"].strip()
-            entry = ("deprecation" if is_deprecation(msg) else "other", "", 0, 0, msg)
+            kind = "error" if m["level"] == "e" else "deprecation" if is_deprecation(msg) else "other"
+            entry = (kind, "", 0, 0, msg)
         elif GRADLE.match(line) and not line.startswith(("w: ", "e: ")):
             where = GRADLE_WHERE.search(line)
             path, at = (where["path"], int(where["line"])) if where else ("", 0)
@@ -65,18 +66,22 @@ def parse(lines, root):
     return out
 
 
-def annotations(warnings, which="compiler"):
-    """`which` is compiler, gradle or all."""
-    for kind, path, line, col, msg in warnings:
-        if which != "all" and (kind == "gradle") != (which == "gradle"):
+def annotations(problems, which="compiler"):
+    """`which` is compiler (warnings), error, gradle or all."""
+    for kind, path, line, col, msg in problems:
+        group = kind if kind in ("error", "gradle") else "compiler"
+        if which not in ("all", group):
             continue
-        title = {"deprecation": "Deprecated API", "gradle": "Gradle deprecation"}.get(kind, "Compiler warning")
+        level = "error" if kind == "error" else "warning"
         if not path:
-            # A compiler warning about the build itself (the Kotlin API version), not a use of an API.
-            yield f"::warning title={'Gradle deprecation' if kind == 'gradle' else 'Kotlin compiler'}::{msg}"
+            # About the build itself (the Kotlin API version, say), not a use of an API.
+            title = {"gradle": "Gradle deprecation", "error": "Kotlin compiler error"}.get(kind, "Kotlin compiler")
+            yield f"::{level} title={title}::{msg}"
             continue
+        title = {"deprecation": "Deprecated API", "gradle": "Gradle deprecation", "error": "Compile error"}.get(
+            kind, "Compiler warning")
         loc = f"file={path}" + (f",line={line}" if line else "") + (f",col={col}" if col else "")
-        yield f"::warning {loc},title={title}::{msg}"
+        yield f"::{level} {loc},title={title}::{msg}"
 
 
 def self_test():
@@ -89,6 +94,8 @@ def self_test():
         "/repo/src/main/java/ghidra/C.java:7: warning: [removal] finalize() in Object has been deprecated and marked for removal\n",
         "The Project.exec(Action) method has been deprecated. This is scheduled to be removed in Gradle 10.\n",
         "w: API version 1.9 is deprecated and its support will be removed in a future version of Kotlin.\n",
+        "e: file:///repo/ghicpp/src/main/kotlin/ghicpp/eh/S.kt:214:30 The spread operator (*foo) can only be applied in a vararg position.\n",
+        "/repo/src/main/java/ghidra/C.java:9: error: cannot find symbol\n",
         "BUILD SUCCESSFUL in 1m\n",
     ]
     got = parse(log, root)
@@ -99,6 +106,9 @@ def self_test():
          "[removal] finalize() in Object has been deprecated and marked for removal"),
         ("gradle", "", 0, 0, "The Project.exec(Action) method has been deprecated. This is scheduled to be removed in Gradle 10."),
         ("deprecation", "", 0, 0, "API version 1.9 is deprecated and its support will be removed in a future version of Kotlin."),
+        ("error", "ghicpp/src/main/kotlin/ghicpp/eh/S.kt", 214, 30,
+         "The spread operator (*foo) can only be applied in a vararg position."),
+        ("error", "src/main/java/ghidra/C.java", 9, 0, "cannot find symbol"),
     ]
     ok = got == want
     if not ok:
@@ -108,7 +118,7 @@ def self_test():
         ok = False
         print("FAIL annotations:", *ann, sep="\n  ")
     gradle_ann = list(annotations(got, "gradle"))
-    if gradle_ann != ["::warning title=Gradle deprecation::" + want[3][4]] or len(list(annotations(got, "all"))) != 5:
+    if gradle_ann != ["::warning title=Gradle deprecation::" + want[3][4]] or len(list(annotations(got, "all"))) != 7:
         ok = False
         print("FAIL gradle annotations:", *gradle_ann, sep="\n  ")
     where = parse(["Build file '/repo/ghicpp/build.gradle.kts': line 9\n",
@@ -117,6 +127,11 @@ def self_test():
                   "The X method has been deprecated. Build file '/repo/ghicpp/build.gradle.kts': line 9")]:
         ok = False
         print("FAIL gradle location:", where)
+    errors = list(annotations(got, "error"))
+    if errors != ["::error file=ghicpp/src/main/kotlin/ghicpp/eh/S.kt,line=214,col=30,title=Compile error::" + want[5][4],
+                  "::error file=src/main/java/ghidra/C.java,line=9,title=Compile error::cannot find symbol"]:
+        ok = False
+        print("FAIL error annotations:", *errors, sep="\n  ")
     print("ok" if ok else "failed")
     return 0 if ok else 1
 
@@ -125,8 +140,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("log", nargs="?")
     ap.add_argument("--root", default=".", help="repo root, to make paths relative (default: .)")
-    ap.add_argument("--kind", default="all", choices=("compiler", "gradle", "all"),
-                    help="which warnings to annotate (default: all)")
+    ap.add_argument("--kind", default="all", choices=("compiler", "error", "gradle", "all"),
+                    help="what to annotate: compiler warnings, compile errors, Gradle deprecations (default: all)")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
     if args.self_test:

@@ -110,6 +110,11 @@ jobs:
           compileJava --rerun compileTestJava --rerun
           2>&1 | tee "$RUNNER_TEMP/compile.log"
 
+      # An annotation per compile error, on the PR's diff at its line, when the compile failed.
+      - name: Annotate compile errors
+        if: failure()
+        run: python3 .github/scripts/build_warnings.py "$RUNNER_TEMP/compile.log" --kind error
+
       # An annotation per compiler warning, on the PR's diff at its line; does not fail the job.
       - name: Annotate compiler warnings
         if: success() || failure()
