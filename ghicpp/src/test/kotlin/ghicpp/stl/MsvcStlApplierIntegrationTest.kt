@@ -162,8 +162,11 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun `every bundled archive opens, with std string the size its runtime makes it`() {
         mapOf(
             "msvcp60_x86" to 16,
+            "msvcp80_x86" to 28,
             "msvcp90_x86" to 28,
             "msvcp90_x64" to 40,
+            "msvcp120_x86" to 24,
+            "msvcp120_x64" to 32,
             "msvcp140_x86" to 24,
             "msvcp140_x64" to 32,
             "msvcp140d_x86" to 28,
