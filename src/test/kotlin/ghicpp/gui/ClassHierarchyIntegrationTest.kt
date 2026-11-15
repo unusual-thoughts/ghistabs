@@ -546,6 +546,24 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         }
     }
 
+    /**
+     * [VirtualSlots] finds a table's slots by its ABI, laid or not: gcc 2.x's tables, which the stabs type as a
+     * plain array, as much as Itanium's. `name` is declared by `Shape`, overridden by `Circle`, inherited by
+     * `Rect` and `Label`: every one of their tables' slot for it implements it.
+     */
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `every class's table slot for a virtual function implements it, laid as a struct or not`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        val slots = VirtualSlots(program, hierarchy)
+        val name = hierarchy.cls("Shape").members.first { it.name == "name" }
+        val func = program.functionManager.getFunctionAt(program.addressFactory.getAddress(name.address))
+        val implementing = slots.implementing(func).toSet()
+        val holders = hierarchy.classes.filter { c -> slots.slotsOf(c).any { it in implementing } }.map { it.name }
+        holders.containsAll(listOf("Shape", "Circle", "Rect", "Label")).mustBeTrue("holders: $holders")
+    }
+
     companion object {
         @JvmStatic
         fun hellos() = stabsHellos()
