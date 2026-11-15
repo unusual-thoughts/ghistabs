@@ -262,13 +262,18 @@ class MemberObjectPass(
         struct.description = "No vtable: named after its first $what, at ${structor.entryPoint}"
     }
 
-    /** Names [func] [ns]'s constructor or destructor and moves it there, where nothing named it. */
+    /**
+     * Names [func] [ns]'s constructor or destructor and moves it there, where nothing named it, its convention
+     * then a method's ([fixMethodConvention]: the `__fastcall` Ghidra takes a function reading only ECX for
+     * becomes a `__thiscall`).
+     */
     private fun name(func: Function, ns: GhidraClass, role: StructorRole) {
         if (func.symbol.source != SourceType.DEFAULT) return
         runCatching {
             func.parentNamespace = ns
             func.setName(if (role == CONSTRUCTOR) ns.name else "~${ns.name}", SourceType.ANALYSIS)
             program.recordPlaced(func, role, virtual = false)
+            func.fixMethodConvention(takesThis = true)
         }.onFailure { warn("member-structor-unnamed", "${func.name} -> ${ns.getName(true)}: $it", func.entryPoint) }
     }
 
