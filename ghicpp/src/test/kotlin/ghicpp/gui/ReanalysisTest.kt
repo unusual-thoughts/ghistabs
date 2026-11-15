@@ -2,13 +2,19 @@ package ghicpp.gui
 
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalyzerType
+import ghidra.app.util.importer.MessageLog
+import ghidra.program.model.address.AddressSetView
+import ghidra.program.model.listing.Program
+import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.capturingReports
 import ghidrakt.diagnose.report
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
 class ReanalysisTest {
-    private class Named(name: String) : AbstractAnalyzer(name, "", AnalyzerType.BYTE_ANALYZER)
+    private class Named(name: String) : AbstractAnalyzer(name, "", AnalyzerType.BYTE_ANALYZER) {
+        override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog) = false
+    }
 
     @Test
     fun `what analyzers report inside capturingReports is kept, in order, and only there`() {
