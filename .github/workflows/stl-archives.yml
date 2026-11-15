@@ -83,7 +83,7 @@ jobs:
 
       # Visual C++ 6.0's msvcp60 has no public PDB: its own disc carries MSVCP60D.PDB, beside the DLL it
       # describes, which the script needs as its program to read the virtual base tables at their addresses.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: vc6
         with:
           path: refs/vc6

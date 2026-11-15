@@ -41,6 +41,7 @@ data class MsvcRuntime(val version: Int, val debug: Boolean) {
             "msvcp140d_x64",
             "msvcp90_x86",
             "msvcp90_x64",
+            "msvcp60_x86",
         )
 
         /**

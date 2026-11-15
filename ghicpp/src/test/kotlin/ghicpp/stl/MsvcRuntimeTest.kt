@@ -48,6 +48,9 @@ class MsvcRuntimeTest {
         MsvcRuntime(90, false).archive(4) mustBe "msvcp90_x86"
         MsvcRuntime(140, true).archive(8) mustBe "msvcp140d_x64"
         MsvcRuntime(90, true).archive(4) mustBe null
+        MsvcRuntime(60, false).archive(4) mustBe "msvcp60_x86"
+        MsvcRuntime(60, true).archive(4) mustBe "msvcp60_x86"
+        MsvcRuntime(60, false).archive(8) mustBe null
 
         MsvcRuntime(100, false).archive(4) mustBe null
         MsvcRuntime(140, false).archive(2) mustBe null
