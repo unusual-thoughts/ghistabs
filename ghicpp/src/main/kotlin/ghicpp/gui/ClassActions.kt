@@ -377,7 +377,7 @@ private fun ClassTree.openStruct(id: Long) = program?.apply {
     }
 }
 
-/** The window's toolbar: Refresh, and the toggles for what the tree shows and how it follows the listing. */
+/** The window's toolbar: Refresh, Reanalyze Classes, and the toggles for what the tree shows and how it follows the listing. */
 internal fun ClassTree.addToolbarActions() {
     addViewToggles()
     addDirectionAndNavigateToggles()
@@ -391,7 +391,7 @@ private val MEMBER_TOGGLES = listOf(
     "Typeinfo" to setOf(MemberKind.ABI),
 )
 
-/** Refresh, and what the tree shows: each kind of member, empty classes, everything expanded. */
+/** Refresh, Reanalyze Classes, and what the tree shows: each kind of member, empty classes, everything expanded. */
 private fun ClassTree.addViewToggles() {
     addLocalAction(
         object : DockingAction("Refresh Class Hierarchy", owner) {
@@ -399,6 +399,15 @@ private fun ClassTree.addViewToggles() {
         }.apply {
             toolBarData = ToolBarData(Icons.REFRESH_ICON, null)
             description = "Rebuild the class hierarchy from the program"
+            helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+        },
+    )
+    addLocalAction(
+        object : DockingAction(REANALYZE, owner) {
+            override fun actionPerformed(context: ActionContext?) = reanalyzeClasses()
+        }.apply {
+            toolBarData = ToolBarData(GIcon("icon.plugin.bookmark.type.analysis"), null)
+            description = "Run the class analyzers again over the program, and say what they did"
             helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
         },
     )
