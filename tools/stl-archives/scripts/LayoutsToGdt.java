@@ -9,6 +9,8 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.data.*;
@@ -186,11 +188,21 @@ public class LayoutsToGdt extends GhidraScript {
 		}
 	}
 
+	/**
+	 * A type's path, then its wraps: the wraps are read off the end, since a path can hold `|` itself
+	 * (a lambda's enclosing scope, `/Concurrency/||/__l3/...`).
+	 */
+	private static final Pattern REF = Pattern.compile("(.*?)((?:\\|(?:\\*\\d+|\\[\\d+\\]))*)");
+
 	private DataType ref(String spec) {
-		String[] parts = spec.split("\\|");
-		DataType dt = parts[0].equals("?") ? null : type(parts[0]);
-		for (int i = 1; i < parts.length; i++) {
-			String wrap = parts[i];
+		Matcher match = REF.matcher(spec);
+		if (!match.matches()) {
+			throw new IllegalArgumentException("bad type " + spec);
+		}
+		String base = match.group(1);
+		DataType dt = base.equals("?") ? null : type(base);
+		String[] wraps = match.group(2).isEmpty() ? new String[0] : match.group(2).substring(1).split("\\|");
+		for (String wrap : wraps) {
 			if (wrap.startsWith("*")) {
 				dt = new PointerDataType(dt, Integer.parseInt(wrap.substring(1)));
 			}
