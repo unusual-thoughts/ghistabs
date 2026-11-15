@@ -377,7 +377,10 @@ private fun ClassTree.openStruct(id: Long) = program?.apply {
     }
 }
 
-/** The window's toolbar: Refresh, Reanalyze Classes, and the toggles for what the tree shows and how it follows the listing. */
+/**
+ * The window's toolbar: Refresh, Reanalyze Classes, and the toggles for what the tree shows and how it follows the
+ * listing.
+ */
 internal fun ClassTree.addToolbarActions() {
     addViewToggles()
     addDirectionAndNavigateToggles()

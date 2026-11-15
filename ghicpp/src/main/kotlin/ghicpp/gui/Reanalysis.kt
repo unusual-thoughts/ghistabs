@@ -94,7 +94,7 @@ internal fun Program.reanalyzeClasses(monitor: TaskMonitor): Reanalysis {
                 ran += a.name
                 try {
                     a.added(this, memory, monitor, log)
-                } catch (e: CancelledException) {
+                } catch (ignored: CancelledException) {
                     cancelled = true
                     break
                 } catch (e: Exception) {
