@@ -17,6 +17,8 @@ rebuilt on Ghidra 10.4 from the layouts text (see below), so 10.4 and every newe
 | `msvcp140_{x86,x64}` | [`stl_probe.cpp`](stl_probe.cpp) built with `/MD` on the runner's Visual Studio | same sizes and field offsets as Microsoft's public `msvcp140` PDB, for every type both define |
 | `msvcp140d_{x86,x64}` | the probe built with `/MDd` (`_ITERATOR_DEBUG_LEVEL=2`) | |
 | `msvcp90_{x86,x64}` | Microsoft's public PDB of msvcp90 9.0.30729.9619, the last security rebuild | |
+| `msvcp120_{x86,x64}` | Microsoft's public PDB of msvcp120 as the Visual Studio 2013 redistributable installs it | |
+| `msvcp80_x86` | Microsoft's public PDB of msvcp80 8.0.50727.6195, the last security rebuild; the x64 one stops Ghidra 12.3's PDB applicator on a virtual base table entry with no offset | |
 | `msvcp60_x86` | `MSVCP60D.PDB` from the Visual C++ 6.0 Professional disc (archive.org's X04-58170), with its `MSVCP60D.DLL` as the program | |
 
 msvcp60 serves both VC6 runtimes: its headers test `_DEBUG` only to pick the library to link, so the
