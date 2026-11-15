@@ -340,10 +340,10 @@ private fun Program.staleNote(): String? = if (areClassesRecorded()) {
 } else {
     ClassRecordSource.hintFor(this) ?: when {
         symbolTable.getSymbols(Msvc.CLASS_HIERARCHY_DESCRIPTOR).hasNext() ->
-            "no class record: $REANALYZE (or One Shot > ${MsvcClassAnalyzer.NAME}) to add it"
+            "no class record: Analysis > One Shot > ${MsvcClassAnalyzer.NAME} to add it"
 
         symbolTable.getSymbols(ClassNaming.TYPEINFO).hasNext() ->
-            "no class record: $REANALYZE (or One Shot > ${ItaniumClassAnalyzer.NAME}) to add it"
+            "no class record: Analysis > One Shot > ${ItaniumClassAnalyzer.NAME} to add it"
 
         else -> null
     }

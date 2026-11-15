@@ -320,10 +320,7 @@
     <H3>Using it</H3>
 
     <P>The toolbar buttons, left to right: <B>Refresh</B> rebuilds the tree from the program (it
-    also rebuilds itself as the program changes); <B>Reanalyze Classes</B> (the gear) runs the class
-    analyzers again over the whole program, each that applies and is on in Analysis Options, in the order
-    auto-analysis runs them, and then says in a dialog what each did, with any warnings they gave (they log
-    it too, as in auto-analysis; a One Shot run only logs it); <B>Show Class Functions and Labels</B> (the
+    also rebuilds itself as the program changes); <B>Show Class Functions and Labels</B> (the
     function icon), <B>Vtables</B> and <B>Typeinfo</B> each toggle those members, thunks with the
     functions and the other ABI objects, such as guard variables, with the typeinfo; <B>Show Empty Classes</B> (the class icon)
     shows the hidden empty classes; <B>Expand All Classes</B> expands every node and keeps the tree
@@ -350,13 +347,15 @@
     <B>Update Field Types</B>, on a class laid without stabs, decompiles its functions again and
     gives the fields its constructors store a more specific type off what they all load and store
     through <CODE>this</CODE>, as analysis first did; on functions, it does the same off just those.
-    Names and comments stay.
+    Names and comments stay. A dialog then lists each field it typed, from what type to what.
     <B>Apply Signature to Vftables</B>, on functions some vftable's slot points at, copies each
     one's signature, as edited, into the function definition its slots are typed with, which every
-    vftable holding it shares, so they all call it the same way.
+    vftable holding it shares, so they all call it the same way. A dialog then says how many
+    definitions each signature went into.
     <B>Apply Slot Names to Vftables</B>, on such functions, names each slot holding one after it, in
     every vftable; on a class, it names each slot of the class's own vftables after the function it
-    holds. Slots of functions still named <CODE>FUN_</CODE> keep their names.
+    holds. Slots of functions still named <CODE>FUN_</CODE> keep their names. A dialog then says how
+    many slots it named, and lists any that kept their old names, and why.
     <B>Rename Virtual Slot</B>, on one such function, renames the function, every function that
     overrides the same slot or that it overrides, and the slot's field, with its function definition,
     in every vftable that has it. A name starting with <CODE>~</CODE> names a destructor slot instead:

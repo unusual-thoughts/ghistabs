@@ -3,7 +3,6 @@ package ghicpp.abi.itanium
 import ghicpp.ClassNaming
 import ghicpp.ClassStructsFixtureTest
 import ghicpp.analyzers.ItaniumClassAnalyzer
-import ghicpp.gui.reanalyzeClasses
 import ghicpp.hierarchy.*
 import ghicpp.recover.updateFieldTypes
 import ghidra.app.util.importer.MessageLog
@@ -77,14 +76,6 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
     fun `a slot target no analysis made a function of becomes one`() {
         val name = program.addressFactory.defaultAddressSpace.getAddress(0x11be8)
         (program.functionManager.getFunctionAt(name) != null).mustBeTrue("no function at $name")
-    }
-
-    @Test
-    fun `Reanalyze Classes runs the class analyzers again and says what each did`() {
-        val done = program.reanalyzeClasses(TaskMonitor.DUMMY)
-        (ItaniumClassAnalyzer.NAME in done.ran).mustBeTrue("ran ${done.ran}")
-        val said = done.summary().lines().single { it.startsWith("${ItaniumClassAnalyzer.NAME}: ") }
-        said.matches(Regex(".*: \\d+ class\\(es\\), .*")).mustBeTrue(said)
     }
 
     @Test

@@ -26,6 +26,7 @@ import ghidra.program.util.FunctionSignatureFieldLocation
 import ghidra.util.HTMLUtilities
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
+import ghidra.util.Swing
 import ghidra.util.task.MonitoredRunnable
 import ghidra.util.task.TaskLauncher
 import ghidrakt.*
@@ -144,10 +145,10 @@ private fun ClassTree.addMemberActions() {
             override fun actionPerformed(context: ActionContext?) {
                 val p = program ?: return
                 val funcs = selectedMethods().map { it.first }
-                val changed = p.runTransaction("Apply signature to vftables") {
-                    funcs.sumOf { p.applySignatureToSlots(it) }
+                val applied = p.runTransaction("Apply signature to vftables") {
+                    funcs.map { it.getName(true) to p.applySignatureToSlots(it) }
                 }
-                tool.statusInfo = "Applied ${funcs.size} signature(s) to $changed vftable slot definition(s)"
+                Msg.showInfo(this, component, "Apply Signature to Vftables", signaturesResult(applied))
             }
         }.apply {
             popupMenuData = MenuData(arrayOf("Apply Signature to Vftables"), VTABLE_ICON)
@@ -273,18 +274,20 @@ private fun memberSymbols(context: ActionContext): List<Symbol> =
 
 /**
  * Retypes each class's fields off the methods paired with it, or off all its own when null, decompiling
- * them in a task that can be cancelled: what it retyped before then stays.
+ * them in a task that can be cancelled: what it retyped before then stays. A dialog then lists the fields typed.
  */
 private fun ClassTree.updateFieldTypes(targets: List<Pair<ClassView, List<Function>?>>) {
     val p = program ?: return
     TaskLauncher.launchModal(
         "Update Field Types",
         MonitoredRunnable { monitor ->
-            p.runTransaction("Update field types") {
-                for ((cls, methods) in targets) {
-                    if (!monitor.isCancelled) p.updateFieldTypes(cls, methods, monitor)
-                }
+            val retyped = p.runTransaction("Update field types") {
+                targets.asSequence().takeWhile { !monitor.isCancelled }
+                    .map { (cls, methods) -> cls.qualifiedName to p.updateFieldTypes(cls, methods, monitor) }
+                    .toList()
             }
+            val text = fieldTypesResult(retyped, monitor.isCancelled)
+            Swing.runLater { Msg.showInfo(this, component, "Update Field Types", text) }
         },
     )
 }
@@ -299,14 +302,15 @@ private fun ClassTree.selectedMethods(): List<Pair<Function, ClassView>> {
 private fun ClassTree.hasSlots(methods: List<Pair<Function, ClassView>>) =
     methods.isNotEmpty() && methods.all { (f, _) -> program?.slotDefinitionsOf(f)?.isNotEmpty() == true }
 
-/** Names the slots [of] picks after the functions they hold. */
+/** Names the slots [of] picks after the functions they hold, then says in a dialog how many, and what it skipped. */
 private fun ClassTree.applySlotNames(of: (VirtualSlots) -> List<VirtualSlot>) {
     val p = program ?: return
     val h = shown ?: return
     val done = p.runTransaction("Apply slot names to vftables") { VirtualSlots(p, h).run { applyNames(of(this)) } }
-    tool.statusInfo = "Named ${done.fields} vftable slot(s)"
-    if (done.skipped.isNotEmpty()) {
-        Msg.showWarn(this, component, "Apply Slot Names", "Kept their old names:\n" + done.skipped.joinToString("\n"))
+    if (done.skipped.isEmpty()) {
+        Msg.showInfo(this, component, "Apply Slot Names to Vftables", slotNamesResult(done))
+    } else {
+        Msg.showWarn(this, component, "Apply Slot Names to Vftables", slotNamesResult(done))
     }
 }
 
@@ -377,10 +381,7 @@ private fun ClassTree.openStruct(id: Long) = program?.apply {
     }
 }
 
-/**
- * The window's toolbar: Refresh, Reanalyze Classes, and the toggles for what the tree shows and how it follows the
- * listing.
- */
+/** The window's toolbar: Refresh, and the toggles for what the tree shows and how it follows the listing. */
 internal fun ClassTree.addToolbarActions() {
     addViewToggles()
     addDirectionAndNavigateToggles()
@@ -394,7 +395,7 @@ private val MEMBER_TOGGLES = listOf(
     "Typeinfo" to setOf(MemberKind.ABI),
 )
 
-/** Refresh, Reanalyze Classes, and what the tree shows: each kind of member, empty classes, everything expanded. */
+/** Refresh, and what the tree shows: each kind of member, empty classes, everything expanded. */
 private fun ClassTree.addViewToggles() {
     addLocalAction(
         object : DockingAction("Refresh Class Hierarchy", owner) {
@@ -402,15 +403,6 @@ private fun ClassTree.addViewToggles() {
         }.apply {
             toolBarData = ToolBarData(Icons.REFRESH_ICON, null)
             description = "Rebuild the class hierarchy from the program"
-            helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
-        },
-    )
-    addLocalAction(
-        object : DockingAction(REANALYZE, owner) {
-            override fun actionPerformed(context: ActionContext?) = reanalyzeClasses()
-        }.apply {
-            toolBarData = ToolBarData(GIcon("icon.plugin.bookmark.type.analysis"), null)
-            description = "Run the class analyzers again over the program, and say what they did"
             helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
         },
     )
