@@ -105,6 +105,7 @@ class ClassTree(plugin: Plugin) :
     internal var inverted = false
     internal var expandAll = false
     internal var showEmpty = false
+    internal var showInherited = false
     internal lateinit var navigateIncoming: ToggleDockingAction
     internal lateinit var navigateOutgoing: ToggleDockingAction
     internal var lastLocation: ProgramLocation? = null
@@ -189,7 +190,7 @@ class ClassTree(plugin: Plugin) :
     internal fun reshow() {
         val p = program ?: return
         val h = shown ?: return
-        val root = ClassTreeRoot(p.name, h, memberKinds, inverted, showEmpty)
+        val root = ClassTreeRoot(p.name, h, memberKinds, inverted, showEmpty, showInherited)
         tree.replaceRoot(root)
         if (expandAll) tree.expandAll()
         reveal?.let { (steps, names) ->
@@ -248,6 +249,12 @@ class ClassTree(plugin: Plugin) :
         val member = (path.lastPathComponent as? MemberNode)?.member ?: return null
         val cls = (path.parentPath?.lastPathComponent as? ClassNode)?.info ?: return null
         return shown?.overridden(cls, member)
+    }
+
+    /** The node of the method the selected inherited slot holds, among the members of the class defining it. */
+    internal val selectedBaseMethod: GTreeNode? get() {
+        val inherited = (selectedNode as? InheritedSlotNode)?.inherited ?: return null
+        return (tree.modelRoot as? ClassTreeRoot)?.nodeAt(listOf(inherited.address)) as? MemberNode
     }
 
     fun dispose() {
