@@ -80,6 +80,37 @@ jobs:
           # msvcp90 9.0.30729.9619, the last security rebuild; earlier builds' public PDBs are stripped.
           curl -fsSL -o refs/msvcp90_x86.pdb https://msdl.microsoft.com/download/symbols/msvcp90.i386.pdb/D026F453A2FD4DF99FD5EF360ECF33FE1/msvcp90.i386.pdb
           curl -fsSL -o refs/msvcp90_x64.pdb https://msdl.microsoft.com/download/symbols/msvcp90.amd64.pdb/0AFF865471F54307A698437C27803A3A1/msvcp90.amd64.pdb
+          # msvcp120 as the Visual Studio 2013 redistributable installs it.
+          curl -fsSL -o refs/msvcp120_x86.pdb https://msdl.microsoft.com/download/symbols/msvcp120.i386.pdb/0B631FCA474F4F6FBBE54C497C5821361/msvcp120.i386.pdb
+          curl -fsSL -o refs/msvcp120_x64.pdb https://msdl.microsoft.com/download/symbols/msvcp120.amd64.pdb/A59C901D336743BCA6091D3F9D81C3201/msvcp120.amd64.pdb
+          # msvcp80 8.0.50727.6195, the last security rebuild, x86 only: the x64 PDB stops Ghidra's applicator.
+          curl -fsSL -o refs/msvcp80_x86.pdb https://msdl.microsoft.com/download/symbols/msvcp80.i386.pdb/E8A9423E890A4ADDB38F8F756268437C1/msvcp80.i386.pdb
+
+      # Visual C++ 6.0's msvcp60 has no public PDB: its own disc carries MSVCP60D.PDB, beside the DLL it
+      # describes, which the script needs as its program to read the virtual base tables at their addresses.
+      - uses: actions/cache@v6
+        id: vc6
+        with:
+          path: refs/vc6
+          key: vc6-VCP600ENU1-msvcp60d
+
+      - name: Fetch Visual C++ 6.0's msvcp60d
+        if: steps.vc6.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p refs/vc6 vc6
+          curl -fsSL -o vc6/disc.7z https://archive.org/download/X04-58170/1999-02_X04-58170_X04-58170_VCP600ENU1.7z
+          7z x -y -ovc6 vc6/disc.7z '*/image/VCP600ENU1.mdf' > /dev/null
+          rm vc6/disc.7z
+          # The image keeps each 2048-byte sector inside 2448 bytes of raw sector and subchannel data.
+          python3 -I -c '
+          import sys
+          with open(sys.argv[1], "rb") as raw, open(sys.argv[2], "wb") as iso:
+              while len(sector := raw.read(2448)) == 2448:
+                  iso.write(sector[16:16 + 2048])
+          ' vc6/*/image/VCP600ENU1.mdf vc6/disc.iso
+          7z e -y -orefs/vc6 vc6/disc.iso VC98/DEBUG/MSVCP60D.PDB VC98/DEBUG/MSVCP60D.DLL > /dev/null
+          rm -rf vc6
+          ls -l refs/vc6
 
       # MsvcStlArchiveScript writes the classes' bases with ghicpp's own model of them.
       - name: Install ghicpp
@@ -99,8 +130,12 @@ jobs:
             $run archive archives/msvcp140_$arch.gdt probes/probe-$arch-release/stl_probe.exe probes/probe-$arch-release/stl_probe.pdb
             $run archive archives/msvcp140d_$arch.gdt probes/probe-$arch-debug/stl_probe.exe probes/probe-$arch-debug/stl_probe.pdb
             $run archive archives/msvcp90_$arch.gdt probes/probe-$arch-release/stl_probe.exe refs/msvcp90_$arch.pdb
+            $run archive archives/msvcp120_$arch.gdt probes/probe-$arch-release/stl_probe.exe refs/msvcp120_$arch.pdb
             $run archive refs/msvcp140_$arch.gdt probes/probe-$arch-release/stl_probe.exe refs/msvcp140_$arch.pdb
           done
+          $run archive archives/msvcp80_x86.gdt probes/probe-x86-release/stl_probe.exe refs/msvcp80_x86.pdb
+          # VC6's headers lay nothing out differently under _DEBUG, so the debug PDB serves msvcp60 too.
+          $run archive archives/msvcp60_x86.gdt refs/vc6/MSVCP60D.DLL refs/vc6/MSVCP60D.PDB
 
       - name: Check against Microsoft's msvcp140 layouts
         run: |
@@ -117,6 +152,8 @@ jobs:
           for gdt in archives/*.gdt; do
             name=$(basename "$gdt" .gdt)
             tools/stl-archives/run.sh layouts $program "$gdt" layouts/$name.txt
+            [ -f ghicpp/data/typeinfo/msvc/$name.gdt ] ||
+              { echo "::warning::ghicpp bundles no $name.gdt yet; add it from this run's artifacts"; continue; }
             tools/stl-archives/run.sh layouts $program ghicpp/data/typeinfo/msvc/$name.gdt bundled/$name.txt
             cmp -s layouts/$name.txt bundled/$name.txt ||
               echo "::warning::$name.gdt built here differs from ghicpp's bundled copy; refresh it from this run's artifacts"
@@ -181,7 +218,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp90_x86, msvcp90_x64]
+        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp120_x86, msvcp120_x64, msvcp90_x86, msvcp90_x64, msvcp80_x86, msvcp60_x86]
     steps:
       - uses: actions/download-artifact@v7
         with:
