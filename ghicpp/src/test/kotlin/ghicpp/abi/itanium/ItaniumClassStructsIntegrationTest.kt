@@ -7,6 +7,8 @@ import ghicpp.hierarchy.*
 import ghicpp.recover.updateFieldTypes
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.DoubleDataType
+import ghidra.program.model.data.FunctionDefinition
+import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.Function
@@ -145,6 +147,20 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
         } finally {
             program.endTransaction(tx, false)
         }
+    }
+
+    /**
+     * `Shape::area` is pure: its slot holds `__cxa_pure_virtual`, and is typed off `Circle`'s override instead,
+     * `this` a `Shape`: of the nearest, `Circle`'s and `Rect`'s, the first by name.
+     */
+    @Test
+    fun `a pure virtual slot is typed off an override, this its own class`() {
+        val shape = program.dataTypeManager.getDataType("/ClassDataTypes/Shape/Shape_vftable") as Structure
+        val slot = shape.getComponent(2)
+        val def = (slot.dataType as Pointer).dataType as FunctionDefinition
+        def.getPrototypeString(true) mustBe "undefined __thiscall vfunction3(Shape * this)"
+        slot.fieldName mustBe "vfunction3"
+        slot.comment mustBe "pure virtual, typed off Circle::vfunction3"
     }
 
     @Test

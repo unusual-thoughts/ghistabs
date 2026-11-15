@@ -69,7 +69,7 @@
             "max": 5
         },
         "demangler-retarget-no-type": {
-            "min": 160,
+            "min": 159,
             "max": 164
         },
         "demangler-retargeted-stub-site": {
@@ -109,11 +109,11 @@
             "max": 45
         },
         "demangler-unbound-stub-signature-site": {
-            "min": 169,
+            "min": 168,
             "max": 189
         },
         "demangler-unbound-stub-site-origin": {
-            "min": 169,
+            "min": 168,
             "max": 189
         },
         "drop-record-opt": {
@@ -859,6 +859,10 @@
         "vfptr-split-from-base": {
             "min": 454,
             "max": 454
+        },
+        "vftable-pure-slot-typed": {
+            "min": 397,
+            "max": 423
         },
         "vtable-construction": {
             "min": 241,
