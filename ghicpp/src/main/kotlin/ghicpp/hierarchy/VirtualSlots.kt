@@ -262,6 +262,9 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
     private fun extended(table: SlotTable): SlotTable? {
         val cls = owner[table.address] ?: return null
         val named = forBase(table)
+        ClassNaming.plainSubobjectOffset(ClassNaming.vftableForLabel(named.orEmpty()))?.let { offset ->
+            return baseAt(cls, offset)?.let(::primary)
+        }
         if (named != null) {
             val ancestors = hierarchy.ancestorsOf(cls)
             return ancestors.firstNotNullOfOrNull { a -> tables[a.id].orEmpty().firstOrNull { forBase(it) == named } }
@@ -270,6 +273,22 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         val others = tables[cls.id].orEmpty().mapNotNull(::forBase).toSet()
         return cls.bases.mapNotNull(hierarchy::get).firstOrNull { it.name !in others && primary(it) != null }
             ?.let(::primary)
+    }
+
+    /**
+     * The base of [cls] at [offset] in it that has a table, down its non-virtual bases, the nearer first: what a
+     * no-RTTI table for `base_at_<offset>` is for.
+     */
+    private fun baseAt(cls: ClassView, offset: Long): ClassView? {
+        var level = listOf(cls to 0L)
+        val seen = mutableSetOf(cls.id)
+        while (level.isNotEmpty()) {
+            level = level.flatMap { (c, at) ->
+                c.bases.mapNotNull { b -> b.offset?.let { o -> hierarchy[b]?.takeIf { seen.add(it.id) }?.to(at + o) } }
+            }
+            level.firstOrNull { (c, at) -> at == offset && primary(c) != null }?.let { return it.first }
+        }
+        return null
     }
 
     /** [cls]'s primary table: its own, else the one for its first base. */
@@ -352,9 +371,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
 
         fun isPureVirtualStub(name: String) = PURE_VIRTUAL_ABIS.any { it.isPureVirtualStub(name) }
 
-        /** The base a table is for, by its label, `vftable_for_B`. */
-        fun forBase(table: SlotTable): String? =
-            table.label.removePrefix(ClassNaming.VFTABLE_FOR).takeIf { it != table.label && it.isNotEmpty() }
+        fun forBase(table: SlotTable): String? = table.base
     }
 }
 
@@ -381,9 +398,9 @@ internal fun Program.slotsOf(ns: Namespace): Map<Address, VirtualSlot> = buildMa
  * A class's vftable: where it is, its [label], and where each of its slots' pointers is ([pfns]), by its
  * ABI's geometry. A gcc 2.x slot is `{delta, index, pfn}`, which gcc 2.7's own stab types as a union a
  * short shows through; only a gcc 2.x table carries its ABI's symbol at the label, and an Itanium
- * `vftable` sits at the address point, past `_ZTV`.
+ * `vftable` sits at the address point, past `_ZTV`. [base] is the base it is for, if not its class's primary.
  */
-internal class SlotTable(val address: Address, val label: String, val pfns: List<Address>)
+internal class SlotTable(val address: Address, val label: String, val pfns: List<Address>, val base: String?)
 
 /**
  * Each of [ns]'s vftables, at its vftable labels ([vftablesOf]). Its slots run as far as what is laid at
@@ -391,7 +408,18 @@ internal class SlotTable(val address: Address, val label: String, val pfns: List
  * memory ([functionSlots]).
  */
 internal fun Program.slotTablesOf(ns: Namespace): List<SlotTable> =
-    vftablesOf(ns).distinctBy { it.first }.map { (at, label) -> SlotTable(at, label, slotPointers(at)) }.toList()
+    vftablesOf(ns).distinctBy { it.first }.map { (at, label) ->
+        SlotTable(at, label, slotPointers(at), baseOfTable(at, label))
+    }.toList()
+
+/**
+ * The base the vftable at [at], labelled [label], is for: by the name of the struct laid there
+ * (`D_vftable_for_B`), else by its label (`vftable_for_B`). The no-RTTI pass names both for the base's
+ * subobject offset alone (`base_at_16`). Null for a class's own primary.
+ */
+private fun Program.baseOfTable(at: Address, label: String): String? =
+    laidAt(at)?.dataType?.name?.substringAfter("_" + ClassNaming.VFTABLE_FOR, "")?.takeIf { it.isNotEmpty() }
+        ?: label.removePrefix(ClassNaming.VFTABLE_FOR).takeIf { it != label && it.isNotEmpty() }
 
 /** Where the pointers of the vftable at [vftable] are ([slotTablesOf]). */
 internal fun Program.slotPointers(vftable: Address): List<Address> {
