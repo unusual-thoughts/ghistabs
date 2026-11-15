@@ -21,7 +21,9 @@ data class MsvcRuntime(val version: Int, val debug: Boolean) {
             8 -> "x64"
             else -> return null
         }
-        return "msvcp$version${if (debug) "d" else ""}_$arch".takeIf { it in BUNDLED }
+        // VC6's headers lay nothing out differently under _DEBUG: its debug runtime has the release layouts.
+        val debugLayouts = debug && version != 60
+        return "msvcp$version${if (debugLayouts) "d" else ""}_$arch".takeIf { it in BUNDLED }
     }
 
     companion object {
