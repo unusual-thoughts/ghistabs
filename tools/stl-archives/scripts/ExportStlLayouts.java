@@ -12,7 +12,8 @@
 //   F <path> <return type> <varargs>       function definition
 //     <name> <type>
 // A type is a path, then `|*<size>` for each pointer and `|[<count>]` for each array around it; `?` is
-// the target of a pointer to nothing. An empty name is a member Ghidra has no name for.
+// the target of a pointer to nothing. The wraps are read off the end, since a path may hold `|` itself.
+// An empty name is a member Ghidra has no name for.
 // @category Data Types
 // @runtime Java
 
