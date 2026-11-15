@@ -5,6 +5,7 @@ package ghicpp.hierarchy
 import ghicpp.ClassNaming
 import ghicpp.ClassRecordSource
 import ghicpp.abi.CxxAbi
+import ghicpp.abi.functionSlots
 import ghicpp.abi.gcc2.Gcc2Abi
 import ghicpp.abi.gcc2.Gcc2Plain
 import ghicpp.abi.itanium.Itanium
@@ -47,21 +48,24 @@ data class VirtualSlot(val table: Address, val label: String, val index: Int) : 
 data class SlotRenames(val functions: Int, val fields: Int, val skipped: List<String>)
 
 /**
- * The program's classes' laid vftables, construction ones aside, and which base's table each one's slots
- * begin with: the table of the base it is for, by its struct's name (`D_vftable_for_B`), else its
+ * The program's classes' vftables, construction ones aside ([slotTablesOf]), and which base's table each
+ * one's slots begin with: the table of the base it is for, by its label (`vftable_for_B`), else its
  * primary base's, the first base no other of its tables is for. A slot overrides the slot at its index in
  * that table, while that table has one.
+ *
+ * Where a slot is, and what it holds, is read off memory by the ABI's geometry, laid or not; its name and
+ * type are its field's ([field]), in whatever struct is laid over it, edited or not.
  */
 class VirtualSlots(private val program: Program, private val hierarchy: ClassHierarchy) {
-    private val tables: Map<Long, List<Data>> =
-        hierarchy.classes.associate { c -> c.id to program.resolve(c)?.let(program::laidVftablesOf).orEmpty() }
+    private val tables: Map<Long, List<SlotTable>> =
+        hierarchy.classes.associate { c -> c.id to program.resolve(c)?.let(program::slotTablesOf).orEmpty() }
     private val owner: Map<Address, ClassView> =
         hierarchy.classes.flatMap { c -> tables[c.id].orEmpty().map { it.address to c } }.toMap()
-    private val byAddress: Map<Address, Data> = tables.values.flatten().associateBy { it.address }
+    private val byAddress: Map<Address, SlotTable> = tables.values.flatten().associateBy { it.address }
 
     /** Every slot of [cls]'s tables. */
     fun slotsOf(cls: ClassView): List<VirtualSlot> =
-        tables[cls.id].orEmpty().flatMap { t -> t.functionSlots().indices.map { VirtualSlot(t.address, t.label, it) } }
+        tables[cls.id].orEmpty().flatMap { t -> t.pfns.indices.map { VirtualSlot(t.address, t.label, it) } }
 
     /** The slots that hold [func], or a thunk to it. */
     fun slotsOf(func: Function): List<VirtualSlot> =
@@ -69,7 +73,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
 
     /** The function [slot] holds, past a thunk; none for an empty or pure virtual slot, or an import. */
     fun target(slot: VirtualSlot): Function? {
-        val at = component(slot)?.value as? Address ?: return null
+        val at = pointee(slot) ?: return null
         val f = program.functionManager.getFunctionAt(at) ?: return null
         return (if (f.isThunk) f.getThunkedFunction(true) else f)
             ?.takeUnless { it.isExternal || isPureVirtualStub(it.name) }
@@ -84,7 +88,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         val seen = mutableSetOf(s.table)
         while (true) {
             val up = byAddress[s.table]?.let(::extended)?.takeIf { seen.add(it.address) } ?: break
-            if (s.index >= up.functionSlots().size) break
+            if (s.index >= up.pfns.size) break
             s = VirtualSlot(up.address, up.label, s.index)
             yield(s)
         }
@@ -129,9 +133,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
 
     /** Names [slot]'s field [name], or `name_1`… if the table has a field so named, and its definition too. */
     private fun nameSlot(slot: VirtualSlot, name: String, skipped: MutableList<String>): Boolean {
-        val table = byAddress[slot.table] ?: return false
-        val struct = table.dataType as? Structure ?: return false
-        val field = component(slot)?.let { struct.getComponent(it.componentIndex) } ?: return false
+        val (struct, field) = field(slot) ?: return false
         if (field.fieldName == name) return false
         val used = struct.definedComponents.filter { it.ordinal != field.ordinal }.mapNotNull { it.fieldName }.toSet()
         val unique = generateSequence(0) { it + 1 }.map { if (it == 0) name else "${name}_$it" }.first { it !in used }
@@ -169,8 +171,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
      * before is typed again in place, as the overrides' signatures may have grown since, and their names.
      */
     private fun typeFrom(slot: VirtualSlot, overrides: List<Override>): Boolean {
-        val struct = byAddress[slot.table]?.dataType as? Structure ?: return false
-        val field = field(slot) ?: return false
+        val (struct, field) = field(slot) ?: return false
         val old = definition(slot) ?: return false
         val dtm = program.dataTypeManager
         val thisType = owner[slot.table]?.let(program::resolve)?.let(program::classStruct)
@@ -208,7 +209,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
             val added = dtm.addDataType(def, DataTypeConflictHandler.DEFAULT_HANDLER)
             struct.replace(field.ordinal, PointerDataType(added, dtm), field.length, name, comment)
         }
-        val now = field(slot) ?: return true
+        val now = field(slot)?.second ?: return true
         return before != Triple(definition(slot)?.getPrototypeString(true), now.fieldName, now.comment)
     }
 
@@ -219,8 +220,8 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
      */
     private fun holdsStub(slot: VirtualSlot): Boolean {
         val def = definition(slot) ?: return false
-        if (def.arguments.isNotEmpty() && field(slot)?.let(::isTypedOff) != true) return false
-        val at = component(slot)?.value as? Address ?: return false
+        if (def.arguments.isNotEmpty() && field(slot)?.second?.let(::isTypedOff) != true) return false
+        val at = pointee(slot) ?: return false
         val func = program.functionManager.getFunctionAt(at)?.let {
             if (it.isThunk) it.getThunkedFunction(true) else it
         }
@@ -229,20 +230,36 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
 
     private fun isTypedOff(field: DataTypeComponent) = field.comment?.startsWith(TYPED_OFF) == true
 
-    /** [slot]'s field in its table's struct. */
-    private fun field(slot: VirtualSlot): DataTypeComponent? =
-        component(slot)?.let { (byAddress[slot.table]?.dataType as? Structure)?.getComponent(it.componentIndex) }
+    /**
+     * [slot]'s field, with the struct holding it: whatever struct is laid over its pointer, a vftable's own or
+     * one edited by hand, where the field there is a function pointer. None where nothing such is laid, as over
+     * a gcc 2.x table the stabs type as a plain array.
+     */
+    private fun field(slot: VirtualSlot): Pair<Structure, DataTypeComponent>? {
+        val pfn = pfn(slot) ?: return null
+        val top = program.listing.getDataContaining(pfn) ?: return null
+        val laid = top.getPrimitiveAt(pfn.subtract(top.address).toInt())
+            ?.takeIf { it.address == pfn && (it.dataType as? Pointer)?.dataType is FunctionDefinition } ?: return null
+        val struct = laid.parent?.dataType as? Structure ?: return null
+        return struct to struct.getComponent(laid.componentIndex)
+    }
 
-    private fun definition(slot: VirtualSlot) = (component(slot)?.dataType as? Pointer)?.dataType as? FunctionDefinition
+    private fun definition(slot: VirtualSlot) =
+        (field(slot)?.second?.dataType as? Pointer)?.dataType as? FunctionDefinition
 
-    private fun component(slot: VirtualSlot): Data? = byAddress[slot.table]?.functionSlots()?.getOrNull(slot.index)
+    /** Where [slot]'s pointer is. */
+    private fun pfn(slot: VirtualSlot): Address? = byAddress[slot.table]?.pfns?.getOrNull(slot.index)
+
+    /** What [slot] points at, off memory. */
+    private fun pointee(slot: VirtualSlot): Address? =
+        pfn(slot)?.let { runCatching { program.pointerAt(it) }.getOrNull() }
 
     /**
      * The table of a base [table]'s slots begin with. For a table for a base `B`, the nearest ancestor's
      * table for `B` where one has it, as an abstract class's does for a base whose pure virtuals it leaves
      * pure, else `B`'s own.
      */
-    private fun extended(table: Data): Data? {
+    private fun extended(table: SlotTable): SlotTable? {
         val cls = owner[table.address] ?: return null
         val named = forBase(table)
         if (named != null) {
@@ -256,7 +273,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
     }
 
     /** [cls]'s primary table: its own, else the one for its first base. */
-    private fun primary(cls: ClassView): Data? {
+    private fun primary(cls: ClassView): SlotTable? {
         val ts = tables[cls.id].orEmpty()
         return ts.firstOrNull { forBase(it) == null }
             ?: cls.bases.firstNotNullOfOrNull { b -> ts.firstOrNull { forBase(it) == b.name } }
@@ -335,9 +352,9 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
 
         fun isPureVirtualStub(name: String) = PURE_VIRTUAL_ABIS.any { it.isPureVirtualStub(name) }
 
-        /** The base a table is for, by its struct's name, `D_vftable_for_B`. */
-        fun forBase(table: Data): String? =
-            table.dataType.name.substringAfter("_" + ClassNaming.VFTABLE_FOR, "").takeIf { it.isNotEmpty() }
+        /** The base a table is for, by its label, `vftable_for_B`. */
+        fun forBase(table: SlotTable): String? =
+            table.label.removePrefix(ClassNaming.VFTABLE_FOR).takeIf { it != table.label && it.isNotEmpty() }
     }
 }
 
@@ -349,8 +366,10 @@ fun Program.typePureSlots(sink: DiagnosticSink) {
 
 /** Every function [ns]'s vtables hold, a thunk's target with it, by its first slot, the primary table's first. */
 internal fun Program.slotsOf(ns: Namespace): Map<Address, VirtualSlot> = buildMap {
-    val slots = vftablesOf(ns).flatMap { (at, label) ->
-        slotTargets(at).mapIndexed { i, target -> target to VirtualSlot(target, label, i) }.toList()
+    val slots = slotTablesOf(ns).flatMap { t ->
+        t.pfns.mapIndexedNotNull { i, pfn ->
+            runCatching { pointerAt(pfn) }.getOrNull()?.let { it to VirtualSlot(t.address, t.label, i) }
+        }
     }.sortedBy { it.second }
     for ((target, slot) in slots) {
         putIfAbsent(target, slot)
@@ -359,23 +378,32 @@ internal fun Program.slotsOf(ns: Namespace): Map<Address, VirtualSlot> = buildMa
 }
 
 /**
- * Read off memory by the ABI's slot geometry rather than the laid struct's components: a gcc
- * 2.x slot is `{delta, index, pfn}`, and gcc 2.7's own stab types the pfn as a union a short
- * shows through. Only a gcc 2.x table carries its ABI's symbol at the label; an Itanium
+ * A class's vftable: where it is, its [label], and where each of its slots' pointers is ([pfns]), by its
+ * ABI's geometry. A gcc 2.x slot is `{delta, index, pfn}`, which gcc 2.7's own stab types as a union a
+ * short shows through; only a gcc 2.x table carries its ABI's symbol at the label, and an Itanium
  * `vftable` sits at the address point, past `_ZTV`.
  */
-internal fun Program.slotTargets(vftable: Address): Sequence<Address> {
-    val length = listing.getDataAt(vftable)?.length ?: return emptySequence()
+internal class SlotTable(val address: Address, val label: String, val pfns: List<Address>)
+
+/**
+ * Each of [ns]'s vftables, at its vftable labels ([vftablesOf]). Its slots run as far as what is laid at
+ * its label, which the stabs, the class pass or the user sized, else as far as its ABI reads them off
+ * memory ([functionSlots]).
+ */
+internal fun Program.slotTablesOf(ns: Namespace): List<SlotTable> =
+    vftablesOf(ns).distinctBy { it.first }.map { (at, label) -> SlotTable(at, label, slotPointers(at)) }.toList()
+
+/** Where the pointers of the vftable at [vftable] are ([slotTablesOf]). */
+internal fun Program.slotPointers(vftable: Address): List<Address> {
     val abi = CxxAbi.ofVftable(this, vftable)
-    val end = vftable.add(length.toLong())
-    return abi.slotOffsets(defaultPointerSize).map(vftable::add).takeWhile { it < end }
-        .mapNotNull { runCatching { pointerAt(it) }.getOrNull() }
+    val offsets = abi.slotOffsets(defaultPointerSize).map(vftable::add)
+    val laid = laidAt(vftable) ?: return offsets.take(functionSlots(vftable, abi).count()).toList()
+    return offsets.takeWhile { it.add(defaultPointerSize - 1L) <= laid.maxAddress }.toList()
 }
 
-/** The function pointers of a laid vftable, in order, empty and pure virtual slots among them. */
-private fun Data.functionSlots(): List<Data> = components.filter {
-    (it.dataType as? Pointer)?.dataType is FunctionDefinition
-}
+/** What [vftable]'s slots point at, empty and pure virtual ones among them ([slotPointers]). */
+internal fun Program.slotTargets(vftable: Address): Sequence<Address> =
+    slotPointers(vftable).asSequence().mapNotNull { runCatching { pointerAt(it) }.getOrNull() }
 
 /** Where each of [ns]'s vftables sits: the primary and every `internal_vftable`, or each `vftable_for_<Base>`. */
 internal fun Program.vftablesOf(ns: Namespace): Sequence<Pair<Address, String>> =
@@ -383,18 +411,11 @@ internal fun Program.vftablesOf(ns: Namespace): Sequence<Pair<Address, String>> 
         .filter { ClassNaming.isClassVftableLabel(it.name) }
         .map { it.address to it.name }
 
-/** Each of [ns]'s laid vftables: at each of its vftable labels, the vftable struct there. */
-private fun Program.laidVftablesOf(ns: Namespace): List<Data> = symbolTable.getSymbols(ns).iterator().asSequence()
-    .filter { ClassNaming.isClassVftableLabel(it.name) }
-    .mapNotNull { vftableDataAt(it.address) }
-    .distinctBy { it.address }
-    .toList()
-
-/** The vftable struct laid at [at], within a vtable's own struct (an Itanium `_ZTV`) or not. */
-private fun Program.vftableDataAt(at: Address): Data? {
+/** The composite laid at [at], within another (an Itanium `_ZTV`) or not. */
+private fun Program.laidAt(at: Address): Data? {
     var d = listing.getDataContaining(at)
     while (d != null && d.numComponents > 0) {
-        if (d.address == at && (d.dataType as? Structure)?.name?.contains(ClassNaming.VFTABLE) == true) return d
+        if (d.address == at) return d
         d = d.getComponentContaining(at.subtract(d.address).toInt())
     }
     return null
