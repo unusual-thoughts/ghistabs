@@ -102,7 +102,7 @@ class ClassPass(
         val reached = stores.mapValues { (cls, at) ->
             val end = at.maxOfOrNull { (offset, dt) -> offset + dt.length }?.toLong() ?: 0L
             val align = if (cls.vftables.isEmpty()) 1L else program.defaultPointerSize.toLong()
-            (end + align - 1) / align * align
+            end.alignedTo(align)
         }
         val called = AllocationSizeFinder(program, abi, this).read(ctors, monitor)
         val allocated = (called.keys + found.inlinedSizes.keys).associateWith { cls ->
