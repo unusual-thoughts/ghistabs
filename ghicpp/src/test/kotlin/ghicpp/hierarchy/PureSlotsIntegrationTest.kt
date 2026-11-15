@@ -92,6 +92,17 @@ class PureSlotsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun `a pure slot an override's destructor fills is named after its own class's destructor`() {
+        program.runTransaction {
+            program.functionManager.getFunctionAt(builder.addr(D_F)).setName("~D", SourceType.IMPORTED)
+            VirtualSlots(program, hierarchy).typePureSlots()
+        }
+        slot("A", "A_vftable").first mustBe "~A"
+        slot("C", "C_vftable_for_A").first mustBe "~C"
+        comment("C", "C_vftable_for_A") mustBe "pure virtual, typed off D::~D"
+    }
+
+    @Test
     fun `a pure slot typed otherwise stays as it is`() {
         program.runTransaction {
             val table = struct("A", "A_vftable")
