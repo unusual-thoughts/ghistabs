@@ -1,16 +1,21 @@
 package ghicpp.analyzers
 
 import ghicpp.recover.MethodClassPass
+import ghicpp.recover.MethodClassPass.Companion.TRUST_GUESSES
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
 import ghidra.app.util.importer.MessageLog
+import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghidrakt.analyzerOptions
 import ghidrakt.diagnose.AnalysisProbe
 import ghidrakt.diagnose.MessageLogSink
 import ghidrakt.diagnose.report
+import ghidrakt.get
+import ghidrakt.register
 
 /**
  * Guess the class of each unnamed function that takes a `this`, off the objects its callers pass it
@@ -31,11 +36,13 @@ class MethodClassAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
+    override fun registerOptions(options: Options, program: Program) = options.register(TRUST_GUESSES)
+
     override fun canAnalyze(program: Program) = program.compilerSpec.callingConventions.any { it.hasThisPointer() }
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val moved = MethodClassPass(program, sink).run(monitor)
+        val moved = MethodClassPass(program, sink, program.analyzerOptions(NAME)[TRUST_GUESSES]).run(monitor)
         if (moved > 0) report("guessed the class of $moved function(s)")
         return true
     }
