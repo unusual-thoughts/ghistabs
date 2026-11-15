@@ -150,7 +150,7 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
     fun `a secondary table's slots override those of the base it is for`() {
         val hierarchy = ClassHierarchy.of(program, hasStabs = false)
         val slots = VirtualSlots(program, hierarchy)
-        val label = hierarchy.classes.single { it.vftable == addr(0x6bf0L).toString() }
+        val label = hierarchy.classes.single { it.vftable == addr(0x6bf0L) }
         val forNamed = slots.slotsOf(label).filter { it.table == addr(0x6c28L) }
         forNamed.isNotEmpty().mustBeTrue("Label's table for Named: ${slots.slotsOf(label)}")
         forNamed.map { slots.root(it).table }.distinct() mustBe listOf(addr(0x6d00L))

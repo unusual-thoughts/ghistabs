@@ -388,10 +388,9 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         assumeTrue(count != null, "$fixture lists no Shape::count")
         val st = program.symbolTable
         fun ns(cls: String) = st.getSymbol(before.cls(cls).id).`object` as GhidraClass
-        fun at(m: ClassHierarchy.Member) = program.addressFactory.getAddress(m.address)
         program.runTransaction("labels") {
-            st.createLabel(at(area), "_ZNK6Circle4areaEv", ns("Circle"), SourceType.IMPORTED)
-            st.createLabel(at(count!!), "_ZN5Shape5countE", ns("Shape"), SourceType.IMPORTED)
+            st.createLabel(area.address, "_ZNK6Circle4areaEv", ns("Circle"), SourceType.IMPORTED)
+            st.createLabel(count!!.address, "_ZN5Shape5countE", ns("Shape"), SourceType.IMPORTED)
         }
 
         val after = ClassHierarchy.of(program)
@@ -558,7 +557,7 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val hierarchy = ClassHierarchy.of(program)
         val slots = VirtualSlots(program, hierarchy)
         val name = hierarchy.cls("Shape").members.first { it.name == "name" }
-        val func = program.functionManager.getFunctionAt(program.addressFactory.getAddress(name.address))
+        val func = program.functionManager.getFunctionAt(name.address)
         val implementing = slots.implementing(func).toSet()
         val holders = hierarchy.classes.filter { c -> slots.slotsOf(c).any { it in implementing } }.map { it.name }
         holders.containsAll(listOf("Shape", "Circle", "Rect", "Label")).mustBeTrue("holders: $holders")
