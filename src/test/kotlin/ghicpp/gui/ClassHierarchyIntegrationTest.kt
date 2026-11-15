@@ -546,6 +546,65 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         }
     }
 
+    /**
+     * [VirtualSlots] finds a table's slots by its ABI, laid or not: gcc 2.x's tables, which the stabs type as a
+     * plain array, as much as Itanium's. `name` is declared by `Shape`, overridden by `Circle`, inherited by
+     * `Rect` and `Label`: every one of their tables' slot for it implements it.
+     */
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `every class's table slot for a virtual function implements it, laid as a struct or not`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        val slots = VirtualSlots(program, hierarchy)
+        val name = hierarchy.cls("Shape").members.first { it.name == "name" }
+        val func = program.functionManager.getFunctionAt(program.addressFactory.getAddress(name.address))
+        val implementing = slots.implementing(func).toSet()
+        val holders = hierarchy.classes.filter { c -> slots.slotsOf(c).any { it in implementing } }.map { it.name }
+        holders.containsAll(listOf("Shape", "Circle", "Rect", "Label")).mustBeTrue("holders: $holders")
+    }
+
+    /**
+     * `Rect` overrides `area` but not `name`, `Label` neither `name` nor `perim`: their tables hold
+     * `Shape::name` and `Rect::perim`, listed as inherited. Their own functions and `Shape`'s pure `area`
+     * never are; the tree lists the inherited ones only once asked, muted among the class's own.
+     */
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `the slots a class leaves to its bases are listed as inherited`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        fun inherited(name: String) = hierarchy.cls(name).inherited.map { it.label }
+
+        "Shape::name" mustBeIn inherited("Rect")
+        for (label in listOf("Shape::name", "Rect::perim")) label mustBeIn inherited("Label")
+        inherited("Shape") mustBe emptyList()
+        for (cls in hierarchy.classes) {
+            for (slot in cls.inherited) {
+                slot.ownerPath mustNotBe cls.path
+                ("pure" !in slot.name).mustBeTrue("${cls.qualifiedName}: ${slot.label}")
+            }
+            cls.inherited.map { it.address }.distinct().size mustBe cls.inherited.size
+        }
+
+        fun labelChildren(show: Boolean) = ClassTreeRoot(program.name, hierarchy, showInherited = show)
+            .children.single { it.name == "Label" }.children
+        labelChildren(false).none { it is InheritedSlotNode }.mustBeTrue("hidden by default")
+        val shown = labelChildren(true)
+        shown.filterIsInstance<InheritedSlotNode>().map { it.name }.containsAll(listOf("Shape::name", "Rect::perim"))
+            .mustBeTrue("shown: ${shown.map { it.name }}")
+        // By slot among the class's own virtual functions, after its vtables and typeinfo.
+        val names = shown.map { it.name }
+        val order = listOf("area", "Shape::name", "Rect::perim").map(names::indexOf)
+        (order.all { it >= 0 } && order == order.sorted()).mustBeTrue("by slot: $names")
+        val lastAbi = shown.indexOfLast { it is MemberNode && it.member.kind < MemberKind.FUNCTION }
+        (lastAbi < order.first()).mustBeTrue("after the vtables: $names")
+        // Go to Base Method: the slot's function among its own class's members.
+        val name = shown.filterIsInstance<InheritedSlotNode>().first { it.name == "Shape::name" }
+        val base = ClassTreeRoot(program.name, hierarchy, showInherited = true).nodeAt(listOf(name.inherited.address))
+        ((base as? MemberNode)?.parent as? ClassNode)?.info?.qualifiedName mustBe "Shape"
+    }
+
     companion object {
         @JvmStatic
         fun hellos() = stabsHellos()

@@ -525,6 +525,10 @@
             "min": 96,
             "max": 96
         },
+        "vftable-pure-slot-typed": {
+            "min": 0,
+            "max": 6
+        },
         "vtable-applied": {
             "min": 113,
             "max": 113
