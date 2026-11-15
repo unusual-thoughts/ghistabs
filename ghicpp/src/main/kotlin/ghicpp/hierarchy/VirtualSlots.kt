@@ -79,6 +79,25 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
             ?.takeUnless { it.isExternal || isPureVirtualStub(it.name) }
     }
 
+    /**
+     * The slots of [cls]'s tables that hold a function of another class's, a base's it doesn't override,
+     * in slot order, each function once: none empty or pure virtual ([target]).
+     */
+    fun inheritedOf(cls: ClassView): List<ClassHierarchy.InheritedSlot> {
+        val seen = HashSet<Address>()
+        return slotsOf(cls).sorted().mapNotNull { slot ->
+            target(slot)?.takeIf { it.parentNamespace.path != cls.path && seen.add(it.entryPoint) }?.run {
+                ClassHierarchy.InheritedSlot(
+                    parentNamespace.takeUnless { it.isGlobal }?.path.orEmpty(),
+                    name,
+                    entryPoint.toString(),
+                    slot,
+                    getPrototypeString(false, false),
+                )
+            }
+        }
+    }
+
     /** The slot [slot] overrides, up to the base that first declares it. */
     fun root(slot: VirtualSlot): VirtualSlot = overridden(slot).lastOrNull() ?: slot
 
