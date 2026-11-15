@@ -207,8 +207,36 @@ class ThisFunctionDissector(
 
     private fun PcodeOp.isOperatorNew(): Boolean {
         if (opcode != PcodeOp.CALL || numInputs < 2) return false
-        val f = program.functionManager.getFunctionAt(getInput(0).address) ?: return false
-        return (f.getThunkedFunction(true) ?: f).name in operatorNewNames
+        return program.functionManager.getFunctionAt(getInput(0).address)?.isOperatorNew() == true
+    }
+
+    private fun Function.isOperatorNew() = (getThunkedFunction(true) ?: this).name in operatorNewNames
+
+    /**
+     * The objects the callers of `operator new` build: for each call of it with a constant size, the first function
+     * called after it with what it returns first, through copies, casts and offsets, at its start. That is the
+     * constructor of a class with no vptr to store; or, where its constructor is inlined, a method, or another
+     * function entirely, which the caller tells apart.
+     */
+    fun allocations(monitor: TaskMonitor): List<Allocation> {
+        if (operatorNewNames.isEmpty()) return emptyList()
+        val news = program.functionManager.getFunctions(true).filter { it.isOperatorNew() }
+        val callers = news.flatMapTo(sortedSetOf(compareBy { it.entryPoint })) { it.getCallingFunctions(monitor) }
+        val found = mutableListOf<Allocation>()
+        val message = "Decompiling operator new's callers for what they build"
+        program.decompileEach(callers, monitor, message) { func, high ->
+            val calls = high.pcodeOps.asSequence().filter { it.opcode == PcodeOp.CALL && it.numInputs >= 2 }.toList()
+            for (new in calls.filter { it.isOperatorNew() }) {
+                val size = new.getInput(1).takeIf { it.isConstant }?.offset?.takeIf { it > 0 } ?: continue
+                val fresh = new.output?.high ?: continue
+                val first = calls.filter { it.seqnum.target > new.seqnum.target }
+                    .filter { call -> call.getInput(1).pointerInto().let { it?.root == fresh && it.offset == 0L } }
+                    .minByOrNull { it.seqnum.target } ?: continue
+                val callee = program.functionManager.getFunctionAt(first.getInput(0).address) ?: continue
+                found += Allocation(func, new.seqnum.target, size, callee.getThunkedFunction(true) ?: callee)
+            }
+        }
+        return found
     }
 
     /**
@@ -356,6 +384,9 @@ class ThisFunctionDissector(
         const val MAX_COPIES = 8
     }
 }
+
+/** A call of `operator new([size])` at [at] in [caller], and the first function [caller] calls on what it returns. */
+class Allocation(val caller: Function, val at: Address, val size: Long, val firstCalled: Function)
 
 /**
  * How [ThisFunctionDissector]s read functions: with [fillArrays], a field one fills in a counted loop or with
