@@ -31,7 +31,7 @@ class OoResultsTest {
         val h = oo.snapshot("t").hierarchy
         val derived = h[0x401000]!!
         assertEquals("Derived", derived.qualifiedName)
-        assertEquals("00405000", derived.vftable)
+        assertEquals(0x405000, derived.vftable?.offset)
         assertTrue(derived.isAbstract)
         assertEquals(0xcL, derived.size)
         val functions = derived.members.filter { it.kind == MemberKind.FUNCTION }

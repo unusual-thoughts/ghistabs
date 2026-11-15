@@ -4,6 +4,7 @@ import ghicpp.VirtKind
 import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghidra.program.model.address.Address
 
 /** True positives, false positives and false negatives of one thing a recovery claims. */
 data class Tally(val tp: Int = 0, val fp: Int = 0, val fn: Int = 0) {
@@ -128,13 +129,13 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     private val findings = mutableListOf<String>()
 
     private val truthByName = t.classes.groupBy { it.qualifiedName }
-    private val truthFunctionOwner: Map<Long, Long> = t.classes
-        .flatMap { c -> c.functions().map { address(it.address) to c.id } }.toMap()
+    private val truthFunctionOwner: Map<Address, Long> = t.classes
+        .flatMap { c -> c.functions().map { it.address to c.id } }.toMap()
     private val truthVtables = truth.snapshot.vtables.sortedBy { it.start }
 
     /** This-adjusting thunks: what the truth lists apart from its functions, and a recovery may well call one. */
-    private val truthThunks: Set<Long> = t.classes
-        .flatMap { c -> c.members.filter { it.kind == MemberKind.THUNK }.map { address(it.address) } }.toSet()
+    private val truthThunks: Set<Address> = t.classes
+        .flatMap { c -> c.members.filter { it.kind == MemberKind.THUNK }.map { it.address } }.toSet()
 
     private fun vtableOwner(at: Long): Long? =
         truthVtables.lastOrNull { it.start <= at }?.takeIf { at < it.end }?.classId
@@ -145,8 +146,8 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
             return (named.firstOrNull { it.id in truth.scope } ?: named.first()).id to 3
         }
         if (!truth.sameBinary) return null
-        cls.vftable?.let { vtableOwner(address(it)) }?.let { return it to 2 }
-        val owners = cls.functions().mapNotNull { truthFunctionOwner[address(it.address)] }
+        cls.vftable?.let { vtableOwner(it.offset) }?.let { return it to 2 }
+        val owners = cls.functions().mapNotNull { truthFunctionOwner[it.address] }
         return owners.groupingBy { it }.eachCount().maxByOrNull { it.value }
             ?.takeIf { it.value * 2 > cls.functions().size }?.let { it.key to 1 }
     }
@@ -288,11 +289,9 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
                     "missed vftable ${tc.vftable} of `${tc.qualifiedName}`"
             }
 
-            truth.sameBinary && address(sc.vftable) != address(tc.vftable) ->
-                Tally(fp = 1, fn = 1).also {
-                    findings +=
-                        "wrong vftable ${sc.vftable} of `${tc.qualifiedName}`: is ${tc.vftable}"
-                }
+            truth.sameBinary && sc.vftable != tc.vftable -> Tally(fp = 1, fn = 1).also {
+                findings += "wrong vftable ${sc.vftable} of `${tc.qualifiedName}`: is ${tc.vftable}"
+            }
 
             else -> Tally(tp = 1)
         }
@@ -314,12 +313,12 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     private fun methods(label: String, actualPick: (ClassView, Member) -> Boolean, pick: (Member) -> Boolean): Tally {
         var total = Tally()
         for ((tc, sc) in scoredPairs) {
-            val claimed = sc.functions().filter(pick).map { address(it.address) }.filter { it !in truthThunks }
-            val actual = tc.functions().filter { actualPick(tc, it) }.associateBy { address(it.address) }
+            val claimed = sc.functions().filter(pick).map { it.address }.filter { it !in truthThunks }
+            val actual = tc.functions().filter { actualPick(tc, it) }.associateBy { it.address }
             total += Tally.of(claimed, actual.keys)
             for (at in claimed.toSet() - actual.keys) {
                 val owner = truthFunctionOwner[at]?.let { t[it]?.qualifiedName }
-                findings += "false $label ${"%x".format(at)} of `${tc.qualifiedName}`" +
+                findings += "false $label $at of `${tc.qualifiedName}`" +
                     (owner?.let { ": is `$it`'s" } ?: ": no method")
             }
             (actual.keys - claimed.toSet()).forEach {
@@ -329,7 +328,7 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         }
         // An unscored library class's functions are neither: only a class matched to nothing claims falsely.
         val strays = candidates.filter { it.id !in truthOf }
-            .sumOf { c -> c.functions().filter(pick).count { address(it.address) !in truthThunks } }
+            .sumOf { c -> c.functions().filter(pick).count { it.address !in truthThunks } }
         return total + Tally(fp = strays)
     }
 
@@ -351,13 +350,10 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         isStructorName(m.name) || m.variants.isNotEmpty() || m.msvcStructor != null
 
     private fun structors(): Tally = scoredPairs.fold(Tally()) { acc, (tc, sc) ->
-        val claimed = sc.functions().filter { sc.isStructor(it) }.map { address(it.address) }.filter {
-            it !in
-                truthThunks
+        val claimed = sc.functions().filter { sc.isStructor(it) }.map { it.address }.filter {
+            it !in truthThunks
         }
-        val actual = tc.functions().filter {
-            it.name == tc.name || it.name == "~${tc.name}"
-        }.map { address(it.address) }
+        val actual = tc.functions().filter { it.name == tc.name || it.name == "~${tc.name}" }.map { it.address }
         (claimed.toSet() - actual.toSet()).forEach {
             findings +=
                 "false structor ${"%x".format(it)} of `${tc.qualifiedName}`"

@@ -11,6 +11,7 @@ import ghicpp.VirtKind
 import ghicpp.gui.Hues.*
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghidra.program.model.address.Address
 import ghidra.program.model.symbol.SourceType
 import java.awt.*
 import java.awt.image.BufferedImage
@@ -86,7 +87,7 @@ class ClassTreeRoot(
      * The node for the first of [addresses] the tree has: the member at it, else the class whose vtable
      * or typeinfo is there. Null when none is a class's.
      */
-    fun nodeAt(addresses: List<String>): GTreeNode? = addresses.firstNotNullOfOrNull { a ->
+    fun nodeAt(addresses: List<Address>): GTreeNode? = addresses.firstNotNullOfOrNull { a ->
         hierarchy.classes.firstNotNullOfOrNull { c ->
             c.members.firstOrNull { it.address == a }?.let { m ->
                 nodeOf(c)?.children?.firstOrNull { it is MemberNode && it.member == m }
@@ -312,7 +313,7 @@ private fun withInherited(members: List<Member>, inherited: List<InheritedSlot>)
 }
 
 /** Where going to [node] goes. */
-internal val GTreeNode.address: String? get() = when (this) {
+internal val GTreeNode.address: Address? get() = when (this) {
     is InheritedSlotNode -> inherited.address
     is MemberNode -> member.address
     is ClassNode -> info?.address
