@@ -2,8 +2,10 @@ package ghicpp.recover
 
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
+import ghicpp.MemberAttrs.Companion.isGuessedClass
 import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.MemberAttrs.Companion.memberAttrs
+import ghicpp.MemberAttrs.Companion.recordGuessed
 import ghicpp.abi.StructorRole
 import ghicpp.dissect.decompileEach
 import ghicpp.dissect.pointerInto
@@ -83,8 +85,8 @@ fun Function.hasKnownClass() = symbol.source == SourceType.IMPORTED || symbol.so
  * `__fastcall` that takes nothing in EDX becomes a `__thiscall`), and leaves an Analysis bookmark saying where
  * it came from.
  *
- * With [trustGuesses], a guess is evidence too: the methods it guessed, this run's and those an earlier run
- * bookmarked, are decompiled as a known class's are, and it guesses again off their calls, round after round
+ * With [trustGuesses], a guess is evidence too: the methods it guessed, in this run or an earlier one
+ * ([isGuessedClass]), are decompiled as a known class's are, and it guesses again off their calls, round after round
  * until a round moves nothing, or [MAX_ROUNDS].
  */
 class MethodClassPass(private val program: Program, sink: DiagnosticSink, private val trustGuesses: Boolean = false) :
@@ -119,7 +121,7 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
             program.memberAttrs(it.entryPoint)?.structor == StructorRole.CONSTRUCTOR
         }
         // What counts as placed in its class: what a class pass placed, and, trusted, what an earlier run guessed.
-        val trusted = recorded + functions.filter { trustGuesses && it.isGuessed() }
+        val trusted = recorded + functions.filter { trustGuesses && program.isGuessedClass(it) }
         val methods = functions.filter { it.hasKnownClass() || it in trusted }
             .mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap(mutableMapOf())
         // A constructor the debug info names goes by its class's name.
@@ -149,10 +151,6 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
         }
         return moved
     }
-
-    /** Whether an earlier run guessed [this]'s class: it is in a class, with the bookmark [place] leaves. */
-    private fun Function.isGuessed() = parentNamespace is GhidraClass &&
-        program.bookmarkManager.getBookmark(entryPoint, BookmarkType.ANALYSIS, BOOKMARK) != null
 
     /** An unnamed global function whose first argument comes in where `this` does ([takesThisAt]). */
     private fun Function.isCandidate() = parentNamespace.isGlobal && symbol.source == SourceType.DEFAULT &&
@@ -221,10 +219,14 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
         return f.getThunkedFunction(true) ?: f
     }
 
-    /** Moves [f] into its [guess]ed class, bookmarked as guessed in [round], off guesses of its own after the first. */
+    /**
+     * Moves [f] into its [guess]ed class, recorded as guessed ([recordGuessed]) and bookmarked as guessed in
+     * [round], off guesses of its own after the first.
+     */
     private fun place(f: Function, guess: MethodClassGuess, round: Int): Boolean = runCatching {
         f.parentNamespace = guess.cls
         f.fixMethodConvention(takesThis = true)
+        program.recordGuessed(f)
         val off = if (round == 1) "objects of known class" else "objects of known or guessed class, round $round"
         program.bookmarkManager.setBookmark(
             f.entryPoint,

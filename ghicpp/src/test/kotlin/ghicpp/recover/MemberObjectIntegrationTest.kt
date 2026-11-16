@@ -170,6 +170,7 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // Untrusted, the member's method is guessed off its holder's constructor, the helper off nothing.
         program.runTransaction("guess") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) mustBe 1 }
         program.functionManager.getFunctionAt(addr(HELPER)).parentNamespace.isGlobal mustBe true
+        program.memberAttrs(addr(MEMBER_METHOD)) mustBe MemberAttrs(source = SourceType.DEFAULT)
         // Trusted, the method's guess is evidence, from this run's guesses or, as here, an earlier run's.
         program.runTransaction("trust") {
             MethodClassPass(program, DummySink, trustGuesses = true).run(TaskMonitor.DUMMY) mustBe 1
