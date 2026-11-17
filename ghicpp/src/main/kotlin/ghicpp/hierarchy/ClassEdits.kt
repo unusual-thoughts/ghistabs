@@ -1,15 +1,11 @@
 package ghicpp.hierarchy
 
-import ghicpp.Access
-import ghicpp.BaseSplitter
-import ghicpp.ClassHierarchyRecords
+import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassEdit
-import ghicpp.ClassNaming
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.slotDefinition
 import ghicpp.hierarchy.ClassHierarchy.*
-import ghicpp.holdsVfptrAt
 import ghicpp.recover.updateFieldTypes
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
@@ -103,16 +99,13 @@ internal fun ClassView.solidSource(): String? =
     origin.desc.removePrefix("from ").takeIf { origin.baseSource == SourceType.IMPORTED }
 
 /** What ties [member] to its class when that is worth a warning before moving it: null if nothing does. */
-fun Program.memberSource(member: Member): String? {
-    val at = addressFactory.getAddress(member.address)
-    return when {
-        at != null && memberAttrs(at)?.source == SourceType.IMPORTED -> "the stabs"
+fun Program.memberSource(member: Member): String? = when {
+    memberAttrs(member.address)?.source == SourceType.IMPORTED -> "the stabs"
 
-        at != null && symbolTable.getSymbols(at).any { it.name.startsWith("_Z") || it.name.startsWith("?") } ->
-            "its mangled name"
+    symbolTable.getSymbols(member.address).any { it.name.startsWith("_Z") || it.name.startsWith("?") } ->
+        "its mangled name"
 
-        else -> null
-    }
+    else -> null
 }
 
 /**
@@ -236,8 +229,7 @@ internal fun Program.methodsOf(ns: GhidraClass): List<Function> = symbolTable.ge
 
 /** The function at [m]'s address, when it is a function member. */
 internal fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == MemberKind.FUNCTION }
-    ?.let { addressFactory.getAddress(it.address) }
-    ?.let(functionManager::getFunctionAt)
+    ?.let { functionManager.getFunctionAt(it.address) }
 
 /**
  * Retypes [cls]'s own fields off what [methods] load and store through `this`, or off all of [methodsOf] its

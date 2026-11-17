@@ -4,6 +4,7 @@ import ghicpp.VirtKind
 import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghidra.program.model.address.Address
 
 /** True positives, false positives and false negatives of one thing a recovery claims. */
 data class Tally(val tp: Int = 0, val fp: Int = 0, val fn: Int = 0) {
@@ -104,7 +105,12 @@ data class Scorecard(val tallies: Map<String, Tally>, val findings: List<String>
 /** A class's own functions: not a thunk nor an import. */
 private fun ClassView.functions() = members.filter { it.kind == MemberKind.FUNCTION && it.library == null }
 
-private fun address(text: String) = text.substringAfter(':').toLong(16)
+/**
+ * Where [this] member is, as an offset. Truth and subject are different programs, or no program at all (a
+ * committed truth file, OOAnalyzer's results), and an [Address] equals only one in a like address space; the
+ * offset is what they share, so the scorer compares by it.
+ */
+private val Member.at: Long get() = address.offset
 
 private fun ghicpp.Access.publicness() = if (this == ghicpp.Access.PUBLIC) "public" else "non-public"
 
@@ -129,12 +135,12 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
 
     private val truthByName = t.classes.groupBy { it.qualifiedName }
     private val truthFunctionOwner: Map<Long, Long> = t.classes
-        .flatMap { c -> c.functions().map { address(it.address) to c.id } }.toMap()
+        .flatMap { c -> c.functions().map { it.at to c.id } }.toMap()
     private val truthVtables = truth.snapshot.vtables.sortedBy { it.start }
 
     /** This-adjusting thunks: what the truth lists apart from its functions, and a recovery may well call one. */
     private val truthThunks: Set<Long> = t.classes
-        .flatMap { c -> c.members.filter { it.kind == MemberKind.THUNK }.map { address(it.address) } }.toSet()
+        .flatMap { c -> c.members.filter { it.kind == MemberKind.THUNK }.map { it.at } }.toSet()
 
     private fun vtableOwner(at: Long): Long? =
         truthVtables.lastOrNull { it.start <= at }?.takeIf { at < it.end }?.classId
@@ -145,8 +151,8 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
             return (named.firstOrNull { it.id in truth.scope } ?: named.first()).id to 3
         }
         if (!truth.sameBinary) return null
-        cls.vftable?.let { vtableOwner(address(it)) }?.let { return it to 2 }
-        val owners = cls.functions().mapNotNull { truthFunctionOwner[address(it.address)] }
+        cls.vftable?.let { vtableOwner(it.offset) }?.let { return it to 2 }
+        val owners = cls.functions().mapNotNull { truthFunctionOwner[it.at] }
         return owners.groupingBy { it }.eachCount().maxByOrNull { it.value }
             ?.takeIf { it.value * 2 > cls.functions().size }?.let { it.key to 1 }
     }
@@ -279,20 +285,16 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
             tc.vftable == null && sc.vftable == null -> Tally()
 
             tc.vftable == null -> Tally(fp = 1).also {
-                findings +=
-                    "false vftable ${sc.vftable} of `${tc.qualifiedName}`"
+                findings += "false vftable ${sc.vftable} of `${tc.qualifiedName}`"
             }
 
             sc.vftable == null -> Tally(fn = 1).also {
-                findings +=
-                    "missed vftable ${tc.vftable} of `${tc.qualifiedName}`"
+                findings += "missed vftable ${tc.vftable} of `${tc.qualifiedName}`"
             }
 
-            truth.sameBinary && address(sc.vftable) != address(tc.vftable) ->
-                Tally(fp = 1, fn = 1).also {
-                    findings +=
-                        "wrong vftable ${sc.vftable} of `${tc.qualifiedName}`: is ${tc.vftable}"
-                }
+            truth.sameBinary && sc.vftable.offset != tc.vftable.offset -> Tally(fp = 1, fn = 1).also {
+                findings += "wrong vftable ${sc.vftable} of `${tc.qualifiedName}`: is ${tc.vftable}"
+            }
 
             else -> Tally(tp = 1)
         }
@@ -314,8 +316,8 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     private fun methods(label: String, actualPick: (ClassView, Member) -> Boolean, pick: (Member) -> Boolean): Tally {
         var total = Tally()
         for ((tc, sc) in scoredPairs) {
-            val claimed = sc.functions().filter(pick).map { address(it.address) }.filter { it !in truthThunks }
-            val actual = tc.functions().filter { actualPick(tc, it) }.associateBy { address(it.address) }
+            val claimed = sc.functions().filter(pick).map { it.at }.filter { it !in truthThunks }
+            val actual = tc.functions().filter { actualPick(tc, it) }.associateBy { it.at }
             total += Tally.of(claimed, actual.keys)
             for (at in claimed.toSet() - actual.keys) {
                 val owner = truthFunctionOwner[at]?.let { t[it]?.qualifiedName }
@@ -323,13 +325,12 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
                     (owner?.let { ": is `$it`'s" } ?: ": no method")
             }
             (actual.keys - claimed.toSet()).forEach {
-                findings +=
-                    "missed $label `${tc.qualifiedName}::${actual.getValue(it).name}`"
+                findings += "missed $label `${tc.qualifiedName}::${actual.getValue(it).name}`"
             }
         }
         // An unscored library class's functions are neither: only a class matched to nothing claims falsely.
         val strays = candidates.filter { it.id !in truthOf }
-            .sumOf { c -> c.functions().filter(pick).count { address(it.address) !in truthThunks } }
+            .sumOf { c -> c.functions().filter(pick).count { it.at !in truthThunks } }
         return total + Tally(fp = strays)
     }
 
@@ -337,11 +338,10 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
      * A truth member that is virtual. Some stabs mark only the deleting variant of a virtual destructor so; the
      * complete one, which an Itanium vtable holds too, comes out plain. The base-object one no vtable holds.
      */
-    private fun isTrulyVirtual(cls: ClassView, m: Member) = m.attrs?.virt == VirtKind.VIRTUAL ||
-        (
-            m.name.startsWith("~") && m.variants.any { it != ItaniumStructor.BASE_DTOR } &&
-                cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL }
-            )
+    private fun isTrulyVirtual(cls: ClassView, m: Member) = m.attrs?.virt == VirtKind.VIRTUAL || (
+        m.name.startsWith("~") && m.variants.any { it != ItaniumStructor.BASE_DTOR } &&
+            cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL }
+        )
 
     /** A constructor's or destructor's name: the class's own, less a template's arguments, which g++ leaves off. */
     private fun ClassView.isStructorName(member: String) = member.removePrefix("~").substringBefore('<') ==
@@ -351,16 +351,12 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         isStructorName(m.name) || m.variants.isNotEmpty() || m.msvcStructor != null
 
     private fun structors(): Tally = scoredPairs.fold(Tally()) { acc, (tc, sc) ->
-        val claimed = sc.functions().filter { sc.isStructor(it) }.map { address(it.address) }.filter {
-            it !in
-                truthThunks
+        val claimed = sc.functions().filter { sc.isStructor(it) }.map { it.at }.filter {
+            it !in truthThunks
         }
-        val actual = tc.functions().filter {
-            it.name == tc.name || it.name == "~${tc.name}"
-        }.map { address(it.address) }
+        val actual = tc.functions().filter { it.name == tc.name || it.name == "~${tc.name}" }.map { it.at }
         (claimed.toSet() - actual.toSet()).forEach {
-            findings +=
-                "false structor ${"%x".format(it)} of `${tc.qualifiedName}`"
+            findings += "false structor ${"%x".format(it)} of `${tc.qualifiedName}`"
         }
         acc + Tally.of(claimed, actual)
     }
