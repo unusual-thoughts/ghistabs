@@ -80,6 +80,9 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
     val thisStores: ThisStores = from.mapValues { (_, r) -> r.thisStores }
     val inlined: List<InlinedConstruction> = from.flatMap { (_, r) -> r.inlined }
 
+    /** The calls each makes on an object, its own `this` or another, by the object's `this` argument. */
+    val objectCalls: Map<Function, List<ObjectCall>> = from.mapValues { (_, r) -> r.objectCalls }
+
     /** The functions each calls on `this` itself. */
     private val thisCalls = subobjectCalls.mapValues { (_, calls) -> calls[0L].orEmpty() }
 

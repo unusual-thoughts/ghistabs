@@ -7,15 +7,14 @@ import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.MemberAttrs.Companion.recordGuessed
 import ghicpp.StructorRole
-import ghicpp.dissect.decompileEach
-import ghicpp.dissect.pointerInto
+import ghicpp.dissect.CalledObject
+import ghicpp.dissect.ObjectCall
+import ghicpp.dissect.ThisFunctionDissector
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
-import ghidra.program.model.pcode.HighFunction
-import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghidrakt.*
@@ -165,14 +164,15 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
         monitor: TaskMonitor,
     ): List<Int> {
         var evidence = firstEvidence
+        val dissector = ThisFunctionDissector(program, emptyList(), this)
         val known = trusted.toMutableSet()
         val calls = mutableListOf<ThisCall>()
         val perRound = mutableListOf<Int>()
         for (round in 1..(if (trustGuesses) MAX_ROUNDS else 1)) {
             if (evidence.isEmpty() || candidates.isEmpty()) break
             val what = if (round == 1) "methods and constructors' callers" else "guessed methods, round $round"
-            program.decompileEach(evidence, monitor, "Decompiling $what") { f, high ->
-                calls += thisCalls(f, high, ctors, methods[f]).filter { it.callee in candidates }
+            for ((f, made) in dissector.readCalls(evidence, monitor, "Decompiling $what").objectCalls) {
+                calls += thisCalls(f, made, ctors, methods[f]).filter { it.callee in candidates }
             }
             val guesses = MethodClassGuesser(bases, known).guess(calls.filter { it.callee in candidates })
             monitor.initialize(guesses.size.toLong(), "Moving methods into their guessed classes")
@@ -195,34 +195,29 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
         !isThunk && takesThisAt(thisStorage)
 
     /**
-     * The calls [f] makes on its own `this`, on objects it built with one of [ctors], and, where it's a method
-     * of [own], on the object of a class [own]'s struct lays at an offset into `this` ([classAt]), decompiled as
-     * [high].
+     * Of [calls], what [f] calls on objects, those on its own `this`, on objects it built with one of [ctors], and,
+     * where it's a method of [own], on the object of a class [own]'s struct lays at an offset into `this`
+     * ([classAt]).
      */
     private fun thisCalls(
         f: Function,
-        high: HighFunction,
+        calls: List<ObjectCall>,
         ctors: Map<Function, GhidraClass>,
         own: GhidraClass?,
     ): List<ThisCall> {
-        val self = f.argumentAt(f.thisIndex())
-        val ops = high.pcodeOps.asSequence().toList()
         // The objects the function built, by where they point, from their constructor's argument and result.
         val built = buildMap {
-            for (op in ops) {
-                val ctor = op.directCallee() ?: continue
-                val cls = ctors[ctor] ?: continue
-                op.thisArgument(ctor)?.pointerInto()?.let { put(it, cls) }
-                op.output?.pointerInto()?.let { put(it, cls) }
+            for (call in calls) {
+                val cls = ctors[call.callee] ?: continue
+                put(call.obj to call.offset, cls)
+                call.returns?.let { put(it to 0L, cls) }
             }
         }
-        return ops.mapNotNull { op ->
-            val callee = op.directCallee() ?: return@mapNotNull null
-            val obj = op.thisArgument(callee)?.pointerInto() ?: return@mapNotNull null
+        return calls.mapNotNull { call ->
             when {
-                !obj.isThis(self) -> built[obj]?.let { ThisCall(f, callee, it) }
-                obj.offset == 0L -> ThisCall(f, callee)
-                else -> own?.let { classAt(it, obj.offset) }?.let { ThisCall(f, callee, it) }
+                call.obj != CalledObject.This -> built[call.obj to call.offset]?.let { ThisCall(f, call.callee, it) }
+                call.offset == 0L -> ThisCall(f, call.callee)
+                else -> own?.let { classAt(it, call.offset) }?.let { ThisCall(f, call.callee, it) }
             }
         }
     }
@@ -249,12 +244,6 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
             at -= part.offset
         }
         return null
-    }
-
-    private fun PcodeOp.directCallee(): Function? {
-        if (opcode != PcodeOp.CALL || numInputs < 2) return null
-        val f = program.functionManager.getFunctionAt(getInput(0).address) ?: return null
-        return f.getThunkedFunction(true) ?: f
     }
 
     /**

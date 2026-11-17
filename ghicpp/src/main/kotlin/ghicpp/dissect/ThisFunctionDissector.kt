@@ -1,10 +1,7 @@
 package ghicpp.dissect
 
-import ghicpp.ClassDecl
-import ghicpp.StructorConvention
-import ghicpp.StructorRole
+import ghicpp.*
 import ghicpp.StructorRole.CONSTRUCTOR
-import ghicpp.thisStorage
 import ghidra.app.decompiler.util.FillOutStructureHelper
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.ArrayDataType
@@ -35,9 +32,6 @@ class ThisFunctionDissector(
     private val operatorNewNames get() = cache.operatorNewNames
 
     private val thisStorage = program.thisStorage()
-
-    /** Whether a pointer points into the function's incoming `this`. */
-    private val intoThis: (PointerInto) -> Boolean = { it.isThis(thisStorage) }
 
     private val tables = classes.vptrTables(program)
 
@@ -76,8 +70,11 @@ class ThisFunctionDissector(
     }
 
     /** What [funcs] store and call through `this`, decompiled, whatever vptrs they store. */
-    fun readCalls(funcs: Collection<Function>, monitor: TaskMonitor): Dissections =
-        decompile(funcs, emptyMap(), monitor)
+    fun readCalls(
+        funcs: Collection<Function>,
+        monitor: TaskMonitor,
+        message: String = "Decompiling constructors and destructors",
+    ): Dissections = decompile(funcs, emptyMap(), monitor, message)
 
     /** The fields each of [funcs] loads or stores through `this`, decompiled, by offset into it, typed off how. */
     fun thisFields(funcs: Collection<Function>, monitor: TaskMonitor) =
@@ -145,9 +142,13 @@ class ThisFunctionDissector(
             debug("structor-undecompiled", it.name, it.entryPoint)
         }) { func, high ->
             visit?.invoke(func, high)
-            val inlined = writes[func]?.let { fill.inlined(high, it) }.orEmpty()
-            val calls = high.subobjectCalls(intoThis)
-            val filled = fill.fillThis(high)
+            // Where this one's `this` comes in, past a hidden return pointer where it takes one.
+            val thisAt = func.thisAt(thisStorage)
+            val intoThis: (PointerInto) -> Boolean = { it.isThis(thisAt) }
+            val objectCalls = high.objectCalls(thisAt)
+            val inlined = writes[func]?.let { fill.inlined(high, it, objectCalls) }.orEmpty()
+            val calls = objectCalls.filter { it.obj == CalledObject.This }
+            val filled = fill.fillThis(high, thisAt)
             val stores = writes[func]?.let { filled.vptrStores(it, calls) }
             val fills = if (fillArrays) high.fills(intoThis).associate { it.second } else emptyMap()
             cache.reads[key(func)] = DissectionCache.Dissection(
@@ -155,6 +156,7 @@ class ThisFunctionDissector(
                 calls.groupBy({ it.offset }, { it.callee }).mapValues { (_, fs) -> fs.toSet() },
                 filled.thisStores(storedOnly).withFills(fills),
                 inlined,
+                objectCalls,
             )
         }
         return Dissections(funcs.mapNotNull { f -> cache.reads[key(f)]?.let { f to it } }.toMap())
@@ -164,11 +166,13 @@ class ThisFunctionDissector(
      * The constructors [high] inlines after a call of `operator new` with a constant size: what the call returns
      * followed as `this` is, through copies, casts and offsets, and which of [at]'s vptrs go at its start. Each
      * class's part runs from its first store to the next class's, the first's from the call, and the last's to
-     * the end of the function. None where the allocation takes no vptr of these classes.
+     * the end of the function, with the [objectCalls] made on that object. None where the allocation takes no
+     * vptr of these classes.
      */
     private fun FillOutStructureHelper.inlined(
         high: HighFunction,
         at: Map<Address, List<Pair<ClassDecl, Long>>>,
+        objectCalls: List<ObjectCall>,
     ): List<InlinedConstruction> = high.pcodeOps.asSequence().filter { it.isOperatorNew() }.toList().mapNotNull { new ->
         val size = new.getInput(1).takeIf { it.isConstant }?.offset?.takeIf { it > 0 } ?: return@mapNotNull null
         val fresh = new.output?.high ?: return@mapNotNull null
@@ -185,7 +189,8 @@ class ThisFunctionDissector(
         val starts = firsts.values.drop(1)
         fun part(where: Address) = starts.count { it <= where }
         val into: (PointerInto) -> Boolean = { it.root == fresh }
-        val calls = high.subobjectCalls(into).filter { it.at > new.seqnum.target }
+        val made = new.seqnum.target
+        val calls = objectCalls.filter { (it.obj as? CalledObject.Returned)?.madeAt == made && it.at > made }
         val types = componentMap.iterator().asSequence().associate { (offset, dt) -> offset.toInt() to dt }
         val fields = stores.mapNotNull { store ->
             val dt = types[store.offset.toInt()]?.takeIf { it.length > 0 } ?: return@mapNotNull null
@@ -215,8 +220,8 @@ class ThisFunctionDissector(
      * Follows `this` through [high] as Ghidra's Auto Fill in Structure does, through copies, casts and offsets,
      * for [thisStores] and [vptrStores] to read; null where `this` goes unread.
      */
-    private fun FillOutStructureHelper.fillThis(high: HighFunction): FillOutStructureHelper? {
-        val thisVar = high.thisVariable() ?: return null
+    private fun FillOutStructureHelper.fillThis(high: HighFunction, thisAt: Address?): FillOutStructureHelper? {
+        val thisVar = high.thisVariable(thisAt) ?: return null
         processStructure(thisVar, high.function, true, false, null)
         return this
     }
@@ -304,22 +309,10 @@ class ThisFunctionDissector(
         return v
     }
 
-    /** The variable `this` comes in as, at [thisStorage]; null where nothing reads it. */
-    private fun HighFunction.thisVariable(): HighVariable? = pcodeOps.asSequence()
+    /** The variable `this` comes in as, at [thisAt]; null where nothing reads it. */
+    private fun HighFunction.thisVariable(thisAt: Address?): HighVariable? = pcodeOps.asSequence()
         .flatMap { it.inputs.asSequence() }
-        .firstOrNull { it.isInput && it.address == thisStorage }?.high
-
-    /** A call at [at] of [callee] with a pointer [offset] bytes into `this` first. */
-    private class SubobjectCall(val at: Address, val offset: Long, val callee: Function)
-
-    /** The calls this makes with a pointer into `this`, or what else [into] says, first. */
-    private fun HighFunction.subobjectCalls(into: (PointerInto) -> Boolean): List<SubobjectCall> =
-        pcodeOps.asSequence().mapNotNull { op ->
-            if (op.opcode != PcodeOp.CALL || op.numInputs < 2) return@mapNotNull null
-            val offset = op.getInput(1).offsetInto(into) ?: return@mapNotNull null
-            val callee = program.functionManager.getFunctionAt(op.getInput(0).address) ?: return@mapNotNull null
-            SubobjectCall(op.seqnum.target, offset, callee.getThunkedFunction(true) ?: callee)
-        }.toList()
+        .firstOrNull { it.isInput && it.address == thisAt }?.high
 
     /**
      * Which of the vptrs [at] holds the function filled stores through `this`, at the offset each belongs at,
@@ -327,7 +320,7 @@ class ThisFunctionDissector(
      */
     private fun FillOutStructureHelper?.vptrStores(
         at: Map<Address, List<Pair<ClassDecl, Long>>>,
-        calls: List<SubobjectCall>,
+        calls: List<ObjectCall>,
     ): VptrStores {
         val hits = this?.storePcodeOps.orEmpty().mapNotNull { store ->
             val where = store.pcodeOp.seqnum.target
@@ -381,6 +374,7 @@ class DissectionCache(
         val subobjectCalls: Map<Long, Set<Function>> = emptyMap(),
         val thisStores: Stores = emptyMap(),
         val inlined: List<InlinedConstruction> = emptyList(),
+        val objectCalls: List<ObjectCall> = emptyList(),
     )
 
     internal val reads = mutableMapOf<Key, Dissection>()
