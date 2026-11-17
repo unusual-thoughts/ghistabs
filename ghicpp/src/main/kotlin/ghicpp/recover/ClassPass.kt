@@ -9,9 +9,7 @@ import ghicpp.abi.StructorRole
 import ghicpp.dissect.*
 import ghicpp.hierarchy.typePureSlots
 import ghidra.framework.options.Options
-import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -191,20 +189,11 @@ class ClassPass(
     private fun Function.guessed() = symbol.source == SourceType.DEFAULT ||
         (symbol.source == SourceType.ANALYSIS && parentNamespace is GhidraClass)
 
-    /**
-     * An empty struct for each class with none, where `RecoverClassesFromRTTIScript` files one, before any
-     * function moves in: a `__thiscall` function landing in a class with no struct makes Ghidra add a
-     * placeholder in the class's parent category, `/<Class>` for a global one, which its lookup then prefers.
-     */
+    /** An empty struct for each class with none, before any function moves in ([stubClassStruct]). */
     private fun stubStructs(classes: Collection<ClassDecl>) {
         for (ns in classes.mapNotNull { it.ns?.toClass() }) {
-            if (program.classStruct(ns) != null) continue
-            runCatching {
-                program.dataTypeManager.addDataType(
-                    StructureDataType(ClassNaming.vftableCategory(ns), ns.name, 0),
-                    DataTypeConflictHandler.KEEP_HANDLER,
-                )
-            }.onFailure { warn("class-struct-unstubbed", "${ns.getName(true)}: $it") }
+            runCatching { program.stubClassStruct(ns) }
+                .onFailure { warn("class-struct-unstubbed", "${ns.getName(true)}: $it") }
         }
     }
 

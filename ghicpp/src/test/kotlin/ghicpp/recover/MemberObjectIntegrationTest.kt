@@ -5,12 +5,17 @@ import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.StructorRole
 import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.classStruct
+import ghicpp.stubClassStruct
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
+import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
+import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.RefType
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -104,6 +109,41 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // What the holder's constructor calls next on the member is the member's method.
         program.runTransaction("guess") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) mustBe 1 }
         program.functionManager.getFunctionAt(addr(MEMBER_METHOD)).parentNamespace.name mustBe member
+    }
+
+    @Test
+    fun `a member's class has one struct, the one Ghidra types this with`() {
+        build()
+        program.runTransaction("recover") {
+            GenericVftableFinder(program).seed() mustBe 1
+            val found = ClassPass(program, PlainVtableParser(program), DummySink).run(TaskMonitor.DUMMY).found!!
+            MemberObjectPass(program, DummySink).run(found) mustBe 1
+        }
+        val member = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
+        val ns = program.symbolTable.getClassSymbol(member, program.globalNamespace).`object` as GhidraClass
+        val structs = program.dataTypeManager.allStructures.asSequence().filter { it.name == member }
+        structs.map { it.pathName }.toList() mustBe listOf(structOf(member).pathName)
+        VariableUtilities.findOrCreateClassStruct(ns, program.dataTypeManager) mustBe structOf(member)
+        val ctor = program.functionManager.getFunctionAt(addr(MEMBER_CTOR))
+        (ctor.getParameter(0).dataType as Pointer).dataType mustBe structOf(member)
+    }
+
+    @Test
+    fun `an empty placeholder Ghidra made for a class gives way to the class's struct`() {
+        build()
+        val dtm = program.dataTypeManager
+        val ns = program.runTransaction("placeholder") {
+            val ns = program.symbolTable.createClass(program.globalNamespace, "Placed", SourceType.ANALYSIS)
+            dtm.addDataType(
+                StructureDataType(CategoryPath.ROOT, "Placed", 0).apply { description = "PlaceHolder Class Structure" },
+                null,
+            )
+            program.stubClassStruct(ns)
+            ns
+        }
+        dtm.allStructures.asSequence().filter { it.name == "Placed" }.map { it.pathName }.toList() mustBe
+            listOf("/ClassDataTypes/Placed/Placed")
+        VariableUtilities.findExistingClassStruct(ns, dtm) mustBe program.classStruct(ns)
     }
 
     @Test
