@@ -116,6 +116,24 @@ jobs:
           rm -rf vc6
           ls -l refs/vc6
 
+      # Visual C++ 5.0's msvcp50 likewise: Visual Studio 97's third disc carries MSVCP50D.PDB and its DLL.
+      - uses: actions/cache@v6
+        id: vc5
+        with:
+          path: refs/vc5
+          key: vc5-VS97PRO-disc3-msvcp50d
+
+      - name: Fetch Visual C++ 5.0's msvcp50d
+        if: steps.vc5.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p refs/vc5 vc5
+          curl -fsSL -o vc5/disc.iso "https://archive.org/download/microsoft-visual-studio-97-professional-edition-disc-3/Microsoft%20Visual%20Studio%2097%20Professional%20Edition%20-%20Disc%203.iso"
+          7z e -y -orefs/vc5 vc5/disc.iso DEVSTUDIO/VC/DEBUG/MSVCP50D.PDB DEVSTUDIO/VC/DEBUG/MSVCP50D.DLL > /dev/null
+          rm -rf vc5
+          # Ghidra reads its module records as Visual C++ 6.0's; give it them in that layout.
+          python3 -I tools/stl-archives/modi50to60.py refs/vc5/MSVCP50D.PDB refs/vc5/msvcp50d.v6.pdb
+          ls -l refs/vc5
+
       # MsvcStlArchiveScript writes the classes' bases with ghicpp's own model of them.
       - name: Install ghicpp
         run: |
@@ -140,6 +158,7 @@ jobs:
           $run archive archives/msvcp80_x86.gdt probes/probe-x86-release/stl_probe.exe refs/msvcp80_x86.pdb
           $run archive archives/msvcp70_x86.gdt refs/msvcp70.dll refs/msvcp70_x86.pdb
           # VC6's headers lay nothing out differently under _DEBUG, so the debug PDB serves msvcp60 too.
+          $run archive archives/msvcp50_x86.gdt refs/vc5/MSVCP50D.DLL refs/vc5/msvcp50d.v6.pdb
           $run archive archives/msvcp60_x86.gdt refs/vc6/MSVCP60D.DLL refs/vc6/MSVCP60D.PDB
 
       - name: Check against Microsoft's msvcp140 layouts
@@ -223,7 +242,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp120_x86, msvcp120_x64, msvcp90_x86, msvcp90_x64, msvcp80_x86, msvcp70_x86, msvcp60_x86]
+        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp120_x86, msvcp120_x64, msvcp90_x86, msvcp90_x64, msvcp80_x86, msvcp70_x86, msvcp60_x86, msvcp50_x86]
     steps:
       - uses: actions/download-artifact@v7
         with:
