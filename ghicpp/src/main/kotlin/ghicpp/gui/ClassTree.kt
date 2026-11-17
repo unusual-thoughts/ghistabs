@@ -279,16 +279,15 @@ internal fun ClassTree.select(loc: ProgramLocation) {
     val p = program?.takeIf { it === loc.program } ?: return
     val addr = loc.address ?: return
     val root = tree.modelRoot as? ClassTreeRoot ?: return
-    val at = listOfNotNull(addr, p.functionManager.getFunctionContaining(addr)?.entryPoint).map(Address::toString)
+    val at = listOfNotNull(addr, p.functionManager.getFunctionContaining(addr)?.entryPoint)
     // Already there: a click on a class goes to its vtable, which mustn't then select the vtable.
     if (selectedNode?.address in at) return
     root.nodeAt(at.distinct())?.let(tree::setSelectedNode)
 }
 
 /** Go to [at], an address as the tree keeps it, in the program shown. */
-internal fun ClassTree.goTo(at: String?) {
-    val address = program?.addressFactory?.let { f -> at?.let(f::getAddress) } ?: return
-    tool.getService(GoToService::class.java)?.goTo(address)
+internal fun ClassTree.goTo(address: Address?) {
+    tool.getService(GoToService::class.java)?.goTo(address ?: return)
 }
 
 /** Go to the selected node: a member, or a class's vtable or typeinfo. */

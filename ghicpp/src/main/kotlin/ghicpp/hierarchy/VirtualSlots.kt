@@ -91,7 +91,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
                 ClassHierarchy.InheritedSlot(
                     parentNamespace.takeUnless { it.isGlobal }?.path.orEmpty(),
                     name,
-                    entryPoint.toString(),
+                    entryPoint,
                     slot,
                     getPrototypeString(false, false),
                 )

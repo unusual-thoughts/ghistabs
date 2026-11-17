@@ -1,3 +1,5 @@
+@file:UseSerializers(AddressSerializer::class)
+
 package ghicpp.hierarchy
 
 import ghicpp.*
@@ -23,6 +25,7 @@ import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.*
 import ghidrakt.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
 /**
  * Every class the program knows, with its direct bases, as the Class Hierarchy window shows them.
@@ -93,7 +96,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
     @Serializable
     data class Member(
         val name: String,
-        val address: String,
+        val address: Address,
         val kind: MemberKind,
         val signature: String? = null,
         val parameters: String? = null,
@@ -129,7 +132,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
     data class InheritedSlot(
         val ownerPath: List<String>,
         val name: String,
-        val address: String,
+        val address: Address,
         val slot: VirtualSlot,
         val signature: String? = null,
     ) {
@@ -164,10 +167,10 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val path: List<String>,
         val origin: Origin,
         /** Where its primary `vftable` label sits, for a polymorphic class. */
-        val vftable: String?,
+        val vftable: Address?,
         val vftableStructId: Long?,
         /** Its `_ZTI` typeinfo object or MSVC type descriptor, when the binary has one. */
-        val typeinfo: String?,
+        val typeinfo: Address?,
         /** The struct the stabs laid for it, by datatype id, and its name (shorter, once typedef shortening ran). */
         val structId: Long?,
         val structName: String?,
@@ -186,7 +189,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val qualifiedName: String get() = path.joinToString("::")
 
         /** Where a double-click goes: the vtable, else the typeinfo. */
-        val address: String? get() = vftable ?: typeinfo
+        val address: Address? get() = vftable ?: typeinfo
 
         override fun toString() = qualifiedName
     }
@@ -319,9 +322,9 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                         ns.isExternal -> Origin.LIBRARY
                         else -> Origin.NAMESPACE
                     },
-                    vftable = vftable?.toString(),
+                    vftable = vftable,
                     vftableStructId = vftableStruct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
-                    typeinfo = (typeinfo ?: typeDescriptor)?.toString(),
+                    typeinfo = typeinfo ?: typeDescriptor,
                     structId = struct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
                     structName = struct?.name,
                     isAbstract = program.vftablesOf(ns).any { (addr, _) -> hasPureVirtualSlot(addr, rttiAbi) },
@@ -378,7 +381,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                         val kind = if (fn.isThunk || fn.isThunkLinkage()) MemberKind.THUNK else MemberKind.FUNCTION
                         Member(
                             sym.name,
-                            sym.address.toString(),
+                            sym.address,
                             kind,
                             fn.getPrototypeString(false, false),
                             fn.params,
@@ -399,7 +402,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                             ?: MemberAttrs(virt = VirtKind.STATIC).takeIf { kind == MemberKind.LABEL }
                         Member(
                             sym.name,
-                            sym.address.toString(),
+                            sym.address,
                             kind,
                             attrs = attrs,
                             symbolId = sym.id,
