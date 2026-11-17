@@ -14,6 +14,10 @@ import ghidra.app.util.bin.format.pdb2.pdbreader.type.AbstractUnionMsType
 import ghidra.app.util.bin.format.pdb2.pdbreader.type.AbstractVirtualBaseClassMsType
 import ghidra.app.util.bin.format.pdb2.pdbreader.type.ClassFieldMsAttributes
 import ghidra.app.util.pdb.pdbapplicator.DefaultPdbApplicator
+import ghidrakt.methodAttributes
+import ghidrakt.methodListType
+import ghidrakt.procedureType
+import ghidrakt.vftableOffset
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypePath
 
@@ -75,14 +79,14 @@ object MsvcPdbClasses {
         fields.methodList.flatMap { field ->
             when (field) {
                 is AbstractOneMethodMsType -> listOfNotNull(
-                    field.takeIf { it.attributes.isIntro() }
-                        ?.let { StdSlot(it.offsetInVFTableIfIntroVirtual, it.name) to it.procedureTypeRecordNumber },
+                    field.takeIf { it.methodAttributes.isIntro() }
+                        ?.let { StdSlot(it.vftableOffset, it.name) to it.procedureType },
                 )
 
                 is AbstractOverloadedMethodMsType ->
-                    (pdb.getTypeRecord(field.typeMethodListRecordNumber) as? AbstractMethodListMsType)?.list.orEmpty()
-                        .filter { it.attributes.isIntro() }
-                        .map { StdSlot(it.optionalOffset, field.name) to it.procedureTypeRecordNumber }
+                    (pdb.getTypeRecord(field.methodListType) as? AbstractMethodListMsType)?.list.orEmpty()
+                        .filter { it.methodAttributes.isIntro() }
+                        .map { StdSlot(it.vftableOffset, field.name) to it.procedureType }
 
                 else -> emptyList()
             }
