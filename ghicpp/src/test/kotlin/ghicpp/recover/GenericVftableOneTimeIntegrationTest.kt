@@ -1,0 +1,93 @@
+package ghicpp.recover
+
+import ghicpp.analyzers.GenericVftableAnalyzer
+import ghicpp.analyzers.MethodClassAnalyzer
+import ghidra.app.plugin.core.analysis.AutoAnalysisManager
+import ghidra.program.model.address.Address
+import ghidra.program.model.address.AddressSet
+import ghidra.program.model.listing.BookmarkType
+import ghidra.program.model.listing.Program
+import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghidra.util.task.TaskMonitor
+import ghidrakt.*
+import ghidrakt.test.TestBinaries
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeTrue
+import org.junit.jupiter.api.*
+import java.io.File
+
+/**
+ * A one-time run of *Vftables from pointer tables* is followed by one of *Method classes from this* when that is
+ * enabled, as auto-analysis follows the other, and by none when it is disabled. The program is
+ * [GenericVftableFixtureIntegrationTest]'s, analyzed whole; each test takes the method class guesses back out
+ * first.
+ */
+@Tag("integration")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+    private lateinit var loaded: LoadedProgram
+    private val program: Program get() = loaded.program
+    private val mgr get() = AutoAnalysisManager.getAnalysisManager(program)
+
+    /** Each function auto-analysis guessed the class of, with that class's full name. */
+    private lateinit var guessed: Map<Address, String>
+
+    @BeforeAll
+    fun analyze() {
+        loaded = loadProgram(File(TestBinaries.HELLOS, GenericVftableFixtureIntegrationTest.FIXTURE), "gcc")
+        program.runTransaction("enable") { program.setAnalyzerEnabled(GenericVftableAnalyzer.NAME) }
+        mgr.initializeOptions()
+        mgr.reAnalyzeAll(null)
+        program.runTransaction("auto-analyze") {
+            mgr.startAnalysis(TaskMonitor.DUMMY)
+            mgr.waitForAnalysis(null, TaskMonitor.DUMMY)
+        }
+        guessed = guesses()
+        guessed.isNotEmpty().mustBeTrue()
+    }
+
+    @AfterAll
+    fun close() {
+        if (::loaded.isInitialized) loaded.close()
+    }
+
+    private fun guesses(): Map<Address, String> =
+        program.bookmarkManager.getBookmarksIterator(BookmarkType.ANALYSIS).asSequence()
+            .filter { it.category == MethodClassPass.BOOKMARK }
+            .associate { b ->
+                b.address to program.functionManager.getFunctionAt(b.address).parentNamespace.getName(true)
+            }
+
+    /** Put each guessed function back in the global namespace, its bookmark removed, and run the analyzer once. */
+    private fun unguessThenRunOnce(methodClassesEnabled: Boolean) {
+        program.runTransaction("unguess") {
+            program.setAnalyzerEnabled(MethodClassAnalyzer.NAME, methodClassesEnabled)
+            for (address in guessed.keys) {
+                program.functionManager.getFunctionAt(address).parentNamespace = program.globalNamespace
+                program.bookmarkManager.removeBookmarks(
+                    AddressSet(address),
+                    BookmarkType.ANALYSIS,
+                    MethodClassPass.BOOKMARK,
+                    TaskMonitor.DUMMY,
+                )
+            }
+        }
+        program.runTransaction("one time") {
+            mgr.scheduleOneTimeAnalysis(mgr.getAnalyzer(GenericVftableAnalyzer.NAME), program.memory)
+            mgr.startAnalysis(TaskMonitor.DUMMY)
+            mgr.waitForAnalysis(null, TaskMonitor.DUMMY)
+        }
+    }
+
+    @Test
+    fun `a one-time run guesses no method class while Method classes from this is disabled`() {
+        unguessThenRunOnce(methodClassesEnabled = false)
+        guesses() mustBe emptyMap()
+    }
+
+    @Test
+    fun `a one-time run is followed by Method classes from this while it is enabled`() {
+        unguessThenRunOnce(methodClassesEnabled = true)
+        guesses() mustBe guessed
+    }
+}

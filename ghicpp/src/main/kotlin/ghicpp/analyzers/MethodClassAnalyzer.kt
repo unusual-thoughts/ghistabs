@@ -16,7 +16,7 @@ import ghidrakt.diagnose.report
  * Guess the class of each unnamed function that takes a `this`, off the objects its callers pass it
  * ([MethodClassPass]), once a class pass (MSVC or Itanium RTTI classes, or vftables from pointer tables) or a
  * stabs import has recorded the classes and put their methods, constructors included, in them. A one-time run
- * of *Vftables from pointer tables*, for the tables an earlier run made reachable, wants one of this after it.
+ * of *Vftables from pointer tables* schedules one of this after it, when this is enabled.
  */
 class MethodClassAnalyzer :
     AbstractAnalyzer(

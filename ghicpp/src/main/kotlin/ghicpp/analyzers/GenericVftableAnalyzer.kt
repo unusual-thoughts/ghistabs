@@ -7,6 +7,8 @@ import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
 import ghicpp.recover.ClassPass.Companion.INLINED_CONSTRUCTORS
 import ghicpp.recover.GenericVftableFinder
 import ghicpp.recover.MemberObjectPass
+import ghidra.app.plugin.core.analysis.AutoAnalysisManager
+import ghidra.app.plugin.core.analysis.OneShotAnalysisCommand
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -19,6 +21,7 @@ import ghidrakt.*
 import ghidrakt.diagnose.AnalysisProbe
 import ghidrakt.diagnose.MessageLogSink
 import ghidrakt.diagnose.report
+import ghidrakt.isAnalyzerEnabled
 
 /**
  * Seed vftables where no RTTI says where they are, absent or in a format no analyzer reads, off the tables of
@@ -27,7 +30,8 @@ import ghidrakt.diagnose.report
  * moved into its class, the constructors and destructors found by their vtable stores, the class sized and
  * its struct filled, and the classes with no vtable that their constructors build members of
  * ([MemberObjectPass]). *Method classes from this* ([MethodClassAnalyzer]) runs after it, and guesses the
- * class of the non-virtual methods off the objects passed to them.
+ * class of the non-virtual methods off the objects passed to them; after a one-time run of this one, which
+ * auto-analysis doesn't follow with the rest, it is scheduled for a one-time run of its own, when enabled.
  *
  * Off by default: its tables are a guess off their shape. It reads references, so run it once most of the
  * program is disassembled and its operand references are marked, and again after: the code its slots led to
@@ -65,11 +69,31 @@ class GenericVftableAnalyzer :
             "$seeded vftable(s) seeded; ${result.classes} class(es), ${result.owned} virtual function(s) owned, " +
                 "${result.structors} constructor(s) and destructor(s) named, $members member object class(es)",
         )
+        if (isOneTimeRun()) followWithMethodClasses(program, set)
         return true
+    }
+
+    /**
+     * Schedule *Method classes from this* when it is enabled, as a one-time run with its own options, at its
+     * priority. Auto-analysis runs it after this one anyway; a one-time run of this one is run alone.
+     */
+    private fun followWithMethodClasses(program: Program, set: AddressSetView) {
+        if (!program.isAnalyzerEnabled(MethodClassAnalyzer.NAME)) return
+        val mgr = AutoAnalysisManager.getAnalysisManager(program)
+        mgr.getAnalyzer(MethodClassAnalyzer.NAME)?.let { mgr.scheduleOneTimeAnalysis(it, set) }
     }
 
     companion object {
         const val NAME = "Vftables from pointer tables"
+
+        /**
+         * Whether this [added] is a one-time run (*Analysis → One Shot*, or
+         * [AutoAnalysisManager.scheduleOneTimeAnalysis]), which runs its analyzer and nothing after it, rather
+         * than a pass of auto-analysis. Ghidra runs both through the same [added], so only the caller tells.
+         */
+        private fun isOneTimeRun() = StackWalker.getInstance().walk { frames ->
+            frames.anyMatch { it.className == OneShotAnalysisCommand::class.java.name }
+        }
 
         val MEMBER_OBJECTS = BoolOption(
             "Classes of member objects",
