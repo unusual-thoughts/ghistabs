@@ -73,10 +73,11 @@ class ClassPass(
         // The parser dissecting the storers as it parses reads them so, and this reads them off it.
         (parser as? DissectingParser)?.cache = cache
         val read = parser.parse(monitor)
-        stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
         val inspector = ThisFunctionDissector(program, read.classes, this, cache)
+        // Before the stubs, which change the program and so what the parser read, as the parser read the storers.
         val found = inspector.find(read.holders, abi, monitor)
+        stubStructs(read.classes)
         val structors = found.roles
         var moved = 0
         monitor.initialize(owners.size.toLong(), "Moving virtual functions into their classes")

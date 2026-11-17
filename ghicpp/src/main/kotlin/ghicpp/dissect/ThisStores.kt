@@ -83,6 +83,10 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
     /** The calls each makes on an object, its own `this` or another, by the object's `this` argument. */
     val objectCalls: Map<Function, List<ObjectCall>> = from.mapValues { (_, r) -> r.objectCalls }
 
+    /** The objects each vptr storer builds, by class, with the address it stores at each offset ([objectsBuilt]). */
+    val objectsBuilt: Map<Function, Map<ClassDecl, Map<Long, Address>>> =
+        from.filterValues { it.objectsBuilt.isNotEmpty() }.mapValues { (_, r) -> r.objectsBuilt }
+
     /** The functions each calls on `this` itself. */
     private val thisCalls = subobjectCalls.mapValues { (_, calls) -> calls[0L].orEmpty() }
 

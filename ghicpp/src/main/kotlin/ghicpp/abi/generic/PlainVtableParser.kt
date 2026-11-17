@@ -217,7 +217,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
                     .sortedBy { it.first }.map { it.second }
                 PlainClass(ns, (labels + secondaries).map { PlainVtables.recordAt(program, it.address) })
             }
-        val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
+        // The slots' functions first: making one changes the program, and so what the storers read as.
         val slots = classes.associateWith { c ->
             c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
                 // An unnamed pure virtual stub never returns: it aborts.
@@ -225,9 +225,11 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
                     ?.takeUnless { it.hasNoReturn() }
             }
         }
+        val holders = holders(classes)
+        val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
         monitor.message = "Inferring bases from constructors"
         BaseCandidates(slots).inferBases(classes, uses, classes.associateWith(::subobjects))
-        return ClassPassInput(classes, classes, holders(classes))
+        return ClassPassInput(classes, classes, holders)
     }
 
     /**
