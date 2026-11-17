@@ -1,22 +1,20 @@
 package ghicpp.recover
 
 import ghicpp.*
-import ghicpp.abi.CxxAbi
+import ghicpp.CxxAbi
+import ghicpp.VtableRecord
 import ghicpp.abi.SlotDefinitions
 import ghicpp.abi.VftableBuilder
-import ghicpp.abi.VtableRecord
+import ghicpp.abi.slots
 import ghicpp.dissect.Stores
-import ghicpp.dissect.ThisFunctionDissector
-import ghicpp.dissect.mergedStores
+import ghicpp.dissect.fillData
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
-import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.diagnose.DummySink
 
 /**
  * Fills each class struct a class pass sized but left empty, off what the pass knows of the class: each
@@ -217,34 +215,4 @@ class ClassStructFiller(
             .onFailure { degradation("vftable-unlaid", "${ns.getName(true)}::$name", it.message, record.addressPoint) }
         return vftable
     }
-}
-
-/**
- * Fills each of this class struct's own `<Class>_data` structs ([ownData]) with the fields of [store] it holds,
- * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
- * specific type, and the field keeps its name
- */
-private fun Structure.fillData(store: Stores) {
-    for ((offset, data) in ownData()) {
-        val inside = store.filter { (at, dt) -> offset.withLength(data.length).includes(at.withLength(dt.length)) }
-        val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
-        for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
-        for ((at, dt) in merged.iterator()) {
-            val old = data.getComponentAt(at.toInt())
-            if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
-            val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
-            data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
-        }
-    }
-}
-
-/**
- * Retypes [ns]'s own fields off what [methods] load and store through `this`, decompiled again, as the class pass
- * fills them: the `<Class>_data` structs its struct holds take the more specific type, and keep names and comments.
- */
-fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor) {
-    val struct = classStruct(ns) ?: return
-    struct.fillData(
-        ThisFunctionDissector(this, emptyList(), DummySink).thisFields(methods, monitor).values.mergedStores(),
-    )
 }

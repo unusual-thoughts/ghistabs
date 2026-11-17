@@ -1,7 +1,5 @@
 package ghicpp
 
-import ghicpp.abi.StructorRole
-import ghicpp.abi.VtableRecord
 import ghidra.framework.options.CustomOption
 import ghidra.framework.options.GProperties
 import ghidra.program.model.address.Address

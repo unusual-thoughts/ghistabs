@@ -3,8 +3,8 @@ package ghicpp.abi.itanium
 import ghicpp.ClassNaming
 import ghicpp.ClassStructsFixtureTest
 import ghicpp.analyzers.ItaniumClassAnalyzer
+import ghicpp.dissect.updateFieldTypes
 import ghicpp.hierarchy.*
-import ghicpp.recover.updateFieldTypes
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.DoubleDataType
 import ghidra.program.model.data.FunctionDefinition
