@@ -551,7 +551,7 @@ private fun List<Symbol>.withoutRepeats(isMember: (Symbol) -> Boolean): Pair<Lis
  */
 fun ClassHierarchy.unattachedVirtuals(program: Program): Set<Address> =
     classes.flatMap { it.inherited }.filter { it.ownerPath.isEmpty() }
-        .mapTo(sortedSetOf()) { program.addressFactory.getAddress(it.address) }
+        .map { it.address }
         .filterTo(sortedSetOf()) { at -> program.functionManager.getFunctionAt(at)?.isTrivialStub() != true }
 
 /**
