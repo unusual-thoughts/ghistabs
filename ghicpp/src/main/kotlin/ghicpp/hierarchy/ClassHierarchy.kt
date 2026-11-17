@@ -74,7 +74,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
 
     /**
      * A direct base: the class it names ([targetId]), if the program has one for it, else only its [name],
-     * and where it sits in the class ([offset]), for a non-virtual one whose place is known.
+     * where it sits in the class ([offset]), for a non-virtual one whose place is known, and who stated it
+     * ([source], [ghicpp.BaseDecl.source]); null for one not stated yet, as one being set by hand.
      */
     @Serializable
     data class BaseRef(
@@ -83,6 +84,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val isVirtual: Boolean,
         val access: Access?,
         val offset: Long? = null,
+        val source: SourceType? = null,
     )
 
     /**
@@ -342,10 +344,12 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                 val target = base.namespaceId?.let(classIds::get)
                 val name = base.namespaceId?.let { (symtab.getSymbol(it)?.`object` as? Namespace)?.getName(true) }
                     ?: base.name ?: "?"
-                BaseRef(name, target, base.isVirtual, base.access, base.offset.takeUnless { base.isVirtual })
+                val offset = base.offset.takeUnless { base.isVirtual }
+                BaseRef(name, target, base.isVirtual, base.access, offset, base.source)
             } ?: typeinfo?.let(rtti::basesOf).orEmpty().map { base ->
                 val offset = base.offset.takeUnless { base.isVirtual }
-                BaseRef(base.className, idOf(base.className.nameSegments), base.isVirtual, base.access, offset)
+                val id = idOf(base.className.nameSegments)
+                BaseRef(base.className, id, base.isVirtual, base.access, offset, SourceType.IMPORTED)
             }
 
         fun classNamespaces(): Sequence<GhidraClass> = symtab.classNamespaces.asSequence()

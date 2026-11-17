@@ -219,6 +219,11 @@ class ClassNode private constructor(
         edge?.offset?.let {
             append(if (inverted) "<br>holds it at 0x" else "<br>at offset 0x").append(it.toString(HEX))
         }
+        when (edge?.source) {
+            SourceType.ANALYSIS -> append("<br>base inferred off the code")
+            SourceType.USER_DEFINED -> append("<br>base set by hand")
+            else -> {}
+        }
         info?.size?.let { append("<br>size 0x").append(it.toString(HEX)) }
         info?.vftable?.let { append("<br>vftable at ").append(it) }
         if (info?.vftable == null) info?.typeinfo?.let { append("<br>typeinfo at ").append(it) }

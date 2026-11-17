@@ -110,7 +110,8 @@ fun Program.memberSource(member: Member): String? = when {
 
 /**
  * Sets [owner]'s bases to [bases], by hand ([ClassHierarchyRecords.EDITS]): the class then shows these
- * whatever its stabs or typeinfo say.
+ * whatever its stabs or typeinfo say. A base it already had keeps who stated it; one added or changed here is the
+ * user's.
  */
 fun Program.setBases(owner: ClassView, bases: List<BaseRef>) {
     val entries = bases.map {
@@ -120,6 +121,7 @@ fun Program.setBases(owner: ClassView, bases: List<BaseRef>) {
             it.isVirtual,
             it.access ?: Access.PUBLIC,
             it.offset,
+            it.source ?: SourceType.USER_DEFINED,
         )
     }
     writeClassEdit(owner.id, ClassHierarchyRecords.Entry(owner.structId, entries))
