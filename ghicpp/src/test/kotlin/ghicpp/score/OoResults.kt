@@ -28,8 +28,7 @@ class OoResults(
 
     fun snapshot(fixture: String): Snapshot {
         val vftNames = all("finalVFTable").associate {
-            (it[0] as Long) to
-                (it[4] as? String)?.takeIf { n -> n.isNotEmpty() }?.let { n -> demangled[n] ?: n }
+            (it[0] as Long) to (it[4] as? String)?.takeIf { n -> n.isNotEmpty() }?.let { n -> demangled[n] ?: n }
         }
         val entries = all("finalVFTableEntry").groupBy({ it[0] as Long }, { it[2] as Long })
         val props = all("finalMethodProperty").groupBy({ it[0] as Long }, { it[1] as String })
@@ -37,8 +36,7 @@ class OoResults(
         val names = classes.associate { c -> c.id to (c.vftable?.let(vftNames::get) ?: "cls_%x".format(c.id)) }
         val inheritance = all("finalInheritance")
         val members = all("finalMember").groupBy({ it[0] as Long }, {
-            (it[1] as Long) to
-                (it[2] as List<*>).maxOf { s -> s as Long }
+            (it[1] as Long) to (it[2] as List<*>).maxOf { s -> s as Long }
         })
         val embedded = all("finalEmbeddedObject").groupBy({ it[0] as Long }, { (it[1] as Long) to (it[2] as Long) })
 
@@ -107,10 +105,8 @@ class OoResults(
             )
         }
         val fieldMap = classes.associate { c ->
-            c.id to
-                sortedMapOf<Long, Int>().also { fields(c.id, 0, it, emptySet()) }
-        }
-            .filterValues { it.isNotEmpty() }
+            c.id to sortedMapOf<Long, Int>().also { fields(c.id, 0, it, emptySet()) }
+        }.filterValues { it.isNotEmpty() }
         return Snapshot(fixture, ClassHierarchy(views), fieldMap)
     }
 

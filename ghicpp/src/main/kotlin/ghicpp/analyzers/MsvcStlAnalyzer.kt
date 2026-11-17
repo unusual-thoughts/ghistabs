@@ -41,10 +41,7 @@ class MsvcStlAnalyzer :
             val result = StlApplier(program, archive.dataTypeManager, MsvcRuntime.ARCHIVES.classes(name)).apply()
             val laid = result.replaced + result.filled + result.laid
             if (laid + result.recorded > 0) {
-                report(
-                    "laid out $laid std class(es) from $name.gdt, " +
-                        "recorded the bases of ${result.recorded}",
-                )
+                report("laid out $laid std class(es) from $name.gdt, recorded the bases of ${result.recorded}")
             }
         }
         return true
