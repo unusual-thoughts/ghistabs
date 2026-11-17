@@ -34,7 +34,7 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
 
     @BeforeAll
     fun analyze() {
-        loaded = loadProgram(File(TestBinaries.HELLOS, GenericVftableFixtureIntegrationTest.FIXTURE), "gcc")
+        loaded = loadProgram(File(TestBinaries.HELLOS, FIXTURE), "gcc")
         program.runTransaction("enable") { program.setAnalyzerEnabled(GenericVftableAnalyzer.NAME) }
         mgr.initializeOptions()
         mgr.reAnalyzeAll(null)
@@ -89,5 +89,9 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
     fun `a one-time run is followed by Method classes from this while it is enabled`() {
         unguessThenRunOnce(methodClassesEnabled = true)
         guesses() mustBe guessed
+    }
+
+    private companion object {
+        const val FIXTURE = "hello_elf64_gcc13_nortti_stripped"
     }
 }
