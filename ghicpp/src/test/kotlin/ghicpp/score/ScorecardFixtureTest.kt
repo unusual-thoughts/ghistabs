@@ -81,10 +81,12 @@ data class TruthFile(val snapshot: Snapshot, val runtime: Map<String, Long> = em
  * which takes the stabs importer. Review their diff as you would a fixture's.
  *
  * Each score is a counter per attribute (`<attribute>-tp`, `-fp`, `-fn`), held to
- * `src/test/resources/ghicpp/scorecard/baselines/<case>.json`. A counter that moves fails the test, or under
- * `-PignoreBaselines=true` only writes the new baseline to `build/test-output/shifted-baselines/`, which CI
- * uploads; `-PregenerateBaselines=true` rewrites the committed ones. Each case's scorecard, its findings and
- * both serialized class views land in `build/test-output/scorecards/<case>/`.
+ * `src/test/resources/ghicpp/scorecard/baselines/<case>.json`, and what each `-fp` and `-fn` counts, a line per
+ * instance (`<counter> <instance>`), held to `<case>.instances.txt` beside it. A counter that moves, or an
+ * instance that comes or goes, fails the test, or under `-PignoreBaselines=true` only writes the new baseline
+ * to `build/test-output/shifted-baselines/`, which CI uploads; `-PregenerateBaselines=true` rewrites the
+ * committed ones. Each case's scorecard, its instances by attribute, and both serialized class views land in
+ * `build/test-output/scorecards/<case>/`.
  */
 @Tag("integration")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -117,7 +119,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         )
         File(out, "subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), subject))
         File(out, "truth.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), truth.snapshot))
-        checkBaseline(case, card.counters())
+        checkBaseline(case, card.counters(), card.instanceLines())
     }
 
     private fun truthFor(case: ScorecardCase): Truth {
@@ -231,21 +233,29 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
-    private fun checkBaseline(case: ScorecardCase, counters: Map<String, Long>) {
+    private fun checkBaseline(case: ScorecardCase, counters: Map<String, Long>, instances: List<String>) {
         val committed = File(BASELINE_DIR, "${case.id}.json")
+        val committedInstances = File(BASELINE_DIR, "${case.id}.instances.txt")
         val text = PRETTY.encodeToString(COUNTERS, counters.toSortedMap()) + "\n"
+        val instanceText = instances.joinToString("") { "$it\n" }
         if (System.getProperty("regenerateBaselines") == "true") {
             committed.parentFile.mkdirs()
             committed.writeText(text)
+            committedInstances.writeText(instanceText)
             return
         }
         assumeTrue(committed.isFile, "no committed baseline for ${case.id}")
         val baseline = COMPACT.decodeFromString(COUNTERS, committed.readText())
-        if (baseline == counters) return
-        File(SHIFTED_DIR, "scorecard-${case.id}.json").apply { parentFile.mkdirs() }.writeText(text)
+        val baselineInstances = committedInstances.takeIf { it.isFile }?.readLines().orEmpty()
+        if (baseline == counters && baselineInstances == instances) return
+        SHIFTED_DIR.mkdirs()
+        File(SHIFTED_DIR, "scorecard-${case.id}.json").writeText(text)
+        File(SHIFTED_DIR, "scorecard-${case.id}.instances.txt").writeText(instanceText)
         val drift = (baseline.keys + counters.keys).toSortedSet()
             .filter { baseline[it] != counters[it] }
-            .map { "$it: ${baseline[it]} -> ${counters[it]}" }
+            .map { "$it: ${baseline[it]} -> ${counters[it]}" } +
+            (instances - baselineInstances.toSet()).map { "+ $it" } +
+            (baselineInstances - instances.toSet()).map { "- $it" }
         if (System.getProperty("ignoreBaselines") != "true") {
             assertEquals(emptyList<String>(), drift, "${case.id} scorecard moved")
         }
