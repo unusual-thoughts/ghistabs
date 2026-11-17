@@ -22,8 +22,8 @@ class MsvcStlAnalyzer :
     AbstractAnalyzer(
         NAME,
         "Fill the empty std classes the demangler makes with the layouts of the MSVC runtime a program " +
-            "uses (msvcp140, msvcp140d, msvcp120, msvcp90, msvcp80, msvcp70 or msvcp60): the one it imports, " +
-            "or the one its linker's toolset links statically",
+            "uses (msvcp140, msvcp140d, msvcp120, msvcp90, msvcp80, msvcp70, msvcp60 or msvcp50): " +
+            "the one it imports, or the one its linker's toolset links statically",
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
