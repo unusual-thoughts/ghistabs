@@ -322,18 +322,25 @@ class ThisFunctionDissector(
         at: Map<Address, List<Pair<ClassDecl, Long>>>,
         calls: List<ObjectCall>,
     ): VptrStores {
-        val hits = this?.storePcodeOps.orEmpty().mapNotNull { store ->
+        val stores = this?.storePcodeOps.orEmpty()
+        val hits = stores.mapNotNull { store ->
             val where = store.pcodeOp.seqnum.target
             val hit = at[where].orEmpty().filter { it.second == store.offset }.map { it.first }
             hit.takeIf { it.isNotEmpty() }?.let { where to it }
         }
+        // A primary table stored past `this` + 0, where it doesn't belong: an MSVC class's own table for a base
+        // subobject, seeded as a class of its own, as no offset_to_top groups it with its primary.
+        val elsewhere = stores.filter { it.offset > 0 }.sortedBy { it.pcodeOp.seqnum.target }.flatMap { store ->
+            at[store.pcodeOp.seqnum.target].orEmpty().filter { it.second == 0L }.map { store.offset to it.first }
+        }.groupBy({ it.first }, { it.second })
         val classes = hits.flatMapTo(mutableSetOf()) { it.second }
-        val first = hits.minOfOrNull { it.first } ?: return VptrStores(classes)
+        val first = hits.minOfOrNull { it.first } ?: return VptrStores(classes, elsewhere = elsewhere)
         val last = hits.maxOf { it.first }
         return VptrStores(
             classes,
             before = calls.filter { it.at < first }.mapTo(mutableSetOf()) { it.callee },
             after = calls.filter { it.at > last }.mapTo(mutableSetOf()) { it.callee },
+            elsewhere = elsewhere,
         )
     }
 

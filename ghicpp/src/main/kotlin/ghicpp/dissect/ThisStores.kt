@@ -41,12 +41,14 @@ internal fun Stores.withFills(fills: Stores): Stores {
 
 /**
  * The [classes] whose vtables a function stores into `this` where they belong, and what it calls on `this` or a
- * subobject of it [before] the first of those stores and [after] the last.
+ * subobject of it [before] the first of those stores and [after] the last. [elsewhere] holds the classes whose
+ * primary table it stores at another offset into `this`, by that offset, in the order it stores them.
  */
 data class VptrStores(
     val classes: Set<ClassDecl> = emptySet(),
     val before: Set<Function> = emptySet(),
     val after: Set<Function> = emptySet(),
+    val elsewhere: Map<Long, List<ClassDecl>> = emptyMap(),
 )
 
 /**
