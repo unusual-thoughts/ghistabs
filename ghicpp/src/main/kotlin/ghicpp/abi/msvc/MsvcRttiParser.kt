@@ -175,9 +175,8 @@ class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
         val vbptrs: Map<ClassDecl, Set<Long>> = hierarchies.associateWith { it.vbptrs }.filterValues { it.isNotEmpty() }
         if (vbptrs.isEmpty()) return
         // Decompiled for the class pass too, which reads the storers the same way.
-        val finder = VbtableFinder(program, classes.values, vbptrs)
-        ThisFunctionDissector(program, classes.values, this, cache).readStorers(monitor) { _, high -> finder.add(high) }
-        for ((cls, vbtables) in finder.found) (cls as RttiClass).vbtables += vbtables
+        val uses = ThisFunctionDissector(program, classes.values, this, cache).readStorers(monitor)
+        for ((cls, vbtables) in program.findVbtables(uses, vbptrs)) (cls as RttiClass).vbtables += vbtables
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }

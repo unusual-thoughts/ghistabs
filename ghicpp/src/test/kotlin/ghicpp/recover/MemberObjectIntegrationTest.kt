@@ -5,6 +5,7 @@ import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.StructorRole
 import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.classStruct
+import ghicpp.dissect.ThisFunctionDissector
 import ghicpp.stubClassStruct
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
@@ -234,6 +235,33 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         holder.length mustBe 32
         own.length mustBe 24
         sink.lines.filter { it.tag == "member-unplaced" } mustBe emptyList()
+    }
+
+    @Test
+    fun `the class pass reads the storer the parser read, nothing having changed it between`() {
+        build()
+        val sink = CapturingSink()
+        program.runTransaction("recover") {
+            GenericVftableFinder(program).seed() mustBe 1
+            ClassPass(program, PlainVtableParser(program), sink).run(TaskMonitor.DUMMY)
+        }
+        sink.lines.filter { it.tag == "dissection-stale" } mustBe emptyList()
+    }
+
+    @Test
+    fun `a dissection read before the program changed is read again`() {
+        build()
+        val sink = CapturingSink()
+        val ctor = program.functionManager.getFunctionAt(addr(CTOR))
+        val dissector = ThisFunctionDissector(program, emptyList(), sink)
+        dissector.readCalls(listOf(ctor), TaskMonitor.DUMMY)
+        dissector.readCalls(listOf(ctor), TaskMonitor.DUMMY)
+        sink.lines.filter { it.tag == "dissection-stale" } mustBe emptyList()
+
+        // Any change to the program, here a new label, may change what the decompiler makes of the function.
+        builder.createLabel(MEMBER_CTOR, "member_ctor")
+        dissector.readCalls(listOf(ctor), TaskMonitor.DUMMY).objectCalls.keys mustBe setOf(ctor)
+        sink.lines.single { it.tag == "dissection-stale" }.msg mustBe "1 read before the program changed"
     }
 
     private companion object {
