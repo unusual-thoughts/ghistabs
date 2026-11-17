@@ -2,8 +2,10 @@ package ghicpp.recover
 
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
+import ghicpp.MemberAttrs.Companion.isGuessedClass
 import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.MemberAttrs.Companion.memberAttrs
+import ghicpp.MemberAttrs.Companion.recordGuessed
 import ghicpp.StructorRole
 import ghicpp.dissect.CalledObject
 import ghicpp.dissect.ObjectCall
@@ -15,6 +17,7 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 
 /**
@@ -22,6 +25,25 @@ import ghidrakt.diagnose.DiagnosticSink
  * with a constructor or holds at an offset into its own `this`.
  */
 data class ThisCall(val caller: Function, val callee: Function, val built: GhidraClass? = null)
+
+/**
+ * What a [MethodClassPass] run moved: [perRound], how many each round that moved any did, the first off the known
+ * classes alone, each later one off guesses too.
+ */
+data class MethodClassResult(val perRound: List<Int> = emptyList()) {
+    /** How many it moved in all. */
+    val moved get() = perRound.sum()
+
+    /** How many rounds moved something; the one after them, which moved nothing, ended the run. */
+    val rounds get() = perRound.size
+
+    /** How many the rounds after the first moved: what trusting its own guesses added. */
+    val offGuesses get() = perRound.drop(1).sum()
+
+    /** "N method class(es) guessed", then, past one round, the rounds and what they added. */
+    override fun toString() = "$moved method class(es) guessed" +
+        if (rounds > 1) " in $rounds round(s), $offGuesses of them off earlier guesses" else ""
+}
 
 /** A function's class, as [MethodClassGuesser] guessed it, off [sites] calls. */
 data class MethodClassGuess(val cls: GhidraClass, val sites: Int)
@@ -76,12 +98,17 @@ fun Function.hasKnownClass() = symbol.source == SourceType.IMPORTED || symbol.so
  * off its callers' decompiled calls, against the classes [ClassHierarchyRecords] holds, their methods, the
  * objects their constructors build, and the member objects and bases their structs lay at an offset. Only a
  * method whose class is known counts ([hasKnownClass]), or one a class pass placed ([isPlacedByClassPass]), so
- * neither another guess nor `RecoverClassesFromRTTIScript`'s placements are evidence.
+ * neither another guess (unless [trustGuesses]) nor `RecoverClassesFromRTTIScript`'s placements are evidence.
  * Each guess moves the function into its class, its convention then a method's ([fixMethodConvention]: a
  * `__fastcall` that takes nothing in EDX becomes a `__thiscall`), and leaves an Analysis bookmark saying where
  * it came from.
+ *
+ * With [trustGuesses], a guess is evidence too: the methods it guessed, in this run or an earlier one
+ * ([isGuessedClass]), are decompiled as a known class's are, and it guesses again off their calls, round after round
+ * until a round moves nothing, or [MAX_ROUNDS].
  */
-class MethodClassPass(private val program: Program, sink: DiagnosticSink) : DiagnosticSink by sink {
+class MethodClassPass(private val program: Program, sink: DiagnosticSink, private val trustGuesses: Boolean = false) :
+    DiagnosticSink by sink {
     private val thisStorage = program.thisStorage()
     private val symbols = program.symbolTable
 
@@ -97,34 +124,70 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
         }.toMap()
     }
 
-    /** How many it moved. Only the evidence is decompiled: the recorded classes' methods and constructors' callers. */
-    fun run(monitor: TaskMonitor): Int {
-        if (bases.isEmpty() || thisStorage == null) return 0
+    /**
+     * How many it moved, round by round. Only the evidence is decompiled: the recorded classes' methods and
+     * constructors' callers, then, with [trustGuesses], the methods each round moved.
+     */
+    fun run(monitor: TaskMonitor): MethodClassResult {
+        if (bases.isEmpty() || thisStorage == null) return MethodClassResult()
         val functions = program.functionManager.getFunctions(true).toList()
         val candidates = functions.filterTo(mutableSetOf()) { it.isCandidate() }
-        if (candidates.isEmpty()) return 0
+        if (candidates.isEmpty()) return MethodClassResult()
         val byId = bases.keys.associateBy { it.id }
         val recorded = functions.filterTo(mutableSetOf()) { program.isPlacedByClassPass(it) }
         val recordedCtors = recorded.filterTo(mutableSetOf()) {
             program.memberAttrs(it.entryPoint)?.structor == StructorRole.CONSTRUCTOR
         }
-        val methods = functions.filter { it.hasKnownClass() || it in recorded }
-            .mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap()
+        // What counts as placed in its class: what a class pass placed, and, trusted, what an earlier run guessed.
+        val trusted = recorded + functions.filter { trustGuesses && program.isGuessedClass(it) }
+        val methods = functions.filter { it.hasKnownClass() || it in trusted }
+            .mapNotNull { f -> byId[f.parentNamespace.id]?.let { f to it } }.toMap(mutableMapOf())
         // A constructor the debug info names goes by its class's name.
         val ctors = methods.filter { (f, cls) -> f in recordedCtors || (f.hasKnownClass() && f.name == cls.name) }
         monitor.message = "Finding constructors' callers"
         val evidence = methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }
-        val read = ThisFunctionDissector(program, emptyList(), this)
-            .readCalls(evidence, monitor, "Decompiling methods and constructors' callers")
-        val calls = read.objectCalls.flatMap { (f, calls) ->
-            thisCalls(f, calls, ctors, methods[f]).filter { it.callee in candidates }
+        return MethodClassResult(guessRounds(evidence, candidates, methods, ctors, trusted, monitor)).also { result ->
+            if (trustGuesses) log("method-class-rounds", "$result: ${result.perRound.joinToString(", ")} per round")
         }
-        val guesses = MethodClassGuesser(bases, recorded).guess(calls)
-        monitor.initialize(guesses.size.toLong(), "Moving methods into their guessed classes")
-        return guesses.count { (f, guess) ->
-            monitor.increment()
-            place(f, guess)
+    }
+
+    /**
+     * Guesses off the calls [firstEvidence] makes, and with [trustGuesses] again off those the methods each round
+     * moved, until one moves none of [candidates]: how many each round moved. [methods] and [known] grow by them.
+     */
+    private fun guessRounds(
+        firstEvidence: Collection<Function>,
+        candidates: MutableSet<Function>,
+        methods: MutableMap<Function, GhidraClass>,
+        ctors: Map<Function, GhidraClass>,
+        trusted: Collection<Function>,
+        monitor: TaskMonitor,
+    ): List<Int> {
+        var evidence = firstEvidence
+        val dissector = ThisFunctionDissector(program, emptyList(), this)
+        val known = trusted.toMutableSet()
+        val calls = mutableListOf<ThisCall>()
+        val perRound = mutableListOf<Int>()
+        for (round in 1..(if (trustGuesses) MAX_ROUNDS else 1)) {
+            if (evidence.isEmpty() || candidates.isEmpty()) break
+            val what = if (round == 1) "methods and constructors' callers" else "guessed methods, round $round"
+            for ((f, made) in dissector.readCalls(evidence, monitor, "Decompiling $what").objectCalls) {
+                calls += thisCalls(f, made, ctors, methods[f]).filter { it.callee in candidates }
+            }
+            val guesses = MethodClassGuesser(bases, known).guess(calls.filter { it.callee in candidates })
+            monitor.initialize(guesses.size.toLong(), "Moving methods into their guessed classes")
+            val placed = guesses.filter { (f, guess) ->
+                monitor.increment()
+                place(f, guess, round)
+            }
+            if (placed.isEmpty()) break
+            perRound += placed.size
+            candidates -= placed.keys
+            known += placed.keys
+            placed.forEach { (f, guess) -> methods[f] = guess.cls }
+            evidence = placed.keys
         }
+        return perRound
     }
 
     /** An unnamed global function whose first argument comes in where `this` does ([takesThisAt]). */
@@ -183,14 +246,20 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
         return null
     }
 
-    private fun place(f: Function, guess: MethodClassGuess): Boolean = runCatching {
+    /**
+     * Moves [f] into its [guess]ed class, recorded as guessed ([recordGuessed]) and bookmarked as guessed in
+     * [round], off guesses of its own after the first.
+     */
+    private fun place(f: Function, guess: MethodClassGuess, round: Int): Boolean = runCatching {
         f.parentNamespace = guess.cls
         f.fixMethodConvention(takesThis = true)
+        program.recordGuessed(f)
+        val off = if (round == 1) "objects of known class" else "objects of known or guessed class, round $round"
         program.bookmarkManager.setBookmark(
             f.entryPoint,
             BookmarkType.ANALYSIS,
             BOOKMARK,
-            "Class guessed from ${guess.sites} call(s) on objects of known class",
+            "Class guessed from ${guess.sites} call(s) on $off",
         )
     }.onFailure {
         warn("this-class-unplaced", "${f.name} -> ${guess.cls.getName(true)}: $it", f.entryPoint)
@@ -198,6 +267,9 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
 
     companion object {
         const val BOOKMARK = "Method class guess"
+
+        /** How many rounds a run that trusts its guesses guesses at most. */
+        const val MAX_ROUNDS = 16
 
         /** How deep [classAt] looks into structs within structs. */
         private const val MAX_NESTING = 8

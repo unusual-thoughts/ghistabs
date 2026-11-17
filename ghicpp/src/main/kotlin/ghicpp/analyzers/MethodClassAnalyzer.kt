@@ -6,13 +6,18 @@ import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
 import ghidra.app.util.importer.MessageLog
+import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghidrakt.BoolOption
+import ghidrakt.analyzerOptions
 import ghidrakt.diagnose.AnalysisProbe
 import ghidrakt.diagnose.MessageLogSink
 import ghidrakt.diagnose.report
+import ghidrakt.get
 import ghidrakt.isAnalyzerEnabled
+import ghidrakt.register
 
 /**
  * Guess the class of each unnamed function that takes a `this`, off the objects its callers pass it
@@ -41,13 +46,15 @@ class MethodClassAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
+    override fun registerOptions(options: Options, program: Program) = options.register(TRUST_GUESSES)
+
     override fun canAnalyze(program: Program) = program.compilerSpec.callingConventions.any { it.hasThisPointer() }
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         if (isUpToDate(program)) return true
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val moved = MethodClassPass(program, sink).run(monitor)
-        if (moved > 0) report("guessed the class of $moved function(s)")
+        val result = MethodClassPass(program, sink, program.analyzerOptions(NAME)[TRUST_GUESSES]).run(monitor)
+        if (result.moved > 0) report("$result")
         lastRun = program.uniqueProgramID to program.modificationNumber
         return true
     }
@@ -57,6 +64,14 @@ class MethodClassAnalyzer :
 
     companion object {
         const val NAME = "Method classes from this"
+
+        /** Whether [MethodClassPass] counts its own guesses as evidence, and guesses again off them. */
+        val TRUST_GUESSES = BoolOption(
+            "Trust guessed method classes",
+            "Count the methods it guessed the class of as evidence, as it does the ones a class pass placed, " +
+                "and guess again off the calls they make, until nothing more moves",
+            false,
+        )
 
         /**
          * Have a run of this follow the class pass that just ran on [program], when this is enabled: a one-time
