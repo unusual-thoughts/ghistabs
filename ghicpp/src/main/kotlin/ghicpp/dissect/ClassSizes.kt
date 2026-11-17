@@ -113,7 +113,7 @@ class AllocationSizeFinder(
         val sizes = mutableMapOf<ClassDecl, MutableSet<Long>>()
         for (call in calls.objectCalls.values.flatten()) {
             val cls = ctors[call.callee] ?: continue
-            val obj = call.obj as? CalledObject.Callee ?: continue
+            val obj = call.obj as? CalledObject.Returned ?: continue
             if (call.offset != 0L || obj.madeBy?.name !in abi.operatorNewNames) continue
             obj.arg?.let { sizes.getOrPut(cls) { mutableSetOf() } += it }
         }

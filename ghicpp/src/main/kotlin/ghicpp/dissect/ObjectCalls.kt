@@ -21,10 +21,10 @@ sealed interface CalledObject {
      * Another object, one a call at [madeAt] returned: [madeBy] that call's callee, with [arg] its first argument
      * where a constant, as `operator new(size)` is.
      */
-    data class Callee(override val id: Int, val madeAt: Address, val madeBy: Function?, val arg: Long?) : CalledObject
+    data class Returned(override val id: Int, val madeAt: Address, val madeBy: Function?, val arg: Long?) : CalledObject
 
     /** Another object that the caller has, a local or an argument. */
-    data class Caller(override val id: Int) : CalledObject
+    data class Local(override val id: Int) : CalledObject
 }
 
 /**
@@ -36,7 +36,7 @@ data class ObjectCall(
     val callee: Function,
     val obj: CalledObject,
     val offset: Long,
-    val returns: CalledObject.Callee? = null,
+    val returns: CalledObject.Returned? = null,
 )
 
 /**
@@ -48,18 +48,18 @@ internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
     fun objectOf(root: HighVariable): CalledObject = ids.getOrPut(root) {
         if (PointerInto(root, 0).isThis(thisAt)) return@getOrPut CalledObject.This
         root.instances.firstNotNullOfOrNull { it.def?.takeIf { op -> op.opcode == PcodeOp.CALL } }?.let { call ->
-            CalledObject.Callee(
+            CalledObject.Returned(
                 ids.size,
                 call.seqnum.target,
                 directCallee(call),
                 call.takeIf { it.numInputs > 1 }?.getInput(1)?.takeIf { it.isConstant }?.offset,
             )
-        } ?: CalledObject.Caller(ids.size)
+        } ?: CalledObject.Local(ids.size)
     }
     return pcodeOps.asSequence().mapNotNull { op ->
         val callee = directCallee(op) ?: return@mapNotNull null
         val obj = op.thisArgument(callee)?.pointerInto() ?: return@mapNotNull null
-        val returns = op.output?.pointerInto()?.let { objectOf(it.root) as? CalledObject.Callee }
+        val returns = op.output?.pointerInto()?.let { objectOf(it.root) as? CalledObject.Returned }
         ObjectCall(op.seqnum.target, callee, objectOf(obj.root), obj.offset, returns)
     }.toList()
 }

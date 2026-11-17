@@ -190,7 +190,7 @@ class ThisFunctionDissector(
         fun part(where: Address) = starts.count { it <= where }
         val into: (PointerInto) -> Boolean = { it.root == fresh }
         val made = new.seqnum.target
-        val calls = objectCalls.filter { (it.obj as? CalledObject.Callee)?.madeAt == made && it.at > made }
+        val calls = objectCalls.filter { (it.obj as? CalledObject.Returned)?.madeAt == made && it.at > made }
         val types = componentMap.iterator().asSequence().associate { (offset, dt) -> offset.toInt() to dt }
         val fields = stores.mapNotNull { store ->
             val dt = types[store.offset.toInt()]?.takeIf { it.length > 0 } ?: return@mapNotNull null
