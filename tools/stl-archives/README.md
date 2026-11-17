@@ -19,6 +19,7 @@ rebuilt on Ghidra 10.4 from the layouts text (see below), so 10.4 and every newe
 | `msvcp90_{x86,x64}` | Microsoft's public PDB of msvcp90 9.0.30729.9619, the last security rebuild | |
 | `msvcp120_{x86,x64}` | Microsoft's public PDB of msvcp120 as the Visual Studio 2013 redistributable installs it | |
 | `msvcp80_x86` | Microsoft's public PDB of msvcp80 8.0.50727.6195, the last security rebuild; the x64 one stops Ghidra 12.3's PDB applicator on a virtual base table entry with no offset | |
+| `msvcp70_x86` | Microsoft's public PDB of msvcp70 (Visual Studio .NET 2002), with the DLL the symbol server also keeps as the program; serves msvcp70d too, whose layouts differ only in `basic_filebuf::_Mystr` pointing at a `_DebugHeapString` | |
 | `msvcp60_x86` | `MSVCP60D.PDB` from the Visual C++ 6.0 Professional disc (archive.org's X04-58170), with its `MSVCP60D.DLL` as the program | |
 
 msvcp60 serves both VC6 runtimes: its headers test `_DEBUG` only to pick the library to link, so the
