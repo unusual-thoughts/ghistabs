@@ -18,7 +18,7 @@ import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghidrakt.BoolOption
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 
 /**
