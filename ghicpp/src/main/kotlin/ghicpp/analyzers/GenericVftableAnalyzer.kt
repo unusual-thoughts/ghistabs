@@ -7,7 +7,6 @@ import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
 import ghicpp.recover.ClassPass.Companion.INLINED_CONSTRUCTORS
 import ghicpp.recover.GenericVftableFinder
 import ghicpp.recover.MemberObjectPass
-import ghicpp.recover.MethodClassPass
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -27,8 +26,9 @@ import ghidrakt.diagnose.report
  * the RTTI class analyzers do ([ClassPass] over a [PlainVtableParser]): each slot's target made a function and
  * moved into its class, the constructors and destructors found by their vtable stores, the class sized and
  * its struct filled, and the classes with no vtable that their constructors build members of
- * ([MemberObjectPass]). Then guess the class of the non-virtual methods off the objects passed to them
- * ([MethodClassPass]).
+ * ([MemberObjectPass]). *Method classes from this* ([MethodClassAnalyzer]) runs after it, and guesses the
+ * class of the non-virtual methods off the objects passed to them, and this asks for a run of it after
+ * each of its own ([MethodClassAnalyzer.followClassPass]), which a one-time run of this has none of otherwise.
  *
  * Off by default: its tables are a guess off their shape. It reads references, so run it once most of the
  * program is disassembled and its operand references are marked, and again after: the code its slots led to
@@ -42,8 +42,9 @@ class GenericVftableAnalyzer :
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
-        // After the class analyzers whose RTTI claims its tables first, and the method class guesses off those.
-        priority = AnalysisPriority.LOW_PRIORITY.after().after().after().after().after()
+        // After the class analyzers whose RTTI claims its tables first, and before the method class guesses off
+        // their classes and its own.
+        priority = AnalysisPriority.LOW_PRIORITY.after().after().after().after()
         setDefaultEnablement(false)
         setSupportsOneTimeAnalysis()
     }
@@ -61,12 +62,11 @@ class GenericVftableAnalyzer :
         val result = pass.run(monitor)
         val members = result.found?.takeIf { options[MEMBER_OBJECTS] }
             ?.let { MemberObjectPass(program, sink, pass.fillArrays).run(it, monitor) } ?: 0
-        val guessed = MethodClassPass(program, sink).run(monitor)
         report(
             "$seeded vftable(s) seeded; ${result.classes} class(es), ${result.owned} virtual function(s) owned, " +
-                "${result.structors} constructor(s) and destructor(s) named, $members member object class(es), " +
-                "$guessed method class(es) guessed",
+                "${result.structors} constructor(s) and destructor(s) named, $members member object class(es)",
         )
+        MethodClassAnalyzer.followClassPass(program, set)
         return true
     }
 
