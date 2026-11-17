@@ -14,12 +14,12 @@ import ghidra.app.util.bin.format.pdb2.pdbreader.type.AbstractUnionMsType
 import ghidra.app.util.bin.format.pdb2.pdbreader.type.AbstractVirtualBaseClassMsType
 import ghidra.app.util.bin.format.pdb2.pdbreader.type.ClassFieldMsAttributes
 import ghidra.app.util.pdb.pdbapplicator.DefaultPdbApplicator
+import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DataTypePath
 import ghidrakt.methodAttributes
 import ghidrakt.methodListType
 import ghidrakt.procedureType
 import ghidrakt.vftableOffset
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypePath
 
 /** [StdClasses] off an MSVC runtime's PDB, for `MsvcStlArchiveScript`. */
 object MsvcPdbClasses {
