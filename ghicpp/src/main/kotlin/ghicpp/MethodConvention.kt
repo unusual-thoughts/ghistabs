@@ -36,19 +36,27 @@ fun Function.argumentAt(i: Int): Address? {
 fun Function.takesThisAt(thisStorage: Address?) = !isExternal && thisStorage != null && argumentAt(0) == thisStorage
 
 /**
- * Which of its arguments is `this`: the second where a `__cdecl` function pops one word, which is gcc's
- * hidden pointer for a class returned in memory, and the first otherwise.
+ * Whether [this] takes a hidden pointer to the object it returns ahead of its arguments, and pops it itself:
+ * a 32-bit `__cdecl` function popping one word, as gcc's i386 code returns a class in memory. One whose
+ * convention Ghidra doesn't know goes by the program's default, so MSVC's, `__stdcall`, never counts.
  */
-fun Function.thisIndex() = if (callingConventionName == CDECL && stackPurgeSize == program.defaultPointerSize) 1 else 0
+fun Function.returnsInSlot(): Boolean {
+    if (program.defaultPointerSize != 4 || stackPurgeSize != 4) return false
+    val named = callingConventionName.takeUnless {
+        it == Function.UNKNOWN_CALLING_CONVENTION_STRING || it == Function.DEFAULT_CALLING_CONVENTION_STRING
+    }
+    return (named ?: program.compilerSpec.defaultCallingConvention.name) == CDECL
+}
+
+/** Which of its arguments is `this`: the second after a hidden return pointer ([returnsInSlot]), else the first. */
+fun Function.thisIndex() = if (returnsInSlot()) 1 else 0
 
 /**
- * Whether [this] takes, as its first argument, a hidden pointer to the object it returns, as gcc's i386 code
- * passes one ahead of `this` and pops it on the way out (`ret 4`): a 32-bit function whose caller cleans the stack,
- * by its convention, but which pops one word itself. What it calls on that pointer builds the object it returns,
- * not its own `this`.
+ * Where [this]'s `this` comes in: [thisStorage], the program's, or past a hidden return pointer
+ * ([returnsInSlot]), the second argument.
  */
-fun Function.returnsInSlot() = program.defaultPointerSize == 4 && stackPurgeSize == 4 &&
-    callingConventionName !in setOf(THISCALL, STDCALL, FASTCALL)
+fun Function.thisAt(thisStorage: Address? = program.thisStorage()): Address? =
+    if (returnsInSlot()) argumentAt(1) else thisStorage
 
 /** The argument a call passes [callee] as its `this`. */
 fun PcodeOp.thisArgument(callee: Function): Varnode? = callee.thisIndex().let { i ->

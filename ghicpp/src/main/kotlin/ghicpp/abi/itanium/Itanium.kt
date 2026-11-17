@@ -1,10 +1,10 @@
 package ghicpp.abi.itanium
 
 import ghicpp.*
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.Structor
-import ghicpp.abi.StructorRole
-import ghicpp.abi.VtableRecord
+import ghicpp.CxxAbi
+import ghicpp.Structor
+import ghicpp.StructorRole
+import ghicpp.VtableRecord
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.app.util.demangler.DemangledObject

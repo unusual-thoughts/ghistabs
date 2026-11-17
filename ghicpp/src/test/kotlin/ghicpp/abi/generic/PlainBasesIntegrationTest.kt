@@ -170,7 +170,10 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             "C" to listOf("cdMake", "c2", "shared"),
             "D" to listOf("cdMake", "c2", "shared"),
         )
-        builder.withTransaction { fn("cdMake").stackPurgeSize = 4 }
+        builder.withTransaction {
+            fn("cdMake").setCallingConvention("__cdecl")
+            fn("cdMake").stackPurgeSize = 4
+        }
         bases(
             mapOf("mDtor" to setOf("M"), "bDtor" to setOf("B")),
             mapOf("mDtor" to mapOf(0L to setOf("bDtor")), "cdMake" to mapOf(0L to setOf("mDtor"))),

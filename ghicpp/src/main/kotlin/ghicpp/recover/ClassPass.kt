@@ -4,8 +4,9 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.recordPlaced
-import ghicpp.abi.RttiParser
-import ghicpp.abi.StructorRole
+import ghicpp.RttiParser
+import ghicpp.StructorRole
+import ghicpp.abi.slots
 import ghicpp.dissect.*
 import ghicpp.hierarchy.typePureSlots
 import ghidra.framework.options.Options
@@ -103,7 +104,7 @@ class ClassPass(
             val align = if (cls.vftables.isEmpty()) 1L else program.defaultPointerSize.toLong()
             end.alignedTo(align)
         }
-        val called = AllocationSizeFinder(program, abi, this).read(ctors, monitor, found.inlined)
+        val called = AllocationSizeFinder(program, abi, this, inspector).read(ctors, monitor, found.inlined)
         val allocated = (called.keys + found.inlinedSizes.keys).associateWith { cls ->
             maxOf(called[cls] ?: 0L, found.inlinedSizes[cls] ?: 0L)
         }

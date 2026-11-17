@@ -4,9 +4,9 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.recordPlaced
-import ghicpp.abi.StructorRole
-import ghicpp.abi.StructorRole.CONSTRUCTOR
-import ghicpp.abi.StructorRole.DESTRUCTOR
+import ghicpp.StructorRole
+import ghicpp.StructorRole.CONSTRUCTOR
+import ghicpp.StructorRole.DESTRUCTOR
 import ghicpp.abi.generic.PlainClass
 import ghicpp.abi.generic.PlainVtables
 import ghicpp.dissect.*

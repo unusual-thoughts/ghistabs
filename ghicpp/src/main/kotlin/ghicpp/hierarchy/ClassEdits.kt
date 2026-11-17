@@ -5,8 +5,8 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassEdit
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.slotDefinition
+import ghicpp.dissect.updateFieldTypes
 import ghicpp.hierarchy.ClassHierarchy.*
-import ghicpp.recover.updateFieldTypes
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Function

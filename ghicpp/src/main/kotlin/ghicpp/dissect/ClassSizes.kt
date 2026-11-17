@@ -1,12 +1,11 @@
 package ghicpp.dissect
 
 import ghicpp.ClassDecl
-import ghicpp.abi.CxxAbi
+import ghicpp.CxxAbi
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
-import ghidra.program.model.pcode.PcodeOp
 import ghidra.util.task.TaskMonitor
-import ghidrakt.alignedTo
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 
 /**
@@ -99,12 +98,16 @@ private const val MAX_DEPTH = 64
 
 /**
  * Reads the sizes each class is allocated with: the `operator new(size)` result a constructor runs on,
- * found in the decompiled callers of [ctors]. Not where a constructor is inlined after that `operator new`
- * ([InlinedConstruction.at]): there the constructor called first builds a base of the class the inlined one
- * builds, which the allocation is the size of.
+ * found in the callers of [ctors] as [dissector] reads them. Not where a constructor is inlined after that
+ * `operator new` ([InlinedConstruction.at]): there the constructor called first builds a base of the class the
+ * inlined one builds, which the allocation is the size of.
  */
-class AllocationSizeFinder(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
-    DiagnosticSink by sink {
+class AllocationSizeFinder(
+    private val program: Program,
+    private val abi: CxxAbi,
+    sink: DiagnosticSink,
+    private val dissector: ThisFunctionDissector = ThisFunctionDissector(program, emptyList(), sink),
+) : DiagnosticSink by sink {
     fun read(
         ctors: Map<Function, ClassDecl>,
         monitor: TaskMonitor,
@@ -113,28 +116,17 @@ class AllocationSizeFinder(private val program: Program, private val abi: CxxAbi
         val inlinedAt = inlined.mapTo(mutableSetOf()) { it.at }
         monitor.message = "Finding constructors' callers"
         val callers = ctors.keys.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
+        val calls = dissector.readCalls(callers, monitor, "Decompiling constructors' callers for allocation sizes")
         val sizes = mutableMapOf<ClassDecl, MutableSet<Long>>()
-        program.decompileEach(callers, monitor, "Decompiling constructors' callers for allocation sizes") { _, high ->
-            for (op in high.pcodeOps.asSequence()) {
-                val cls = op.callee()?.let(ctors::get) ?: continue
-                val obj = op.getInput(1).pointerInto()?.takeIf { it.offset == 0L } ?: continue
-                val alloc = obj.root.instances.mapNotNull { it.def }.firstOrNull { it.isOperatorNew() }
-                    ?.takeUnless { it.seqnum.target in inlinedAt }
-                val size = alloc?.getInput(1)?.takeIf { it.isConstant }
-                size?.let { sizes.getOrPut(cls) { mutableSetOf() } += it.offset }
-            }
+        for (call in calls.objectCalls.values.flatten()) {
+            val cls = ctors[call.callee]?.takeUnless { call.slot } ?: continue
+            val obj = call.obj as? CalledObject.Returned ?: continue
+            if (call.offset != 0L || obj.madeBy?.name !in abi.operatorNewNames || obj.madeAt in inlinedAt) continue
+            obj.arg?.let { sizes.getOrPut(cls) { mutableSetOf() } += it }
         }
         return sizes.mapValues { (cls, all) ->
             if (all.size > 1) debug("msvc-new-sizes", "${cls.name} allocated with sizes $all")
             all.max()
         }
     }
-
-    private fun PcodeOp.callee(): Function? {
-        if (opcode != PcodeOp.CALL || numInputs < 2) return null
-        val f = program.functionManager.getFunctionAt(getInput(0).address) ?: return null
-        return f.getThunkedFunction(true) ?: f
-    }
-
-    private fun PcodeOp.isOperatorNew() = callee()?.name in abi.operatorNewNames
 }

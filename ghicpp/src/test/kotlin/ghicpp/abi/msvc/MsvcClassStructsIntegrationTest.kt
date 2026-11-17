@@ -2,7 +2,7 @@ package ghicpp.abi.msvc
 
 import ghicpp.ClassDecl
 import ghicpp.ClassStructsFixtureTest
-import ghicpp.abi.isPrimaryTableSymbol
+import ghicpp.abi.slots
 import ghicpp.analyzers.MsvcClassAnalyzer
 import ghicpp.hierarchy.*
 import ghicpp.qualifiedName
@@ -55,8 +55,8 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
             }
         }
         try {
-            symbols.map { Msvc.isPrimaryVtable(it.name) } mustBe listOf(false, false)
-            symbols.map { isPrimaryTableSymbol(it, Msvc) } mustBe listOf(true, false)
+            symbols.map { Msvc.isOnlyVftable(it.name) } mustBe listOf(false, false)
+            symbols.map { Msvc.isPrimaryTableSymbol(it) } mustBe listOf(true, false)
         } finally {
             program.runTransaction { symbols.forEach { it.delete() } }
         }

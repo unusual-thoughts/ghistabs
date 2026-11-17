@@ -1,14 +1,15 @@
 package ghistabs.integration
 
 import ghicpp.*
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.CxxAbi.Companion.prevailingAbi
+import ghicpp.CxxAbi
 import ghicpp.abi.gcc2.Gcc2
 import ghicpp.abi.gcc2.Gcc2Abi
 import ghicpp.abi.isPrimaryVftable
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.isTypeinfo
+import ghicpp.abi.prevailingAbi
 import ghicpp.abi.vftableStructAt
+import ghicpp.abi.vtableCandidates
 import ghicpp.eh.SjljLsda
 import ghicpp.eh.SjljLsdaPass
 import ghicpp.eh.SjljRegistrationFinder
