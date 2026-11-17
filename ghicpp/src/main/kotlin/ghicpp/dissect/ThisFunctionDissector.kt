@@ -99,26 +99,25 @@ class ThisFunctionDissector(
     }
 
     /**
-     * The stores of each function writing one of [tables], and what those and [others] call on `this`, decompiled.
-     * A store counts only through `this` at the table's own offset, which leaves out locals built inline and
-     * member objects; a call, only with `this` first, which leaves out a local built and destroyed. A store into
-     * what `operator new` just returned is a constructor inlined there ([inlined]). [visit] sees each as
-     * decompiled, so it decompiles them all, read in [cache] already or not.
+     * Decompiles the functions that store the classes' vptrs, and [others]. For each one, reads what it stores
+     * and calls through `this`, and the objects it builds.
+     *
+     * A vptr store counts only when it goes through `this` at the table's own offset, so locals built inline and
+     * member objects are left out. A call counts only when `this` is its first argument, so a local built and
+     * destroyed is left out. A store into what `operator new` just returned is a constructor inlined after the
+     * call ([inlined]).
      */
-    fun readStorers(
-        monitor: TaskMonitor,
-        others: Collection<Function> = emptyList(),
-        visit: ((Function, HighFunction) -> Unit)? = null,
-    ): Dissections {
+    fun readStorers(monitor: TaskMonitor, others: Collection<Function> = emptyList()): Dissections {
         monitor.message = "Finding vptr stores"
         val writes = program.vptrWriters(tables)
         if (writes.isEmpty()) return Dissections()
-        return decompile(writes.keys + others, writes, monitor, visit = visit)
+        return decompile(writes.keys + others, writes, monitor)
     }
 
     /**
      * What [funcs] store and call through `this`, decompiled, and which of [writes]' vptrs each stores; what
-     * [cache] holds read the same way already isn't decompiled again, unless [visit] is to see it.
+     * [cache] already holds a read of, made the same way, is not decompiled again, unless the program has
+     * changed since that read.
      */
     private fun decompile(
         funcs: Collection<Function>,
@@ -126,16 +125,20 @@ class ThisFunctionDissector(
         monitor: TaskMonitor,
         message: String = "Decompiling constructors and destructors",
         storedOnly: Boolean = true,
-        visit: ((Function, HighFunction) -> Unit)? = null,
     ): Dissections {
         if (thisStorage == null) return Dissections()
         fun key(func: Function) = DissectionCache.Key(func, writes[func], storedOnly)
         val fill = FillOutStructureHelper(program, monitor)
-        val fresh = if (visit != null) funcs else funcs.filter { key(it) !in cache.reads }
-        program.decompileEach(fresh, monitor, message, {
+        // Any change to the program since a read may change what the decompiler makes of the function now.
+        val version = program.modificationNumber
+        val (fresh, stale) = funcs.filter { cache.reads[key(it)]?.version != version }
+            .partition { key(it) !in cache.reads }
+        if (stale.isNotEmpty()) {
+            debug("dissection-stale", "${stale.size} read before the program changed", count = stale.size.toLong())
+        }
+        program.decompileEach(fresh + stale, monitor, message, {
             debug("structor-undecompiled", it.name, it.entryPoint)
         }) { func, high ->
-            visit?.invoke(func, high)
             // Where this one's `this` comes in, past a hidden return pointer where it takes one.
             val thisAt = func.thisAt(thisStorage)
             val intoThis: (PointerInto) -> Boolean = { it.isThis(thisAt) }
@@ -151,6 +154,8 @@ class ThisFunctionDissector(
                 filled.thisStores(storedOnly).withFills(fills),
                 inlined,
                 objectCalls,
+                writes[func]?.let { high.objectsBuilt(tables) }.orEmpty(),
+                version,
             )
         }
         return Dissections(funcs.mapNotNull { f -> cache.reads[key(f)]?.let { f to it } }.toMap())
@@ -376,7 +381,8 @@ class Allocation(val caller: Function, val at: Address, val size: Long, val firs
  * How [ThisFunctionDissector]s read functions: with [fillArrays], a field one fills in a counted loop or with
  * `memset` is an array; after a call of one of [operatorNewNames], `operator new(size)`, a constructor inlined
  * builds its object. And what the dissectors sharing it read of each function already, so that a parser that
- * dissects as it parses ([DissectingParser]) and the class pass after it decompile each function once.
+ * dissects as it parses ([DissectingParser]) and the class pass after it decompile each function once. That holds
+ * only while nothing changes the program: a function read before a change is decompiled again.
  */
 class DissectionCache(
     val fillArrays: Boolean = true,
@@ -397,6 +403,9 @@ class DissectionCache(
         val thisStores: Stores = emptyMap(),
         val inlined: List<InlinedConstruction> = emptyList(),
         val objectCalls: List<ObjectCall> = emptyList(),
+        val objectsBuilt: Map<ClassDecl, Map<Long, Address>> = emptyMap(),
+        /** The program's [Program.getModificationNumber] when the function was read. */
+        val version: Long = 0,
     )
 
     internal val reads = mutableMapOf<Key, Dissection>()

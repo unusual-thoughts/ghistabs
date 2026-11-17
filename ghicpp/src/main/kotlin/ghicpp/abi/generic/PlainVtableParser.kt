@@ -377,6 +377,8 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
                     .sortedBy { it.first }.map { it.second }
                 PlainClass(ns, (labels + secondaries).map { PlainVtables.recordAt(program, it.address) })
             }
+        // Look up the slots' functions before reading the storers. Looking one up can create it, which changes
+        // the program, and the class pass would then have to decompile the storers again.
         val targets = classes.associateWith { c ->
             c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty()
         }
@@ -385,9 +387,10 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         }
         // An unnamed pure virtual stub never returns: it aborts.
         val slots = own.mapValues { (_, fs) -> fs.map { f -> f?.takeUnless { it.hasNoReturn() } } }
-        // The slots' functions too, for the destructors their deleting destructors call ([BaseCandidates]): the
-        // class pass reads them next, through the same cache.
+        // Read the slots' functions too. BaseCandidates needs the destructors that deleting destructors call, and
+        // the class pass reads the same functions next, through the same cache.
         val held = slots.values.flatMapTo(mutableSetOf()) { it.filterNotNull() }
+        val holders = holders(classes)
         val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor, held)
         monitor.message = "Inferring bases from constructors"
         BaseCandidates(
@@ -395,7 +398,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             pureSlots(targets, own),
             sink,
         ).inferBases(classes, uses, classes.associateWith(::subobjects))
-        return ClassPassInput(classes, classes, holders(classes))
+        return ClassPassInput(classes, classes, holders)
     }
 
     /**

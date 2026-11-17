@@ -173,10 +173,11 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
 }
 
 /**
- * A member function's or static data member's access, virtuality and cv-qualifiers, who stated them
- * ([source]: [SourceType.IMPORTED] the stabs, [SourceType.ANALYSIS] a class pass, [SourceType.USER_DEFINED] the
- * user), and the constructor or destructor it is where a class pass found it one ([structor]). Stabs give
- * all of the first; otherwise cv comes from the mangled name, virtuality from the vtables, and access stays null.
+ * A member function's or static data member's access, virtuality and cv-qualifiers, who stated them ([source]:
+ * [SourceType.IMPORTED] the stabs, [SourceType.ANALYSIS] a class pass, [SourceType.USER_DEFINED] the user,
+ * [SourceType.DEFAULT] no one, its class a guess off the objects it is called on), and the constructor or destructor it
+ * is where a class pass found it one ([structor]). Stabs give all of the first; otherwise cv comes from the mangled
+ * name, virtuality from the vtables, and access stays null.
  */
 @Serializable
 data class MemberAttrs(
@@ -262,6 +263,18 @@ data class MemberAttrs(
 
         /** Whether a class pass moved [func] into its class ([recordPlaced]). */
         fun Program.isPlacedByClassPass(func: Function) = memberAttrs(func.entryPoint)?.source == SourceType.ANALYSIS
+
+        /**
+         * Records that [func]'s class is a guess off the objects it is called on, at [SourceType.DEFAULT], unless
+         * something stated its attributes already.
+         */
+        fun Program.recordGuessed(func: Function) {
+            if (memberAttrs(func.entryPoint)?.source != null) return
+            writeMember(func.entryPoint, MemberAttrs(source = SourceType.DEFAULT))
+        }
+
+        /** Whether [func]'s class is a guess ([recordGuessed]) nothing has confirmed since. */
+        fun Program.isGuessedClass(func: Function) = memberAttrs(func.entryPoint)?.source == SourceType.DEFAULT
     }
 }
 

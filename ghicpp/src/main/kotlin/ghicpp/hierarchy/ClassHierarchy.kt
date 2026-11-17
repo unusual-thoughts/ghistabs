@@ -388,7 +388,9 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                             kind,
                             fn.getPrototypeString(false, false),
                             fn.params,
-                            attrs = program.memberAttrs(sym.address)?.takeIf { it.source != SourceType.ANALYSIS }
+                            // A class pass's placement and a guess state no attributes of their own.
+                            attrs = program.memberAttrs(sym.address)
+                                ?.takeIf { it.source != SourceType.ANALYSIS && it.source != SourceType.DEFAULT }
                                 ?: fn.derivedAttrs(virtuals),
                             variants = symtab.getSymbols(sym.address).mapNotNull { ItaniumStructor.of(it.name) }
                                 .distinct().sorted(),
