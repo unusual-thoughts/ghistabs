@@ -24,7 +24,7 @@ running the same probe.
 
 ## Building one yourself
 
-[`build/MsvcStlArchiveScript.java`](build/MsvcStlArchiveScript.java) builds one. It uses ghicpp's classes and Ghidra 12.2+ APIs, so it needs the
+[`build/MsvcStlArchiveScript.java`](build/MsvcStlArchiveScript.java) builds one. It uses ghicpp's classes and Ghidra 12.3+ APIs, so it needs the
 ghicpp extension installed. It sits in its own folder, beside `scripts/` rather than above it, because Ghidra compiles a script folder and its subfolders as one bundle, and the scripts in `scripts/` also run on 10.4, where this one cannot compile. Add that folder to the Script Manager's paths and run it on any program of the
 right architecture, pointing it at a PDB with type information, or headless:
 

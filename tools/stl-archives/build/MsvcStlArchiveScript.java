@@ -76,7 +76,7 @@ public class MsvcStlArchiveScript extends GhidraScript {
 	}
 
 	private void build(File pdbFile, File out) throws Exception {
-		// 12.2+'s archive API: the workflow runs this on 12.3 only.
+		// 12.3's archive API: the workflow runs this on 12.3 only.
 		FileDataTypeArchive archive = DataTypeArchiveFactory.createFileArchive(out, this);
 		DataTypeManager dtm = archive.getDataTypeManager();
 		try (AbstractPdb pdb = PdbParser.parse(pdbFile, new PdbReaderOptions(), monitor)) {
