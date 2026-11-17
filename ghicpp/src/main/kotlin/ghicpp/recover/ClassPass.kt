@@ -4,8 +4,9 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.recordPlaced
-import ghicpp.abi.RttiParser
-import ghicpp.abi.StructorRole
+import ghicpp.RttiParser
+import ghicpp.StructorRole
+import ghicpp.abi.slots
 import ghicpp.dissect.*
 import ghicpp.hierarchy.typePureSlots
 import ghidra.framework.options.Options

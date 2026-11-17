@@ -4,7 +4,7 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.MemberAttrs.Companion.memberAttrs
-import ghicpp.abi.StructorRole
+import ghicpp.StructorRole
 import ghicpp.dissect.decompileEach
 import ghicpp.dissect.pointerInto
 import ghidra.program.model.data.Structure

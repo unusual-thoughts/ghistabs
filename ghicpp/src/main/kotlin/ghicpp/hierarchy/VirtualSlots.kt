@@ -4,7 +4,7 @@ package ghicpp.hierarchy
 
 import ghicpp.ClassNaming
 import ghicpp.ClassRecordSource
-import ghicpp.abi.CxxAbi
+import ghicpp.CxxAbi
 import ghicpp.abi.functionSlots
 import ghicpp.abi.gcc2.Gcc2Abi
 import ghicpp.abi.gcc2.Gcc2Plain
@@ -12,6 +12,8 @@ import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.msvc.MsvcStructor
+import ghicpp.abi.ofVftable
+import ghicpp.abi.ofVtableSymbol
 import ghicpp.classStruct
 import ghicpp.hierarchy.ClassHierarchy.ClassView
 import ghicpp.hierarchy.ClassHierarchy.Origin

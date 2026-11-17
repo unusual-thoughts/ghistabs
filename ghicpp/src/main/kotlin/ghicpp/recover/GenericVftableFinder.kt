@@ -1,9 +1,12 @@
 package ghicpp.recover
 
 import ghicpp.ClassNaming
+import ghicpp.CxxAbi
 import ghicpp.abi.*
 import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.abi.generic.PlainVtables
+import ghicpp.abi.generic.PlainVtables.MAX_SUBOBJECT_OFFSET
+import ghicpp.abi.ofVtableSymbol
 import ghicpp.describeVxTable
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRangeImpl
@@ -286,9 +289,6 @@ class GenericVftableFinder(
         val SEEDED = SourceType.ANALYSIS
 
         const val SEEDED_CLASS_PREFIX = "Klass_"
-
-        /** How far into its object a base subobject may sit, for the words before a table to read as its offset. */
-        const val MAX_SUBOBJECT_OFFSET = 0x10000L
 
         /** How many vbase and vcall offset words may sit between two tables of one group. */
         const val MAX_OFFSET_WORDS = 8L

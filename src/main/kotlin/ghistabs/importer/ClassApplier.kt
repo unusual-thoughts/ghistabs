@@ -3,7 +3,9 @@ package ghistabs.importer
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.abi.*
-import ghicpp.abi.CxxAbi.Companion.prevailingAbi
+import ghicpp.abi.ofVtableSymbol
+import ghicpp.abi.prevailingAbi
+import ghicpp.abi.vtableCandidates
 import ghicpp.recover.VtableSweepPass
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.demangler.DemangledFunction
