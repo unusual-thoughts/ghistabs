@@ -1,7 +1,6 @@
 package ghistabs.importer
 
 import ghicpp.hierarchy.typePureSlots
-import ghicpp.recover.MethodClassPass.Companion.markMethodClassesGuessed
 import ghicpp.recover.VtableSweepPass.Companion.markVtablesSwept
 import ghidrakt.*
 import ghistabs.harvest.Harvest
@@ -107,8 +106,6 @@ internal fun ImportContext<*>.runOnRecords(stabs: StabReader.Result): ImportResu
     }
     // The class pass claimed its tables: a sweep from before this import has more to leave alone now.
     program.markVtablesSwept(false)
-    // And recorded classes and their methods: method classes guessed before it have more evidence now.
-    program.markMethodClassesGuessed(false)
 
     // Pass D — publish the line map, then point it at local sources if any root was given
     val sourceMapEntries = program.runTransaction("Stabs: publish source map") {

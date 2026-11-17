@@ -2,7 +2,6 @@ package ghicpp.recover
 
 import ghicpp.analyzers.GenericVftableAnalyzer
 import ghicpp.analyzers.MethodClassAnalyzer
-import ghicpp.recover.MethodClassPass.Companion.isMethodClassesGuessed
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
@@ -30,12 +29,13 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
     private lateinit var loaded: LoadedProgram
     private val program: Program get() = loaded.program
     private val mgr get() = AutoAnalysisManager.getAnalysisManager(program)
+    private val methodClasses get() = mgr.getAnalyzer(MethodClassAnalyzer.NAME) as MethodClassAnalyzer
 
     /** Each function auto-analysis guessed the class of, with that class's full name. */
     private lateinit var guessed: Map<Address, String>
 
-    /** Whether auto-analysis left the guesses marked made. */
-    private var markedGuessed = false
+    /** Whether auto-analysis's *Method classes from this* counted itself up to date once analysis ended. */
+    private var upToDate = false
 
     /** How many functions a second pass over auto-analysis's classes moved. */
     private var movedAgain = -1
@@ -52,7 +52,7 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         }
         guessed = guesses()
         guessed.isNotEmpty().mustBeTrue()
-        markedGuessed = program.isMethodClassesGuessed
+        upToDate = methodClasses.isUpToDate(program)
         movedAgain = program.runTransaction("again") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) }
     }
 
@@ -90,13 +90,33 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
     }
 
     @Test
-    fun `auto-analysis leaves the guesses marked made, so a later run returns at once`() {
-        markedGuessed.mustBeTrue()
+    fun `nothing changes the program after auto-analysis's guesses, so a run right after returns at once`() {
+        upToDate.mustBeTrue()
     }
 
     @Test
     fun `a second pass over the same classes moves nothing`() {
         movedAgain mustBe 0
+    }
+
+    @Test
+    fun `an edit by hand makes the next run look again`() {
+        program.runTransaction("edit") { program.functionManager.getFunctionAt(guessed.keys.first()).comment = "x" }
+        methodClasses.isUpToDate(program).mustBe(false)
+    }
+
+    @Test
+    fun `a changed analysis option makes the next run look again`() {
+        program.runTransaction("run") {
+            methodClasses.added(program, program.memory, TaskMonitor.DUMMY, mgr.messageLog)
+        }
+        methodClasses.isUpToDate(program).mustBeTrue()
+        program.runTransaction("option") {
+            val options = program.analyzerOptions(GenericVftableAnalyzer.NAME)
+            val member = GenericVftableAnalyzer.MEMBER_OBJECTS
+            options.setBoolean(member.name, !options.getBoolean(member.name, member.default))
+        }
+        methodClasses.isUpToDate(program).mustBe(false)
     }
 
     @Test
