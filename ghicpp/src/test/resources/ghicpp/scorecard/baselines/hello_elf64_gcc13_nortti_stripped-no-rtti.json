@@ -23,6 +23,7 @@
     "vftables-fn": 0,
     "vftables-fp": 0,
     "vftables-tp": 11,
+    "vfunctions-unattached": 2,
     "virtual-methods-fn": 6,
     "virtual-methods-fp": 6,
     "virtual-methods-tp": 23
