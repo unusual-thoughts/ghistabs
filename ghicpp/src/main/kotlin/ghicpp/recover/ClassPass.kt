@@ -103,7 +103,7 @@ class ClassPass(
             val align = if (cls.vftables.isEmpty()) 1L else program.defaultPointerSize.toLong()
             end.alignedTo(align)
         }
-        val called = AllocationSizeFinder(program, abi, this).read(ctors, monitor)
+        val called = AllocationSizeFinder(program, abi, this).read(ctors, monitor, found.inlined)
         val allocated = (called.keys + found.inlinedSizes.keys).associateWith { cls ->
             maxOf(called[cls] ?: 0L, found.inlinedSizes[cls] ?: 0L)
         }

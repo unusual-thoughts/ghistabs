@@ -15,6 +15,8 @@ data class Snapshot(
     /** Each class's struct's leaf fields, by class id: offset to size, base classes and nested structs flattened. */
     val fields: Map<Long, Map<Long, Int>> = emptyMap(),
     val vtables: List<VtableExtent> = emptyList(),
+    /** How many virtual functions no class has, trivial stubs left out ([ghicpp.hierarchy.unattachedVirtuals]). */
+    val unattachedVirtuals: Int = 0,
 )
 
 /** A vtable label of class [classId] at [start], up to the next symbol ([end], exclusive): offsets in the program. */

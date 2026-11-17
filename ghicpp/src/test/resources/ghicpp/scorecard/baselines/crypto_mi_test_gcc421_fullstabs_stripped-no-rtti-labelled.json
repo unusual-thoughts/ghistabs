@@ -4,7 +4,7 @@
     "abstract-tp": 251,
     "base-access-fn": 0,
     "base-access-fp": 0,
-    "base-access-tp": 504,
+    "base-access-tp": 519,
     "base-offsets-fn": 0,
     "base-offsets-fp": 0,
     "base-offsets-tp": 500,
@@ -35,7 +35,8 @@
     "vftables-fn": 0,
     "vftables-fp": 0,
     "vftables-tp": 570,
-    "virtual-methods-fn": 160,
+    "vfunctions-unattached": 223,
+    "virtual-methods-fn": 133,
     "virtual-methods-fp": 12,
-    "virtual-methods-tp": 2561
+    "virtual-methods-tp": 2588
 }
