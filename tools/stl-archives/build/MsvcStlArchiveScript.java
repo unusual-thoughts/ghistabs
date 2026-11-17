@@ -98,7 +98,7 @@ public class MsvcStlArchiveScript extends GhidraScript {
 				int dropped = prune(dtm, pdbRoot);
 				int typedefs = addTypedefs(dtm);
 				println(String.format(
-					"%s: %d std types filed by their unique names, %d unrelated types dropped, " +
+					"%s: %d std types filed at their demangled paths, %d unrelated types dropped, " +
 						"%d typedefs, %d vfptrs sized, %d bases named, %d own vftables, %d classes split around one; " +
 						"%d method classes resolve to an " +
 						"archive type; %d classes with bases",
@@ -120,11 +120,13 @@ public class MsvcStlArchiveScript extends GhidraScript {
 		for (int i = tpi.getTypeIndexMin(); i < tpi.getTypeIndexMaxExclusive(); i++) {
 			monitor.checkCancelled();
 			AbstractMsType type = pdb.getTypeRecord(RecordNumber.typeRecordNumber(i));
-			if (!(type instanceof AbstractComplexMsType c) || c.getMsProperty().isForwardReference() ||
-				c.getMangledName() == null || c.getMangledName().isEmpty()) {
+			if (!(type instanceof AbstractComplexMsType c) || c.getMsProperty().isForwardReference()) {
 				continue;
 			}
-			DataTypePath path = demangledPath(c.getMangledName());
+			// Before Visual Studio 2008 a PDB records no unique name, only the C++ one.
+			String unique = c.getMangledName();
+			DataTypePath path = unique == null || unique.isEmpty() ? cxxPath(c.getName())
+					: demangledPath(unique);
 			if (path != null && ROOTS.contains(path.getCategoryPath().asList().get(0))) {
 				paths.putIfAbsent(spelled(c.getName()), path);
 			}
@@ -180,6 +182,39 @@ public class MsvcStlArchiveScript extends GhidraScript {
 		catch (DemangledException | RuntimeException e) {
 			return null;
 		}
+	}
+
+	/**
+	 * `std::vector<int,std::allocator<int> >` filed as the demangler files it, for a PDB without unique
+	 * names: its namespaces split at the `::` outside template arguments, the class its last part.
+	 */
+	static DataTypePath cxxPath(String cxxName) {
+		// Visual C++ 5.0 closes nested template arguments as `>>`; the demangler, as `> >`.
+		while (cxxName.contains(">>")) {
+			cxxName = cxxName.replace(">>", "> >");
+		}
+		List<String> parts = new ArrayList<>();
+		int depth = 0;
+		int start = 0;
+		for (int i = 0; i < cxxName.length(); i++) {
+			char ch = cxxName.charAt(i);
+			if (ch == '<' || ch == '(') {
+				depth++;
+			}
+			else if (ch == '>' || ch == ')') {
+				depth--;
+			}
+			else if (depth == 0 && cxxName.startsWith("::", i)) {
+				parts.add(cxxName.substring(start, i));
+				start = i + 2;
+				i++;
+			}
+		}
+		if (parts.isEmpty()) {
+			return null;
+		}
+		return new DataTypePath(new CategoryPath(CategoryPath.ROOT, parts),
+			SymbolUtilities.replaceInvalidChars(cxxName.substring(start), true));
 	}
 
 	private static List<String> namespacePath(Demangled demangled) {

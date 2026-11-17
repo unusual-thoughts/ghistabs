@@ -15,7 +15,33 @@ class MsvcRuntimeTest {
         MsvcRuntime.of(listOf("MSVCP140_ATOMIC_WAIT.DLL")) mustBe MsvcRuntime(140, false)
         MsvcRuntime.of(listOf("MSVCP140_1D.DLL")) mustBe MsvcRuntime(140, true)
         MsvcRuntime.of(listOf("MSVCP140D_ATOMIC_WAIT.DLL")) mustBe MsvcRuntime(140, true)
-        MsvcRuntime.of(listOf("VCRUNTIME140.DLL", "KERNEL32.DLL")) mustBe null
+        MsvcRuntime.of(listOf("MSVCP90D.DLL", "MSVCR90D.DLL")) mustBe MsvcRuntime(90, true)
+    }
+
+    @Test
+    fun `without the standard library DLL, the C runtime's names the toolset`() {
+        MsvcRuntime.of(listOf("VCRUNTIME140.DLL", "KERNEL32.DLL")) mustBe MsvcRuntime(140, false)
+        MsvcRuntime.of(listOf("VCRUNTIME140_1.DLL", "VCRUNTIME140.DLL")) mustBe MsvcRuntime(140, false)
+        MsvcRuntime.of(listOf("VCRUNTIME140D.DLL", "UCRTBASED.DLL")) mustBe MsvcRuntime(140, true)
+        MsvcRuntime.of(listOf("VCRUNTIME140_1D.DLL")) mustBe MsvcRuntime(140, true)
+        MsvcRuntime.of(listOf("MSVCR90.DLL")) mustBe MsvcRuntime(90, false)
+        MsvcRuntime.of(listOf("msvcr100d.dll")) mustBe MsvcRuntime(100, true)
+        MsvcRuntime.of(listOf("MSVCRT.DLL", "KERNEL32.DLL")) mustBe null
+        MsvcRuntime.of(listOf("MSVCP140.DLL", "UCRTBASED.DLL")) mustBe MsvcRuntime(140, false)
+    }
+
+    @Test
+    fun `a static link's toolset is its linker's`() {
+        MsvcRuntime.toolset(14, 44) mustBe 140
+        MsvcRuntime.toolset(14, 0) mustBe 140
+        MsvcRuntime.toolset(12, 0) mustBe 120
+        MsvcRuntime.toolset(9, 0) mustBe 90
+        MsvcRuntime.toolset(7, 10) mustBe 71
+        MsvcRuntime.toolset(7, 0) mustBe 70
+        MsvcRuntime.toolset(6, 0) mustBe 60
+        MsvcRuntime.toolset(5, 0) mustBe 50
+        MsvcRuntime.toolset(13, 0) mustBe null
+        MsvcRuntime.toolset(2, 56) mustBe null // GNU ld
     }
 
     @Test
@@ -23,6 +49,17 @@ class MsvcRuntimeTest {
         MsvcRuntime(90, false).archive(4) mustBe "msvcp90_x86"
         MsvcRuntime(140, true).archive(8) mustBe "msvcp140d_x64"
         MsvcRuntime(90, true).archive(4) mustBe null
+        MsvcRuntime(60, false).archive(4) mustBe "msvcp60_x86"
+        MsvcRuntime(60, true).archive(4) mustBe "msvcp60_x86"
+        MsvcRuntime(60, false).archive(8) mustBe null
+
+        MsvcRuntime(120, false).archive(8) mustBe "msvcp120_x64"
+        MsvcRuntime(120, true).archive(4) mustBe null
+        MsvcRuntime(80, false).archive(4) mustBe "msvcp80_x86"
+        MsvcRuntime(80, true).archive(4) mustBe null
+        MsvcRuntime(70, true).archive(4) mustBe "msvcp70_x86"
+        MsvcRuntime(50, false).archive(4) mustBe "msvcp50_x86"
+        MsvcRuntime(80, false).archive(8) mustBe null
         MsvcRuntime(100, false).archive(4) mustBe null
         MsvcRuntime(140, false).archive(2) mustBe null
     }

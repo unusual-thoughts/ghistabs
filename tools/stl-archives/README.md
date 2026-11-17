@@ -17,6 +17,15 @@ rebuilt on Ghidra 10.4 from the layouts text (see below), so 10.4 and every newe
 | `msvcp140_{x86,x64}` | [`stl_probe.cpp`](stl_probe.cpp) built with `/MD` on the runner's Visual Studio | same sizes and field offsets as Microsoft's public `msvcp140` PDB, for every type both define |
 | `msvcp140d_{x86,x64}` | the probe built with `/MDd` (`_ITERATOR_DEBUG_LEVEL=2`) | |
 | `msvcp90_{x86,x64}` | Microsoft's public PDB of msvcp90 9.0.30729.9619, the last security rebuild | |
+| `msvcp120_{x86,x64}` | Microsoft's public PDB of msvcp120 as the Visual Studio 2013 redistributable installs it | |
+| `msvcp80_x86` | Microsoft's public PDB of msvcp80 8.0.50727.6195, the last security rebuild; the x64 one stops Ghidra 12.3's PDB applicator on a virtual base table entry with no offset | |
+| `msvcp70_x86` | Microsoft's public PDB of msvcp70 (Visual Studio .NET 2002), with the DLL the symbol server also keeps as the program; serves msvcp70d too, whose layouts differ only in `basic_filebuf::_Mystr` pointing at a `_DebugHeapString` | |
+| `msvcp50_x86` | `MSVCP50D.PDB` from Visual Studio 97 Professional's third disc, its module records rewritten in the 6.0 layout by [`modi50to60.py`](modi50to60.py) (Ghidra reads only that one), with its `MSVCP50D.DLL` as the program | |
+| `msvcp60_x86` | `MSVCP60D.PDB` from the Visual C++ 6.0 Professional disc (archive.org's X04-58170), with its `MSVCP60D.DLL` as the program | |
+
+msvcp60 serves both VC6 runtimes: its headers test `_DEBUG` only to pick the library to link, so the
+debug DLL lays everything out as the release one does. The release `MSVCP60.PDB` on the disc stalls Ghidra
+12.3's PDB applicator, and the debug one loses `strstream`, which nests deeper than the applicator follows.
 
 msvcp90 covers what the DLL itself instantiates (strings, iostreams, locale and facets, exceptions),
 not header-only containers, and has no debug variant: neither needs more than a VS2008 toolchain
@@ -26,7 +35,8 @@ running the same probe.
 
 [`build/MsvcStlArchiveScript.java`](build/MsvcStlArchiveScript.java) builds one. It uses ghicpp's classes and Ghidra 12.3+ APIs, so it needs the
 ghicpp extension installed. It sits in its own folder, beside `scripts/` rather than above it, because Ghidra compiles a script folder and its subfolders as one bundle, and the scripts in `scripts/` also run on 10.4, where this one cannot compile. Add that folder to the Script Manager's paths and run it on any program of the
-right architecture, pointing it at a PDB with type information, or headless:
+right architecture, pointing it at a PDB with type information, or headless. A PDB whose classes have
+virtual bases needs the DLL it describes as the program, since the applicator reads their tables there:
 
 ```
 tools/stl-archives/run.sh archive out.gdt <program> <pdb>
@@ -34,7 +44,7 @@ tools/stl-archives/run.sh compare <program> out.gdt reference.gdt
 ```
 
 Which runtime builds have typed public PDBs is not obvious: for msvcp80 and msvcp90 only the 2016 to
-2019 security rebuilds do, for msvcp100 build 40219.325 but not 40219.1, and msvcp60's are stripped.
+2019 security rebuilds do, for msvcp100 build 40219.325 on x64 only, msvcp110 none, msvcp120 both.
 [`pdb_url.py`](pdb_url.py) prints the symbol server URL of a DLL's PDB.
 
 ## In ghicpp

@@ -12,17 +12,18 @@ import ghidra.util.task.TaskMonitor
 import ghidrakt.diagnose.report
 
 /**
- * Lays out the standard library classes a program uses from the MSVC runtime it imports, off the archive
- * of that runtime bundled with ghicpp ([StlApplier]): the demangler knows a
- * `std::basic_string<char,…>` method's `this` only as an empty struct.
+ * Lays out the standard library classes a program uses from the MSVC runtime it builds with ([MsvcRuntime]:
+ * imported, or linked statically), off the archive of that runtime bundled with ghicpp ([StlApplier]): the
+ * demangler knows a `std::basic_string<char,…>` method's `this` only as an empty struct.
  *
  * After the Microsoft demangler, which makes those placeholders, and before the class passes.
  */
 class MsvcStlAnalyzer :
     AbstractAnalyzer(
         NAME,
-        "Fill the empty std classes the demangler makes for the methods a program imports from " +
-            "MSVCP140.DLL, MSVCP140D.DLL or MSVCP90.DLL with that runtime's layouts",
+        "Fill the empty std classes the demangler makes with the layouts of the MSVC runtime a program " +
+            "uses (msvcp140, msvcp140d, msvcp120, msvcp90, msvcp80, msvcp70, msvcp60 or msvcp50): " +
+            "the one it imports, or the one its linker's toolset links statically",
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
