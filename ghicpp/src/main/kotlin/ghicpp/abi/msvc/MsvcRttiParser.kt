@@ -176,7 +176,7 @@ class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
         if (vbptrs.isEmpty()) return
         // Decompiled for the class pass too, which reads the storers the same way.
         val uses = ThisFunctionDissector(program, classes.values, this, cache).readStorers(monitor)
-        for ((cls, vbtables) in VbtableFinder(program, vbptrs).find(uses)) (cls as RttiClass).vbtables += vbtables
+        for ((cls, vbtables) in program.findVbtables(uses, vbptrs)) (cls as RttiClass).vbtables += vbtables
     }
 
     private fun labelled(name: String) = symbols.getSymbols(name).iterator().asSequence().distinctBy { it.address }
