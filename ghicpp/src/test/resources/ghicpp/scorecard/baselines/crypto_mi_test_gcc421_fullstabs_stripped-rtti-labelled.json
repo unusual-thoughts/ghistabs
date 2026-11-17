@@ -8,7 +8,7 @@
     "base-offsets-fn": 0,
     "base-offsets-fp": 0,
     "base-offsets-tp": 563,
-    "bases-fn": 49,
+    "bases-fn": 40,
     "bases-fp": 47,
     "bases-tp": 567,
     "class-splits-fn": 0,

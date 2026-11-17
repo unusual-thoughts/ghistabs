@@ -43,6 +43,5 @@ structors-fn 11bb2 of `Shape`
 structors-fn 12016 of `Down`
 structors-fn 120c6 of `Up`
 structors-fn 120fa of `Down`
-virtual-methods-fn `Shape::~Shape` 11b96
 virtual-methods-fn `Shape::~Shape` 11bb2
 virtual-methods-fn `Up::g` 12000

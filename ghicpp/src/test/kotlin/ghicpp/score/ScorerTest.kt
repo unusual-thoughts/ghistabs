@@ -3,6 +3,7 @@ package ghicpp.score
 import ghicpp.Access
 import ghicpp.MemberAttrs
 import ghicpp.VirtKind
+import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.*
 import ghidrakt.DetachedAddresses
@@ -211,5 +212,59 @@ class ScorerTest {
     fun `counters are each attribute's three tallies`() {
         Scorecard(mapOf("classes" to Tally(3, 1, 2))).counters() mustBe
             mapOf("classes-tp" to 3L, "classes-fp" to 1L, "classes-fn" to 2L)
+    }
+
+    @Test
+    fun `a base with no vtable nor function counts found, but not missed`() {
+        val withEmpty = ClassHierarchy(
+            truth.classes.map { if (it.id == 2L) it.copy(bases = it.bases + base("Empty", 4, offset = 4)) else it },
+        )
+        fun card(subject: ClassHierarchy) = Scorer(
+            Truth(truthSnapshot.copy(hierarchy = withEmpty), Truth.describedScope(withEmpty), true, true),
+            Snapshot("subject", subject),
+        ).score()
+        val missed =
+            card(
+                ClassHierarchy(
+                    listOf(cls(10, "Circle", Origin.ITANIUM_RTTI, 0x120, bases = listOf(base("Shape", null)))),
+                ),
+            )
+        missed.tallies["bases"] mustBe Tally(tp = 1)
+        missed.notes mustBe listOf("base `Empty` of `Circle`: no vtable nor function to find it by")
+        val found = card(
+            ClassHierarchy(
+                listOf(
+                    cls(
+                        10,
+                        "Circle",
+                        Origin.ITANIUM_RTTI,
+                        0x120,
+                        bases = listOf(base("Shape", null), base("Empty", 11)),
+                    ),
+                    cls(11, "Empty", Origin.ITANIUM_RTTI),
+                ),
+            ),
+        )
+        found.tallies["bases"] mustBe Tally(tp = 2)
+    }
+
+    @Test
+    fun `a destructor variant no truth vtable slot holds is not a virtual method`() {
+        val d0 = fn(0x10, "~Shape", true).copy(variants = listOf(ItaniumStructor.DELETING_DTOR))
+        val unslotted = ClassHierarchy(
+            truth.classes.map { c -> if (c.id == 1L) c.copy(members = listOf(d0) + c.members.drop(1)) else c },
+        )
+        fun card(slots: Set<Long>?) = Scorer(
+            Truth(truthSnapshot.copy(hierarchy = unslotted), Truth.describedScope(unslotted), true, true),
+            Snapshot(
+                "subject",
+                ClassHierarchy(
+                    listOf(cls(10, "Shape", Origin.ITANIUM_RTTI, 0x100), cls(11, "Circle", Origin.ITANIUM_RTTI, 0x120)),
+                ),
+            ),
+            slots,
+        ).score()
+        card(null).tallies["virtual-methods"] mustBe Tally(fn = 3)
+        card(setOf(0x14L, 0x24L)).tallies["virtual-methods"] mustBe Tally(fn = 2)
     }
 }

@@ -158,7 +158,12 @@ private val NAMED = setOf(Origin.MSVC_RTTI, Origin.ITANIUM_RTTI, Origin.SWEPT_RT
  * by address where [Truth.sameBinary], by offset where [Truth.sameLayout], and not at all where the truth
  * cannot tell.
  */
-class Scorer(private val truth: Truth, private val subject: Snapshot) {
+class Scorer(
+    private val truth: Truth,
+    private val subject: Snapshot,
+    /** What the words of the truth's vtables hold, where the binary is at hand to read them: null where not. */
+    private val vtableSlots: Set<Long>? = null,
+) {
     private val t = truth.hierarchy
     private val s = subject.hierarchy
     private val instances = linkedMapOf<String, MutableList<String>>()
@@ -178,6 +183,7 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     private val truthFunctionOwner: Map<Long, Long> = t.classes
         .flatMap { c -> c.functions().map { it.at to c.id } }.toMap()
     private val truthVtables = truth.snapshot.vtables.sortedBy { it.start }
+    private val truthVtableClasses = truthVtables.mapTo(HashSet()) { it.classId }
 
     /** This-adjusting thunks: what the truth lists apart from its functions, and a recovery may well call one. */
     private val truthThunks: Set<Long> = t.classes
@@ -297,6 +303,10 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     private fun BaseRef.ownKey(): String = targetId?.let { "#$it" } ?: truthByName[name]?.firstOrNull()
         ?.let { "#${it.id}" } ?: "?$name"
 
+    /** Whether the truth class [this] keys has no vtable and no function: a class a recovery has nothing of. */
+    private fun String.isUnreachable() = removePrefix("#").toLongOrNull()?.let { t[it] }
+        ?.let { it.vftable == null && it.functions().isEmpty() } == true
+
     private fun keyName(key: String) = key.removePrefix("#").toLongOrNull()?.let { t[it]?.qualifiedName } ?: key
 
     private fun bases(tallies: MutableMap<String, Tally>) {
@@ -304,15 +314,21 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         var access = Tally()
         var offsets = Tally()
         for ((tc, sc) in scoredPairs) {
-            val actual = tc.bases.associateBy { it.ownKey() to it.isVirtual }
             val claimed = sc.bases.associateBy { it.truthKey() to it.isVirtual }
-            edges += Tally.of(claimed.keys, actual.keys)
+            // A base with no vtable and no function of its own leaves nothing a recovery could find it by: found,
+            // it counts, but missed it is no miss.
+            val actualMap = tc.bases.associateBy { it.ownKey() to it.isVirtual }
+                .filterKeys { it in claimed || !it.first.isUnreachable() }
+            for (key in tc.bases.map { it.ownKey() to it.isVirtual } - actualMap.keys) {
+                notes += "base `${keyName(key.first)}` of `${tc.qualifiedName}`: no vtable nor function to find it by"
+            }
+            edges += Tally.of(claimed.keys, actualMap.keys)
             fun edge(key: Pair<String, Boolean>) =
                 "`${keyName(key.first)}`${if (key.second) " (virtual)" else ""} of `${tc.qualifiedName}`"
-            (claimed.keys - actual.keys).forEach { fp("bases", edge(it)) }
-            (actual.keys - claimed.keys).forEach { fn("bases", edge(it)) }
-            for (key in claimed.keys intersect actual.keys) {
-                val a = actual.getValue(key)
+            (claimed.keys - actualMap.keys).forEach { fp("bases", edge(it)) }
+            (actualMap.keys - claimed.keys).forEach { fn("bases", edge(it)) }
+            for (key in claimed.keys intersect actualMap.keys) {
+                val a = actualMap.getValue(key)
                 val c = claimed.getValue(key)
                 // Neither ABI's RTTI tells a protected base from a private one: only whether it is public.
                 if (a.access != null) {
@@ -396,12 +412,19 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
 
     /**
      * A truth member that is virtual. Some stabs mark only the deleting variant of a virtual destructor so; the
-     * complete one, which an Itanium vtable holds too, comes out plain. The base-object one no vtable holds.
+     * complete one, which an Itanium vtable holds too, comes out plain. The base-object one no vtable holds, nor,
+     * in gcc 5 and later, an abstract class's own: its slots are null. A destructor no vtable holds no recovery
+     * can tell is virtual.
      */
-    private fun isTrulyVirtual(cls: ClassView, m: Member) = m.attrs?.virt == VirtKind.VIRTUAL || (
-        m.name.startsWith("~") && m.variants.any { it != ItaniumStructor.BASE_DTOR } &&
-            cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL }
-        )
+    private fun isTrulyVirtual(cls: ClassView, m: Member): Boolean {
+        val marked = m.attrs?.virt == VirtKind.VIRTUAL || (
+            m.name.startsWith("~") && m.variants.any { it != ItaniumStructor.BASE_DTOR } &&
+                cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL }
+            )
+        val unslotted = vtableSlots != null && m.variants.isNotEmpty() && m.name.startsWith("~") &&
+            cls.id in truthVtableClasses && m.at !in vtableSlots
+        return marked && !unslotted
+    }
 
     /** A constructor's or destructor's name: the class's own, less a template's arguments, which g++ leaves off. */
     private fun ClassView.isStructorName(member: String) = member.removePrefix("~").substringBefore('<') ==

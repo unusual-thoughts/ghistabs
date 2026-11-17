@@ -105,8 +105,11 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         val truth = truthFor(case)
         val runtime = case.twin?.takeIf { case.labelled }?.let { truthOf(case, it).runtime }.orEmpty()
         assumeTrue(!case.labelled || runtime.isNotEmpty(), "the twin names no runtime function to label")
-        val subject = snapshotOf(subjectFile, case.compiler) { prepare(case.recovery, runtime) }
-        val card = Scorer(truth, subject).score()
+        var slots: Set<Long>? = null
+        val subject = snapshotOf(subjectFile, case.compiler, { prepare(case.recovery, runtime) }) {
+            if (truth.sameBinary) slots = slotTargets(truth.snapshot.vtables)
+        }
+        val card = Scorer(truth, subject, slots).score()
 
         val out = File(OUTPUT_DIR, case.id).apply { mkdirs() }
         val against = listOfNotNull(case.twin, case.source).joinToString(" + ")
@@ -162,7 +165,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
             val bin = File(case.dir, binary)
             assumeTrue(bin.isFile, "$binary is not on disk, and no truth is committed for it")
             var runtime = emptyMap<String, Long>()
-            val snapshot = snapshotOf(bin, compiler) { runtime = runtimeFunctions() }
+            val snapshot = snapshotOf(bin, compiler, { runtime = runtimeFunctions() })
             TruthFile(snapshot, runtime).also {
                 file.parentFile.mkdirs()
                 GZIPOutputStream(file.outputStream()).bufferedWriter().use { w ->
@@ -172,17 +175,30 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
-    private fun snapshotOf(file: File, compiler: String, setup: Program.() -> Unit): Snapshot =
-        loadProgram(file, compiler).use { loaded ->
-            val program = loaded.program
-            program.runTransaction("options") {
-                // Runs a Ghidra script on a PE, which the headless harness has no bundle host for.
-                program.getOptions(Program.ANALYSIS_PROPERTIES).setBoolean("WindowsResourceReference", false)
-            }
-            program.setup()
-            analyzeAll(program)
-            program.snapshot(file.name)
+    private fun snapshotOf(
+        file: File,
+        compiler: String,
+        setup: Program.() -> Unit,
+        analysed: Program.() -> Unit = {},
+    ): Snapshot = loadProgram(file, compiler).use { loaded ->
+        val program = loaded.program
+        program.runTransaction("options") {
+            // Runs a Ghidra script on a PE, which the headless harness has no bundle host for.
+            program.getOptions(Program.ANALYSIS_PROPERTIES).setBoolean("WindowsResourceReference", false)
         }
+        program.setup()
+        analyzeAll(program)
+        program.analysed()
+        program.snapshot(file.name)
+    }
+
+    /** The addresses the words of [vtables] hold, the truth's, read where this is the very binary it describes. */
+    private fun Program.slotTargets(vtables: List<VtableExtent>): Set<Long> = vtables.flatMapTo(HashSet()) { v ->
+        val ptr = defaultPointerSize.toLong()
+        (v.start until v.end step ptr).mapNotNull { at ->
+            runCatching { pointerAt(addressFactory.defaultAddressSpace.getAddress(at)) }.getOrNull()?.offset
+        }
+    }
 
     private fun Program.prepare(recovery: Recovery, runtime: Map<String, Long>) {
         // A subject that still carries stabs (a `_stripped` PE keeps them) is recovered as if it had none.
