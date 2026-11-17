@@ -1,11 +1,13 @@
 package ghicpp.abi.generic
 
 import ghicpp.ClassNaming
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.VtableRecord
+import ghicpp.CxxAbi
+import ghicpp.VtableRecord
 import ghicpp.abi.gcc2.Gcc2Plain
 import ghicpp.abi.itanium.Itanium
+import ghicpp.abi.mangledBy
 import ghicpp.abi.msvc.Msvc
+import ghicpp.abi.structorOf
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program

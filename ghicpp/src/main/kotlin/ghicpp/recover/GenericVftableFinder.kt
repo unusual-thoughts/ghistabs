@@ -1,10 +1,12 @@
 package ghicpp.recover
 
 import ghicpp.ClassNaming
+import ghicpp.CxxAbi
 import ghicpp.abi.*
 import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.generic.PlainVtables.MAX_SUBOBJECT_OFFSET
+import ghicpp.abi.ofVtableSymbol
 import ghicpp.describeVxTable
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRangeImpl

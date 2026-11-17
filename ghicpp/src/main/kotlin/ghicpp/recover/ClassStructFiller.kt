@@ -1,10 +1,11 @@
 package ghicpp.recover
 
 import ghicpp.*
-import ghicpp.abi.CxxAbi
+import ghicpp.CxxAbi
+import ghicpp.VtableRecord
 import ghicpp.abi.SlotDefinitions
 import ghicpp.abi.VftableBuilder
-import ghicpp.abi.VtableRecord
+import ghicpp.abi.slots
 import ghicpp.dissect.Stores
 import ghicpp.dissect.fillData
 import ghidra.program.model.data.*

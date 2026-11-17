@@ -2,9 +2,9 @@ package ghicpp.dissect
 
 import ghicpp.ClassDecl
 import ghicpp.ClassNaming
-import ghicpp.abi.StructorConvention
-import ghicpp.abi.StructorRole
-import ghicpp.abi.StructorRole.*
+import ghicpp.StructorConvention
+import ghicpp.StructorRole
+import ghicpp.StructorRole.*
 import ghicpp.classStruct
 import ghicpp.introducingClass
 import ghicpp.ownData

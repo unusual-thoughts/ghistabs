@@ -1,8 +1,11 @@
 package ghicpp.abi.gcc2
 
-import ghicpp.abi.CxxAbi
+import ghicpp.CxxAbi
+import ghicpp.abi.isGeneratedData
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.msvc.Msvc
+import ghicpp.abi.ofVtableSymbol
+import ghicpp.abi.prevailing
 import ghidrakt.test.must
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeNull

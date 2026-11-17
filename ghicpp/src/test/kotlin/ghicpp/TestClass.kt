@@ -1,6 +1,5 @@
 package ghicpp
 
-import ghicpp.abi.VtableRecord
 import ghidra.program.model.symbol.Namespace
 
 /** A class with no namespace, with direct [bases]. */

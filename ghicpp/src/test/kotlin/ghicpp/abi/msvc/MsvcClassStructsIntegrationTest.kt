@@ -3,6 +3,7 @@ package ghicpp.abi.msvc
 import ghicpp.ClassDecl
 import ghicpp.ClassStructsFixtureTest
 import ghicpp.abi.isPrimaryTableSymbol
+import ghicpp.abi.slots
 import ghicpp.analyzers.MsvcClassAnalyzer
 import ghicpp.hierarchy.*
 import ghicpp.qualifiedName

@@ -1,10 +1,10 @@
 package ghicpp.abi.msvc
 
 import ghicpp.*
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.Structor
-import ghicpp.abi.StructorRole
-import ghicpp.abi.VtableRecord
+import ghicpp.CxxAbi
+import ghicpp.Structor
+import ghicpp.StructorRole
+import ghicpp.VtableRecord
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.app.util.demangler.DemangledObject

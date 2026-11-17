@@ -1,9 +1,10 @@
 package ghicpp.abi.gcc2
 
+import ghicpp.CxxAbi
 import ghicpp.MemberDecl
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.Structor
-import ghicpp.abi.VtableRecord
+import ghicpp.Structor
+import ghicpp.VtableRecord
+import ghicpp.abi.prevailing
 import ghicpp.leafName
 import ghicpp.nameSegments
 import ghicpp.qualifiedName

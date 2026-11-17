@@ -5,7 +5,10 @@ import ghicpp.abi.VftableBuilder
 import ghicpp.abi.definedVtableRecord
 import ghicpp.abi.isVtableClaimed
 import ghicpp.abi.itanium.*
+import ghicpp.abi.lay
 import ghicpp.abi.primaryVtableOf
+import ghicpp.abi.rttiOf
+import ghicpp.abi.slots
 import ghicpp.hierarchy.typePureSlots
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.PointerDataType

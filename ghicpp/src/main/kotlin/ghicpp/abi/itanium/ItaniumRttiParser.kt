@@ -4,9 +4,12 @@ import ghicpp.ClassBase
 import ghicpp.ClassDecl
 import ghicpp.ClassNaming
 import ghicpp.ClassPassInput
-import ghicpp.abi.RttiParser
-import ghicpp.abi.VtableRecord
+import ghicpp.RttiParser
+import ghicpp.VtableRecord
+import ghicpp.abi.rttiOf
 import ghicpp.abi.slotFunction
+import ghicpp.abi.slots
+import ghicpp.abi.vbaseOffset
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
