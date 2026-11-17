@@ -99,11 +99,18 @@ private const val MAX_DEPTH = 64
 
 /**
  * Reads the sizes each class is allocated with: the `operator new(size)` result a constructor runs on,
- * found in the decompiled callers of [ctors].
+ * found in the decompiled callers of [ctors]. Not where a constructor is inlined after that `operator new`
+ * ([InlinedConstruction.at]): there the constructor called first builds a base of the class the inlined one
+ * builds, which the allocation is the size of.
  */
 class AllocationSizeFinder(private val program: Program, private val abi: CxxAbi, sink: DiagnosticSink) :
     DiagnosticSink by sink {
-    fun read(ctors: Map<Function, ClassDecl>, monitor: TaskMonitor): Map<ClassDecl, Long> {
+    fun read(
+        ctors: Map<Function, ClassDecl>,
+        monitor: TaskMonitor,
+        inlined: Collection<InlinedConstruction> = emptyList(),
+    ): Map<ClassDecl, Long> {
+        val inlinedAt = inlined.mapTo(mutableSetOf()) { it.at }
         monitor.message = "Finding constructors' callers"
         val callers = ctors.keys.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
         val sizes = mutableMapOf<ClassDecl, MutableSet<Long>>()
@@ -112,6 +119,7 @@ class AllocationSizeFinder(private val program: Program, private val abi: CxxAbi
                 val cls = op.callee()?.let(ctors::get) ?: continue
                 val obj = op.getInput(1).pointerInto()?.takeIf { it.offset == 0L } ?: continue
                 val alloc = obj.root.instances.mapNotNull { it.def }.firstOrNull { it.isOperatorNew() }
+                    ?.takeUnless { it.seqnum.target in inlinedAt }
                 val size = alloc?.getInput(1)?.takeIf { it.isConstant }
                 size?.let { sizes.getOrPut(cls) { mutableSetOf() } += it.offset }
             }
