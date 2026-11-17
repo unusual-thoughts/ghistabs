@@ -1,7 +1,7 @@
 package ghicpp.dissect
 
 import ghicpp.ClassDecl
-import ghicpp.abi.CxxAbi
+import ghicpp.CxxAbi
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor

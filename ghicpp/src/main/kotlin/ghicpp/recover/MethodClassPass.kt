@@ -4,7 +4,7 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.MemberAttrs.Companion.memberAttrs
-import ghicpp.abi.StructorRole
+import ghicpp.StructorRole
 import ghicpp.dissect.CalledObject
 import ghicpp.dissect.ObjectCall
 import ghicpp.dissect.ThisFunctionDissector

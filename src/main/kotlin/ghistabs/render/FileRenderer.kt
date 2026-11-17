@@ -1,8 +1,10 @@
 package ghistabs.render
 
+import ghicpp.CxxAbi
 import ghicpp.VirtKind
-import ghicpp.abi.CxxAbi
 import ghicpp.abi.gcc2.Gcc2
+import ghicpp.abi.isGeneratedData
+import ghicpp.abi.structorOf
 import ghicpp.qualifiedName
 import ghicpp.templateLeaf
 import ghidra.program.model.address.Address

@@ -1,6 +1,7 @@
 package ghicpp.abi.itanium
 
-import ghicpp.abi.CxxAbi
+import ghicpp.CxxAbi
+import ghicpp.abi.vtableCandidates
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.app.util.demangler.DemangledType

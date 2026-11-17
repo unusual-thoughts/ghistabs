@@ -2,8 +2,8 @@ package ghistabs.importer
 
 import ghicpp.MemberAttrs
 import ghicpp.MemberAttrs.Companion.writeMember
-import ghicpp.abi.CxxAbi.Companion.prevailingAbi
 import ghicpp.abi.itanium.Itanium.isInlineStdMember
+import ghicpp.abi.prevailingAbi
 import ghicpp.qualifiedName
 import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.cmd.function.CreateFunctionCmd

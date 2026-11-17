@@ -1,9 +1,9 @@
 package ghicpp.dissect
 
 import ghicpp.ClassDecl
-import ghicpp.abi.StructorConvention
-import ghicpp.abi.StructorRole
-import ghicpp.abi.StructorRole.CONSTRUCTOR
+import ghicpp.StructorConvention
+import ghicpp.StructorRole
+import ghicpp.StructorRole.CONSTRUCTOR
 import ghicpp.thisAt
 import ghicpp.thisStorage
 import ghidra.app.decompiler.util.FillOutStructureHelper
