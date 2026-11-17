@@ -1,6 +1,7 @@
 package ghicpp.dissect
 
 import ghicpp.thisArgument
+import ghicpp.thisIndex
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.pcode.HighFunction
@@ -28,8 +29,9 @@ sealed interface CalledObject {
 }
 
 /**
- * A call at [at] of [callee], given as its `this` ([thisArgument]) a pointer [offset] bytes into [obj];
- * [returns], the object its result points into, where it points into one.
+ * A call at [at] of [callee], given as its `this` ([thisArgument]) a pointer [offset] bytes into [obj].
+ * [returns] is the object its result points into, if any. [next] is the constant address it passes right after
+ * `this`, if any, such as the VTT pointer an Itanium base-object structor takes.
  */
 data class ObjectCall(
     val at: Address,
@@ -37,6 +39,7 @@ data class ObjectCall(
     val obj: CalledObject,
     val offset: Long,
     val returns: CalledObject.Returned? = null,
+    val next: Address? = null,
 )
 
 /**
@@ -60,7 +63,9 @@ internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
         val callee = directCallee(op) ?: return@mapNotNull null
         val obj = op.thisArgument(callee)?.pointerInto() ?: return@mapNotNull null
         val returns = op.output?.pointerInto()?.let { objectOf(it.root) as? CalledObject.Returned }
-        ObjectCall(op.seqnum.target, callee, objectOf(obj.root), obj.offset, returns)
+        val next = (callee.thisIndex() + 2).takeIf { it < op.numInputs }
+            ?.let { op.getInput(it).constantAddress(function.program) }
+        ObjectCall(op.seqnum.target, callee, objectOf(obj.root), obj.offset, returns, next)
     }.toList()
 }
 

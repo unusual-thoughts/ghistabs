@@ -288,13 +288,15 @@ fun introducingClass(holders: Set<ClassDecl>): ClassDecl? {
 
 /**
  * The classes an ABI's own records describe, as its [ghicpp.abi.RttiParser] read them for the class
- * pass: [classes], every one seen; those whose bases it knows, to record ([recorded]); and each function a
- * vftable slot holds, with the classes whose tables hold it ([holders]).
+ * pass. [classes] holds every class seen, and [recorded] those whose bases it knows. [holders] maps each function a
+ * vftable slot holds to the classes whose tables hold it. [vttStructors] maps each base-object structor that loads
+ * its vptrs from a VTT, and so stores no vtable address itself, to its class.
  */
 class ClassPassInput(
     val classes: Collection<ClassDecl>,
     val recorded: Collection<ClassDecl>,
     val holders: Map<Function, Set<ClassDecl>>,
+    val vttStructors: Map<Function, ClassDecl> = emptyMap(),
 )
 
 /**
