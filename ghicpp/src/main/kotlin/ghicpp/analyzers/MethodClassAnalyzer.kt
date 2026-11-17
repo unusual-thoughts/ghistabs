@@ -14,8 +14,9 @@ import ghidrakt.diagnose.report
 
 /**
  * Guess the class of each unnamed function that takes a `this`, off the objects its callers pass it
- * ([MethodClassPass]), once a class pass (MSVC or Itanium RTTI classes) or a stabs import has recorded the
- * classes and put their methods, constructors included, in them.
+ * ([MethodClassPass]), once a class pass (MSVC or Itanium RTTI classes, or vftables from pointer tables) or a
+ * stabs import has recorded the classes and put their methods, constructors included, in them. A one-time run
+ * of *Vftables from pointer tables*, for the tables an earlier run made reachable, wants one of this after it.
  */
 class MethodClassAnalyzer :
     AbstractAnalyzer(
@@ -25,8 +26,9 @@ class MethodClassAnalyzer :
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
-        // After MSVC RTTI classes and Itanium RTTI classes, whose methods and constructors are the evidence.
-        priority = AnalysisPriority.LOW_PRIORITY.after().after().after().after()
+        // After MSVC RTTI classes, Itanium RTTI classes and Vftables from pointer tables, whose methods and
+        // constructors are the evidence.
+        priority = AnalysisPriority.LOW_PRIORITY.after().after().after().after().after()
         setDefaultEnablement(true)
         setSupportsOneTimeAnalysis()
     }
