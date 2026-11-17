@@ -2,7 +2,7 @@ package ghicpp.recover
 
 import ghicpp.MemberAttrs
 import ghicpp.MemberAttrs.Companion.memberAttrs
-import ghicpp.abi.StructorRole
+import ghicpp.StructorRole
 import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.classStruct
 import ghicpp.stubClassStruct

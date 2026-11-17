@@ -1,5 +1,6 @@
 package ghicpp.abi
 
+import ghicpp.CxxAbi
 import ghicpp.abi.gcc2.Gcc2Structor
 import ghicpp.abi.gcc2.Gcc2Thunks
 import ghicpp.abi.msvc.Msvc

@@ -2,7 +2,7 @@ package ghicpp.recover
 
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
-import ghicpp.abi.CxxAbi
+import ghicpp.CxxAbi
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils

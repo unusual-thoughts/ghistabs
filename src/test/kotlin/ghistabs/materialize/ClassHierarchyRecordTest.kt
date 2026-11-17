@@ -5,8 +5,8 @@ import ghicpp.ClassHierarchyRecords
 import ghicpp.ClassHierarchyRecords.Base
 import ghicpp.ClassHierarchyRecords.Entry
 import ghicpp.MemberAttrs
+import ghicpp.StructorRole
 import ghicpp.VirtKind
-import ghicpp.abi.StructorRole
 import ghidra.framework.options.GProperties
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.Saveable

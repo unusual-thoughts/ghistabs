@@ -1,9 +1,9 @@
 package ghistabs.importer
 
 import ghicpp.*
-import ghicpp.abi.CxxAbi.Companion.prevailingAbi
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.Typeinfo
+import ghicpp.abi.prevailingAbi
 import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.database.data.DataTypeManagerDB

@@ -6,7 +6,7 @@ import ghicpp.MemberAttrs.Companion.isGuessedClass
 import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.MemberAttrs.Companion.recordGuessed
-import ghicpp.abi.StructorRole
+import ghicpp.StructorRole
 import ghicpp.dissect.decompileEach
 import ghicpp.dissect.pointerInto
 import ghidra.program.model.data.Structure
