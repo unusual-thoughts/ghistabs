@@ -39,6 +39,7 @@ class MsvcRuntimeTest {
         MsvcRuntime.toolset(7, 10) mustBe 71
         MsvcRuntime.toolset(7, 0) mustBe 70
         MsvcRuntime.toolset(6, 0) mustBe 60
+        MsvcRuntime.toolset(5, 0) mustBe 50
         MsvcRuntime.toolset(13, 0) mustBe null
         MsvcRuntime.toolset(2, 56) mustBe null // GNU ld
     }

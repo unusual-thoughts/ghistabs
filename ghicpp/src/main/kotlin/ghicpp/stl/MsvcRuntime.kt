@@ -21,8 +21,8 @@ data class MsvcRuntime(val version: Int, val debug: Boolean) {
             8 -> "x64"
             else -> return null
         }
-        // Before iterator debugging (VS2005), a debug runtime has the release layouts: VC6's headers test
-        // _DEBUG only to pick the library, and msvcp70d differs from msvcp70 only in where a pointer points.
+        // Before iterator debugging (VS2005), a debug runtime has the release layouts: VC5's and VC6's headers
+        // test _DEBUG only to pick the library, and msvcp70d differs from msvcp70 only in where a pointer points.
         val debugLayouts = debug && version > 70
         return "msvcp$version${if (debugLayouts) "d" else ""}_$arch".takeIf { it in BUNDLED }
     }
@@ -86,6 +86,7 @@ data class MsvcRuntime(val version: Int, val debug: Boolean) {
             14, 12, 11, 10, 9, 8 -> major * 10
             7 -> if (minor >= 10) 71 else 70
             6 -> 60
+            5 -> 50
             else -> null
         }
 
