@@ -6,6 +6,7 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.gcc2.Gcc2
+import ghicpp.abi.holdsPureVirtualStub
 import ghicpp.abi.isPrimaryVftable
 import ghicpp.abi.itanium.*
 import ghicpp.abi.msvc.Msvc
@@ -483,12 +484,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         // A class's RTTI names its tables' ABI before their labels do: an MSVC type descriptor, an Itanium typeinfo.
         fun hasPureVirtualSlot(vftable: Address, known: CxxAbi? = null): Boolean {
             val abi = known ?: CxxAbi.ofVftable(program, vftable)
-            return program.slotTargets(vftable).any { target ->
-                val name = program.functionManager.getFunctionAt(target)?.let { fn ->
-                    fn.getThunkedFunction(true)?.name ?: fn.name
-                } ?: symtab.getPrimarySymbol(target)?.name
-                name != null && abi.isPureVirtualStub(name)
-            }
+            return program.slotTargets(vftable).any { program.holdsPureVirtualStub(it, abi::isPureVirtualStub) }
         }
     }
 }
