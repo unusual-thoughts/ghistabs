@@ -543,3 +543,26 @@ private fun List<Symbol>.withoutRepeats(isMember: (Symbol) -> Boolean): Pair<Lis
     }.toSet()
     return filterNot { it in repeats } to repeats.groupBy({ it.address }, { it.name })
 }
+
+/**
+ * The functions a vftable slot holds that no class has, where they are: each class holding one shows it
+ * inherited from nowhere ([ClassHierarchy.InheritedSlot.ownerPath] empty). A trivial stub ([isTrivialStub]) is
+ * left out: the linker folds one alike across unrelated classes, so no one class has it. What remains is how far
+ * the bases recovered fall short of telling which class introduced each virtual function.
+ */
+fun ClassHierarchy.unattachedVirtuals(program: Program): Set<Address> =
+    classes.flatMap { it.inherited }.filter { it.ownerPath.isEmpty() }
+        .mapTo(sortedSetOf()) { program.addressFactory.getAddress(it.address) }
+        .filterTo(sortedSetOf()) { at -> program.functionManager.getFunctionAt(at)?.isTrivialStub() != true }
+
+/**
+ * Whether this function is a stub alike in many classes: at most [TRIVIAL_STUB_INSTRUCTIONS] instructions and no
+ * call, as `ret`, `xor eax, eax; ret 4` or `mov eax, [ecx+0x10]; ret`.
+ */
+fun Function.isTrivialStub(): Boolean {
+    val instructions = program.listing.getInstructions(body, true).iterator().asSequence()
+        .take(TRIVIAL_STUB_INSTRUCTIONS + 1).toList()
+    return instructions.size <= TRIVIAL_STUB_INSTRUCTIONS && instructions.none { it.flowType.isCall }
+}
+
+private const val TRIVIAL_STUB_INSTRUCTIONS = 2

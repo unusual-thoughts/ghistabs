@@ -4,6 +4,7 @@ import ghicpp.ClassRecordSource
 import ghicpp.analyzers.*
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.MemberKind
+import ghicpp.hierarchy.unattachedVirtuals
 import ghicpp.score.Truth.Companion.withBasesOf
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.options.OptionType
@@ -117,7 +118,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         )
         File(out, "subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), subject))
         File(out, "truth.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), truth.snapshot))
-        checkBaseline(case, card.counters())
+        checkBaseline(case, card.counters() + (UNATTACHED to subject.unattachedVirtuals.toLong()))
     }
 
     private fun truthFor(case: ScorecardCase): Truth {
@@ -260,6 +261,9 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         private val COMPACT = Json { ignoreUnknownKeys = true }
         private val COUNTERS = MapSerializer(String.serializer(), Long.serializer())
 
+        /** The counter of the subject's virtual functions in no class, trivial stubs left out: fewer is better. */
+        private const val UNATTACHED = "vfunctions-unattached"
+
         /** `-Pfixture=<subject>[,…]` narrows the cases to those subjects. */
         private fun accepts(subject: String) = System.getProperty("fixtureFilter").orEmpty()
             .split(',').map(String::trim).filter(String::isNotEmpty).let { it.isEmpty() || subject in it }
@@ -294,7 +298,7 @@ fun Program.snapshot(fixture: String): Snapshot {
             VtableExtent(at.offset, nextSymbolAfter(at).offset, cls.id)
         }
     }.distinct()
-    return Snapshot(fixture, hierarchy, fields, vtables)
+    return Snapshot(fixture, hierarchy, fields, vtables, hierarchy.unattachedVirtuals(this).size)
 }
 
 private fun Program.nextSymbolAfter(at: Address): Address {
