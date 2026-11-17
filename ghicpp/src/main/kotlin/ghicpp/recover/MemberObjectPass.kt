@@ -212,8 +212,9 @@ class MemberObjectPass(
      * The classes of the objects `operator new` allocates with a constant size whose constructor, the first function
      * called on what it returns ([ThisFunctionDissector.allocations]), [found] doesn't know: one class for each,
      * which [merge] merges with any member's it builds too, at least as large as allocated. Not where that function
-     * is no method, has a name of its own outside a class, as a library function has, or is the first called after
-     * allocations of different sizes, which no one class's constructor is.
+     * is no method, has a name of its own outside a class, as a library function has, takes it as the object it
+     * returns ([returnsInSlot]), or is the first called after allocations of different sizes, which no one class's
+     * constructor is.
      */
     private fun allocated(found: FoundStructors, monitor: TaskMonitor): List<NonPolymorphicClass> {
         val cache = DissectionCache(fillArrays, operatorNewNames = PlainVtables.operatorNewNames)
@@ -223,7 +224,15 @@ class MemberObjectPass(
         return byCtor.mapNotNull { (ctor, allocs) ->
             val sizes = allocs.mapTo(sortedSetOf()) { it.size }
             when {
-                ctor in found.roles || ctor.isExternal || !ctor.takesThis() -> null
+                ctor in found.roles || ctor.isExternal -> null
+
+                // What it allocates is the object a function returning one by value fills, not its `this`.
+                ctor.returnsInSlot() -> {
+                    debug("member-allocated-return-slot", "${ctor.name} returns into what operator new allocates")
+                    null
+                }
+
+                !ctor.takesThis() -> null
 
                 ctor.symbol.source != SourceType.DEFAULT && ctor.parentNamespace !is GhidraClass -> null
 

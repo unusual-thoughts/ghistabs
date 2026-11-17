@@ -41,6 +41,15 @@ fun Function.takesThisAt(thisStorage: Address?) = !isExternal && thisStorage != 
  */
 fun Function.thisIndex() = if (callingConventionName == CDECL && stackPurgeSize == program.defaultPointerSize) 1 else 0
 
+/**
+ * Whether [this] takes, as its first argument, a hidden pointer to the object it returns, as gcc's i386 code
+ * passes one ahead of `this` and pops it on the way out (`ret 4`): a 32-bit function whose caller cleans the stack,
+ * by its convention, but which pops one word itself. What it calls on that pointer builds the object it returns,
+ * not its own `this`.
+ */
+fun Function.returnsInSlot() = program.defaultPointerSize == 4 && stackPurgeSize == 4 &&
+    callingConventionName !in setOf(THISCALL, STDCALL, FASTCALL)
+
 /** The argument a call passes [callee] as its `this`. */
 fun PcodeOp.thisArgument(callee: Function): Varnode? = callee.thisIndex().let { i ->
     if (numInputs > i + 1) getInput(i + 1) else null

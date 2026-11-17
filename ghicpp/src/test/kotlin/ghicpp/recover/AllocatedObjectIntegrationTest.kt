@@ -35,7 +35,8 @@ class AllocatedObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var builder: ProgramBuilder
     private val program: Program get() = builder.program
 
-    private fun build(secondSize: Int = 0x10, secondCallee: String = OTHER) {
+    /** [pushed]: the second allocation passed on the stack, as gcc's i386 code passes a return slot, not in ECX. */
+    private fun build(secondSize: Int = 0x10, secondCallee: String = OTHER, pushed: Boolean = false) {
         builder = ProgramBuilder("allocated-objects", ProgramBuilder._X86)
         builder.setExecute(builder.createMemory(".text", "0x401000", 0x200), true)
         builder.setBytes(
@@ -43,7 +44,8 @@ class AllocatedObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             "6a 0c e8 f9 00 00 00 83 c4 04" + // push 0xc; call NEW; add esp, 4
                 " 8b c8 e8 6f 00 00 00" + // mov ecx, eax; call CTOR
                 " 6a %02x e8 e8 00 00 00 83 c4 04".format(secondSize) + // push secondSize; call NEW; add esp, 4
-                " 8b c8 e8 ${rel(0x40101d, secondCallee)} c3", // mov ecx, eax; call secondCallee; ret
+                // mov ecx, eax (or push eax; nop); call secondCallee; ret
+                " ${if (pushed) "50 90" else "8b c8"} e8 ${rel(0x40101d, secondCallee)} c3",
         )
         // mov eax, ecx; mov dword ptr [eax], 0; mov dword ptr [eax+4], 0; ret
         builder.setBytes(CTOR, "8b c1 c7 00 00 00 00 00 c7 40 04 00 00 00 00 c3")
@@ -128,6 +130,22 @@ class AllocatedObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
         recover() mustBe 1
         classNamed("${MemberObjectPass.NON_POLYMORPHIC_PREFIX}004010a0") mustBe null
+    }
+
+    @Test
+    fun `a function returning into what operator new allocates builds no class`() {
+        build(pushed = true)
+        // As gcc's i386 code returns a class by value: the caller's memory first, popped on the way out.
+        program.runTransaction("return slot") {
+            program.functionManager.getFunctionAt(addr(OTHER)).run {
+                setCallingConvention("__cdecl")
+                stackPurgeSize = 4
+            }
+        }
+        val sink = CapturingSink()
+        recover(sink) mustBe 1
+        classNamed("${MemberObjectPass.NON_POLYMORPHIC_PREFIX}004010a0") mustBe null
+        ("member-allocated-return-slot" in sink.lines.map { it.tag }) mustBe true
     }
 
     private companion object {

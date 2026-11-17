@@ -51,11 +51,19 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         stores: Map<String, Set<String>>,
         calls: Map<String, Map<Long, Set<String>>> = emptyMap(),
         slots: Map<String, List<String?>> = emptyMap(),
+        before: Map<String, Set<String>> = emptyMap(),
+        after: Map<String, Set<String>> = emptyMap(),
     ): Map<String, List<Pair<String, Long?>>> {
         val uses = Dissections(
             (stores.keys + calls.keys).associate {
                 fn(it) to DissectionCache.Dissection(
-                    stores[it]?.let { cs -> VptrStores(cs.mapTo(mutableSetOf(), ::cls)) },
+                    stores[it]?.let { cs ->
+                        VptrStores(
+                            cs.mapTo(mutableSetOf(), ::cls),
+                            before[it].orEmpty().mapTo(mutableSetOf(), ::fn),
+                            after[it].orEmpty().mapTo(mutableSetOf(), ::fn),
+                        )
+                    },
                     calls[it]?.let { byOffset ->
                         byOffset.mapValues { (_, called) -> called.mapTo(mutableSetOf(), ::fn) }
                     }.orEmpty(),
@@ -150,7 +158,41 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             mapOf("mDtor" to setOf("M"), "bDtor" to setOf("B")),
             mapOf("mDtor" to mapOf(0L to setOf("bDtor")), "cdDelete" to mapOf(0L to setOf("mDtor"))),
             slots,
+            after = mapOf("mDtor" to setOf("bDtor")),
         ) mustBe mapOf("M" to listOf("B" to 0L), "C" to listOf("M" to 0L), "D" to listOf("M" to 0L))
+    }
+
+    @Test
+    fun `a slot whose first argument is the object it returns makes no base`() {
+        // gcc's i386 code passes a class returned by value in memory ahead of this, and pops it: `ret 4`.
+        val slots = mapOf(
+            "B" to listOf("bDelete", "b2"),
+            "C" to listOf("cdMake", "c2", "shared"),
+            "D" to listOf("cdMake", "c2", "shared"),
+        )
+        builder.withTransaction { fn("cdMake").stackPurgeSize = 4 }
+        bases(
+            mapOf("mDtor" to setOf("M"), "bDtor" to setOf("B")),
+            mapOf("mDtor" to mapOf(0L to setOf("bDtor")), "cdMake" to mapOf(0L to setOf("mDtor"))),
+            slots,
+            after = mapOf("mDtor" to setOf("bDtor")),
+        ).filterKeys { it != "M" } mustBe emptyMap()
+    }
+
+    @Test
+    fun `a slot calling a constructor on this makes no base`() {
+        // As a virtual returning a class by value builds it: what cdMake calls builds M, before M's store calls B's.
+        val slots = mapOf(
+            "B" to listOf("bDelete", "b2"),
+            "C" to listOf("cdMake", "c2", "shared"),
+            "D" to listOf("cdMake", "c2", "shared"),
+        )
+        bases(
+            mapOf("mCtor" to setOf("M"), "bCtor" to setOf("B")),
+            mapOf("mCtor" to mapOf(0L to setOf("bCtor")), "cdMake" to mapOf(0L to setOf("mCtor"))),
+            slots,
+            before = mapOf("mCtor" to setOf("bCtor")),
+        ).filterKeys { it != "M" } mustBe emptyMap()
     }
 
     @Test

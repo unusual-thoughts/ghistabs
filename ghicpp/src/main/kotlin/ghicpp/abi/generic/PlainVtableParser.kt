@@ -111,19 +111,35 @@ internal class BaseCandidates(
     }
 
     /**
-     * Off the deleting destructors the tables hold: one storing no vptr, which calls on `this` a function storing
+     * Off the deleting destructors the tables hold: one storing no vptr, which calls on `this` a destructor storing
      * one other class's, destroys an object of the class whose table holds it with that class's destructor, its
      * own having nothing of its own to do. So that class is a base of it, though no constructor shows it: one
      * inlining an abstract base's constructor drops its vptr store, which the derived class's overwrites.
+     *
+     * Not off a slot whose first argument is the object it returns ([returnsInSlot]), whose calls build that, nor
+     * off a callee not seen destroying ([destroys]): the constructors a virtual returning a class by value calls
+     * would make every class returning one derive from it.
      */
     fun addDeletingSlots(uses: Dissections) {
         for ((cls, fs) in slots) {
-            for (f in fs.filterNotNull().distinct().filterNot { it in uses.stores }) {
-                val callees = uses.subobjectCalls[f].orEmpty()[0L].orEmpty()
+            for (f in fs.filterNotNull().distinct().filterNot { it in uses.stores || it.returnsInSlot() }) {
+                val callees = uses.subobjectCalls[f].orEmpty()[0L].orEmpty().filter { uses.destroys(it) }
                 val destroyed = callees.flatMapTo(mutableSetOf()) { uses.stores[it]?.classes.orEmpty() }
                 destroyed.singleOrNull()?.let { add(cls, it, "its table's ${f.name} destroys one") }
             }
         }
+    }
+
+    /**
+     * Whether [f] is seen destroying an object: it stores a vptr, then calls on `this` itself, not a member, a
+     * function storing another, its base's destructor, and calls none there before, as a constructor building its
+     * bases does.
+     */
+    private fun Dissections.destroys(f: Function): Boolean {
+        val own = stores[f] ?: return false
+        val onThis = subobjectCalls[f].orEmpty()[0L].orEmpty()
+        fun storesOther(g: Function) = g != f && g in onThis && stores[g]?.classes.orEmpty().any { it !in own.classes }
+        return own.after.any(::storesOther) && own.before.none(::storesOther)
     }
 
     /** Off the functions several tables hold in one slot, each introduced by the shortest. */
