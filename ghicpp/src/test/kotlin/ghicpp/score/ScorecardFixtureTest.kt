@@ -80,13 +80,14 @@ data class TruthFile(val snapshot: Snapshot, val runtime: Map<String, Long> = em
  * subject binaries and this package; `-PregenerateTruth=true` rebuilds the files from the truth binaries,
  * which takes the stabs importer. Review their diff as you would a fixture's.
  *
- * Each score is a counter per attribute (`<attribute>-tp`, `-fp`, `-fn`), held to
- * `src/test/resources/ghicpp/scorecard/baselines/<case>.json`, and what each `-fp` and `-fn` counts, a line per
- * instance (`<counter> <instance>`), held to `<case>.instances.txt` beside it. A counter that moves, or an
- * instance that comes or goes, fails the test, or under `-PignoreBaselines=true` only writes the new baseline
- * to `build/test-output/shifted-baselines/`, which CI uploads; `-PregenerateBaselines=true` rewrites the
- * committed ones. Each case's scorecard, its instances by attribute, and both serialized class views land in
- * `build/test-output/scorecards/<case>/`.
+ * Each score is a counter per attribute (`<attribute>-tp`, `-fp`, `-fn`), checked against
+ * `src/test/resources/ghicpp/scorecard/baselines/<case>.json`. The instances behind each `-fp` and `-fn` counter,
+ * one `<counter> <instance>` line each, are checked against `<case>.instances.txt` next to it.
+ *
+ * The test fails when a counter moves or an instance appears or disappears. With `-PignoreBaselines=true` it
+ * writes the new baseline to `build/test-output/shifted-baselines/` instead, which CI uploads.
+ * `-PregenerateBaselines=true` rewrites the committed baselines. Each case's scorecard, its instances by
+ * attribute, and both serialized class views are written to `build/test-output/scorecards/<case>/`.
  */
 @Tag("integration")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -192,7 +193,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         program.snapshot(file.name)
     }
 
-    /** The addresses the words of [vtables] hold, the truth's, read where this is the very binary it describes. */
+    /** The addresses that the words of the truth's [vtables] hold, read from this program, the binary they describe. */
     private fun Program.slotTargets(vtables: List<VtableExtent>): Set<Long> = vtables.flatMapTo(HashSet()) { v ->
         val ptr = defaultPointerSize.toLong()
         (v.start until v.end step ptr).mapNotNull { at ->

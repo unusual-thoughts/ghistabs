@@ -198,8 +198,8 @@ class Found:
     shifted: dict
     path: Path  # the committed file, relative to the repository root
     source: Path  # the shifted file
-    # A scorecard's instances: the lines only the shifted file has, those only the committed one has, and
-    # both files, when any differ.
+    # For a scorecard: the instance lines only the shifted file has (added), the lines only the committed file
+    # has (removed), and the paths of both files.
     added: tuple = ()
     removed: tuple = ()
     instances_path: Path = None
@@ -309,7 +309,7 @@ def render(found, artifact=None, patch=None):
 def render_instances(f):
     """A scorecard's instances that came (❌, a new miss) or went (✅, a miss fixed), folded."""
     moved = [(BAD, "+", line) for line in f.added] + [(GOOD, "−", line) for line in f.removed]
-    # By counter, then instance, the came and gone of one counter together.
+    # Sort by counter, then by instance, so that one counter's added and removed lines sit together.
     moved.sort(key=lambda m: (m[2].split(" ", 1)[0], m[2]))
     out = ["<details>", f"<summary>Instances: {len(f.added)} came, {len(f.removed)} went</summary>", ""]
     for mark, sign, line in moved[:MAX_INSTANCES]:

@@ -67,9 +67,9 @@ class GenericVftableFinder(
      * first word code takes the address of ([codeReferences]). A run ends before the next such word, which begins
      * another, at a symbol, at data laid other than one word ([isFree]), or past [DESTRUCTOR_SLOTS] nulls;
      * the nulls that end it are no slots. A table whose constructor isn't disassembled yet waits for a later run.
-     * One whose first slot is null must sit after a vtable header ([hasVtableHeader]): an abstract Itanium
-     * class's leaves its destructors' null, but MSVC fills a pure virtual's slot, and a run of a null and code
-     * pointers with no such header, a CRT's exception scope table say, is no vtable.
+     * A run whose first slot is null also needs a vtable header in front of it ([hasVtableHeader]). An abstract
+     * Itanium class leaves its destructor slots null, but MSVC fills a pure virtual's slot with `_purecall`.
+     * Without the header, a null followed by code pointers is some other table, such as a CRT exception scope table.
      */
     val potentialVtables: List<PotentialVtable> by lazy {
         program.findPointers()
@@ -121,7 +121,10 @@ class GenericVftableFinder(
 
     private fun Address.wordBefore(words: Int) = signedWordBefore(program, words)
 
-    /** Whether [table] follows an Itanium vtable header: an `offset_to_top` of a subobject's and an rtti word. */
+    /**
+     * Whether an Itanium vtable header comes before [table]: an `offset_to_top` that a subobject could have, then
+     * an RTTI word.
+     */
     private fun hasVtableHeader(table: Address): Boolean {
         val top = table.wordBefore(2) ?: return false
         val rtti = table.wordBefore(1) ?: return false
