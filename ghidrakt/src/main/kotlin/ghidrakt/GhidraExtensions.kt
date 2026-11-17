@@ -37,6 +37,16 @@ operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)
 operator fun Address.plus(rhs: Int): Address = addNoWrap(rhs.toLong())
 fun Address.alignTo(size: Long): Address = add((size - offset % size) % size)
 
+/** [this] rounded up to a multiple of [n]; itself where [n] isn't positive. */
+fun Long.alignedTo(n: Long) = if (n <= 0) this else (this + n - 1) / n * n
+
+/** The signed pointer-sized word [words] words before [this], in [program]'s memory; null where unreadable. */
+fun Address.signedWordBefore(program: Program, words: Int): Long? = runCatching {
+    val ptr = program.defaultPointerSize
+    val at = subtractNoWrap(words.toLong() * ptr)
+    if (ptr == 8) program.memory.getLong(at) else program.memory.getInt(at).toLong()
+}.getOrNull()
+
 operator fun Address.minus(rhs: Long): Address = subtractNoWrap(rhs)
 operator fun Address.minus(rhs: Int): Address = subtractNoWrap(rhs.toLong())
 operator fun Address.minus(rhs: Address): Long = subtract(rhs)

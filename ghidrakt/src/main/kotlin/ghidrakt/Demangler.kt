@@ -6,7 +6,6 @@ import ghidra.app.util.demangler.gnu.GnuDemanglerFormat
 import ghidra.app.util.demangler.gnu.GnuDemanglerOptions
 import ghidra.app.util.demangler.gnu.GnuDemanglerParser
 import ghidra.app.util.demangler.microsoft.MicrosoftDemangler
-import ghidra.app.util.demangler.microsoft.MicrosoftDemanglerOptions
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
@@ -96,7 +95,7 @@ object Demangler {
         if (!mangled.startsWith("?")) return null
         if (msvcCache.size > MAX_ENTRIES) msvcCache.clear()
         return msvcCache.computeIfAbsent(mangled) { name ->
-            runCatching { microsoft.demangle(MangledContext(null, MicrosoftDemanglerOptions(), name, null)) }
+            runCatching { microsoft.demangle(MangledContext(null, microsoft.createDefaultOptions(), name, null)) }
         }.getOrNull()
     }
 

@@ -121,10 +121,6 @@ class VirtualBasePass(private val program: Program, private val abi: CxxAbi, sin
 
     private fun Structure.takeAcceptable() = takeUnless { it.isZeroLength }
 
-    /** The bytes from [offset] to the next defined component or the end. */
-    private fun Structure.roomAt(offset: Int) =
-        (definedComponents.map { it.offset }.filter { it > offset }.minOrNull() ?: length) - offset
-
     /** [cls]'s non-empty struct, by [lookup]. */
     private fun structFor(cls: ClassDecl) = lookup(cls).firstNotNullOfOrNull { it.takeAcceptable() }
 

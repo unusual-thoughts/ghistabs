@@ -1,5 +1,6 @@
 package ghicpp
 
+import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
@@ -100,10 +101,31 @@ fun Structure.isKnownLayout() = !isNotYetDefined &&
     sourceArchive?.archiveType.let { it == ArchiveType.FILE || it == ArchiveType.PROJECT }
 
 /**
- * Gives [ns] a [classStruct] of [size] bytes, or grows its own to them; a [knownLayout] stays as it is. Where its
- * last field is one of its own `<Class>_data` structs, or, split around a deriving class's vptr, its own `_fields`
- * run ending in one, that grows with it, so the fields its constructors store past the old end are refilled there.
- * A base's `_fields` part keeps its size: it is the base's, which grew none.
+ * Gives [ns] an empty [classStruct] where it has none. Done before any function moves into [ns]: a `__thiscall`
+ * method of a class with no struct makes Ghidra add an empty placeholder to type its `this` with, in the class's
+ * parent category (`/<Class>` for a global one), and its lookup (`findExistingClassStruct`) then takes that one over
+ * the [classStruct], being the shorter path. Such a placeholder an earlier run left is replaced by the [classStruct],
+ * so what it typed is typed with this.
+ */
+fun Program.stubClassStruct(ns: GhidraClass) {
+    val struct = classStruct(ns) ?: dataTypeManager.addDataType(
+        StructureDataType(ClassNaming.vftableCategory(ns), ns.name, 0),
+        DataTypeConflictHandler.KEEP_HANDLER,
+    ) as Structure
+    val found = DataTypeUtilities.findExistingClassStruct(dataTypeManager, ns) ?: return
+    if (found != struct && found.isZeroLength && found.description == GHIDRA_PLACEHOLDER) {
+        dataTypeManager.replaceDataType(found, struct, false)
+    }
+}
+
+/** The description `VariableUtilities` gives the placeholder struct it makes for a class with none. */
+private const val GHIDRA_PLACEHOLDER = "PlaceHolder Class Structure"
+
+/**
+ * Gives [ns] a [classStruct] of [size] bytes, or grows its own to them. Where its last field is one of its own
+ * `<Class>_data` structs, or, split around a deriving class's vptr, its own `_fields` run ending in one, that grows
+ * with it, so the fields its constructors store past the old end are refilled there. A base's `_fields` part keeps
+ * its size: it is the base's, which grew none.
  */
 fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
     if (size <= 0) return
@@ -243,6 +265,10 @@ fun Structure.ownData(): List<Pair<Int, Structure>> = definedComponents.flatMap 
         else -> emptyList()
     }
 }
+
+/** The bytes from [offset] to the next defined component or the end. */
+fun Structure.roomAt(offset: Int) =
+    (definedComponents.map { it.offset }.filter { it > offset }.minOrNull() ?: length) - offset
 
 /** Why [dt] can't go at [at] in this over undefined bytes alone, or null where it can. */
 fun Structure.layoutProblem(at: Int, dt: DataType): String? = when {

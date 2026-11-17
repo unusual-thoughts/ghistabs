@@ -82,4 +82,37 @@ class ClassSizesTest {
         val bounds = sizeBounds(listOf(d, v, a, s), mapOf(a to 0L), emptyMap(), ptrSize = 4)
         bounds.getValue(v) mustBe 12L..Long.MAX_VALUE
     }
+
+    @Test
+    fun `a virtual base takes a byte past its offset, and a class with one is pointer-aligned`() {
+        // struct Base { int id; }; struct Diamond : ... virtual Base, with Base at 32 and nothing known of it
+        val base = TestClass("Base")
+        val d =
+            TestClass("D", listOf(ClassBase(base, true, Access.PUBLIC, null)), virtualBases = listOf(base virtualAt 32))
+        sizeBounds(listOf(d, base), mapOf(d to 16L), emptyMap(), ptrSize = 4).getValue(d).first mustBe 36
+    }
+
+    @Test
+    fun `a vbase offset with no class known for it still sizes its class`() {
+        val up = TestClass("Up", emptyList(), unnamedVbaseOffsets = setOf(32L))
+        sizeBounds(listOf(up), mapOf(up to 0L), emptyMap(), ptrSize = 4).getValue(up).first mustBe 36
+    }
+
+    @Test
+    fun `virtual bases at offsets no record states are laid out past the gap the holder leaves`() {
+        // struct Left : virtual Base { int l; }; Diamond : Left, Right, with Right at 8 and no table of Left's own
+        val base = TestClass("Base")
+        val left = TestClass("Left", listOf(ClassBase(base, true, Access.PUBLIC, null)))
+        val right = TestClass("Right")
+        val d = TestClass("Diamond", listOf(left at 0, right at 8))
+        val bounds =
+            sizeBounds(
+                listOf(d, left, right, base),
+                mapOf(right to 0L),
+                emptyMap(),
+                ptrSize = 4,
+                stored = mapOf(left to 4L),
+            )
+        bounds.getValue(left) mustBe 12L..Long.MAX_VALUE
+    }
 }
