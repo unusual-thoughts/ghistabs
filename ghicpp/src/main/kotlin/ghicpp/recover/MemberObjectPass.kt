@@ -11,6 +11,7 @@ import ghicpp.abi.generic.PlainClass
 import ghicpp.abi.generic.PlainVtables
 import ghicpp.dissect.*
 import ghicpp.recover.MemberObjectPass.Companion.MAX_DEPTH
+import ghicpp.recover.MethodClassPass.Companion.markMethodClassesGuessed
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -122,6 +123,7 @@ class MemberObjectPass(
             containerOf(sub)?.let { placeMember(it, sub.offset.toInt(), member) }
         }
         writeRecords(classes.mapNotNull { it.cls })
+        program.markMethodClassesGuessed(false)
         return classes.size
     }
 

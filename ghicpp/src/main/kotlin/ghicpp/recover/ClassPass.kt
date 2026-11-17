@@ -8,6 +8,7 @@ import ghicpp.abi.RttiParser
 import ghicpp.abi.StructorRole
 import ghicpp.dissect.*
 import ghicpp.hierarchy.typePureSlots
+import ghicpp.recover.MethodClassPass.Companion.markMethodClassesGuessed
 import ghidra.framework.options.Options
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.PointerDataType
@@ -118,6 +119,7 @@ class ClassPass(
         monitor.message = "Recording classes"
         for ((func, _) in placed) program.recordPlaced(func, structors[func]?.second, virtual = func in owners)
         writeRecords(read.recorded)
+        program.markMethodClassesGuessed(false)
         monitor.message = "Typing pure virtual slots"
         program.typePureSlots(this)
         return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size, filled)

@@ -16,7 +16,10 @@ import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
+import ghidrakt.BoolOption
 import ghidrakt.diagnose.DiagnosticSink
+import ghidrakt.get
+import ghidrakt.set
 
 /**
  * A call passing an object as [callee]'s `this`: [caller]'s own, or one of class [built], which [caller] built
@@ -210,6 +213,20 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink) : Diag
 
     companion object {
         const val BOOKMARK = "Method class guess"
+
+        val METHOD_CLASSES_GUESSED = BoolOption(
+            "Method Classes Guessed",
+            "Method classes already guessed off the classes recorded.",
+            false,
+        )
+
+        /** Whether a guess ran since a class pass last recorded classes: a run now would move nothing more. */
+        val Program.isMethodClassesGuessed get() = this[METHOD_CLASSES_GUESSED]
+
+        /** Set [value] false once a class pass records classes, so the next guess looks again. */
+        fun Program.markMethodClassesGuessed(value: Boolean = true) {
+            this[METHOD_CLASSES_GUESSED] = value
+        }
 
         /** How deep [classAt] looks into structs within structs. */
         private const val MAX_NESTING = 8

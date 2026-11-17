@@ -2,6 +2,7 @@ package ghicpp.recover
 
 import ghicpp.analyzers.GenericVftableAnalyzer
 import ghicpp.analyzers.MethodClassAnalyzer
+import ghicpp.recover.MethodClassPass.Companion.isMethodClassesGuessed
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
@@ -10,6 +11,7 @@ import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghidrakt.*
+import ghidrakt.diagnose.DummySink
 import ghidrakt.test.TestBinaries
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeTrue
@@ -19,8 +21,8 @@ import java.io.File
 /**
  * A one-time run of *Vftables from pointer tables* is followed by one of *Method classes from this* when that is
  * enabled, as auto-analysis follows the other, and by none when it is disabled. The program is
- * [GenericVftableFixtureIntegrationTest]'s, analyzed whole; each test takes the method class guesses back out
- * first.
+ * [GenericVftableFixtureIntegrationTest]'s, analyzed whole; each one-time test takes the method class guesses
+ * back out first.
  */
 @Tag("integration")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -31,6 +33,12 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
 
     /** Each function auto-analysis guessed the class of, with that class's full name. */
     private lateinit var guessed: Map<Address, String>
+
+    /** Whether auto-analysis left the guesses marked made. */
+    private var markedGuessed = false
+
+    /** How many functions a second pass over auto-analysis's classes moved. */
+    private var movedAgain = -1
 
     @BeforeAll
     fun analyze() {
@@ -44,6 +52,8 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         }
         guessed = guesses()
         guessed.isNotEmpty().mustBeTrue()
+        markedGuessed = program.isMethodClassesGuessed
+        movedAgain = program.runTransaction("again") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) }
     }
 
     @AfterAll
@@ -77,6 +87,16 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             mgr.startAnalysis(TaskMonitor.DUMMY)
             mgr.waitForAnalysis(null, TaskMonitor.DUMMY)
         }
+    }
+
+    @Test
+    fun `auto-analysis leaves the guesses marked made, so a later run returns at once`() {
+        markedGuessed.mustBeTrue()
+    }
+
+    @Test
+    fun `a second pass over the same classes moves nothing`() {
+        movedAgain mustBe 0
     }
 
     @Test
