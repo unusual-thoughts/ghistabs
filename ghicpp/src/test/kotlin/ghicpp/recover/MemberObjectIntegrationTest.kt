@@ -112,6 +112,42 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun `what a function calls on an object it built on its stack is that object's class's`() {
+        build()
+        builder.setBytes(
+            STACK_CALLER,
+            "83 ec 10 8d 0c 24" + // sub esp, 0x10; lea ecx, [esp]
+                " e8 f5 fe ff ff" + // call MEMBER_CTOR
+                " 8d 0c 24 e8 2d ff ff ff" + // lea ecx, [esp]; call LOCAL_METHOD
+                " 83 c4 10 c3", // add esp, 0x10; ret
+        )
+        // mov eax, ecx; mov dword ptr [eax+4], 2; ret
+        builder.setBytes(LOCAL_METHOD, "8b c1 c7 40 04 02 00 00 00 c3")
+        builder.disassemble(STACK_CALLER, 0x17)
+        builder.disassemble(LOCAL_METHOD, 0x0a)
+        builder.withTransaction {
+            val functions = program.functionManager
+            for ((at, length, convention) in listOf(
+                Triple(STACK_CALLER, 0x17, "__cdecl"),
+                Triple(LOCAL_METHOD, 0x0a, "__thiscall"),
+            )) {
+                val body = AddressSet(addr(at), addr(at).add(length - 1L))
+                val func = functions.getFunctionAt(addr(at))
+                    ?: functions.createFunction(null, addr(at), body, SourceType.DEFAULT)
+                func.setCallingConvention(convention)
+            }
+        }
+        program.runTransaction("recover") {
+            GenericVftableFinder(program).seed() mustBe 1
+            val found = ClassPass(program, PlainVtableParser(program), DummySink).run(TaskMonitor.DUMMY).found!!
+            MemberObjectPass(program, DummySink).run(found) mustBe 1
+        }
+        program.runTransaction("guess") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) mustBe 2 }
+        val member = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
+        program.functionManager.getFunctionAt(addr(LOCAL_METHOD)).parentNamespace.name mustBe member
+    }
+
+    @Test
     fun `a member's class has one struct, the one Ghidra types this with`() {
         build()
         program.runTransaction("recover") {
@@ -208,7 +244,9 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         const val TABLE_STORE = "0x401014"
         const val MEMBER_CTOR = "0x401080"
         const val MEMBER_METHOD = "0x4010a0"
+        const val LOCAL_METHOD = "0x4010c0"
         const val VF1 = "0x401100"
+        const val STACK_CALLER = "0x401180"
         const val TABLE = "0x402010"
     }
 }
