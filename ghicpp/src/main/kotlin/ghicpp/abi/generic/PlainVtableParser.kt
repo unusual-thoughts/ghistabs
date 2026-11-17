@@ -38,8 +38,14 @@ class PlainClass(override val ns: Namespace, override val vftables: List<VtableR
     override val vbaseOffsets get() = super.vbaseOffsets + headerVbaseOffsets
 }
 
-/** The candidate bases of each class, as [inferBases] finds them, off their tables' [slots]. */
-internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Function?>>) {
+/**
+ * The candidate bases of each class, as [inferBases] finds them, off their tables' [slots], and which of those are
+ * [pure] virtual, by index.
+ */
+internal class BaseCandidates(
+    private val slots: Map<out ClassDecl, List<Function?>>,
+    private val pure: Map<out ClassDecl, Set<Int>> = emptyMap(),
+) {
     val byClass = mutableMapOf<ClassDecl, MutableSet<ClassDecl>>()
 
     private fun length(c: ClassDecl) = slots[c]?.size ?: 0
@@ -79,11 +85,23 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
             if (at.map { it.second }.distinct().size != 1) continue
             val classes = at.map { it.third }.distinct()
             val shortest = classes.minOf(::length)
-            val introducer = classes.singleOrNull { length(it) == shortest } ?: continue
+            val tied = classes.filter { length(it) == shortest }
+            val introducer = tied.singleOrNull() ?: tied.singleOrNull { c -> tied.all { it == c || c.isPurerThan(it) } }
+                ?: continue
             for (cls in classes) {
                 if (cls != introducer && !cls.inheritsPast(introducer, slots, holders, ::length)) add(cls, introducer)
             }
         }
+    }
+
+    /**
+     * Whether this class's table is [pure] where [other]'s holds a function, and [other]'s nowhere this one's isn't:
+     * pure where [other] overrides, as a base can be and a class deriving from one that isn't can't.
+     */
+    private fun ClassDecl.isPurerThan(other: ClassDecl): Boolean {
+        val own = pure[this].orEmpty()
+        val theirs = pure[other].orEmpty()
+        return own.any { it !in theirs && slots[other].orEmpty().getOrNull(it) != null } && own.containsAll(theirs)
     }
 
     /**
@@ -99,7 +117,9 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
      * new` can only build, so there the order of its stores says.
      *
      * A function several tables hold, in the same slot of each, was introduced by a class all of theirs derive from:
-     * the one with the shortest table, if no other is as short, which is then a candidate base of the others. Not
+     * the one with the shortest table, which is then a candidate base of the others. Of several as short, the one
+     * pure where each other overrides ([isPurerThan]): MSVC drops an abstract base's vptr store from the
+     * constructor inlining it, as the derived class's overwrites it, so only its table tells it from them. Not
      * where that class overrides a slot that the other inherits from a class with a shorter table still, which a class
      * deriving from it couldn't ([inheritsPast]); and not for a function in different slots, as the linker folds
      * functions alike across unrelated classes.
@@ -225,7 +245,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             }
         }
         monitor.message = "Inferring bases from constructors"
-        BaseCandidates(slots).inferBases(classes, uses, classes.associateWith(::subobjects))
+        BaseCandidates(slots, pureSlots(classes)).inferBases(classes, uses, classes.associateWith(::subobjects))
         return ClassPassInput(classes, classes, holders(classes))
     }
 
@@ -246,6 +266,25 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         cls.headerVbaseOffsets = vbaseOffsets
         return cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } }
             .associateWith { it in vbaseOffsets }
+    }
+
+    /**
+     * The indices of each class's primary table's pure virtual slots: null, or holding a pure virtual stub, named
+     * ([PlainVtables.isPureVirtualStub]) or not, which never returns and fills more than one slot. A function the
+     * analysis wrongly thinks never returns fills one.
+     */
+    private fun pureSlots(classes: List<PlainClass>): Map<PlainClass, Set<Int>> {
+        val targets = classes.associateWith { c ->
+            c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
+                at.takeIf { it.offset != 0L }?.let { program.functionAtOrCreate(it) }
+                    ?.let { if (it.isThunk) it.getThunkedFunction(true) ?: it else it }
+            }
+        }
+        val slotsHeld = targets.values.flatMap { fs -> fs.withIndex().mapNotNull { (i, f) -> f?.let { it to i } } }
+            .groupBy({ it.first }, { it.second }).mapValues { it.value.toSet().size }
+        fun isPure(f: Function?) = f == null || PlainVtables.isPureVirtualStub(f.name) ||
+            (f.hasNoReturn() && slotsHeld.getValue(f) > 1)
+        return targets.mapValues { (_, fs) -> fs.indices.filterTo(mutableSetOf()) { isPure(fs[it]) } }
     }
 
     /** Whether [this] labels a table no ABI's records describe, in a class that has none. */
