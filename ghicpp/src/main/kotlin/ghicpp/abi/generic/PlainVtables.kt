@@ -18,6 +18,9 @@ import ghidra.program.model.listing.Program
 object PlainVtables : CxxAbi {
     private val abis = listOf(Itanium, Msvc, Gcc2Plain)
 
+    /** How far into its object a base subobject may sit, for the words before a table to read as its offset. */
+    const val MAX_SUBOBJECT_OFFSET = 0x10000L
+
     override fun recordAt(program: Program, at: Address) = VtableRecord(at, null, this)
 
     /** 0 for a class's primary; a secondary's own label says its subobject's ([ClassNaming.plainSecondaryLabel]). */

@@ -10,7 +10,6 @@ import ghicpp.dissect.DissectingParser
 import ghicpp.dissect.DissectionCache
 import ghicpp.dissect.Dissections
 import ghicpp.dissect.ThisFunctionDissector
-import ghicpp.recover.GenericVftableFinder
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -238,7 +237,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         val primary = cls.vftables.firstOrNull()?.addressPoint ?: return emptyMap()
         val vbaseOffsets = if (primary.signedWordBefore(program, 2) == 0L) {
             (3..2 + MAX_VBASE_WORDS).asSequence().map { primary.signedWordBefore(program, it) }
-                .takeWhile { it != null && it in ptr until GenericVftableFinder.MAX_SUBOBJECT_OFFSET }
+                .takeWhile { it != null && it in ptr until PlainVtables.MAX_SUBOBJECT_OFFSET }
                 .filterNotNull().toSet()
         } else {
             emptySet()
