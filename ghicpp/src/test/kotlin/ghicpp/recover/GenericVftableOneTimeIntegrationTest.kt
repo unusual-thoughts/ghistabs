@@ -34,9 +34,6 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
     /** Each function auto-analysis guessed the class of, with that class's full name. */
     private lateinit var guessed: Map<Address, String>
 
-    /** Whether auto-analysis's *Method classes from this* counted itself up to date once analysis ended. */
-    private var upToDate = false
-
     /** How many functions a second pass over auto-analysis's classes moved. */
     private var movedAgain = -1
 
@@ -52,7 +49,6 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         }
         guessed = guesses()
         guessed.isNotEmpty().mustBeTrue()
-        upToDate = methodClasses.isUpToDate(program)
         movedAgain = program.runTransaction("again") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) }
     }
 
@@ -89,9 +85,17 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         }
     }
 
+    private fun runMethodClasses() = program.runTransaction("run") {
+        methodClasses.added(program, program.memory, TaskMonitor.DUMMY, mgr.messageLog)
+    }
+
     @Test
-    fun `nothing changes the program after auto-analysis's guesses, so a run right after returns at once`() {
-        upToDate.mustBeTrue()
+    fun `a run right after another, with nothing changed between, returns at once`() {
+        runMethodClasses()
+        methodClasses.isUpToDate(program).mustBeTrue()
+        val before = program.modificationNumber
+        runMethodClasses()
+        program.modificationNumber mustBe before
     }
 
     @Test
@@ -107,9 +111,7 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
 
     @Test
     fun `a changed analysis option makes the next run look again`() {
-        program.runTransaction("run") {
-            methodClasses.added(program, program.memory, TaskMonitor.DUMMY, mgr.messageLog)
-        }
+        runMethodClasses()
         methodClasses.isUpToDate(program).mustBeTrue()
         program.runTransaction("option") {
             val options = program.analyzerOptions(GenericVftableAnalyzer.NAME)
