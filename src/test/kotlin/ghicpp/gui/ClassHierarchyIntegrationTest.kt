@@ -464,7 +464,7 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
             for (m in cls.members) {
                 val sym = symtab.getSymbol(m.symbolId ?: fail("no symbol id for ${cls.qualifiedName}::${m.name}"))
                     ?: fail("no symbol for ${cls.qualifiedName}::${m.name}")
-                (sym.name to sym.address.toString()) mustBe (m.name to m.address)
+                (sym.name to sym.address) mustBe (m.name to m.address)
                 // An import, from the class's namespace under its library.
                 if (m.library == null) sym.parentNamespace.id mustBe cls.id
                 if (m.library != null) sym.parentNamespace.path mustBe cls.path
@@ -541,6 +541,7 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
                 node.member mustBe member
                 (node.parent as ClassNode).info?.id mustBe cls.id
             }
+            root.nodeAt(listOf(program.addressFactory.defaultAddressSpace.getAddress(0xffffffffL))) mustBe null
         }
     }
 

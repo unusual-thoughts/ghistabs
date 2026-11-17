@@ -225,8 +225,8 @@ typealias StaticSymbol = Symbol<SymbolDecl.Static<GlobalTypeId>>
 typealias FunctionSymbol = Symbol<SymbolDecl.Function<GlobalTypeId>>
 
 /**
- * An [AddressRange] as `min-max`. Keys the text partition, and a map key has to encode as a string —
- * hence not the surrogate shape [AddressSerializer] uses. Serialize-only, like every serializer here.
+ * An [AddressRange] as `min-max`, each end as [AddressSerializer] writes it. Keys the text partition, so it
+ * encodes as one string. Serialize-only.
  */
 class AddressRangeSerializer : KSerializer<AddressRange> {
     override val descriptor = PrimitiveSerialDescriptor("ghidra.program.model.address.AddressRange", STRING)

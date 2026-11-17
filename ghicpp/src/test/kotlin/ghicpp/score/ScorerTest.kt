@@ -5,14 +5,14 @@ import ghicpp.MemberAttrs
 import ghicpp.VirtKind
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.*
-import ghidra.program.model.address.AddressSpace
+import ghidrakt.DetachedAddresses
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
 class ScorerTest {
     private fun fn(at: Long, name: String, virtual: Boolean = false) = Member(
         name,
-        AddressSpace.OTHER_SPACE.getAddress(at),
+        DetachedAddresses.at(at),
         MemberKind.FUNCTION,
         attrs = MemberAttrs(virt = VirtKind.VIRTUAL.takeIf { virtual }),
     )
@@ -28,7 +28,7 @@ class ScorerTest {
         size: Long? = null,
     ) = ClassView(
         id, listOf(name), origin,
-        vftable?.let { AddressSpace.OTHER_SPACE.getAddress(it) },
+        vftable?.let { DetachedAddresses.at(it) },
         null, null, null, null, abstract, members, bases, size,
     )
 
