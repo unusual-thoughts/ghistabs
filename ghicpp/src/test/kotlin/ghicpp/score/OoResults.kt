@@ -3,11 +3,8 @@ package ghicpp.score
 import ghicpp.MemberAttrs
 import ghicpp.VirtKind
 import ghicpp.hierarchy.ClassHierarchy
-import ghicpp.hierarchy.ClassHierarchy.BaseRef
-import ghicpp.hierarchy.ClassHierarchy.ClassView
-import ghicpp.hierarchy.ClassHierarchy.Member
-import ghicpp.hierarchy.ClassHierarchy.MemberKind
-import ghicpp.hierarchy.ClassHierarchy.Origin
+import ghicpp.hierarchy.ClassHierarchy.*
+import ghidra.program.model.address.AddressSpace
 
 /**
  * OOAnalyzer's Prolog results (`ooprolog --results`), read back as the [Snapshot] a recovery leaves, for the
@@ -72,14 +69,21 @@ class OoResults(
                     else -> "FUN_%08x".format(m)
                 }
                 val virt = if ("virtual" in p) VirtKind.VIRTUAL else null
-                Member(fname, "%08x".format(m), MemberKind.FUNCTION, attrs = virt?.let { MemberAttrs(virt = it) })
+                Member(
+                    fname,
+                    AddressSpace.OTHER_SPACE.getAddress(m),
+                    MemberKind.FUNCTION,
+                    attrs = virt?.let { MemberAttrs(virt = it) },
+                )
             }
-            val vtable = c.vftable?.let { listOf(Member("vftable", "%08x".format(it), MemberKind.VTABLE)) }.orEmpty()
+            val vtable = c.vftable?.let {
+                listOf(Member("vftable", AddressSpace.OTHER_SPACE.getAddress(it), MemberKind.VTABLE))
+            }.orEmpty()
             ClassView(
                 id = c.id,
                 path = path,
                 origin = if (c.vftable?.let(vftNames::get) != null) Origin.MSVC_RTTI else Origin.INFERRED,
-                vftable = c.vftable?.let { "%08x".format(it) },
+                vftable = c.vftable?.let { AddressSpace.OTHER_SPACE.getAddress(it) },
                 vftableStructId = null,
                 typeinfo = null,
                 structId = null,

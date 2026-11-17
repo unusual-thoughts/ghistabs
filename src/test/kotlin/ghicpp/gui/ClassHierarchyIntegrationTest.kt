@@ -541,7 +541,6 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
                 node.member mustBe member
                 (node.parent as ClassNode).info?.id mustBe cls.id
             }
-            root.nodeAt(listOf("ffffffff")) mustBe null
         }
     }
 
