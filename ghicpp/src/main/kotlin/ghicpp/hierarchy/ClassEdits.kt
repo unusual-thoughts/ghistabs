@@ -95,8 +95,25 @@ internal fun ClassHierarchy.derivesFrom(cls: ClassView, ancestor: ClassView): Bo
 }
 
 /** What a class's bases come from when that is worth a warning before changing them: null if nothing solid. */
-internal fun ClassView.solidSource(): String? =
-    origin.desc.removePrefix("from ").takeIf { origin.baseSource == SourceType.IMPORTED }
+internal fun ClassView.solidSource(): String? = origin.desc.removePrefix("from ").takeIf {
+    // With no bases, whether its origin says it has none; a hand edit's own say is the user's.
+    if (bases.isEmpty()) {
+        origin.basesKnown && origin != Origin.EDITED
+    } else {
+        bases.any {
+            it.source == SourceType.IMPORTED
+        }
+    }
+}
+
+/**
+ * Whether its bases are stated rather than guessed or unknown: each by the stabs, RTTI or a hand edit, or, with
+ * none, by an origin that says it has none.
+ */
+val ClassView.basesStated: Boolean
+    get() = if (bases.isEmpty()) origin.basesKnown else bases.all { it.source in STATED_BASES }
+
+private val STATED_BASES = setOf(SourceType.IMPORTED, SourceType.USER_DEFINED)
 
 /** What ties [member] to its class when that is worth a warning before moving it: null if nothing does. */
 fun Program.memberSource(member: Member): String? = when {

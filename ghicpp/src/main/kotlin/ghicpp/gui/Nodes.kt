@@ -11,6 +11,7 @@ import ghicpp.VirtKind
 import ghicpp.gui.Hues.*
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghicpp.hierarchy.basesStated
 import ghidra.program.model.address.Address
 import ghidra.program.model.symbol.SourceType
 import java.awt.*
@@ -21,9 +22,6 @@ import javax.swing.ImageIcon
 import javax.swing.JTree
 
 internal val CLASS_ICON: Icon = GIcon("icon.plugin.symboltree.node.class")
-
-// Green: bases the binary states (stabs, RTTI) or set by hand. Grey: guessed by analysis, or none known.
-private val SOLID_BASES = setOf(SourceType.IMPORTED, SourceType.USER_DEFINED)
 
 private val NAMESPACE_ICON: Icon = GIcon("icon.plugin.symboltree.node.namespace")
 private val ROOT_ICON: Icon = GIcon("icon.plugin.symboltree.node.category.classes.closed")
@@ -185,10 +183,16 @@ class ClassNode private constructor(
     // UNSOURCED only for a class the program has: a base with no class at all stays a plain class.
     private val kind get() = when {
         isNested -> Kind.NESTED
+
         edge?.isVirtual == true -> if (info?.isAbstract == true) Kind.VIRTUAL_ABSTRACT else Kind.VIRTUAL
+
         info?.isAbstract == true -> Kind.ABSTRACT
+
         info?.origin == Origin.LIBRARY -> Kind.LIBRARY
-        info != null && info.origin.baseSource !in SOLID_BASES -> Kind.UNSOURCED
+
+        // Green: bases the binary states (stabs, RTTI) or set by hand. Grey: guessed by analysis, or none known.
+        info != null && !info.basesStated -> Kind.UNSOURCED
+
         else -> Kind.NORMAL
     }
 

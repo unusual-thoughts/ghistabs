@@ -43,36 +43,40 @@ import kotlinx.serialization.UseSerializers
  */
 @Serializable
 data class ClassHierarchy(val classes: List<ClassView>) {
-    enum class Origin(val desc: String, val baseSource: SourceType) {
+    /**
+     * Where a class comes from. [basesKnown] where that says what its bases are, so that a class it gives none
+     * has none; each base says itself who stated it ([BaseRef.source]).
+     */
+    enum class Origin(val desc: String, val basesKnown: Boolean) {
         /** Its bases set by hand, in this window: over whatever else describes it. */
-        EDITED("edited by hand", SourceType.USER_DEFINED),
+        EDITED("edited by hand", true),
 
         /** Described by the stabs: the import recorded its bases. */
-        STABS("from stabs", SourceType.IMPORTED),
+        STABS("from stabs", true),
 
         /** Laid by Ghidra's RTTI analyzer, bases off its MSVC Class Hierarchy Descriptor ([MsvcRttiParser]). */
-        MSVC_RTTI("from MSVC RTTI", SourceType.IMPORTED),
+        MSVC_RTTI("from MSVC RTTI", true),
 
         /** Recorded off its Itanium typeinfo by the class pass ([ItaniumRttiParser]), on a binary with no stabs. */
-        ITANIUM_RTTI("from Itanium RTTI", SourceType.IMPORTED),
+        ITANIUM_RTTI("from Itanium RTTI", true),
 
         /**
          * Recorded by the class pass with no stabs nor RTTI to go by: its bases are guesses, off what its
          * constructors call and the slots its vftables share with others'.
          */
-        INFERRED("with inferred bases", SourceType.ANALYSIS),
+        INFERRED("with inferred bases", false),
 
         /** Laid by the vtable sweep, bases read off its `_ZTI` typeinfo. */
-        SWEPT_RTTI("from typeinfo", SourceType.IMPORTED),
+        SWEPT_RTTI("from typeinfo", true),
 
         /** Laid by the vtable sweep with no typeinfo to read: bases unknown. */
-        SWEPT("from vtables", SourceType.DEFAULT),
+        SWEPT("from vtables", false),
 
         /** A class namespace and nothing else (the demangler's, DWARF's): bases unknown. */
-        NAMESPACE("from namespaces alone", SourceType.DEFAULT),
+        NAMESPACE("from namespaces alone", false),
 
         /** Only a library's: its namespace under an external library, which holds what the program imports. */
-        LIBRARY("only imported", SourceType.DEFAULT),
+        LIBRARY("only imported", false),
     }
 
     /**
