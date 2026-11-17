@@ -14,6 +14,7 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.Symbol
 import ghidrakt.*
 
 /**
@@ -223,7 +224,7 @@ sealed interface Gcc2Abi : CxxAbi {
     /** A destructor in charge of freeing calls `__builtin_delete`; a program's own is `__dl__FPv`. */
     override val mangledOperatorDelete get() = setOf("__builtin_delete", "__dl__FPv")
 
-    override fun isPrimaryVtable(symbolName: String) = Gcc2.looksLikePrimaryVtable(symbolName)
+    override fun isPrimaryTableSymbol(sym: Symbol) = Gcc2.looksLikePrimaryVtable(sym.name)
 
     override fun demangledVtableClass(obj: DemangledObject) = Gcc2.demangledVtableClass(obj)
 

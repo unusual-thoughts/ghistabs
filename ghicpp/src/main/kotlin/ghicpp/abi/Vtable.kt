@@ -205,7 +205,7 @@ fun Program.isPrimaryVftable(label: Symbol): Boolean =
             ?.let { symbolTable.getSymbols(it.address) }.orEmpty()
             .any { it.name == ClassNaming.VTABLE && it.parentNamespace == label.parentNamespace } ||
             symbolTable.getSymbols(label.address).any {
-                CxxAbi.ofVtableSymbol(it.name)?.isPrimaryVtable(it.name) == true
+                CxxAbi.ofVtableSymbol(it.name)?.isPrimaryTableSymbol(it) == true
             }
     }
 

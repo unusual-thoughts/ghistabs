@@ -165,17 +165,15 @@ class Gcc2Test {
     }
 
     /**
-     * gcc 2.x and MSVC give a secondary a symbol of its own, though MSVC's name only tells a class's only table;
-     * Itanium must not inherit a "no" from the default.
+     * gcc 2.x and MSVC give a secondary a symbol of its own, though MSVC's name only tells a class's only table.
      */
     @Test
     fun gcc2AndMsvcScreenOutSecondariesByName() {
-        Itanium.must { isPrimaryVtable("_ZTV10ThisStream") }
-        Gcc2Plain.must { isPrimaryVtable("_vt.14CExposedStream") }
-        Gcc2Plain.mustNot { isPrimaryVtable("_vt.14CExposedStream.11PRevertable") }
-        Msvc.must { isPrimaryVtable("??_7Foo@ns@@6B@") }
-        Msvc.mustNot { isPrimaryVtable("??_7Label@@6BNamed@@@") }
-        Msvc.mustNot { isPrimaryVtable("??0Foo@@QAE@XZ") }
+        Gcc2.must { looksLikePrimaryVtable("_vt.14CExposedStream") }
+        Gcc2.mustNot { looksLikePrimaryVtable("_vt.14CExposedStream.11PRevertable") }
+        Msvc.must { isOnlyVftable("??_7Foo@ns@@6B@") }
+        Msvc.mustNot { isOnlyVftable("??_7Label@@6BNamed@@@") }
+        Msvc.mustNot { isOnlyVftable("??0Foo@@QAE@XZ") }
     }
 
     /**

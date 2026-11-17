@@ -55,7 +55,7 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
             }
         }
         try {
-            symbols.map { Msvc.isPrimaryVtable(it.name) } mustBe listOf(false, false)
+            symbols.map { Msvc.isOnlyVftable(it.name) } mustBe listOf(false, false)
             symbols.map { Msvc.isPrimaryTableSymbol(it) } mustBe listOf(true, false)
         } finally {
             program.runTransaction { symbols.forEach { it.delete() } }

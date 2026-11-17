@@ -49,13 +49,13 @@ fun CxxAbi.Companion.vtableCandidates(className: String) = buildList {
 }
 
 /**
- * The ABI a binary was built with: that of the first primary vtable symbol, even an undefined one,
+ * The ABI a binary was built with: that of the first vtable symbol, even an undefined one or a secondary's,
  * else the one most mangled names are in. Null for a binary with neither, such as a C one.
  */
 fun CxxAbi.Companion.prevailing(symbolNames: Sequence<String>): CxxAbi? {
     val byMember = mutableMapOf<CxxAbi, Int>()
     for (name in symbolNames) {
-        ofVtableSymbol(name)?.takeIf { it.isPrimaryVtable(name) }?.let { return it }
+        ofVtableSymbol(name)?.let { return it }
         mangledBy(name)?.let { byMember[it] = byMember.getOrDefault(it, 0) + 1 }
     }
     return byMember.maxByOrNull { it.value }?.key

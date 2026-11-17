@@ -132,14 +132,12 @@ interface VtableSymbols {
     fun looksLikeVtable(symbolName: String): Boolean
 
     /**
-     * Whether [symbolName] names a class's own table rather than a base's secondary one, by the name alone.
-     * gcc 2.x and MSVC give secondaries symbols of their own; MSVC qualifies all of a class's tables once it
-     * has several, its own too, so only [isPrimaryTableSymbol] can tell those apart.
+     * Whether [sym], one of this ABI's table symbols, is its class's own table rather than a base's secondary
+     * one. By default every table symbol is, as Itanium's `_ZTV` names a whole vtable group. gcc 2.x and MSVC
+     * give secondaries symbols of their own; MSVC qualifies all of a class's tables once it has several, its own
+     * too, so its complete object locator must tell those apart.
      */
-    fun isPrimaryVtable(symbolName: String) = looksLikeVtable(symbolName)
-
-    /** Whether [sym], one of this ABI's table symbols, is its class's own table: by default by its name alone. */
-    fun isPrimaryTableSymbol(sym: Symbol): Boolean = isPrimaryVtable(sym.name)
+    fun isPrimaryTableSymbol(sym: Symbol): Boolean = looksLikeVtable(sym.name)
 
     /** The symbols [className]'s vtable may have, most likely first; none for a template, which has no closed form. */
     fun vtableCandidates(className: String): List<String>
