@@ -102,11 +102,14 @@ class ThisFunctionDissector(
     }
 
     /**
-     * What the functions storing the classes' vptrs store and call through `this`, decompiled. [visit] sees each
-     * as decompiled, so it decompiles them all, read in [cache] already or not.
+     * What the functions storing the classes' vptrs store and call through `this`, decompiled, and what [others]
+     * call there. [visit] sees each as decompiled, so it decompiles them all, read in [cache] already or not.
      */
-    fun readStorers(monitor: TaskMonitor, visit: ((Function, HighFunction) -> Unit)? = null): Dissections =
-        read(emptyList(), monitor, visit)
+    fun readStorers(
+        monitor: TaskMonitor,
+        others: Collection<Function> = emptyList(),
+        visit: ((Function, HighFunction) -> Unit)? = null,
+    ): Dissections = read(others, monitor, visit)
 
     /**
      * The stores of each function writing one of [tables], and what those and [others] call on `this`. A

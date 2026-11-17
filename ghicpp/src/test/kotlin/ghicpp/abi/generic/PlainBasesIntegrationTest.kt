@@ -138,6 +138,22 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun `a deleting destructor in a table destroying another class makes that class its base`() {
+        // C's and D's tables are alike, with no pure slot to tell M by: only their deleting destructor, which calls
+        // M's destructor, shows M between them and B, whose destructor M's calls.
+        val slots = mapOf(
+            "B" to listOf("bDelete", "b2"),
+            "C" to listOf("cdDelete", "c2", "shared"),
+            "D" to listOf("cdDelete", "c2", "shared"),
+        )
+        bases(
+            mapOf("mDtor" to setOf("M"), "bDtor" to setOf("B")),
+            mapOf("mDtor" to mapOf(0L to setOf("bDtor")), "cdDelete" to mapOf(0L to setOf("mDtor"))),
+            slots,
+        ) mustBe mapOf("M" to listOf("B" to 0L), "C" to listOf("M" to 0L), "D" to listOf("M" to 0L))
+    }
+
+    @Test
     fun `a slot null for a function that never returns, but no pure virtual, breaks no tie`() {
         val tables = mapOf(
             "M" to listOf("m1", null, "shared"),
