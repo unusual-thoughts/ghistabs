@@ -13,6 +13,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.Symbol
 import ghidrakt.*
 
 /**
@@ -106,6 +107,10 @@ object Msvc : CxxAbi {
      */
     override fun isPrimaryVtable(symbolName: String) =
         looksLikeVtable(symbolName) && symbolName.endsWith(UNQUALIFIED_VFTABLE_SUFFIX)
+
+    /** By its name, else, for one of a class's several tables, by its complete object locator, which gives 0. */
+    override fun isPrimaryTableSymbol(sym: Symbol) =
+        isPrimaryVtable(sym.name) || sym.program.msvcSubobjectOffset(sym.address) == 0
 
     /** A template's name has no closed form, as its arguments mangle as types. */
     override fun vtableCandidates(className: String) = listOfNotNull(

@@ -8,7 +8,6 @@ import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.SpecialName
 import ghicpp.abi.msvc.Msvc
-import ghicpp.abi.msvc.msvcSubobjectOffset
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
@@ -81,14 +80,7 @@ fun CxxAbi.Companion.mangledBy(name: String): CxxAbi? = when {
     else -> null
 }
 
-/**
- * Whether [sym], one of [abi]'s table symbols, is its class's own table: by its name, else, for one of an MSVC
- * class's several tables, by its complete object locator, which gives its own offset 0.
- */
-fun isPrimaryTableSymbol(sym: Symbol, abi: CxxAbi): Boolean =
-    abi.isPrimaryVtable(sym.name) || (abi == Msvc && sym.program.msvcSubobjectOffset(sym.address) == 0)
-
 /** The class whose own vtable [sym] is, demangled, and its ABI; null for a secondary or any other symbol. */
 fun primaryVtableOf(sym: Symbol): Pair<String, CxxAbi>? = CxxAbi.ofVtableSymbol(sym.name)
-    ?.takeIf { isPrimaryTableSymbol(sym, it) }
+    ?.takeIf { it.isPrimaryTableSymbol(sym) }
     ?.let { abi -> Demangler.of(sym.name)?.let(abi::demangledVtableClass)?.let { it to abi } }

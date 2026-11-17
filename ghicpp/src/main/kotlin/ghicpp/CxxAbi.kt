@@ -8,6 +8,7 @@ import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.Symbol
 import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 
@@ -136,6 +137,9 @@ interface VtableSymbols {
      * has several, its own too, so only [isPrimaryTableSymbol] can tell those apart.
      */
     fun isPrimaryVtable(symbolName: String) = looksLikeVtable(symbolName)
+
+    /** Whether [sym], one of this ABI's table symbols, is its class's own table: by default by its name alone. */
+    fun isPrimaryTableSymbol(sym: Symbol): Boolean = isPrimaryVtable(sym.name)
 
     /** The symbols [className]'s vtable may have, most likely first; none for a template, which has no closed form. */
     fun vtableCandidates(className: String): List<String>
