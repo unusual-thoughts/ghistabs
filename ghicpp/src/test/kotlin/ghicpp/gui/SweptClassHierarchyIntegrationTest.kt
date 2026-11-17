@@ -154,7 +154,7 @@ class SweptClassHierarchyIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             }
         }
         val members = ClassHierarchy.of(program).classes.single { it.qualifiedName == "Qux" }.members
-        fun attrs(address: String) = members.single { it.address.endsWith(address) }.attrs
+        fun attrs(address: String) = members.single { it.address.toString().endsWith(address) }.attrs
         attrs("402030") mustBe MemberAttrs(virt = VirtKind.VIRTUAL)
         attrs("402040") mustBe MemberAttrs(isConst = true)
         attrs("402050") mustBe MemberAttrs(isConst = true, isVolatile = true)

@@ -3,6 +3,8 @@ package ghicpp.recover
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassNaming
 import ghicpp.analyzers.GenericVftableAnalyzer
+import ghicpp.hierarchy.ClassHierarchy
+import ghicpp.hierarchy.VirtualSlots
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Pointer
@@ -138,6 +140,20 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         down.definedComponents.map { "+${it.offset} ${it.fieldName}" } mustBe
             listOf("+0 vfptr", "+8 Klass_00106b58_data", "+16 vfptr", "+24 _vbase_")
         down.getComponentAt(24).comment mustBe "public virtual Klass_00106bc8 at +0x10, by its vftables"
+    }
+
+    /**
+     * [VirtualSlots] over tables with no rtti word: Label's secondary table, labelled by its subobject's offset
+     * alone (`vftable_for_base_at_32`), overrides Named's, the base at +32, so its slots root there.
+     */
+    @Test
+    fun `a secondary table's slots override those of the base it is for`() {
+        val hierarchy = ClassHierarchy.of(program, hasStabs = false)
+        val slots = VirtualSlots(program, hierarchy)
+        val label = hierarchy.classes.single { it.vftable == addr(0x6bf0L) }
+        val forNamed = slots.slotsOf(label).filter { it.table == addr(0x6c28L) }
+        forNamed.isNotEmpty().mustBeTrue("Label's table for Named: ${slots.slotsOf(label)}")
+        forNamed.map { slots.root(it).table }.distinct() mustBe listOf(addr(0x6d00L))
     }
 
     private companion object {
