@@ -8,6 +8,7 @@ import ghicpp.templateName
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
+import ghidra.program.model.address.AddressRangeImpl
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
@@ -225,16 +226,21 @@ typealias StaticSymbol = Symbol<SymbolDecl.Static<GlobalTypeId>>
 typealias FunctionSymbol = Symbol<SymbolDecl.Function<GlobalTypeId>>
 
 /**
- * An [AddressRange] as `min-max`, each end as [AddressSerializer] writes it. Keys the text partition, so it
- * encodes as one string. Serialize-only.
+ * An [AddressRange] as `min-max`, each end as [AddressSerializer] writes it, read back as [DetachedAddresses]
+ * ones. Keys the text partition, so it encodes as one string.
  */
 class AddressRangeSerializer : KSerializer<AddressRange> {
     override val descriptor = PrimitiveSerialDescriptor("ghidra.program.model.address.AddressRange", STRING)
     override fun serialize(encoder: Encoder, value: AddressRange) =
         encoder.encodeString("${value.minAddress}-${value.maxAddress}")
 
-    override fun deserialize(decoder: Decoder) =
-        throw UnsupportedOperationException("AddressRangeSerializer is serialize-only")
+    override fun deserialize(decoder: Decoder): AddressRange {
+        val text = decoder.decodeString()
+        return AddressRangeImpl(
+            DetachedAddresses.parse(text.substringBefore('-')),
+            DetachedAddresses.parse(text.substringAfter('-')),
+        )
+    }
 }
 
 /** A source identity in a dump is its normalised path — the whole of what it is, minus an id type
