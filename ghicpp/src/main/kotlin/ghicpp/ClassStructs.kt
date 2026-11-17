@@ -1,5 +1,6 @@
 package ghicpp
 
+import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
@@ -79,6 +80,27 @@ fun DiagnosticSink.placeBase(
 /** The class's struct where `RecoverClassesFromRTTIScript` files it. */
 fun Program.classStruct(ns: GhidraClass) =
     dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
+
+/**
+ * Gives [ns] an empty [classStruct] where it has none. Done before any function moves into [ns]: a `__thiscall`
+ * method of a class with no struct makes Ghidra add an empty placeholder to type its `this` with, in the class's
+ * parent category (`/<Class>` for a global one), and its lookup (`findExistingClassStruct`) then takes that one over
+ * the [classStruct], being the shorter path. Such a placeholder an earlier run left is replaced by the [classStruct],
+ * so what it typed is typed with this.
+ */
+fun Program.stubClassStruct(ns: GhidraClass) {
+    val struct = classStruct(ns) ?: dataTypeManager.addDataType(
+        StructureDataType(ClassNaming.vftableCategory(ns), ns.name, 0),
+        DataTypeConflictHandler.KEEP_HANDLER,
+    ) as Structure
+    val found = DataTypeUtilities.findExistingClassStruct(dataTypeManager, ns) ?: return
+    if (found != struct && found.isZeroLength && found.description == GHIDRA_PLACEHOLDER) {
+        dataTypeManager.replaceDataType(found, struct, false)
+    }
+}
+
+/** The description `VariableUtilities` gives the placeholder struct it makes for a class with none. */
+private const val GHIDRA_PLACEHOLDER = "PlaceHolder Class Structure"
 
 /**
  * Gives [ns] a [classStruct] of [size] bytes, or grows its own to them. Where its last field is one of its own

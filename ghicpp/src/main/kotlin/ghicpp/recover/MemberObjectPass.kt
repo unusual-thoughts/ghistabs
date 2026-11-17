@@ -96,11 +96,14 @@ class MemberObjectPass(
         for (m in classes) {
             monitor.increment()
             val ns = m.cls?.ns?.toClass() ?: continue
-            m.ctors.forEach { name(it, ns, CONSTRUCTOR) }
-            m.dtors.forEach { name(it, ns, DESTRUCTOR) }
+            // Its struct first, so its structors' `this` is typed with it, not a placeholder of Ghidra's.
+            runCatching { program.stubClassStruct(ns) }
+                .onFailure { warn("member-struct-unstubbed", "${ns.getName(true)}: $it") }
             val size = sizes[m] ?: 0
             runCatching { program.sizeClassStruct(ns, size) }
                 .onFailure { warn("member-struct-unsized", "${ns.getName(true)} -> $size: $it") }
+            m.ctors.forEach { name(it, ns, CONSTRUCTOR) }
+            m.dtors.forEach { name(it, ns, DESTRUCTOR) }
             m.namedAfter?.let { (f, role) -> describe(ns, f, role) }
         }
         monitor.message = "Filling member object class structs"
