@@ -189,6 +189,10 @@ public class MsvcStlArchiveScript extends GhidraScript {
 	 * names: its namespaces split at the `::` outside template arguments, the class its last part.
 	 */
 	static DataTypePath cxxPath(String cxxName) {
+		// Visual C++ 5.0 closes nested template arguments as `>>`; the demangler, as `> >`.
+		while (cxxName.contains(">>")) {
+			cxxName = cxxName.replace(">>", "> >");
+		}
 		List<String> parts = new ArrayList<>();
 		int depth = 0;
 		int start = 0;
