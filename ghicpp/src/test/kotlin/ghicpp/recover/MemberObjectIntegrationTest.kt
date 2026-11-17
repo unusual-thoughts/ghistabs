@@ -258,7 +258,7 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         dissector.readCalls(listOf(ctor), TaskMonitor.DUMMY)
         sink.lines.filter { it.tag == "dissection-stale" } mustBe emptyList()
 
-        // Any change to the program may change what the decompiler makes of the function: a label, here.
+        // Any change to the program, here a new label, may change what the decompiler makes of the function.
         builder.createLabel(MEMBER_CTOR, "member_ctor")
         dissector.readCalls(listOf(ctor), TaskMonitor.DUMMY).objectCalls.keys mustBe setOf(ctor)
         sink.lines.single { it.tag == "dissection-stale" }.msg mustBe "1 read before the program changed"

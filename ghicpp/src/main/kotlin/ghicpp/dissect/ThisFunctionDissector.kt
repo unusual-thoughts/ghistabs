@@ -98,7 +98,10 @@ class ThisFunctionDissector(
         }
     }
 
-    /** What the functions storing the classes' vptrs store and call through `this`, and build, decompiled. */
+    /**
+     * Decompiles the functions that store the classes' vptrs. For each one, reads what it stores and calls
+     * through `this`, and the objects it builds.
+     */
     fun readStorers(monitor: TaskMonitor): Dissections = read(emptyList(), monitor)
 
     /**
@@ -116,7 +119,8 @@ class ThisFunctionDissector(
 
     /**
      * What [funcs] store and call through `this`, decompiled, and which of [writes]' vptrs each stores; what
-     * [cache] holds read the same way, of the program as it is now, isn't decompiled again.
+     * [cache] already holds a read of, made the same way, is not decompiled again, unless the program has
+     * changed since that read.
      */
     private fun decompile(
         funcs: Collection<Function>,
@@ -128,7 +132,7 @@ class ThisFunctionDissector(
         if (thisStorage == null) return Dissections()
         fun key(func: Function) = DissectionCache.Key(func, writes[func], storedOnly)
         val fill = FillOutStructureHelper(program, monitor)
-        // A read of the program before it last changed may not be what the decompiler makes of it now.
+        // Any change to the program since a read may change what the decompiler makes of the function now.
         val version = program.modificationNumber
         val (fresh, stale) = funcs.filter { cache.reads[key(it)]?.version != version }
             .partition { key(it) !in cache.reads }
@@ -352,8 +356,8 @@ class ThisFunctionDissector(
  * How [ThisFunctionDissector]s read functions: with [fillArrays], a field one fills in a counted loop or with
  * `memset` is an array; after a call of one of [operatorNewNames], `operator new(size)`, a constructor inlined
  * builds its object. And what the dissectors sharing it read of each function already, so that a parser that
- * dissects as it parses ([DissectingParser]) and the class pass after it decompile each function once, as long as
- * nothing changes the program between: a read of it before a change is read again.
+ * dissects as it parses ([DissectingParser]) and the class pass after it decompile each function once. That holds
+ * only while nothing changes the program: a function read before a change is decompiled again.
  */
 class DissectionCache(
     val fillArrays: Boolean = true,
@@ -375,7 +379,7 @@ class DissectionCache(
         val inlined: List<InlinedConstruction> = emptyList(),
         val objectCalls: List<ObjectCall> = emptyList(),
         val objectsBuilt: Map<ClassDecl, Map<Long, Address>> = emptyMap(),
-        /** The program's [Program.getModificationNumber] as it was read. */
+        /** The program's [Program.getModificationNumber] when the function was read. */
         val version: Long = 0,
     )
 

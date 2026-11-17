@@ -217,7 +217,8 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
                     .sortedBy { it.first }.map { it.second }
                 PlainClass(ns, (labels + secondaries).map { PlainVtables.recordAt(program, it.address) })
             }
-        // The slots' functions first: making one changes the program, and so what the storers read as.
+        // Look up the slots' functions before reading the storers. Looking one up can create it, which changes
+        // the program, and the class pass would then have to decompile the storers again.
         val slots = classes.associateWith { c ->
             c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
                 // An unnamed pure virtual stub never returns: it aborts.

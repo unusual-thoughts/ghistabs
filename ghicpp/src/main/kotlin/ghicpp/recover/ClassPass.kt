@@ -75,7 +75,8 @@ class ClassPass(
         val read = parser.parse(monitor)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
         val inspector = ThisFunctionDissector(program, read.classes, this, cache)
-        // Before the stubs, which change the program and so what the parser read, as the parser read the storers.
+        // Find the structors before stubbing the structs. Stubbing changes the program, and the parser's reads of
+        // the storers, which this reuses, would then be out of date.
         val found = inspector.find(read.holders, abi, monitor)
         stubStructs(read.classes)
         val structors = found.roles

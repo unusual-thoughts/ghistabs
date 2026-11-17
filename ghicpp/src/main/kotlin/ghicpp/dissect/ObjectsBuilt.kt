@@ -9,10 +9,16 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 
 /**
- * Each object this function stores a vftable of [tables] ([vptrTables]) into where it belongs, by the class the
- * vftables say it is ([storedClass]), with the address it stores at each offset into it ([constantStores]): its
- * vptrs, and its vbtables among the rest. A virtual base's stores go into the object the vbtable stored beside its
- * vbptr puts the base in.
+ * The objects this function builds, found from the vftables of [tables] ([vptrTables]) it stores into them.
+ *
+ * An object counts when a vftable is stored at the offset where it belongs. The vftables stored into the object
+ * tell its class ([storedClass]). For each object, the result maps that class to every constant address the
+ * function stores into the object, by offset ([constantStores]). These include the vptrs and, for MSVC, the
+ * vbtables.
+ *
+ * A constructor reaches a virtual base through the vbtable it stored earlier, so its stores into that base are
+ * not at a constant offset from `this`. [throughVbtable] resolves them, so that they count as stores into the
+ * object being built, at the base's offset.
  */
 internal fun HighFunction.objectsBuilt(
     tables: Map<Address, Pair<ClassDecl, Long>>,
@@ -32,8 +38,11 @@ internal fun HighFunction.objectsBuilt(
 }
 
 /**
- * Where [this] points as a constructor reaches a virtual base, into the object [stores] puts a vbtable
- * in: `vbptr + vbtable[vdisp]`, the vbtable the one stored at the vbptr. Null for any other pointer.
+ * Where [this] points, when it is a pointer to a virtual base that a constructor computes as
+ * `vbptr + vbtable[vdisp]`.
+ *
+ * The vbtable must be the one [stores] says the function stored at that vbptr. The result is the object holding
+ * the vbptr, at the offset of the virtual base inside it. Null when [this] is not such a pointer.
  */
 private fun HighVariable.throughVbtable(program: Program, stores: Map<HighVariable, Map<Long, Address>>): PointerInto? {
     val sum = instances.firstNotNullOfOrNull { v ->
@@ -52,12 +61,15 @@ private fun HighVariable.throughVbtable(program: Program, stores: Map<HighVariab
     }
 }
 
-/** The pointer [this] is loaded through, past casts. */
+/** The address that [this] was loaded from, looking through casts. Null when [this] was not loaded. */
 private fun Varnode.loaded(): Varnode? = when (def?.opcode) {
     PcodeOp.CAST -> def.getInput(0).loaded()
     PcodeOp.LOAD -> def.getInput(1)
     else -> null
 }
 
-/** Whether [at] may be an MSVC vbtable: its first entry, from the vbptr back to its subobject, is not positive. */
+/**
+ * Whether [at] may be an MSVC vbtable. A vbtable's first entry is the offset from the vbptr back to the start of
+ * its subobject, so it is zero or negative.
+ */
 fun Program.mayBeVbtable(at: Address) = runCatching { memory.getInt(at) <= 0 }.getOrDefault(false)

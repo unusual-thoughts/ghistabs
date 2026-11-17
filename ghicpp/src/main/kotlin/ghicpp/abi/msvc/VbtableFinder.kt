@@ -6,17 +6,23 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 
 /**
- * Finds MSVC vbtables, which no RTTI points at: a function building a class, its constructor or one it
- * was inlined into, stores the class's vftables and vbtables into the object, so the address stored where
- * a vbptr sits, in an object the vftables say is of that class, is that class's vbtable there. It reads
- * what a [ThisFunctionDissector] found the vptr storers build ([Dissections.objectsBuilt]).
+ * Finds MSVC vbtables, which no RTTI points at.
+ *
+ * A function that builds an object, such as its class's constructor or a function the constructor was inlined
+ * into, stores both the vftables and the vbtables into it. The vftables tell which class the object is. So when
+ * that class has a vbptr at some offset, the address stored at that offset is the class's vbtable.
+ *
+ * The objects each function builds come from a [ThisFunctionDissector] ([Dissections.objectsBuilt]).
  */
 class VbtableFinder(
     private val program: Program,
     /** Where each class with virtual bases has its vbptrs. */
     private val vbptrs: Map<ClassDecl, Set<Long>>,
 ) {
-    /** Each of [vbptrs]' classes' vbtables, by where its vbptr sits in the class, where one of [uses] stores one. */
+    /**
+     * The vbtables that the functions in [uses] store, for each class in [vbptrs]. Each vbtable is keyed by the
+     * offset of its vbptr in the class.
+     */
     fun find(uses: Dissections): Map<ClassDecl, Map<Long, Address>> {
         val vbtables = mutableMapOf<ClassDecl, MutableMap<Long, Address>>()
         for (built in uses.objectsBuilt.values) {
