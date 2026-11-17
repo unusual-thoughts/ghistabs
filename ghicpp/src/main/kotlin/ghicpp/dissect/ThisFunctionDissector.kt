@@ -51,7 +51,7 @@ class ThisFunctionDissector(
         convention: StructorConvention,
         monitor: TaskMonitor,
     ): FoundStructors {
-        val uses = read(slots.keys, monitor)
+        val uses = readStorers(monitor, slots.keys)
         val roles = uses.roles(slots, convention).toMutableMap()
         val subobjectCalls = uses.subobjectCalls.toMutableMap()
         val thisStores = uses.thisStores.toMutableMap()
@@ -102,24 +102,15 @@ class ThisFunctionDissector(
     }
 
     /**
-     * What the functions storing the classes' vptrs store and call through `this`, decompiled, and what [others]
-     * call there. [visit] sees each as decompiled, so it decompiles them all, read in [cache] already or not.
+     * The stores of each function writing one of [tables], and what those and [others] call on `this`, decompiled.
+     * A store counts only through `this` at the table's own offset, which leaves out locals built inline and
+     * member objects; a call, only with `this` first, which leaves out a local built and destroyed. A store into
+     * what `operator new` just returned is a constructor inlined there ([inlined]). [visit] sees each as
+     * decompiled, so it decompiles them all, read in [cache] already or not.
      */
     fun readStorers(
         monitor: TaskMonitor,
         others: Collection<Function> = emptyList(),
-        visit: ((Function, HighFunction) -> Unit)? = null,
-    ): Dissections = read(others, monitor, visit)
-
-    /**
-     * The stores of each function writing one of [tables], and what those and [others] call on `this`. A
-     * store counts only through `this` at the table's own offset, which leaves out locals built inline and
-     * member objects; a call, only with `this` first, which leaves out a local built and destroyed. A store into
-     * what `operator new` just returned is a constructor inlined there ([inlined]).
-     */
-    private fun read(
-        others: Collection<Function>,
-        monitor: TaskMonitor,
         visit: ((Function, HighFunction) -> Unit)? = null,
     ): Dissections {
         monitor.message = "Finding vptr stores"
