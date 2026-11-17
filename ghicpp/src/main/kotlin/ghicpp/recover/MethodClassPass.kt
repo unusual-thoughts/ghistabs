@@ -27,6 +27,25 @@ import ghidrakt.diagnose.DiagnosticSink
  */
 data class ThisCall(val caller: Function, val callee: Function, val built: GhidraClass? = null)
 
+/**
+ * What a [MethodClassPass] run moved: [perRound], how many each round that moved any did, the first off the known
+ * classes alone, each later one off guesses too.
+ */
+data class MethodClassResult(val perRound: List<Int> = emptyList()) {
+    /** How many it moved in all. */
+    val moved get() = perRound.sum()
+
+    /** How many rounds moved something; the one after them, which moved nothing, ended the run. */
+    val rounds get() = perRound.size
+
+    /** How many the rounds after the first moved: what trusting its own guesses added. */
+    val offGuesses get() = perRound.drop(1).sum()
+
+    /** "N method class(es) guessed", then, past one round, the rounds and what they added. */
+    override fun toString() = "$moved method class(es) guessed" +
+        if (rounds > 1) " in $rounds round(s), $offGuesses of them off earlier guesses" else ""
+}
+
 /** A function's class, as [MethodClassGuesser] guessed it, off [sites] calls. */
 data class MethodClassGuess(val cls: GhidraClass, val sites: Int)
 
@@ -107,14 +126,14 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
     }
 
     /**
-     * How many it moved. Only the evidence is decompiled: the recorded classes' methods and constructors' callers,
-     * then, with [trustGuesses], the methods each round moved.
+     * How many it moved, round by round. Only the evidence is decompiled: the recorded classes' methods and
+     * constructors' callers, then, with [trustGuesses], the methods each round moved.
      */
-    fun run(monitor: TaskMonitor): Int {
-        if (bases.isEmpty() || thisStorage == null) return 0
+    fun run(monitor: TaskMonitor): MethodClassResult {
+        if (bases.isEmpty() || thisStorage == null) return MethodClassResult()
         val functions = program.functionManager.getFunctions(true).toList()
         val candidates = functions.filterTo(mutableSetOf()) { it.isCandidate() }
-        if (candidates.isEmpty()) return 0
+        if (candidates.isEmpty()) return MethodClassResult()
         val byId = bases.keys.associateBy { it.id }
         val recorded = functions.filterTo(mutableSetOf()) { program.isPlacedByClassPass(it) }
         val recordedCtors = recorded.filterTo(mutableSetOf()) {
@@ -127,10 +146,28 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
         // A constructor the debug info names goes by its class's name.
         val ctors = methods.filter { (f, cls) -> f in recordedCtors || (f.hasKnownClass() && f.name == cls.name) }
         monitor.message = "Finding constructors' callers"
-        var evidence = methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }
+        val evidence = methods.keys + ctors.keys.flatMap { it.getCallingFunctions(monitor) }
+        return MethodClassResult(guessRounds(evidence, candidates, methods, ctors, trusted, monitor)).also { result ->
+            if (trustGuesses) log("method-class-rounds", "$result: ${result.perRound.joinToString(", ")} per round")
+        }
+    }
+
+    /**
+     * Guesses off the calls [firstEvidence] makes, and with [trustGuesses] again off those the methods each round
+     * moved, until one moves none of [candidates]: how many each round moved. [methods] and [known] grow by them.
+     */
+    private fun guessRounds(
+        firstEvidence: Collection<Function>,
+        candidates: MutableSet<Function>,
+        methods: MutableMap<Function, GhidraClass>,
+        ctors: Map<Function, GhidraClass>,
+        trusted: Collection<Function>,
+        monitor: TaskMonitor,
+    ): List<Int> {
+        var evidence = firstEvidence
         val known = trusted.toMutableSet()
         val calls = mutableListOf<ThisCall>()
-        var moved = 0
+        val perRound = mutableListOf<Int>()
         for (round in 1..(if (trustGuesses) MAX_ROUNDS else 1)) {
             if (evidence.isEmpty() || candidates.isEmpty()) break
             val what = if (round == 1) "methods and constructors' callers" else "guessed methods, round $round"
@@ -143,13 +180,14 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
                 monitor.increment()
                 place(f, guess, round)
             }
-            moved += placed.size
+            if (placed.isEmpty()) break
+            perRound += placed.size
             candidates -= placed.keys
             known += placed.keys
             placed.forEach { (f, guess) -> methods[f] = guess.cls }
             evidence = placed.keys
         }
-        return moved
+        return perRound
     }
 
     /** An unnamed global function whose first argument comes in where `this` does ([takesThisAt]). */

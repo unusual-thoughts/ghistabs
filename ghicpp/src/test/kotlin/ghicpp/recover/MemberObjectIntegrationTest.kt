@@ -119,7 +119,7 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         holder.getComponentAt(8).dataType.name mustBe member
 
         // What the holder's constructor calls next on the member is the member's method.
-        program.runTransaction("guess") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) mustBe 1 }
+        program.runTransaction("guess") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY).moved mustBe 1 }
         program.functionManager.getFunctionAt(addr(MEMBER_METHOD)).parentNamespace.name mustBe member
     }
 
@@ -168,12 +168,14 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
         val member = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
         // Untrusted, the member's method is guessed off its holder's constructor, the helper off nothing.
-        program.runTransaction("guess") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) mustBe 1 }
+        program.runTransaction("guess") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY).moved mustBe 1 }
         program.functionManager.getFunctionAt(addr(HELPER)).parentNamespace.isGlobal mustBe true
         program.memberAttrs(addr(MEMBER_METHOD)) mustBe MemberAttrs(source = SourceType.DEFAULT)
         // Trusted, the method's guess is evidence, from this run's guesses or, as here, an earlier run's.
         program.runTransaction("trust") {
-            MethodClassPass(program, DummySink, trustGuesses = true).run(TaskMonitor.DUMMY) mustBe 1
+            // Its first round moves the helper, off the earlier run's guess.
+            MethodClassPass(program, DummySink, trustGuesses = true).run(TaskMonitor.DUMMY) mustBe
+                MethodClassResult(listOf(1))
         }
         program.functionManager.getFunctionAt(addr(HELPER)).parentNamespace.name mustBe member
     }
@@ -185,7 +187,10 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             GenericVftableFinder(program).seed() mustBe 1
             val found = ClassPass(program, PlainVtableParser(program), DummySink).run(TaskMonitor.DUMMY).found!!
             MemberObjectPass(program, DummySink).run(found) mustBe 1
-            MethodClassPass(program, DummySink, trustGuesses = true).run(TaskMonitor.DUMMY) mustBe 2
+            val result = MethodClassPass(program, DummySink, trustGuesses = true).run(TaskMonitor.DUMMY)
+            result.perRound mustBe listOf(1, 1)
+            result.offGuesses mustBe 1
+            result.toString() mustBe "2 method class(es) guessed in 2 round(s), 1 of them off earlier guesses"
         }
         val member = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
         program.functionManager.getFunctionAt(addr(MEMBER_METHOD)).parentNamespace.name mustBe member

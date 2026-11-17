@@ -66,7 +66,7 @@ class GenericVftableAnalyzer :
         report(
             "$seeded vftable(s) seeded; ${result.classes} class(es), ${result.owned} virtual function(s) owned, " +
                 "${result.structors} constructor(s) and destructor(s) named, $members member object class(es), " +
-                "$guessed method class(es) guessed",
+                "$guessed",
         )
         return true
     }

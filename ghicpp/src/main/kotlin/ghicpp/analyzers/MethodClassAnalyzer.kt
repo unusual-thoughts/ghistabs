@@ -42,8 +42,8 @@ class MethodClassAnalyzer :
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val moved = MethodClassPass(program, sink, program.analyzerOptions(NAME)[TRUST_GUESSES]).run(monitor)
-        if (moved > 0) report("guessed the class of $moved function(s)")
+        val result = MethodClassPass(program, sink, program.analyzerOptions(NAME)[TRUST_GUESSES]).run(monitor)
+        if (result.moved > 0) report("$result")
         return true
     }
 
