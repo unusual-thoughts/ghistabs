@@ -1,11 +1,7 @@
 package ghicpp.dissect
 
-import ghicpp.ClassDecl
-import ghicpp.StructorConvention
-import ghicpp.StructorRole
+import ghicpp.*
 import ghicpp.StructorRole.CONSTRUCTOR
-import ghicpp.thisAt
-import ghicpp.thisStorage
 import ghidra.app.decompiler.util.FillOutStructureHelper
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.ArrayDataType
@@ -194,7 +190,7 @@ class ThisFunctionDissector(
         fun part(where: Address) = starts.count { it <= where }
         val into: (PointerInto) -> Boolean = { it.root == fresh }
         val made = new.seqnum.target
-        val calls = objectCalls.filter { (it.obj as? CalledObject.Other)?.madeAt == made && it.at > made }
+        val calls = objectCalls.filter { (it.obj as? CalledObject.Callee)?.madeAt == made && it.at > made }
         val types = componentMap.iterator().asSequence().associate { (offset, dt) -> offset.toInt() to dt }
         val fields = stores.mapNotNull { store ->
             val dt = types[store.offset.toInt()]?.takeIf { it.length > 0 } ?: return@mapNotNull null

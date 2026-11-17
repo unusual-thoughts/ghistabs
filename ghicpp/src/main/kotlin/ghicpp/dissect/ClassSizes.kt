@@ -5,7 +5,7 @@ import ghicpp.CxxAbi
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghidrakt.alignedTo
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 
 /**
@@ -113,9 +113,9 @@ class AllocationSizeFinder(
         val sizes = mutableMapOf<ClassDecl, MutableSet<Long>>()
         for (call in calls.objectCalls.values.flatten()) {
             val cls = ctors[call.callee] ?: continue
-            val obj = call.obj as? CalledObject.Other ?: continue
+            val obj = call.obj as? CalledObject.Callee ?: continue
             if (call.offset != 0L || obj.madeBy?.name !in abi.operatorNewNames) continue
-            obj.size?.let { sizes.getOrPut(cls) { mutableSetOf() } += it }
+            obj.arg?.let { sizes.getOrPut(cls) { mutableSetOf() } += it }
         }
         return sizes.mapValues { (cls, all) ->
             if (all.size > 1) debug("msvc-new-sizes", "${cls.name} allocated with sizes $all")

@@ -9,16 +9,22 @@ import ghidra.program.model.pcode.PcodeOp
 
 /** The object a call is made on, as the calling function has it. */
 sealed interface CalledObject {
+    /** tells the object apart from the caller's others */
+    val id: Int?
+
     /** The caller's own incoming `this`. */
-    data object This : CalledObject
+    data object This : CalledObject {
+        override val id = null
+    }
 
     /**
-     * Another object, [id] telling it apart from the caller's others: one a call at [madeAt] returned, [madeBy]
-     * that call's callee, with [size] its first argument where a constant, as `operator new(size)` is; or one the
-     * caller has otherwise, a local or an argument, with none of those.
+     * Another object, that a call at [madeAt] returned, [madeBy] that call's callee,
+     * with [arg] its first argument where a constant, as `operator new(size)` is
      */
-    data class Other(val id: Int, val madeAt: Address? = null, val madeBy: Function? = null, val size: Long? = null) :
-        CalledObject
+    data class Callee(override val id: Int, val madeAt: Address, val madeBy: Function?, val arg: Long?) : CalledObject
+
+    /** Another object that the caller has, a local or an argument. */
+    data class Caller(override val id: Int) : CalledObject
 }
 
 /**
@@ -30,7 +36,7 @@ data class ObjectCall(
     val callee: Function,
     val obj: CalledObject,
     val offset: Long,
-    val returns: CalledObject.Other? = null,
+    val returns: CalledObject.Callee? = null,
 )
 
 /**
@@ -41,18 +47,19 @@ internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
     val ids = mutableMapOf<HighVariable, CalledObject>()
     fun objectOf(root: HighVariable): CalledObject = ids.getOrPut(root) {
         if (PointerInto(root, 0).isThis(thisAt)) return@getOrPut CalledObject.This
-        val made = root.instances.firstNotNullOfOrNull { it.def?.takeIf { op -> op.opcode == PcodeOp.CALL } }
-        CalledObject.Other(
-            ids.size,
-            made?.seqnum?.target,
-            made?.let { directCallee(it) },
-            made?.takeIf { it.numInputs > 1 }?.getInput(1)?.takeIf { it.isConstant }?.offset,
-        )
+        root.instances.firstNotNullOfOrNull { it.def?.takeIf { op -> op.opcode == PcodeOp.CALL } }?.let { call ->
+            CalledObject.Callee(
+                ids.size,
+                call.seqnum.target,
+                directCallee(call),
+                call.takeIf { it.numInputs > 1 }?.getInput(1)?.takeIf { it.isConstant }?.offset,
+            )
+        } ?: CalledObject.Caller(ids.size)
     }
     return pcodeOps.asSequence().mapNotNull { op ->
         val callee = directCallee(op) ?: return@mapNotNull null
         val obj = op.thisArgument(callee)?.pointerInto() ?: return@mapNotNull null
-        val returns = op.output?.pointerInto()?.let { objectOf(it.root) as? CalledObject.Other }
+        val returns = op.output?.pointerInto()?.let { objectOf(it.root) as? CalledObject.Callee }
         ObjectCall(op.seqnum.target, callee, objectOf(obj.root), obj.offset, returns)
     }.toList()
 }
