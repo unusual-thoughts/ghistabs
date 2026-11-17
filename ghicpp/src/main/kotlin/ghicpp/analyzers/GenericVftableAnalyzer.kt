@@ -2,9 +2,12 @@ package ghicpp.analyzers
 
 import ghicpp.VfptrModel
 import ghicpp.abi.generic.PlainVtableParser
-import ghicpp.recover.*
+import ghicpp.recover.ClassPass
 import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
 import ghicpp.recover.ClassPass.Companion.INLINED_CONSTRUCTORS
+import ghicpp.recover.GenericVftableFinder
+import ghicpp.recover.MemberObjectPass
+import ghicpp.recover.MethodClassPass
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -13,13 +16,10 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghidrakt.BoolOption
-import ghidrakt.analyzerOptions
+import ghidrakt.*
 import ghidrakt.diagnose.AnalysisProbe
 import ghidrakt.diagnose.MessageLogSink
 import ghidrakt.diagnose.report
-import ghidrakt.get
-import ghidrakt.register
 
 /**
  * Seed vftables where no RTTI says where they are, absent or in a format no analyzer reads, off the tables of

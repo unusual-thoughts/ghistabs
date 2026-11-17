@@ -9,7 +9,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.NoisyStructureBuilder
 import ghidra.program.model.listing.Function
-import ghidrakt.withLength
+import ghidrakt.*
 
 /** Stores to a `this` variable within one method */
 typealias Stores = Map<Int, DataType>

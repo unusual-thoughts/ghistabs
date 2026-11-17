@@ -12,8 +12,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.ObjectStorage
 import ghidra.util.Saveable
-import ghidrakt.GPropertiesFormat
-import ghidrakt.toClass
+import ghidrakt.*
 import kotlinx.serialization.Serializable
 
 /** A C++ member's or base's access, as a stab's visibility marker or an RTTI base flag states it. */
@@ -36,6 +35,8 @@ data class ClassBase(
     override val isVirtual: Boolean,
     override val access: Access,
     override val offset: Long?,
+    /** Where a virtual base's [offset] is from: IMPORTED its ABI record, ANALYSIS its vtables, DEFAULT nowhere. */
+    val offsetSource: SourceType = SourceType.IMPORTED,
 ) : BaseDecl
 
 /**
@@ -66,6 +67,21 @@ interface ClassDecl {
      * records say: Itanium's vtable, MSVC's vbtable. Null where they don't.
      */
     val virtualBases: List<ClassBase> get() = emptyList()
+
+    /**
+     * Where its complete object's virtual bases start, as its records state them: [virtualBases]' offsets, and
+     * those of virtual bases no record names, such as a plain Itanium vtable's vbase offsets.
+     */
+    val vbaseOffsets: Set<Long> get() = virtualBases.mapNotNullTo(mutableSetOf()) { it.offset }
+
+    /** Its virtual bases: [virtualBases], and those of [bases] that are virtual where no record lists them. */
+    val allVirtualBases: List<ClassBase> get() = (virtualBases + bases.filter { it.isVirtual }).distinctBy { it.cls }
+
+    /** Whether it has virtual bases, named ([allVirtualBases]) or only by their offsets ([vbaseOffsets]). */
+    val hasVirtualBases: Boolean get() = allVirtualBases.isNotEmpty() || vbaseOffsets.isNotEmpty()
+
+    /** Where its first virtual base starts, which its non-virtual part ends before; null where none is placed. */
+    val nonVirtualSize: Long? get() = vbaseOffsets.minOrNull()
 
     /** Where its vbptrs sit, MSVC's, which point at its vbtables; Itanium keeps vbase offsets in the vtable. */
     val vbptrs: Set<Long> get() = emptySet()

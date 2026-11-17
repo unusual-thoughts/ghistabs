@@ -9,7 +9,7 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach

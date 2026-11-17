@@ -4,7 +4,7 @@ import ghicpp.fixup.markNoReturn
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.listing.Function
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.must
 import ghidrakt.test.mustNot
 import org.junit.jupiter.api.AfterEach

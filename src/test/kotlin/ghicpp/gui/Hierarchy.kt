@@ -1,6 +1,6 @@
 package ghicpp.gui
 
-import ghicpp.hierarchy.*
+import ghicpp.hierarchy.ClassHierarchy
 import ghidra.program.model.listing.Program
 import ghistabs.parse.StabReader
 

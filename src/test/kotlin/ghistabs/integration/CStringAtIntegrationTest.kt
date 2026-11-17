@@ -4,8 +4,7 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.ascii.AsciiCharSetRecognizer
 import ghidra.util.ascii.CharSetRecognizer
-import ghidrakt.cBytesAt
-import ghidrakt.cStringAt
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach

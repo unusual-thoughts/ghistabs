@@ -1,10 +1,6 @@
 package ghicpp.eh
 
-import ghidra.app.cmd.disassemble.DisassembleCommand
-import ghidra.app.cmd.function.CreateFunctionCmd
-import ghidra.program.database.function.OverlappingFunctionException
 import ghidra.program.model.address.Address
-import ghidra.program.model.address.AddressSet
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.Structure
@@ -13,18 +9,12 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Function.FunctionUpdateType
 import ghidra.program.model.scalar.Scalar
-import ghidra.program.model.symbol.RefType
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.exception.DuplicateNameException
 import ghidra.util.exception.InvalidInputException
 import ghidra.util.task.TaskMonitor
-import ghidrakt.cancelOnly
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.frameBias
-import ghidrakt.minus
-import ghidrakt.overlaps
-import ghidrakt.withLength
-import kotlin.math.abs
 
 /**
  * Applies [SjljTypes] to the functions that register with it ([SjljLsdaPass] lays the LSDAs and receivers,

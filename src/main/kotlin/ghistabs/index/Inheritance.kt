@@ -3,8 +3,9 @@ package ghistabs.index
 import ghicpp.VfptrModel
 import ghicpp.VirtKind
 import ghicpp.isVptrFieldName
-import ghicpp.member
-import ghistabs.parse.*
+import ghistabs.parse.GlobalTypeDecl
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
 

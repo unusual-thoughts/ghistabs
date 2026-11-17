@@ -9,11 +9,12 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.functionsIterable
-import ghidrakt.runTransaction
-import ghidrakt.test.*
-import ghidrakt.withProgram
-import ghistabs.test.*
+import ghidrakt.*
+import ghidrakt.test.must
+import ghidrakt.test.mustBeA
+import ghidrakt.test.mustBeEmpty
+import ghistabs.test.disableAnalyzersFromProperty
+import ghistabs.test.disableWindowsResourceAnalyzer
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.io.File

@@ -1,10 +1,6 @@
 package ghidrakt
 import ghidra.app.cmd.label.DemanglerCmd
-import ghidra.app.util.demangler.Demangled
-import ghidra.app.util.demangler.DemangledDataType
-import ghidra.app.util.demangler.DemangledFunction
-import ghidra.app.util.demangler.DemangledObject
-import ghidra.app.util.demangler.MangledContext
+import ghidra.app.util.demangler.*
 import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.demangler.gnu.GnuDemanglerFormat
 import ghidra.app.util.demangler.gnu.GnuDemanglerOptions

@@ -2,12 +2,12 @@ package ghistabs.index
 
 import ghicpp.canonTemplateName
 import ghicpp.isTemplated
-import ghicpp.member
 import ghicpp.outermostTemplate
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
 import ghistabs.harvest.*
-import ghistabs.parse.*
+import ghistabs.parse.SourceFile
+import ghistabs.parse.TypeDecl
 
 /**
  * Where the stabs alone say each type lives — attribution before a source root has a say.

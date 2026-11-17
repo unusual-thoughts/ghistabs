@@ -1,9 +1,11 @@
 package ghistabs.integration
 
-import ghidrakt.test.*
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeEmpty
 import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode
-import ghistabs.test.*
+import ghistabs.test.defaultContext
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource

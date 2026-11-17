@@ -22,6 +22,26 @@ class MsvcTest {
         BaseEntry(td(type), contained, isVirtual, Access.PUBLIC)
 
     @Test
+    fun `virtual bases sit where the class's last vftables, theirs, are moved to`() {
+        // class M : virtual F, virtual A: a vbptr at 0, F's table of 18 slots at +152, A's of 14 at +236
+        val tables = listOf(236L to 14, 152L to 18)
+        vbaseOffsetsByVftables(listOf(listOf(0L to 18), listOf(0L to 14)), tables) mustBe listOf(152L, 236L)
+        // A table of the class's own, for a virtual it adds, comes first.
+        vbaseOffsetsByVftables(listOf(listOf(0L to 18)), listOf(0L to 3, 152L to 18)) mustBe listOf(152L)
+    }
+
+    @Test
+    fun `virtual bases whose tables do not match the class's last are placed by nothing`() {
+        // A slot count the base's own table doesn't have.
+        vbaseOffsetsByVftables(listOf(listOf(0L to 18)), listOf(152L to 19)).mustBeNull()
+        // A base with no table of its own, and more bases' tables than the class has.
+        vbaseOffsetsByVftables(listOf(emptyList(), listOf(0L to 14)), listOf(236L to 14)).mustBeNull()
+        vbaseOffsetsByVftables(listOf(listOf(0L to 18), listOf(0L to 14)), listOf(236L to 14)).mustBeNull()
+        // Two tables of one base, moved by different amounts.
+        vbaseOffsetsByVftables(listOf(listOf(0L to 4, 8L to 2)), listOf(16L to 4, 28L to 2)).mustBeNull()
+    }
+
+    @Test
     fun `direct bases step over each base's own`() {
         // class D : B, S, with B : A
         val array = listOf(entry("D", 3), entry("B", 1), entry("A"), entry("S"))

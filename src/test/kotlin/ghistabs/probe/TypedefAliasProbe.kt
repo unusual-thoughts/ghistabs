@@ -4,8 +4,7 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.runTransaction
-import ghidrakt.withProgram
+import ghidrakt.*
 import ghistabs.importer.ImportProbe
 import ghistabs.materialize.resolveRef
 import ghistabs.test.defaultContext

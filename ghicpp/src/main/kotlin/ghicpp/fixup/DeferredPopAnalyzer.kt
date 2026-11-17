@@ -17,8 +17,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.pcode.*
 import ghidra.util.Msg
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.report
-import ghidrakt.useWith
 
 /**
  * gcc defers popping a call's arguments (`-fdefer-pop`, on at -O1 and up, and the default for some

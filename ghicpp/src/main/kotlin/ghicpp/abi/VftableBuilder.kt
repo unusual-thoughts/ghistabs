@@ -228,8 +228,10 @@ class VftableBuilder(
      * Adds a slot pointing at [target], always as a function definition pointer, even to
      * `__cxa_pure_virtual`. The field and the definition share a name, as Ghidra's class recovery expects,
      * so an overload gets a `_1` suffix; [used] holds the names this table spent. A target [defined]
-     * already, in another table, keeps its definition and its name, so an edit to it reaches every table.
-     * Code at [target] with no function becomes one ([functionAtOrCreate]).
+     * already, in another table, keeps its definition and its name, so an edit to it reaches every table;
+     * not a pure virtual stub, whose slot each table types off its own overrides
+     * ([ghicpp.hierarchy.VirtualSlots.typePureSlots]). Code at [target] with no function becomes one
+     * ([functionAtOrCreate]).
      */
     fun addSlot(
         vftable: Structure,
@@ -239,7 +241,8 @@ class VftableBuilder(
         used: MutableSet<String> = mutableSetOf(),
         defined: SlotDefinitions? = null,
     ) {
-        val reused = defined?.get(target)
+        val shared = defined?.takeUnless { isPureVirtualStub(target, abi) }
+        val reused = shared?.get(target)
         // Code nothing reached but this pointer becomes a function first, so the slot is typed and named off it.
         val func = if (reused == null) program.functionAtOrCreate(target) else null
         val linkage = symtab.getSymbols(target).map { it.name }.firstOrNull(abi::isProbablyMangled)
@@ -254,9 +257,15 @@ class VftableBuilder(
             ?.let { slotDefinition(category, name, it.signature, dtm) }
             .let { it ?: demangledDefinition(category, name, linkage) }
             .let(registry::registerAgain)
-        defined?.add(target, funcDef)
+        shared?.add(target, funcDef)
         vftable.add(PointerDataType(funcDef, dtm), name, "$target")
     }
+
+    /** Whether [target], by a label at it or past a thunk, is [abi]'s pure virtual stub. */
+    private fun isPureVirtualStub(target: Address, abi: CxxAbi) =
+        symtab.getSymbols(target).any { abi.isPureVirtualStub(it.name) } ||
+            program.functionManager.getFunctionAt(target)?.getThunkedFunction(true)?.name
+                ?.let(abi::isPureVirtualStub) == true
 
     /** The definition [name] for a target with only its [linkage] name to go by; untyped if that isn't mangled. */
     private fun demangledDefinition(category: CategoryPath, name: String, linkage: String) =

@@ -4,8 +4,6 @@ import ghicpp.MemberDecl
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.Structor
 import ghicpp.abi.VtableRecord
-import ghicpp.abi.gcc2.Gcc2.DEMANGLED_VTABLE_SUFFIX
-import ghicpp.abi.itanium.Itanium
 import ghicpp.leafName
 import ghicpp.nameSegments
 import ghicpp.qualifiedName
@@ -15,8 +13,7 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
-import ghidrakt.Demangler
-import ghidrakt.namespaces
+import ghidrakt.*
 
 /**
  * gcc 2.x's symbol spellings: vtables, thunks, typeinfo and mangled members, and what Ghidra's demangler

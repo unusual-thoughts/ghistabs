@@ -8,8 +8,7 @@ import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghidrakt.isAnalyzerEnabled
-import ghidrakt.runTransaction
+import ghidrakt.*
 
 /**
  * The analyzers that read what a stabs import applied, in their analysis order: auto-analysis runs them

@@ -1,6 +1,6 @@
 package ghistabs.scan
 
-import ghidrakt.ECHOES_DROPPED_LINES
+import ghidrakt.*
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Assumptions.assumeTrue

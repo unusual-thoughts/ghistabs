@@ -1,8 +1,6 @@
 package ghicpp.abi
 
-import ghicpp.BaseDecl
-import ghicpp.ClassPassInput
-import ghicpp.MemberDecl
+import ghicpp.*
 import ghicpp.abi.gcc2.Gcc2
 import ghicpp.abi.gcc2.Gcc2Plain
 import ghicpp.abi.gcc2.Gcc2Thunks
@@ -10,7 +8,6 @@ import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.SpecialName
 import ghicpp.abi.msvc.Msvc
-import ghicpp.templateLeaf
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
@@ -67,7 +64,7 @@ interface CxxAbi :
     fun basesOf(program: Program, cls: Namespace): List<BaseDecl>? = null
 
     /** The record that says where an object's virtual bases sit: Itanium's vtable, MSVC's vbtable. */
-    val virtualBaseRecord: String get() = "vtable"
+    val virtualBaseRecord: String get() = ClassNaming.VTABLE
 
     /**
      * Whether the table whose address point is [vftable] is one of this ABI's records, by the record's symbols.

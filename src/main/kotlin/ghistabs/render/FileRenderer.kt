@@ -3,12 +3,10 @@ package ghistabs.render
 import ghicpp.VirtKind
 import ghicpp.abi.CxxAbi
 import ghicpp.abi.gcc2.Gcc2
-import ghicpp.member
 import ghicpp.qualifiedName
 import ghicpp.templateLeaf
 import ghidra.program.model.address.Address
-import ghidrakt.Demangler
-import ghidrakt.chunkOf
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
@@ -17,7 +15,10 @@ import ghistabs.harvest.Type
 import ghistabs.index.EffectiveSource
 import ghistabs.index.hasHeaderExtension
 import ghistabs.index.includeSpelling
-import ghistabs.parse.*
+import ghistabs.parse.GlobalTypeDecl
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.TypeDecl
+import ghistabs.parse.TypeNameKind
 
 /**
  * One source file's render. Each pass (decomp, typedefs, locals, globals, braces, type bodies,

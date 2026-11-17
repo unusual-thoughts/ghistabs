@@ -1,18 +1,12 @@
 package ghicpp.recover
 
-import ghicpp.ClassHierarchyRecords
+import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.StructorRole
-import ghicpp.argumentAt
-import ghicpp.classStruct
-import ghicpp.dissect.*
-import ghicpp.fixMethodConvention
-import ghicpp.takesThisAt
-import ghicpp.thisArgument
-import ghicpp.thisIndex
-import ghicpp.thisStorage
+import ghicpp.dissect.decompileEach
+import ghicpp.dissect.pointerInto
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Function

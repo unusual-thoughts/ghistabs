@@ -16,10 +16,10 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.framework.Application
 import ghidra.framework.HeadlessGhidraApplicationConfiguration
 import ghidra.util.Msg
-import ghidrakt.diagnose.*
-import ghidrakt.isPackedProgram
-import ghidrakt.loadPackedProgram
-import ghidrakt.loadProgram
+import ghidrakt.*
+import ghidrakt.diagnose.Level
+import ghidrakt.diagnose.TeeSink
+import ghidrakt.diagnose.WriterSink
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.StabCursor
 import ghistabs.harvest.Symbol

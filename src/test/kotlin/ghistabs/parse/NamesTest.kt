@@ -1,13 +1,6 @@
 package ghistabs.parse
 
-import ghicpp.enclosingName
-import ghicpp.isTemplated
-import ghicpp.isVptrFieldName
-import ghicpp.leafName
-import ghicpp.nameSegments
-import ghicpp.outermostTemplate
-import ghicpp.templateLeaf
-import ghicpp.templateName
+import ghicpp.*
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 

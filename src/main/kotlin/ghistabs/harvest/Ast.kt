@@ -8,6 +8,7 @@ import ghicpp.templateName
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
+import ghidra.program.model.address.AddressRangeImpl
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
@@ -20,7 +21,6 @@ import kotlinx.serialization.Transient
 import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.descriptors.PrimitiveKind.STRING
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlin.io.path.Path
@@ -226,16 +226,21 @@ typealias StaticSymbol = Symbol<SymbolDecl.Static<GlobalTypeId>>
 typealias FunctionSymbol = Symbol<SymbolDecl.Function<GlobalTypeId>>
 
 /**
- * An [AddressRange] as `min-max`. Keys the text partition, and a map key has to encode as a string —
- * hence not the surrogate shape [AddressSerializer] uses. Serialize-only, like every serializer here.
+ * An [AddressRange] as `min-max`, each end as [AddressSerializer] writes it, read back as [DetachedAddresses]
+ * ones. Keys the text partition, so it encodes as one string.
  */
 class AddressRangeSerializer : KSerializer<AddressRange> {
     override val descriptor = PrimitiveSerialDescriptor("ghidra.program.model.address.AddressRange", STRING)
     override fun serialize(encoder: Encoder, value: AddressRange) =
         encoder.encodeString("${value.minAddress}-${value.maxAddress}")
 
-    override fun deserialize(decoder: Decoder) =
-        throw UnsupportedOperationException("AddressRangeSerializer is serialize-only")
+    override fun deserialize(decoder: Decoder): AddressRange {
+        val text = decoder.decodeString()
+        return AddressRangeImpl(
+            DetachedAddresses.parse(text.substringBefore('-')),
+            DetachedAddresses.parse(text.substringAfter('-')),
+        )
+    }
 }
 
 /** A source identity in a dump is its normalised path — the whole of what it is, minus an id type

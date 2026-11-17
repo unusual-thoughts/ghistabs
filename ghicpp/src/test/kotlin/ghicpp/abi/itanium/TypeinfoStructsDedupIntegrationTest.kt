@@ -3,8 +3,7 @@ package ghicpp.abi.itanium
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataUtilities
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.DtmRegistry
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.mustBeEmpty
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

@@ -5,11 +5,11 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.EnumDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.Demangler
-import ghidrakt.formals
-import ghidrakt.runTransaction
-import ghidrakt.test.*
-import ghistabs.test.*
+import ghidrakt.*
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeSameAs
+import ghistabs.test.defaultContext
+import ghistabs.test.defaultTypeRegistry
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

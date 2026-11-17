@@ -9,8 +9,10 @@ import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonUnquotedLiteral
+import kotlinx.serialization.json.jsonPrimitive
 import java.math.BigInteger
 
 /**
@@ -88,8 +90,10 @@ object BigIntegerSerializer : KSerializer<BigInteger> {
         else -> encoder.encodeLong(value.toLong())
     }
 
-    override fun deserialize(decoder: Decoder): BigInteger =
-        throw UnsupportedOperationException("BigIntegerSerializer is serialize-only")
+    override fun deserialize(decoder: Decoder): BigInteger = when (decoder) {
+        is JsonDecoder -> BigInteger(decoder.decodeJsonElement().jsonPrimitive.content)
+        else -> BigInteger.valueOf(decoder.decodeLong())
+    }
 }
 
 class ToStringSerializer<T> : KSerializer<T> {
