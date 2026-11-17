@@ -9,17 +9,17 @@ import ghidra.program.model.pcode.PcodeOp
 
 /** The object a call is made on, as the calling function has it. */
 sealed interface CalledObject {
-    /** tells the object apart from the caller's others */
+    /** What tells the object apart from the caller's others; none for `this`, which there is one of. */
     val id: Int?
 
     /** The caller's own incoming `this`. */
     data object This : CalledObject {
-        override val id = null
+        override val id: Int? = null
     }
 
     /**
-     * Another object, that a call at [madeAt] returned, [madeBy] that call's callee,
-     * with [arg] its first argument where a constant, as `operator new(size)` is
+     * Another object, one a call at [madeAt] returned: [madeBy] that call's callee, with [arg] its first argument
+     * where a constant, as `operator new(size)` is.
      */
     data class Callee(override val id: Int, val madeAt: Address, val madeBy: Function?, val arg: Long?) : CalledObject
 
