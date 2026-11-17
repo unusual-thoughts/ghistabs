@@ -23,7 +23,9 @@ enum class Access { PRIVATE, PROTECTED, PUBLIC }
  */
 interface BaseDecl {
     val isVirtual: Boolean
-    val access: Access
+
+    /** How the class holds the base, or null where nothing tells, as with no RTTI. */
+    val access: Access?
     val offset: Long?
 }
 
@@ -31,7 +33,7 @@ interface BaseDecl {
 data class ClassBase(
     val cls: ClassDecl,
     override val isVirtual: Boolean,
-    override val access: Access,
+    override val access: Access?,
     override val offset: Long?,
     /** Where a virtual base's [offset] is from: IMPORTED its ABI record, ANALYSIS its vtables, DEFAULT nowhere. */
     val offsetSource: SourceType = SourceType.IMPORTED,
@@ -117,7 +119,7 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         val namespaceId: Long?,
         val name: String?,
         override val isVirtual: Boolean,
-        override val access: Access,
+        override val access: Access?,
         override val offset: Long? = null,
     ) : BaseDecl
 
