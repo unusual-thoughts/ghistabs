@@ -1,0 +1,45 @@
+classes-fn `Boot` (stabs)
+classes-fn `Quals` (stabs)
+classes-fn `Stack<Point,2>` (stabs)
+classes-fn `extras(int)::Local` (stabs)
+classes-fn `outer::inner::Deep` (stabs)
+field-sizes-fp `Circle`+12: 4, is 2
+field-sizes-fp `Circle`+16: 4, is 8
+field-sizes-fp `Circle`+8: 4, is 2
+field-sizes-fp `Diamond`+20: 1, is 8
+field-sizes-fp `Label`+12: 4, is 2
+field-sizes-fp `Label`+28: 1, is 8
+field-sizes-fp `Label`+8: 4, is 2
+field-sizes-fp `Named`+4: 1, is 8
+field-sizes-fp `Rect`+12: 4, is 2
+field-sizes-fp `Rect`+8: 4, is 2
+field-sizes-fp `Shape`+12: 4, is 2
+field-sizes-fp `Shape`+8: 4, is 2
+fields-fn `Both`+4:4
+fields-fn `Circle`+10:2
+fields-fn `Diamond`+12:4
+fields-fn `Diamond`+32:4
+fields-fn `Diamond`+4:4
+fields-fn `Label`+10:2
+fields-fn `Left`+4:4
+fields-fn `Left`+8:4
+fields-fn `Rect`+10:2
+fields-fn `Right`+4:4
+fields-fn `Right`+8:4
+fields-fn `Shape`+10:2
+fields-fn `Up`+4:4
+fields-fp `Circle`+20:4
+fields-fp `Diamond`+27:1
+fields-fp `Label`+35:1
+fields-fp `Named`+11:1
+methods-fn `Down::Down` 407bc0
+methods-fn `Down::~Down` 407ca4
+methods-fn `Up::Up` 4077bc
+methods-fn `Up::~Up` 4078a0
+methods-fp 4019f6 of `Circle`: no method
+methods-fp 4077bc of `Both`: is `Up`'s
+methods-fp 4078a0 of `Both`: is `Up`'s
+structors-fn 4077bc of `Up`
+structors-fn 4078a0 of `Up`
+structors-fn 407bc0 of `Down`
+structors-fn 407ca4 of `Down`
