@@ -158,6 +158,28 @@ class ScorerTest {
     }
 
     @Test
+    fun `a class only named, with no vtable or function, stands for its truth class only when no other does`() {
+        val subject = ClassHierarchy(
+            listOf(
+                cls(
+                    10,
+                    "Shape",
+                    Origin.NAMESPACE,
+                    members = listOf(Member("RTTI_Type_Descriptor", DetachedAddresses.at(0x500), MemberKind.ABI)),
+                ),
+                cls(11, "Klass_100", Origin.INFERRED, 0x100, abstract = true),
+                cls(12, "Klass_120", Origin.INFERRED, 0x120, bases = listOf(base("Klass_100", 11))),
+            ),
+        )
+        val card = score(subject)
+        card.tallies["vftables"] mustBe Tally(tp = 2)
+        card.tallies["bases"] mustBe Tally(tp = 1)
+        card.tallies["abstract"] mustBe Tally(tp = 1)
+        card.instances["classes-fp"] mustBe listOf("duplicate `Shape` (namespace) of `Shape`")
+        card.mustListEveryMiss()
+    }
+
+    @Test
     fun `counters are each attribute's three tallies`() {
         Scorecard(mapOf("classes" to Tally(3, 1, 2))).counters() mustBe
             mapOf("classes-tp" to 3L, "classes-fp" to 1L, "classes-fn" to 2L)
