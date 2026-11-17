@@ -271,13 +271,6 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
         /** How many rounds a run that trusts its guesses guesses at most. */
         const val MAX_ROUNDS = 16
 
-        val TRUST_GUESSES = BoolOption(
-            "Trust guessed method classes",
-            "Count the methods it guessed the class of as evidence, as it does the ones a class pass placed, " +
-                "and guess again off the calls they make, until nothing more moves",
-            false,
-        )
-
         /** How deep [classAt] looks into structs within structs. */
         private const val MAX_NESTING = 8
     }
