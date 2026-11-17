@@ -280,13 +280,11 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
             tc.vftable == null && sc.vftable == null -> Tally()
 
             tc.vftable == null -> Tally(fp = 1).also {
-                findings +=
-                    "false vftable ${sc.vftable} of `${tc.qualifiedName}`"
+                findings += "false vftable ${sc.vftable} of `${tc.qualifiedName}`"
             }
 
             sc.vftable == null -> Tally(fn = 1).also {
-                findings +=
-                    "missed vftable ${tc.vftable} of `${tc.qualifiedName}`"
+                findings += "missed vftable ${tc.vftable} of `${tc.qualifiedName}`"
             }
 
             truth.sameBinary && sc.vftable != tc.vftable -> Tally(fp = 1, fn = 1).also {
@@ -322,8 +320,7 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
                     (owner?.let { ": is `$it`'s" } ?: ": no method")
             }
             (actual.keys - claimed.toSet()).forEach {
-                findings +=
-                    "missed $label `${tc.qualifiedName}::${actual.getValue(it).name}`"
+                findings += "missed $label `${tc.qualifiedName}::${actual.getValue(it).name}`"
             }
         }
         // An unscored library class's functions are neither: only a class matched to nothing claims falsely.
@@ -336,11 +333,10 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
      * A truth member that is virtual. Some stabs mark only the deleting variant of a virtual destructor so; the
      * complete one, which an Itanium vtable holds too, comes out plain. The base-object one no vtable holds.
      */
-    private fun isTrulyVirtual(cls: ClassView, m: Member) = m.attrs?.virt == VirtKind.VIRTUAL ||
-        (
-            m.name.startsWith("~") && m.variants.any { it != ItaniumStructor.BASE_DTOR } &&
-                cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL }
-            )
+    private fun isTrulyVirtual(cls: ClassView, m: Member) = m.attrs?.virt == VirtKind.VIRTUAL || (
+        m.name.startsWith("~") && m.variants.any { it != ItaniumStructor.BASE_DTOR } &&
+            cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL }
+        )
 
     /** A constructor's or destructor's name: the class's own, less a template's arguments, which g++ leaves off. */
     private fun ClassView.isStructorName(member: String) = member.removePrefix("~").substringBefore('<') ==
@@ -355,8 +351,7 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         }
         val actual = tc.functions().filter { it.name == tc.name || it.name == "~${tc.name}" }.map { it.address }
         (claimed.toSet() - actual.toSet()).forEach {
-            findings +=
-                "false structor ${"%x".format(it)} of `${tc.qualifiedName}`"
+            findings += "false structor ${"%x".format(it)} of `${tc.qualifiedName}`"
         }
         acc + Tally.of(claimed, actual)
     }
