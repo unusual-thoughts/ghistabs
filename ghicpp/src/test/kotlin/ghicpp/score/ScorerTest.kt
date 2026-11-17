@@ -116,7 +116,7 @@ class ScorerTest {
     }
 
     @Test
-    fun `a second class off the same truth class is a duplicate, and a wrong base is false and missed`() {
+    fun `a second class off the same truth class is a split, and a wrong base is false and missed`() {
         val subject = ClassHierarchy(
             listOf(
                 cls(10, "Shape", Origin.ITANIUM_RTTI, 0x100),
@@ -125,10 +125,35 @@ class ScorerTest {
             ),
         )
         val card = score(subject)
-        card.tallies["classes"] mustBe Tally(tp = 2, fp = 1, fn = 1)
+        card.tallies["classes"] mustBe Tally(tp = 2, fp = 0, fn = 1)
+        card.tallies["class-splits"] mustBe Tally(tp = 1, fp = 1)
         card.tallies["bases"] mustBe Tally(tp = 0, fp = 1, fn = 1)
         card.tallies["abstract"] mustBe Tally(fn = 1)
-        card.findings.any { it.startsWith("duplicate class `Klass_124`") } mustBe true
+        card.findings.any { it.startsWith("split class `Klass_124`") } mustBe true
+    }
+
+    @Test
+    fun `a split's functions count for the class it is a piece of`() {
+        val subject = ClassHierarchy(
+            listOf(
+                cls(10, "NPKlass_20", Origin.INFERRED, members = listOf(fn(0x20, "NPKlass_20"))),
+                cls(11, "NPKlass_24", Origin.INFERRED, members = listOf(fn(0x24, "NPKlass_24"))),
+            ),
+        )
+        val card = score(subject)
+        card.tallies["classes"] mustBe Tally(tp = 1, fp = 0, fn = 2)
+        card.tallies["class-splits"] mustBe Tally(tp = 0, fp = 1)
+        card.tallies["methods"] mustBe Tally(tp = 2, fp = 0, fn = 0)
+    }
+
+    @Test
+    fun `a class holding one function of another's goes by its structor`() {
+        val subject = ClassHierarchy(
+            listOf(cls(10, "NPKlass_20", Origin.INFERRED, members = listOf(fn(0x20, "NPKlass_20"), fn(0x30, "f")))),
+        )
+        val card = score(subject)
+        card.tallies["classes"] mustBe Tally(tp = 1, fp = 0, fn = 2)
+        card.findings.any { it.startsWith("false method 30 of `Circle`: is `Point`'s") } mustBe true
     }
 
     @Test

@@ -96,7 +96,8 @@ data class Scorecard(val tallies: Map<String, Tally>, val findings: List<String>
     companion object {
         /** The order attributes are reported in, and the ones a truth may not be able to score. */
         val ATTRIBUTES = listOf(
-            "classes", "polymorphic-classes", "bases", "base-access", "base-offsets", "vftables", "abstract",
+            "classes", "polymorphic-classes", "class-splits", "bases", "base-access", "base-offsets", "vftables",
+            "abstract",
             "methods", "virtual-methods", "structors", "sizes", "fields", "field-sizes",
         )
     }
@@ -121,12 +122,14 @@ private val NAMED = setOf(Origin.MSVC_RTTI, Origin.ITANIUM_RTTI, Origin.SWEPT_RT
  * Scores [subject], what a recovery from a bare binary made of its classes, against [truth].
  *
  * Each subject class is matched to a truth class by its qualified name, else by the vtable it labels,
- * else by the truth class most of its functions belong to. A subject class with no match is a false
- * class; one matched to a class the truth already has a better match for, a duplicate, is false too;
- * one matched to a truth class out of [Truth.scope] (a library's, its vtable known but not described) is
- * left unscored. Every other attribute is scored over the matched pairs in scope, the truth class's bases,
- * vtable, members and layout against the subject's: by address where [Truth.sameBinary], by offset where
- * [Truth.sameLayout], and not at all where the truth cannot tell.
+ * else by the truth class more of its functions belong to than any other, its own structors breaking a tie.
+ * A subject class with no match is a false class. One matched to a class the truth already has a better
+ * match for is a split, a piece of that class the recovery set apart: `class-splits` counts it, not
+ * `classes`, and its functions count for that class. One matched to a truth class out of [Truth.scope] (a
+ * library's, its vtable known but not described) is left unscored. Every other attribute is scored over
+ * the matched pairs in scope, the truth class's bases, vtable, members and layout against the subject's:
+ * by address where [Truth.sameBinary], by offset where [Truth.sameLayout], and not at all where the truth
+ * cannot tell.
  */
 class Scorer(private val truth: Truth, private val subject: Snapshot) {
     private val t = truth.hierarchy
@@ -152,9 +155,15 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         }
         if (!truth.sameBinary) return null
         cls.vftable?.let { vtableOwner(it.offset) }?.let { return it to 2 }
-        val owners = cls.functions().mapNotNull { truthFunctionOwner[it.at] }
-        return owners.groupingBy { it }.eachCount().maxByOrNull { it.value }
-            ?.takeIf { it.value * 2 > cls.functions().size }?.let { it.key to 1 }
+        val functions = cls.functions()
+        val votes = functions.mapNotNull { truthFunctionOwner[it.at] }.groupingBy { it }.eachCount()
+        val most = votes.values.maxOrNull() ?: return null
+        val leaders = votes.filterValues { it == most }.keys
+        // A class holding a stray function of another's, its base's say, is still the class its structors are.
+        val owner = leaders.singleOrNull()
+            ?: functions.filter { cls.isStructorName(it.name) }.mapNotNull { truthFunctionOwner[it.at] }
+                .distinct().filter { it in leaders }.singleOrNull()
+        return owner?.let { it to 1 }
     }
 
     /** The subject's classes worth scoring: anything the recovery found or named, not an import's namespace. */
@@ -175,6 +184,11 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
 
     private val scoredPairs = pairs.filterKeys { it in truth.scope }.map { (tid, sc) -> t[tid]!! to sc }
 
+    /** The splits of each truth class (by id): the other subject classes matched to it. */
+    private val splits: Map<Long, List<ClassView>> = candidates
+        .filter { it.id in matches && it.id !in truthOf }
+        .groupBy { matches.getValue(it.id).first }
+
     private fun ClassView.describe() = "`$qualifiedName` (${origin.name.lowercase()}${vftable?.let {
         ", vftable $it"
     }.orEmpty()})"
@@ -183,6 +197,7 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         val tallies = linkedMapOf<String, Tally>()
         tallies["classes"] = classes(polymorphic = false)
         tallies["polymorphic-classes"] = classes(polymorphic = true)
+        tallies["class-splits"] = classSplits()
         bases(tallies)
         // Across ABIs a class's vftables differ (MSVC gives a class whose only virtuals are its virtual base's none).
         if (truth.sameBinary) tallies["vftables"] = vftables()
@@ -213,19 +228,21 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
 
                 match == null -> true.also { if (!polymorphic) findings += "invented class ${c.describe()}" }
 
-                truthOf[c.id] == null -> true.also {
-                    if (!polymorphic) {
-                        findings +=
-                            "duplicate class ${c.describe()} of `${t[match.first]?.qualifiedName}`"
-                    }
-                }
-
                 else -> false
             }
         }
         val missed = inScope.filter { it.id !in pairs }
         if (!polymorphic) missed.forEach { findings += "missed class ${it.describe()}" }
         return Tally(tp, fp, missed.size)
+    }
+
+    /** The truth classes in scope found whole, against the pieces split off them. */
+    private fun classSplits(): Tally {
+        val found = pairs.keys.filter { it in truth.scope }
+        val pieces = found.flatMap { tid ->
+            splits[tid].orEmpty().onEach { findings += "split class ${it.describe()} of `${t[tid]?.qualifiedName}`" }
+        }
+        return Tally(tp = found.count { splits[it].isNullOrEmpty() }, fp = pieces.size)
     }
 
     /** The truth class a subject base names: through its own class's match, else by name. */
@@ -310,13 +327,14 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     }
 
     /**
-     * The functions each class claims that [pick] keeps, by address, against the truth's. A function an
-     * unmatched or duplicate class claims is false too: it belongs to no class the recovery found.
+     * The functions each class and its splits claim that [pick] keeps, by address, against the truth's. A
+     * function an unmatched class claims is false too: it belongs to no class the recovery found.
      */
     private fun methods(label: String, actualPick: (ClassView, Member) -> Boolean, pick: (Member) -> Boolean): Tally {
         var total = Tally()
         for ((tc, sc) in scoredPairs) {
-            val claimed = sc.functions().filter(pick).map { it.at }.filter { it !in truthThunks }
+            val claimed = (listOf(sc) + splits[tc.id].orEmpty()).flatMap { it.functions() }
+                .filter(pick).map { it.at }.filter { it !in truthThunks }
             val actual = tc.functions().filter { actualPick(tc, it) }.associateBy { it.at }
             total += Tally.of(claimed, actual.keys)
             for (at in claimed.toSet() - actual.keys) {
@@ -329,7 +347,7 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
             }
         }
         // An unscored library class's functions are neither: only a class matched to nothing claims falsely.
-        val strays = candidates.filter { it.id !in truthOf }
+        val strays = candidates.filter { it.id !in matches }
             .sumOf { c -> c.functions().filter(pick).count { it.at !in truthThunks } }
         return total + Tally(fp = strays)
     }
