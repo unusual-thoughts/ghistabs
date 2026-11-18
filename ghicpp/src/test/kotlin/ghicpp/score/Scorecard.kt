@@ -183,10 +183,15 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     private fun vtableOwner(at: Long): Long? =
         truthVtables.lastOrNull { it.start <= at }?.takeIf { at < it.end }?.classId
 
-    /** The truth class [cls] stands for, and how strongly: 3 by name, 2 by its vtable, 1 by most of its functions. */
+    /**
+     * The truth class [cls] stands for, and how strongly: 3 by name, 2 by its vtable, 1 by most of its functions,
+     * 0 by the name alone of a class with neither a vtable nor a function. Exception records name a class with no
+     * RTTI to give it a vtable (MSVC's `catch` type descriptors), so another class can stand for it better.
+     */
     private fun matchOf(cls: ClassView): Pair<Long, Int>? {
         truthByName[cls.qualifiedName]?.let { named ->
-            return (named.firstOrNull { it.id in truth.scope } ?: named.first()).id to 3
+            val strength = if (cls.vftable == null && cls.functions().isEmpty()) 0 else 3
+            return (named.firstOrNull { it.id in truth.scope } ?: named.first()).id to strength
         }
         if (!truth.sameBinary) return null
         cls.vftable?.let { vtableOwner(it.offset) }?.let { return it to 2 }
