@@ -1,7 +1,10 @@
 // Writes an archive's types as the version-neutral text ghicpp bundles (ghicpp.stl.StlLayouts reads
-// it): released Ghidras cannot open a .gdt written by a newer one. Arguments: archive, output file.
+// it): released Ghidras cannot open a .gdt written by a newer one. Arguments: archive (or `-` for the
+// program's own types), output file.
 //
-// One type per line, its members on the indented lines after it, fields separated by tabs:
+// An archive made for one architecture starts with it:
+//   A <language id> <compiler spec id>
+// Then one type per line, its members on the indented lines after it, fields separated by tabs:
 //   S <path> <length>                      structure, non-packed
 //     <offset> <length> <name> <type> [<bit offset> <bit size>]
 //   U <path> <length>                      union
@@ -9,6 +12,7 @@
 //   E <path> <length>                      enum
 //     <name> <value>
 //   T <path> <type>                        typedef
+//   B <path> <length> <signed>             built-in integer, of the Ghidra that wrote it
 //   F <path> <return type> <varargs>       function definition
 //     <name> <type>
 // A type is a path, then `|*<size>` for each pointer and `|[<count>]` for each array around it; `?` is
@@ -24,26 +28,39 @@ import java.util.*;
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.data.*;
 import ghidra.program.model.data.Enum;
+import ghidra.program.model.lang.ProgramArchitecture;
 
 public class ExportStlLayouts extends GhidraScript {
 
 	@Override
 	public void run() throws Exception {
 		String[] args = getScriptArgs();
-		FileDataTypeManager archive = FileDataTypeManager.openFileArchive(new File(args[0]), false);
+		// `-` writes the program's own types, as GccStlArchiveScript leaves them.
+		boolean own = args[0].equals("-");
+		DataTypeManager archive = own ? currentProgram.getDataTypeManager()
+				: FileDataTypeManager.openFileArchive(new File(args[0]), false);
 		int written = 0;
 		try (PrintWriter out = new PrintWriter(args[1], "UTF-8")) {
+			ProgramArchitecture arch = archive.getProgramArchitecture();
+			if (arch != null) {
+				out.println("A\t" + arch.getLanguage().getLanguageID() + "\t" +
+					arch.getCompilerSpec().getCompilerSpecID());
+			}
 			List<DataType> types = new ArrayList<>();
 			archive.getAllDataTypes(types);
 			types.sort(Comparator.comparing(DataType::getPathName));
+			Set<String> seen = new HashSet<>();
 			for (DataType dt : types) {
-				if (write(out, dt)) {
+				// A program's getAllDataTypes lists some of its types twice, and some it has deleted.
+				if (!dt.isDeleted() && seen.add(dt.getPathName()) && write(out, dt)) {
 					written++;
 				}
 			}
 		}
 		finally {
-			archive.close();
+			if (!own) {
+				archive.close();
+			}
 		}
 		println(String.format("%s: %d types", args[1], written));
 	}
@@ -80,8 +97,12 @@ public class ExportStlLayouts extends GhidraScript {
 				out.println("\t" + Objects.toString(p.getName(), "") + "\t" + ref(p.getDataType()));
 			}
 		}
+		else if (dt instanceof BuiltInDataType && dt instanceof AbstractIntegerDataType i) {
+			// Some (intptr_t) are newer than the Ghidra the text is read back on, which makes them of their size.
+			out.println("B\t" + path + "\t" + i.getLength() + "\t" + (i.isSigned() ? 1 : 0));
+		}
 		else {
-			return false; // built-ins, pointers and arrays are written where they are used
+			return false; // other built-ins, pointers and arrays are written where they are used
 		}
 		return true;
 	}
