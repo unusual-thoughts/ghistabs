@@ -1,5 +1,6 @@
 package ghicpp.analyzers
 
+import ghicpp.stl.DwarfLanguages
 import ghicpp.stl.GnuRuntime
 import ghicpp.stl.StlApplier
 import ghidra.app.services.AbstractAnalyzer
@@ -17,8 +18,10 @@ import ghidrakt.diagnose.report
  * `std::basic_string<char,…>` method's `this` only as an empty struct. One archive per architecture holds
  * both string ABIs, the C++11 one's classes under `std::__cxx11`.
  *
- * A program with its own debug info (DWARF or stabs) is left alone: that already lays out the library's
- * classes as the compiler that built it did, and the archive's would only stand beside them.
+ * A program with its own debug info (stabs, or DWARF of C++ units) is left alone: that already lays out
+ * the library's classes as the compiler that built it did, and the archive's would only stand beside them.
+ * DWARF of C and assembler units alone, as glibc's start files bring into a gcc 3 build linked on Debian
+ * etch, does not count.
  *
  * After the GNU demangler, which makes those placeholders, and before the class passes.
  */
@@ -60,9 +63,8 @@ class GnuStlAnalyzer :
     companion object {
         const val NAME = "libstdc++ layouts"
 
-        /** The sections a compiler's type information lives in: DWARF's, compressed or not, and stabs'. */
-        private val DEBUG_SECTIONS = setOf(".debug_info", ".zdebug_info", ".stab")
-
-        fun hasDebugInfo(program: Program) = program.memory.blocks.any { it.name in DEBUG_SECTIONS }
+        /** Whether [program] has stabs, or DWARF that describes C++ ([DwarfLanguages]). */
+        fun hasDebugInfo(program: Program) =
+            program.memory.getBlock(".stab") != null || DwarfLanguages.describesCxx(program)
     }
 }
