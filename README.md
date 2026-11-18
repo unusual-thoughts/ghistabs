@@ -1,5 +1,6 @@
 # GhiStabs 🐉🗡️
 [![GitHub Release](https://img.shields.io/github/v/release/unusual-thoughts/ghistabs?sort=date&color=blue)](https://github.com/unusual-thoughts/ghistabs/releases)
+[![Ghidra 12.2](https://img.shields.io/badge/Ghidra-12.2-green?logo=redragon)](https://github.com/unusual-thoughts/ghistabs/releases)
 [![Ghidra 12.1.3](https://img.shields.io/badge/Ghidra-12.1.3-green?logo=redragon)](https://github.com/unusual-thoughts/ghistabs/releases)
 [![Ghidra 12.0.4](https://img.shields.io/badge/Ghidra-12.0.4-orange?logo=redragon)](https://github.com/unusual-thoughts/ghistabs/releases)
 [![Ghidra 11.4.3](https://img.shields.io/badge/Ghidra-11.4.3-orange?logo=redragon)](https://github.com/unusual-thoughts/ghistabs/releases)
@@ -31,7 +32,7 @@ bodies.
 
 |                       | Supported                                                                                                                                                                                             |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Ghidra**            | **10.4 - 12.1.3**                                                                                                                                                                                     |
+| **Ghidra**            | **10.4 - 12.2**                                                                                                                                                                                       |
 | **Binary containers** | **PE/COFF**, **ELF** and **a.out**                                                                                                                                                                    |
 | **Instruction sets**  | `i386` / `x86-64` / 32-bit `sparc`                                                                                                                                                                    |
 | **Compiler**          | **gcc**, on both Unix and Cygwin/MinGW targets, up to gcc **12** (`-gstabs` was deprecated in 12 and removed outright in 13). Stabs produced by other compilers are out of scope but may mostly work. |
@@ -80,6 +81,14 @@ typedefs, and which methods are virtual and in what slot order. That is the gap 
 Ghidra's own demangler output is reconciled against the imported types, so its synthesized
 placeholder structs are replaced by the real definitions rather than competing with them.
 
+## ghicpp
+
+[ghicpp](ghicpp/README.md), in `ghicpp/`, is the C++ side of this repo, and works with or without
+stabs: class recovery from Itanium, MSVC and gcc 2.x RTTI or from vtables alone, class structs and
+vftables, constructors and destructors, the Class Hierarchy window, and fix-up analyzers for gcc
+and MinGW binaries. ghistabs builds on it and bundles it: classes the stabs describe are recorded
+the same way, so its passes and window work on them too. See [its README](ghicpp/README.md).
+
 ## Install
 
 Grab a prebuilt zips on the [releases page](https://github.com/unusual-thoughts/ghistabs/releases)
@@ -90,8 +99,8 @@ for one of the supported Ghidra versions. Or build your own, which lands in `dis
   extensions dir, e.g. `~/.config/ghidra/ghidra_12.1.2_DEV/Extensions`; set `GHIDRA_USER_DIR`
   to override), then restart Ghidra.
 
-The ghistabs zip carries the C++ analyzers and the Class Hierarchy window with it, so it is the only
-one to install. The ghicpp zip (`ghicpp/dist/`) is those alone, for binaries without stabs.
+The ghistabs zip carries [ghicpp](#ghicpp) with it, so it is the only one to install. The ghicpp
+zip (`ghicpp/dist/`) is ghicpp alone, for binaries without stabs.
 
 ## Building
 
@@ -99,7 +108,7 @@ Requires a Ghidra install and a JDK toolchain >=21 from Ghidra 11, or >=17 for 1
 API differences between releases are absorbed by ghidrakt's `src/main/kotlin-pre*` /
 `kotlin-since*` compat source sets, selected by the version of the install you build against: the
 other projects reach its shims through `import ghidrakt.*`;
-releases are cut for Ghidra 10.4, 11.4.3, 12.0.4 and 12.1.3.
+releases are cut for Ghidra 10.4, 11.4.3, 12.0.4, 12.1.3 and 12.2.
 
 Three Gradle projects, each depending on the one below it:
 
@@ -135,7 +144,7 @@ Options (`Analysis > Auto Analyze… > Stabs Importer`):
 | **Shorten templated names via typedefs** | off          | Rewrite template *arguments* onto their shorter typedef aliases (`vector<basic_string<char, …>, …>` → `vector<string>`), recursively. Renames the parent datatype itself, and its class namespace to match so methods keep a typed `this`, so is less faithful to the compiled/mangled type names. A type that is itself a typedef's target is left alone.                                                                                                                 |
 | **Fold source-file spellings**           | on           | Collapse gcc's two spellings of one physical header (full include path vs bare `#include "x.h"`) onto one rendered output file, by unique basename.                                                                                                                                                                                                                                                                                                                        |
 | **Overlay `.stab` section structs**      | on           | Decode every `.stab` entry into a `StabRecord` struct with references into `.stabstr` and back to the code/data it describes.                                                                                                                                                                                                                                                                                                                                              |
-| **Virtual function pointer model**       | `SPLIT_BASE` | Where a polymorphic class's `{vfptr}` comes from. `SPLIT_BASE` gives every polymorphic class its own, typed to its own vftable, embedding the primary base as that base's fields without the vptr, so virtual calls resolve to named slots. `INHERITED` keeps one on the root of each hierarchy, shared through the base subobject - derived slots then sit past the end of the root's vftable and virtual calls render as `vfptr[N].field`. See [gcc 2.x C++](#gcc-2x-c). |
+| **Virtual function pointer model**       | `SPLIT_BASE` | Where a polymorphic class's `{vfptr}` comes from. `SPLIT_BASE` gives every polymorphic class its own, typed to its own vftable, embedding the primary base as that base's fields without the vptr, so virtual calls resolve to named slots. `INHERITED` keeps one on the root of each hierarchy, shared through the base subobject - derived slots then sit past the end of the root's vftable and virtual calls render as `vfptr[N].field`. The importer splits around a class's primary vptr only, where the RTTI class analyzers split every base holding one. See [the ghicpp README](ghicpp/README.md#virtual-function-pointer-models). |
 | **Minimum log level**                    | `INFO`       | Floor for diagnostics: warnings and errors go to the analysis log, the rest to the application log. Bookmarks and counters are emitted regardless.                                                                                                                                                                                                                                                                                                                         |
 | **Source roots**                         | none         | `;`-separated local checkouts of the sources this binary was built from; each recorded source directory found under a root becomes a directory transform, so paths resolve to real files. The **Browse** button picks directories only, multi-selects, and appends to the list. Read at import time - adding a root later needs a re-import.                                                                                                                               |
 
@@ -152,35 +161,14 @@ end of the import.
 
 ### `Window > Class Hierarchy`
 
-A read-only tree of the program's C++ classes, each under its namespace.
+The window comes from ghicpp, and is described in [its README](ghicpp/README.md#window--class-hierarchy).
+With stabs, its classes and bases are exactly as gcc stated them, with virtuality and access, gcc 2.x
+included, and its members' access, virtuality and cv-qualifiers come from the stabs' method lists.
+The import records them in the program, so programs imported before the window existed need a
+**Re-import**. Classes with no stabs, such as libstdc++'s, come from the C++ analyzers as in a
+binary without stabs.
 
 ![Class Hierarchy window on hello_elf_gcc34](src/main/help/help/topics/Stabs/images/ClassHierarchy.png)
-
-Each class expands into its direct bases, spelled as the base clause would (`virtual Base`,
-`private Impl`), and then its members: its vtables, its typeinfo, and its functions and labels.
-Overloads carry their parameter types, and constructors and destructors their variants
-(`[complete]`, `[base]`, `[deleting]`). The icons' colours say what kind of class each one is
-(abstract, virtual base, nested, found without stabs), and what is known of each member (access,
-virtual or static, const). The tree can also be inverted, so that each class expands into the
-classes derived from it.
-
-Where the information comes from:
-
-- **Classes and bases from the stabs.** These are exactly as gcc stated them, with virtuality and
-  access, gcc 2.x included. The import records them in the program, so programs imported before
-  this window existed need a **Re-import**.
-- **Classes found by the vtable sweep.** A class with no stabs, such as one from libstdc++ or a
-  binary with no stabs at all, takes its bases from its Itanium typeinfo where there is one.
-- **Members.** These are the class namespace's symbols. Access, virtuality and cv-qualifiers come
-  from the stabs' method lists. Without stabs, virtuality is read off the vtable slots and
-  const/volatile off the mangled name.
-- **Constructor and destructor variants.** These come from the Itanium mangled names.
-- **Abstract classes.** A class is abstract when one of its vtable slots holds
-  `__cxa_pure_virtual`.
-
-Vtables follow Ghidra's RTTI-script naming, so a class with several vftables has
-`vftable_for_<Base>` labels and `<Class>_vftable_for_<Base>` structs. The window's controls are
-described in its Ghidra help page.
 
 ### `File > Export Program…`
 
@@ -210,52 +198,20 @@ So a line that carried three speculative declarations in the skeleton typically 
 statement of decompilation in `decomp`, with the rest either gone or demoted to comments. Read the
 skeleton when you want to see what the stabs *claimed*; read `decomp` when you want the code.
 
-### Supporting analyzers
+### C++ and gcc analyzers (ghicpp)
 
-Independent of stabs, enabled by default, each re-runnable and available as one-shot analysis. Ghidra runs them in
-the order of their priority, earliest first; the Stabs Importer itself runs at `LOW_PRIORITY`.
+The C++ class recovery, the gcc and MinGW fix-up analyzers and the Class Hierarchy window are
+[ghicpp](#ghicpp)'s, and run with or without stabs; [its README](ghicpp/README.md#analyzers) lists
+them. Alongside the Stabs Importer, which runs at `LOW_PRIORITY`:
 
-| Analyzer | Priority | Runs on | What it does |
-|---|---|---|---|
-| **Itanium RTTI symbols** | `FORMAT_ANALYSIS` + 1 | gcc 3+ | Puts back the `_ZTS`/`_ZTI`/`_ZTV` labels a stripped binary lost, from the RTTI it kept. Runs early, so everything keyed off those symbols sees them. |
-| **In-Function Gap Disassembler** | `FUNCTION_ANALYSIS` + 1 | any | Disassembles undefined bytes *inside* a function's extent: hot/cold split holes and exception landing pads reachable only by unwinding. Only where every byte of the gap decodes cleanly. |
-| **GCC SJLJ exception tables** | `LOW_PRIORITY` − 2 | MinGW gcc, SJLJ | Lays the LSDA (`.gcc_except_table` entry) of every function with SJLJ exceptions: header, call-site, action and type tables, typed and commented, labelled `lsda`. Ghidra's `GCC Exception Handlers` finds LSDAs through `.eh_frame`, which an SJLJ binary lacks. The tables are found through the prologue that fills the unwind context, so stripped binaries are covered too. |
-| **Filler Byte Condenser** | `LOW_PRIORITY` − 1 | any | Collapses GAS `.p2align` padding in code (NOP idioms and the jump-over-fill form) into `Alignment` data, so it isn't mistaken for undescribed data. |
-| **GCC SJLJ unwind context** | `LOW_PRIORITY` + 1 | MinGW gcc, SJLJ | Types each function's unwind context as a local `fc` of type `SjLj_Function_Context`, and the `_Unwind_SjLj_*`, personality and `__cxa_*` calls, so the decompiler shows `fc.call_site = 2` instead of raw stack slots. Each `fc.call_site` store gets a comment saying what its LSDA entry does if the call throws. With stabs, the importer runs it after applying its symbols. |
-| **C++ method calling convention** | `LOW_PRIORITY` + 1 | any C++ | Makes each class method's convention take `this`: a `__fastcall` that takes nothing in `EDX` becomes the `__thiscall` it is, and a method *Decompiler Parameter ID* committed in custom storage gets its automatic `this` back. The class passes, which run later, do the same to every function they place in a class, virtual functions included. |
-| **Non-returning functions (reachability)** | `LOW_PRIORITY` + 1 | any | Marks a function non-returning when every path ends in a call to a non-returning function, such as a project `error()` that calls `exit`. Runs after the importer, which creates most of these functions on a stripped binary. |
-| **Struct-return ABI (x86 gcc)** | `LOW_PRIORITY` + 2 | x86:LE:32 gcc | gcc returns a class in memory whenever it is non-trivial for calls, whatever its size, which `x86gcc.cspec` can't express. Reads the callee's stack purge (`RET 0x4` vs bare `RET`) and, where it disagrees with the cspec, moves the function to a derived convention (`__thiscall_memret`, `__cdecl_regret`, …). |
-| **GCC C++ vftables** | `LOW_PRIORITY` + 2 | gcc (Itanium `_ZTV…`, gcc 2.x `_vt…`) | Lays a `<Class>_vftable` at every vtable symbol, each slot typed off the function it points at, under the class namespace with the labels Ghidra's RTTI scripts use (`vftable`, `vftable_for_<Base>`, …). With stabs, the importer runs it after its class pass and it leaves those classes alone. |
-| **Itanium typeinfo** | `LOW_PRIORITY` + 2 | gcc 3+ | Lays the `__class_type_info`, `__si_class_type_info` or `__vmi_class_type_info` struct its vtable pointer names at every `_ZTI…`, a vmi one's base array sized to its base count. It also fills in the empty structs Ghidra makes for the `this` of the `__cxxabiv1` typeinfo classes' own methods. |
-| **MSVC RTTI classes** | `LOW_PRIORITY` + 2 | MSVC / clang-cl PE | Off the RTTI that Ghidra's `Windows x86 PE RTTI Analyzer` laid, each class's bases and vftables go to the class pass the Itanium one shares: it records the bases for the Class Hierarchy window, moves each virtual function into the class that introduced it, and finds constructors and destructors by the vftables they store through `this`, and a destructor that stores none by the deleting destructor that calls it. It names them (`Foo`, `~Foo`, `` `scalar_deleting_destructor' ``) and gives each function it places, virtual functions included, a method's convention as *C++ method calling convention* does. Each class gets a struct where `RecoverClassesFromRTTIScript` files one, of its size (exact from `operator new`, else at least what its bases, vptrs and constructor stores reach), filled as the script fills it: each non-virtual base at its offset, a `vfptr` at each vptr typed to its `<Class>_vftable` or `<Class>_vftable_for_<Base>` struct, a `vbptr` where a constructor stores a vbtable, the virtual bases after, and the fields its constructors store in `<Class>_data`. A struct something else filled, or a second analysis finds filled, is left alone. A base holding a vptr is split around it (`vfptr`, then the base's `<Base>_fields_<from>_<to>`) under its **Virtual function pointer model** option, `SPLIT_BASE` by default as for the importer; `INHERITED` keeps the base whole with its own `vfptr`, typed to the base's vftable. Unlike the importer, which only knows the primary vptr, this splits every base holding one, secondary and virtual ones too. Its **Arrays from fill loops** option, on by default, types a field a constructor fills in a loop counted down from a constant (x86 `rep stos`), or with `memset` of a constant size, as an array. Its **Constructors inlined after new** option, on by default, reads a constructor the compiler inlined after `operator new(size)`: the vptrs stored at the start of what it returns, in order, are bases before the class they build, the last one stored is that class, of the `new` size, and the fields stored and members built there are theirs. |
-| **Itanium RTTI classes** | `LOW_PRIORITY` + 3 | gcc 3+, no stabs | What *MSVC RTTI classes* does, off the Itanium RTTI: classes from the `typeinfo` labels, their bases from the typeinfo, their vtables from *GCC C++ vftables*' `vtable` labels. Its structs are filled alike, each virtual base at the offset the vtable gives, and it has the same **Virtual function pointer model**, **Arrays from fill loops** and **Constructors inlined after new** options. With *Itanium RTTI symbols*, this covers stripped binaries; one with stabs gets its classes from them. |
-| **Deferred stack pops (x86)** | `LOW_PRIORITY` + 3 | x86 gcc | Finds where two paths meet with `ESP` apart because gcc left a call's arguments pushed, and pops the dead bytes at that call through a call-site override (`__cdecl_pop16`, …), kept only if the decompiler then makes fewer stores through pointers. Also gives MinGW `_Name@N` import stubs their `N`-byte purge. |
-| **Itanium virtual bases** | `LOW_PRIORITY` + 3 | gcc 3+ | Places the virtual bases a class struct lacks, at the offset its `_ZTV` gives, as its typeinfo names them. When nothing defines a virtual base, places the first base of it that something does. The RTTI class passes place virtual bases the same way, MSVC's off the vbtable. With stabs, the importer runs it once its labels are demangled. |
-| **Vftables from pointer tables** | `LOW_PRIORITY` + 4 | any C++, off by default | For a program whose RTTI no class analyzer reads, absent or in an unknown format. Finds vtables by their shape: a run of words pointing at functions, beginning at one that code takes the address of (not a call, jump, read or write through it), ending at the next such word, a symbol, data laid other than one plain word, or past two nulls (gcc leaves an abstract class's destructor slots null). Each becomes the `vftable` of a class `Klass_<address>`, laid as a `<Class>_vftable`, and goes through the class pass: slots made functions and moved in, constructors and destructors found by their stores, the class sized and filled. A class's base is the class whose vtable a structor's call on `this` stores, or which introduced the slots its table shares with others, the one with the shortest table, unless it overrides a slot the class inherits from further up. Bases at an offset are not inferred. Its **Classes of member objects** option, on by default, gives a class to each member a constructor builds at `this` + k with a function that stores no vptr (the first called there in a constructor, the last in a destructor). It has no vtable, so it is named `NPKlass_<address>` after its first constructor's address, not a table's, as its struct's description says. It is sized off its constructor's stores and laid in the holding class at k, as is a class with a vtable built there. It also has the **Virtual function pointer model**, **Arrays from fill loops** and **Constructors inlined after new** options. Its classes are evidence for *Method classes from this*, which runs after it. Run it once most of the program is disassembled and its references marked, and again after: a rerun finds tables the code it made refers to, and cuts a table it seeded where code now refers into it; a one-time rerun is followed by one of *Method classes from this*, when it is enabled, with its own options. |
-| **Method classes from this** | `LOW_PRIORITY` + 5 | any C++ | Moves each unnamed global function whose first argument comes in where `this` does into the class of the objects its callers pass it. The evidence is the classes the class record holds: a method of one calling on its own `this` or on the member object or base its class's struct lays at an offset into it, or any function calling on an object it built with one of their constructors. A method is also called on its derived classes' objects, so where callers pass several classes it goes to the one they all lead to through the bases they share their address with (non-virtual, at offset 0), and nowhere where none does. A guess is not evidence for another. Under MinGW gcc before 4.7, which passes `this` on the stack, a `__cdecl` counts too (`this` second when it returns a class in memory), so a free function taking an object first can't be told from a method. Runs after the class passes, *Vftables from pointer tables* included, and leaves an Analysis bookmark on each guess. A rerun over an unchanged program moves nothing more, so a run right after another, with no change by an analyzer, a user or an option between, returns at once. |
-
-#### Runtime functions worth labelling
-
-The class analyzers (*MSVC RTTI classes*, *Itanium RTTI classes* and *Vftables from pointer tables*), and the
-Class Hierarchy window, know a few runtime functions by name. An import or a symbol names them already. In a
-stripped program with the runtime linked in, they are unnamed `FUN_…`, so label them before running the
-analyzers, or rerun the analyzers once they are labelled. A call through a thunk counts as a call to the
-function.
-
-| Function | Names it goes by | Used by | Unlabelled |
-|---|---|---|---|
-| `operator new` | `operator_new`, `operator new`, `??2@YAPAXI@Z`, `_Znwj`, `__builtin_new`, … | The class pass, which every class analyzer runs: a constructor called on what `new(size)` returned sizes its class at least `size`. | Classes are sized only off the furthest field their constructors store, and short of any trailing field they leave unset. |
-| `operator delete` | `operator_delete`, `operator delete`, `??3@YAXPAX@Z`, `_ZdlPv`, `__builtin_delete`, … | The class pass: a vtable slot that frees `this` with it is a deleting destructor, and the destructor it calls is found from it. | Each deleting destructor is named a plain destructor, and the destructor it calls is not found. |
-| The pure virtual stub | `_purecall` (MSVC), `__cxa_pure_virtual` and `__cxa_deleted_virtual` (Itanium), `__pure_virtual` (gcc 2.x) | The class analyzers leave a slot holding it out: it is not a virtual method of the class, nor a slot two tables share. The Class Hierarchy window shows a class abstract by it, and the slots' override chains skip it. | The stub is taken for a virtual method, and moved into the base the classes holding it share, if they have one. *Vftables from pointer tables* takes the tables holding it in the same slot for a base's and its derived classes', and infers wrong bases off it. No class shows abstract. |
-| `memset` | `memset`, `_memset` | The **Arrays from fill loops** option: a constructor's `memset(this + k, c, n)`, with `n` constant, lays an array at k. | Only inline fills (`REP STOSD`, or a store loop) are seen. |
-
-The Gap Disassembler, Filler Byte Condenser and SJLJ exception tables run before the importer, mostly so its data-coverage report doesn't flag
-compiler scaffolding as missing.
-
-Ghidra's `RecoverClassesFromRTTIScript` skips any vtable that already has a struct under `/ClassDataTypes`, so after
-*GCC C++ vftables* it recovers nothing for those classes and retypes their methods' `this` to an empty placeholder: run it
-on a program analysed with that analyzer off and no stabs import. The script also refuses to run at all once `/ClassDataTypes`
-exists, and *MSVC RTTI classes*, *Itanium RTTI classes* and *Itanium typeinfo* all file structs there: turn them off too.
+- The In-Function Gap Disassembler, Filler Byte Condenser and SJLJ exception tables run before the
+  importer, mostly so its data-coverage report doesn't flag compiler scaffolding as missing.
+- The importer runs *GCC SJLJ unwind context* after applying its symbols, *Itanium virtual bases*
+  once its labels are demangled, and *GCC C++ vftables* after its own class pass, which leaves
+  the classes from stabs alone.
+- *Non-returning functions* runs after the importer, which creates most of those functions on a
+  stripped binary.
+- The RTTI class analyzers leave a program whose classes came from stabs alone.
 
 ## Headless CLI
 
@@ -368,8 +324,6 @@ Settles what a real binary actually contains when the manuals disagree.
   format for most ELF platforms … has changed from stabs to DWARF2."
 
 ### Prior art
-- [astrelsky/Ghidra-Cpp-Class-Analyzer](https://github.com/astrelsky/Ghidra-Cpp-Class-Analyzer) -
-  its *ClassTypeInfo Tree* is the model for `Window > Class Hierarchy`.
 - [RidgeX/ghidra-gcc2-stabs](https://github.com/RidgeX/ghidra-gcc2-stabs) - a Ghidra script
   parsing GCC 2.x stabs.
 - [chaoticgd/ccc](https://github.com/chaoticgd/ccc) - library and tools for debugging symbols in
