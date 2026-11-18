@@ -14,7 +14,10 @@ Two layouts:
   * stabs import baselines: <root>/build/test-output/shifted-baselines/<fixture>-baseline.json against
     <root>/src/test/resources/baselines/, counters as {"counters": {name: {"min", "max", "degrades"}}}.
   * ghicpp scorecards: <root>/ghicpp/build/test-output/shifted-baselines/scorecard-<case>.json against
-    <root>/ghicpp/src/test/resources/ghicpp/scorecard/baselines/<case>.json, a flat {name: count} map.
+    <root>/ghicpp/src/test/resources/ghicpp/scorecard/baselines/<case>.json, a flat {name: count} map,
+    and scorecard-<case>.instances.txt against <case>.instances.txt, a line `<counter> <instance>` per
+    false positive and false negative. An instance that came or went moves the scorecard as a counter
+    does; the summary lists them under its table, and the patch carries both files.
 
 Usage: baseline_summary.py [repo-root] [--artifact NAME] [--summary FILE] [--output FILE]
                            [--patch DIR [--patch-artifact NAME]]
@@ -39,6 +42,8 @@ SCORECARD_BASELINES = Path("ghicpp/src/test/resources/ghicpp/scorecard/baselines
 PATCH_NAME = "shifted-baselines.diff"
 # How many degraded targets to name per counter before eliding the rest.
 MAX_TARGETS = 6
+# How many scorecard instances that came or went to list per case before eliding the rest.
+MAX_INSTANCES = 100
 
 
 def load(path):
@@ -176,6 +181,13 @@ def moves(committed, shifted):
     return rows
 
 
+def load_lines(path):
+    try:
+        return [line for line in path.read_text().splitlines() if line]
+    except OSError:
+        return []
+
+
 @dataclass
 class Found:
     """A shifted baseline: its moved rows, both sides' counters, and where each file is."""
@@ -186,6 +198,17 @@ class Found:
     shifted: dict
     path: Path  # the committed file, relative to the repository root
     source: Path  # the shifted file
+    # For a scorecard: the instance lines only the shifted file has (added), the lines only the committed file
+    # has (removed), and the paths of both files.
+    added: tuple = ()
+    removed: tuple = ()
+    instances_path: Path = None
+    instances_source: Path = None
+
+    @property
+    def moved(self):
+        """Its moved counters and instances, one each."""
+        return len(self.rows) + len(self.added) + len(self.removed)
 
 
 def collect(root):
@@ -202,33 +225,52 @@ def collect(root):
         case = f.name.removeprefix("scorecard-").removesuffix(".json")
         base = SCORECARD_BASELINES / f"{case}.json"
         committed, shifted = scorecard_counters(load(root / base)), scorecard_counters(load(f))
-        found.append(Found("Scorecard", case, moves(committed, shifted), committed, shifted, base, f))
+        base_instances = SCORECARD_BASELINES / f"{case}.instances.txt"
+        shifted_instances = f.with_name(f"scorecard-{case}.instances.txt")
+        was, now = load_lines(root / base_instances), load_lines(shifted_instances)
+        added = tuple(sorted(set(now) - set(was))) if shifted_instances.is_file() else ()
+        removed = tuple(sorted(set(was) - set(now))) if shifted_instances.is_file() else ()
+        found.append(Found("Scorecard", case, moves(committed, shifted), committed, shifted, base, f,
+                           added, removed, base_instances, shifted_instances))
     return found
 
 
 def patch_text(root, found):
     """A unified diff, from each committed baseline to its shifted copy, that `git apply` takes."""
     out = []
-    for f in found:
-        if not f.rows:
-            continue
-        a = (root / f.path).read_text().splitlines(keepends=True)
-        b = f.source.read_text().splitlines(keepends=True)
-        for line in difflib.unified_diff(a, b, f"a/{f.path.as_posix()}", f"b/{f.path.as_posix()}"):
+
+    def diff(path, source):
+        committed = root / path
+        a = committed.read_text().splitlines(keepends=True) if committed.is_file() else []
+        b = source.read_text().splitlines(keepends=True)
+        old = f"a/{path.as_posix()}" if committed.is_file() else "/dev/null"
+        for line in difflib.unified_diff(a, b, old, f"b/{path.as_posix()}"):
             # A last line with no newline needs git's marker, or the hunk after it is unreadable.
             out.append(line if line.endswith("\n") else line + "\n\\ No newline at end of file\n")
+
+    for f in found:
+        if not f.moved:
+            continue
+        if f.rows:
+            diff(f.path, f.source)
+        if f.added or f.removed:
+            diff(f.instances_path, f.instances_source)
     return "".join(out)
 
 
 def render(found, artifact=None, patch=None):
     lines = ["## Baseline counters"]
-    moved = [f for f in found if f.rows]
+    moved = [f for f in found if f.moved]
     if not moved:
         lines += ["", "No baseline counter moved." if not found else
                   "Shifted baselines were written, but no counter differs from the committed ones."]
         return "\n".join(lines) + "\n"
     total = sum(len(f.rows) for f in moved)
-    lines += ["", f"**{total}** counter{'s' if total != 1 else ''} moved in **{len(moved)}** "
+    instances = sum(len(f.added) + len(f.removed) for f in moved)
+    what = f"**{total}** counter{'s' if total != 1 else ''}"
+    if instances:
+        what += f" and **{instances}** scorecard instance{'s' if instances != 1 else ''}"
+    lines += ["", f"{what} moved in **{len(moved)}** "
               f"baseline{'s' if len(moved) != 1 else ''}. The job fails on them once the rest of it has run."]
     if artifact:
         lines.append(f"The new baselines are in the `{artifact}` artifact.")
@@ -240,6 +282,9 @@ def render(found, artifact=None, patch=None):
         any_targets = any(fmt_targets(o, n) for _, o, n in f.rows)
         pr = {attr: rest for attr, *rest in precision_recall(f.committed, f.shifted, f.rows)}
         lines += ["", f"### {f.kind}: `{f.label}`", ""]
+        if not f.rows:
+            lines += ["No counter moved.", "", *render_instances(f)]
+            continue
         header = "| Counter | Committed | New | Δ |" + (" Precision | Recall |" if pr else "") \
             + (" What moved |" if any_targets else "")
         lines += [header, "|---|---:|---:|---:|" + ("---:|---:|" if pr else "") + ("---|" if any_targets else "")]
@@ -256,7 +301,23 @@ def render(found, artifact=None, patch=None):
                 else:
                     row += " | |"
             lines.append(row + (f" {fmt_targets(old, new)} |" if any_targets else ""))
+        if f.added or f.removed:
+            lines += ["", *render_instances(f)]
     return "\n".join(lines) + "\n"
+
+
+def render_instances(f):
+    """A scorecard's instances that came (🔴, a new miss) or went (🟢, a miss fixed), folded."""
+    moved = [(BAD, "+", line) for line in f.added] + [(GOOD, "−", line) for line in f.removed]
+    # Sort by counter, then by instance, so that one counter's added and removed lines sit together.
+    moved.sort(key=lambda m: (m[2].split(" ", 1)[0], m[2]))
+    out = ["<details>", f"<summary>Instances: {len(f.added)} came, {len(f.removed)} went</summary>", ""]
+    for mark, sign, line in moved[:MAX_INSTANCES]:
+        counter, _, what = line.partition(" ")
+        out.append(f"- {mark} {sign} `{counter}` {what}")
+    if len(moved) > MAX_INSTANCES:
+        out.append(f"- … (+{len(moved) - MAX_INSTANCES} more, in the patch)")
+    return out + ["", "</details>"]
 
 
 def main(argv=None):
@@ -270,7 +331,7 @@ def main(argv=None):
     p.add_argument("--patch-artifact", help="name of the artifact the patch is uploaded as, to point readers at")
     args = p.parse_args(argv)
     found = collect(args.root)
-    moved = sum(len(f.rows) for f in found)
+    moved = sum(f.moved for f in found)
     if args.patch is not None and moved:
         args.patch.mkdir(parents=True, exist_ok=True)
         (args.patch / PATCH_NAME).write_text(patch_text(args.root, found))
@@ -281,9 +342,11 @@ def main(argv=None):
         with args.summary.open("a") as out:
             out.write(text)
         for f in found:
-            if f.rows:
+            if f.moved:
                 names = ", ".join(name for name, _, _ in f.rows[:8]) + (" …" if len(f.rows) > 8 else "")
-                print(f"::warning title={f.kind} moved: {f.label}::{len(f.rows)} counter(s) moved: {names}")
+                changed = f"{len(f.added) + len(f.removed)} instance(s) changed" if f.added or f.removed else ""
+                what = "; ".join(x for x in (f"{len(f.rows)} counter(s) moved: {names}" if f.rows else "", changed) if x)
+                print(f"::warning title={f.kind} moved: {f.label}::{what}")
     if args.output is not None:
         with args.output.open("a") as out:
             out.write(f"moved={moved}\n")
