@@ -212,6 +212,38 @@ class GenericVftableFinder(
         return seeded
     }
 
+    /**
+     * Makes each seeded table of [secondaries] the secondary of the class it maps to, for the base subobject at the
+     * offset it maps to: labelled and laid in that class, and the class it was seeded with merged into it. Returns
+     * how many it moved.
+     */
+    fun regroup(secondaries: Map<Address, Pair<GhidraClass, Long>>): Int {
+        var moved = 0
+        for ((at, target) in secondaries) {
+            val (ns, offset) = target
+            val label = symtab.getSymbols(at).firstOrNull { it.name == ClassNaming.VFTABLE && isSeededLabel(it) }
+                ?: continue
+            val seeded = label.parentNamespace as? GhidraClass ?: continue
+            if (seeded == ns) continue
+            val slots = listing.getDataAt(at)?.takeIf(::isSeeded)
+                ?.let { d -> (0 until d.numComponents).mapNotNull { d.getComponent(it).value as? Address } }
+                ?: continue
+            label.delete()
+            for (sym in symtab.getSymbols(seeded).iterator().asSequence().toList()) {
+                runCatching { sym.setNamespace(ns) }
+                    .onFailure { warn("vftable-regroup-member", "${sym.name} into ${ns.name}: $it", sym.address) }
+            }
+            if (!symtab.getSymbols(seeded).hasNext()) seeded.symbol.delete()
+            val secondary = ClassNaming.plainSecondaryLabel(offset)
+            symtab.createLabel(at, secondary, ns, SEEDED)
+            listing.clearCodeUnits(at, at, false)
+            lay(PotentialVtable(at, slots, emptyList()), ns, "${ns.name}_$secondary")
+            debug("vftable-regrouped", "${seeded.name} as ${ns.name}'s, at +$offset", at)
+            moved++
+        }
+        return moved
+    }
+
     /** Lays a `<Class>_vftable` at [table], typed off its slots, unless one was typed already. */
     private fun lay(table: PotentialVtable, ns: GhidraClass, name: String? = null) {
         val path = name?.let { ClassNaming.vftableCategory(ns).at(it) } ?: ClassNaming.vftablePath(ns)
