@@ -63,6 +63,25 @@ class GnuStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         32,
     )
 
+    @Test
+    fun `gcc 3's map, before 3_4 moved its header node into it`() = check(
+        ProgramBuilder._X86,
+        "libstdcxx5_x86",
+        "_ZNSt3mapIiiSt4lessIiESaISt4pairIKiiEEE5clearEv",
+        // gcc 3's own spelling, with no space after a comma.
+        "/std/map<int,int,std::less<int>,std::allocator<std::pair<const_int,_int>_>_>",
+        12,
+    )
+
+    @Test
+    fun `gcc 3's exceptions, which only the library's own debug info defines`() = check(
+        ProgramBuilder._X64,
+        "libstdcxx5_x64",
+        "_ZNKSt11logic_error4whatEv",
+        "/std/logic_error",
+        16,
+    )
+
     /**
      * [shift]: a copy-on-write string's `_M_p` points [shift] bytes into `_Rep_chars`, past the header, so
      * the decompiler reaches the header's fields through it.

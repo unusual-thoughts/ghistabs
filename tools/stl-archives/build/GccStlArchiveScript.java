@@ -53,6 +53,10 @@ public class GccStlArchiveScript extends GhidraScript {
 			dwarf.init(monitor);
 			DWARFDataTypeManager dwarfTypes = dwarf.getDwarfDTM();
 			dwarfTypes.importAllDataTypes(monitor);
+			// gcc 4 on writes its namespaces.
+			if (currentProgram.getDataTypeManager().getCategory(new CategoryPath("/DWARF/_UNCATEGORIZED_/std")) == null) {
+				scopes = readScopes();
+			}
 			Read read = readClasses(dwarf, dwarfTypes);
 			build(name, classesFile, read);
 		}
@@ -101,9 +105,11 @@ public class GccStlArchiveScript extends GhidraScript {
 		StlShape.Result shape = StlShape.apply(dtm, read.classes().getClasses(), pointerSize, read::typeOf);
 		// The slots' function types, which the vftables brought in.
 		refile(dtm);
+		dropInjectedNames(dtm);
 		int typedefs = addTypedefs(dtm);
 		// Last, as laying the classes brings the built-ins back.
 		portableBuiltins(dtm);
+		fitBases(dtm);
 		int shifted = shiftStringPointers(dtm);
 		int folded = foldConflicts(dtm);
 		tagAbi(dtm, read);
@@ -132,13 +138,22 @@ public class GccStlArchiveScript extends GhidraScript {
 		dtm.getAllDataTypes(types);
 		for (DataType dt : types) {
 			monitor.checkCancelled();
-			List<String> rest = underDwarf(dt.getCategoryPath());
+			List<String> rest = scoped(underDwarf(dt.getCategoryPath()), dt.getName());
 			if (rest == null || dt instanceof FunctionDefinition && (rest.isEmpty() || !ROOTS.contains(rest.get(0)))) {
 				continue;
 			}
 			CategoryPath target = rest.isEmpty() ? CategoryPath.ROOT : new CategoryPath(CategoryPath.ROOT, rest);
+			DataType there = dtm.getDataType(target, dt.getName());
 			try {
-				dt.setCategoryPath(target);
+				if (there != null && there != dt && (there.isEquivalent(dt) ||
+					dt instanceof TypeDef t && t.getBaseDataType().isEquivalent(there))) {
+					// gcc 3's `unsigned int` for the importer's `uint`, or glibc's typedef of it, one already
+					// at the root.
+					dtm.replaceDataType(dt, there, false);
+				}
+				else {
+					dt.setCategoryPath(target);
+				}
 			}
 			catch (Exception e) {
 				printerr("cannot move " + dt.getPathName() + ": " + e.getMessage());
@@ -563,12 +578,12 @@ public class GccStlArchiveScript extends GhidraScript {
 	}
 
 	/** Where the archive files the type the DWARF importer made of [die]; null outside the library. */
-	private static String archivePath(DWARFDataTypeManager dwarfTypes, DIEAggregate die) {
+	private String archivePath(DWARFDataTypeManager dwarfTypes, DIEAggregate die) {
 		DataType dt = dwarfTypes.getDataType(die, null);
 		if (dt == null) {
 			return null;
 		}
-		List<String> path = underDwarf(dt.getCategoryPath());
+		List<String> path = scoped(underDwarf(dt.getCategoryPath()), dt.getName());
 		if (path == null || path.isEmpty() || !ROOTS.contains(path.get(0))) {
 			return null;
 		}
@@ -593,6 +608,200 @@ public class GccStlArchiveScript extends GhidraScript {
 		return all.subList(base.asList().size(), all.size());
 	}
 
+	// ---- the namespaces gcc 3 leaves out ----
+
+	/**
+	 * The namespaces of the classes the program's mangled names mention, by [StlIndex.key] of the class's
+	 * name: gcc before 4.0 writes no DW_TAG_namespace, so the importer files `std::basic_string<…>` at the
+	 * root as `basic_string<…>`. Every qualified name a demangled symbol spells out, its own scope or a
+	 * parameter's or template argument's, says where its class goes; a name two scopes claim says nothing.
+	 */
+	private Map<String, List<String>> scopes = Map.of();
+
+	private Map<String, List<String>> readScopes() {
+		Map<String, List<String>> found = new HashMap<>();
+		Set<String> ambiguous = new HashSet<>();
+		for (Symbol sym : currentProgram.getSymbolTable().getAllSymbols(false)) {
+			String name = sym.getName().startsWith("__Z") ? sym.getName().substring(1) : sym.getName();
+			if (!name.startsWith("_Z")) {
+				continue;
+			}
+			String text;
+			try {
+				DemangledObject d = demangler.demangle(
+					demangler.createMangledContext(name, demangler.createDefaultOptions(), null, null));
+				text = d == null ? null : d.getOriginalDemangled();
+			}
+			catch (DemangledException | RuntimeException e) {
+				continue;
+			}
+			if (text == null) {
+				continue;
+			}
+			for (List<String> qualified : qualifiedNames(text)) {
+				for (int i = 1; i < qualified.size(); i++) {
+					List<String> scope = qualified.subList(0, i);
+					if (!ROOTS.contains(scope.get(0))) {
+						break;
+					}
+					// A constructor, `std::_Bit_iterator::_Bit_iterator()`, names no class of its own.
+					if (stem(scope.get(i - 1)).equals(stem(qualified.get(i)))) {
+						continue;
+					}
+					String key = StlIndex.key(List.of(qualified.get(i)));
+					List<String> known = found.putIfAbsent(key, List.copyOf(scope));
+					if (known != null && !known.equals(scope)) {
+						ambiguous.add(key);
+					}
+				}
+			}
+		}
+		ambiguous.forEach(found::remove);
+		// The demangler names `std::basic_istream<char, …>` by its alias, `std::istream`.
+		for (Map.Entry<String, String> e : StlApplier.gnuAliases().entrySet()) {
+			List<String> scope = found.get(StlIndex.key(List.of(e.getKey())));
+			if (scope != null) {
+				found.putIfAbsent(StlIndex.key(List.of(e.getValue())), scope);
+			}
+		}
+		return found;
+	}
+
+	/** A segment's name without its template arguments. */
+	private static String stem(String segment) {
+		int args = segment.indexOf('<');
+		return args < 0 ? segment : segment.substring(0, args);
+	}
+
+	/**
+	 * The qualified names of classes in a demangled [text], each as its scopes: `std::map<int, int>::find(int
+	 * const&)` gives [std, map<int, int>]. A template's arguments are part of its segment, and each name in
+	 * them is read too.
+	 */
+	static List<List<String>> qualifiedNames(String text) {
+		List<List<String>> out = new ArrayList<>();
+		List<String> current = new ArrayList<>();
+		int i = 0;
+		while (i < text.length()) {
+			char c = text.charAt(i);
+			if (Character.isLetter(c) || c == '_') {
+				int start = i;
+				while (i < text.length() && (Character.isLetterOrDigit(text.charAt(i)) || text.charAt(i) == '_')) {
+					i++;
+				}
+				if (i < text.length() && text.charAt(i) == '<') {
+					int depth = 0;
+					int args = i;
+					for (; i < text.length(); i++) {
+						char t = text.charAt(i);
+						if (t == '<') {
+							depth++;
+						}
+						else if (t == '>' && --depth == 0) {
+							i++;
+							break;
+						}
+					}
+					out.addAll(qualifiedNames(text.substring(args + 1, Math.max(args + 1, i - 1))));
+				}
+				current.add(text.substring(start, i));
+				if (text.startsWith("::", i)) {
+					i += 2;
+					continue;
+				}
+				// A function's name, `std::error_code::category()`, names no class.
+				if (text.startsWith("(", i)) {
+					current.remove(current.size() - 1);
+				}
+				if (current.size() > 1) {
+					out.add(current);
+				}
+				current = new ArrayList<>();
+				continue;
+			}
+			if (!current.isEmpty()) {
+				if (current.size() > 1) {
+					out.add(current);
+				}
+				current = new ArrayList<>();
+			}
+			i++;
+		}
+		if (current.size() > 1) {
+			out.add(current);
+		}
+		return out;
+	}
+
+	/**
+	 * [rest], the scopes of a type named [name] below the importer's root, with the namespace the
+	 * program's mangled names put its outermost class in ([scopes]) where the DWARF gave none.
+	 */
+	private List<String> scoped(List<String> rest, String name) {
+		if (rest == null || !rest.isEmpty() && ROOTS.contains(rest.get(0))) {
+			return rest;
+		}
+		List<String> scope = scopes.get(StlIndex.key(List.of(rest.isEmpty() ? name : rest.get(0))));
+		if (scope == null) {
+			return rest;
+		}
+		List<String> out = new ArrayList<>(scope);
+		out.addAll(rest);
+		return out;
+	}
+
+	/**
+	 * Widens each class component to its class's length where the room after it is free: gcc 3 defines a
+	 * library class only in the library's units, so a unit that derives from it lays the base as the
+	 * one-byte placeholder of a declaration, and Ghidra keeps that length once the definition fills it.
+	 */
+	private void fitBases(DataTypeManager dtm) throws Exception {
+		List<DataType> types = new ArrayList<>();
+		dtm.getAllDataTypes(types);
+		for (DataType dt : types) {
+			if (dt.isDeleted() || !(dt instanceof Structure s) || s.isPackingEnabled()) {
+				continue;
+			}
+			for (DataTypeComponent c : s.getDefinedComponents()) {
+				DataType type = c.getDataType();
+				int length = type.getLength();
+				if (!(type instanceof Composite) || c.isBitFieldComponent() || length <= c.getLength() ||
+					c.getOffset() + length > s.getLength()) {
+					continue;
+				}
+				boolean free = true;
+				for (DataTypeComponent o : s.getDefinedComponents()) {
+					if (o != c && o.getOffset() < c.getOffset() + length && o.getOffset() + o.getLength() >
+						c.getOffset() && o.getLength() > 0) {
+						free = false;
+					}
+				}
+				if (free) {
+					s.replaceAtOffset(c.getOffset(), type, length, c.getFieldName(), c.getComment());
+				}
+			}
+		}
+	}
+
+	/**
+	 * Drops gcc 3's typedef of each class's own name inside it, `std::fpos<…>::fpos`, its injected class
+	 * name, each use taking the class.
+	 */
+	private void dropInjectedNames(DataTypeManager dtm) throws Exception {
+		List<DataType> types = new ArrayList<>();
+		dtm.getAllDataTypes(types);
+		for (DataType dt : types) {
+			if (dt.isDeleted() || !(dt instanceof TypeDef t)) {
+				continue;
+			}
+			DataType base = t.getDataType();
+			if (base instanceof Composite && t.getCategoryPath().equals(new CategoryPath(base.getCategoryPath(),
+				base.getName())) && stem(base.getName()).equals(t.getName())) {
+				dtm.replaceDataType(t, base, false);
+			}
+		}
+	}
+
 	// ---- the names the demangler gives ----
 
 	/**
@@ -605,9 +814,15 @@ public class GccStlArchiveScript extends GhidraScript {
 	private int addTypedefs(DataTypeManager dtm) throws Exception {
 		List<CategoryPath> categories = List.of(new CategoryPath("/std"), new CategoryPath("/std/__cxx11"));
 		Map<String, TypeDef> made = new HashMap<>();
+		// gcc 3's DWARF spells `basic_string<char,std::char_traits<char>,...>`, without the importer's `_`.
+		StlIndex index = new StlIndex(dtm);
 		for (CategoryPath category : categories) {
 			for (Map.Entry<String, String> e : StlApplier.gnuAliases().entrySet()) {
-				if (dtm.getDataType(category, e.getValue()) instanceof Composite target) {
+				List<String> path = new ArrayList<>(category.asList());
+				path.add(e.getValue());
+				DataType found = dtm.getDataType(category, e.getValue());
+				Composite target = found instanceof Composite c ? c : index.find(path);
+				if (target != null) {
 					DataType t = dtm.addDataType(new TypedefDataType(category, e.getKey() + ".stl", target, dtm),
 						DataTypeConflictHandler.DEFAULT_HANDLER);
 					made.put(category.getPath() + "/" + e.getKey(), (TypeDef) t);
