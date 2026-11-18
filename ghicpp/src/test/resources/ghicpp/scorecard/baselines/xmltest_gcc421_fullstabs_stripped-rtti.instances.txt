@@ -4,24 +4,6 @@ abstract-fn `std::__codecvt_abstract_base<char,char,int>`
 abstract-fn `std::__codecvt_abstract_base<wchar_t,char,int>`
 abstract-fn `std::__ctype_abstract_base<char>`
 abstract-fn `std::__ctype_abstract_base<wchar_t>`
-bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
-bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`
-bases-fn `?ctype_base` of `std::__ctype_abstract_base<char>`
-bases-fn `?ctype_base` of `std::__ctype_abstract_base<wchar_t>`
-bases-fn `?ctype_base` of `std::ctype<char>`
-bases-fn `?messages_base` of `std::messages<char>`
-bases-fn `?messages_base` of `std::messages<wchar_t>`
-bases-fn `?time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
-bases-fn `?time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
-bases-fp `std::codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
-bases-fp `std::codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`
-bases-fp `std::ctype_base` of `std::__ctype_abstract_base<char>`
-bases-fp `std::ctype_base` of `std::__ctype_abstract_base<wchar_t>`
-bases-fp `std::ctype_base` of `std::ctype<char>`
-bases-fp `std::messages_base` of `std::messages<char>`
-bases-fp `std::messages_base` of `std::messages<wchar_t>`
-bases-fp `std::time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
-bases-fp `std::time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
 classes-fn `__cxa_call_unexpected::end_catch_protect` (stabs)
 classes-fn `__cxa_guard_acquire::mutex_wrapper` (stabs)
 classes-fn `__cxxabiv1::__base_class_type_info` (stabs)
