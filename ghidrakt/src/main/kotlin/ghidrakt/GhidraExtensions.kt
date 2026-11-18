@@ -138,6 +138,15 @@ fun FunctionManager.inHull(addr: Address) = getFunctionWrapping(addr) != null
 
 val Function.isMethod get() = parentNamespace is GhidraClass
 
+/**
+ * The function this thunk ends at, following a chain of thunks to the last ([Function.getThunkedFunction] with
+ * `recursive`): often an import's external function. Null when this isn't a thunk.
+ */
+val Function.thunked get(): Function? = getThunkedFunction(true)
+
+/** The function a call of this one runs: the one it ends at if a thunk ([thunked]), else itself. */
+val Function.orThunked get() = thunked ?: this
+
 fun Namespace.toClass(): GhidraClass? = this as? GhidraClass
     ?: runCatching { NamespaceUtils.convertNamespaceToClass(this) }.getOrNull()
 

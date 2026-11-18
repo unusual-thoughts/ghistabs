@@ -35,6 +35,7 @@
     "vftables-fn": 0,
     "vftables-fp": 0,
     "vftables-tp": 115,
+    "vfunctions-unattached": 1,
     "virtual-methods-fn": 0,
     "virtual-methods-fp": 0,
     "virtual-methods-tp": 544

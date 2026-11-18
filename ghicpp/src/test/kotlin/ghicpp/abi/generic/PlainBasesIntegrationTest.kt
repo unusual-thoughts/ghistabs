@@ -44,17 +44,26 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     /**
      * The bases [inferBases] gives each class, by name and offset, off functions storing the vptrs of the
-     * classes [stores] names and calling the functions [calls] names at `this` + the offset each gives.
+     * classes [stores] names and calling the functions [calls] names at `this` + the offset each gives, with
+     * tables holding the functions [slots] names, pure virtual where null.
      */
     private fun bases(
         stores: Map<String, Set<String>>,
         calls: Map<String, Map<Long, Set<String>>> = emptyMap(),
         slots: Map<String, List<String?>> = emptyMap(),
+        before: Map<String, Set<String>> = emptyMap(),
+        after: Map<String, Set<String>> = emptyMap(),
     ): Map<String, List<Pair<String, Long?>>> {
         val uses = Dissections(
             (stores.keys + calls.keys).associate {
                 fn(it) to DissectionCache.Dissection(
-                    stores[it]?.let { cs -> VptrStores(cs.mapTo(mutableSetOf(), ::cls)) },
+                    stores[it]?.let { cs ->
+                        VptrStores(
+                            cs.mapTo(mutableSetOf(), ::cls),
+                            before[it].orEmpty().mapTo(mutableSetOf(), ::fn),
+                            after[it].orEmpty().mapTo(mutableSetOf(), ::fn),
+                        )
+                    },
                     calls[it]?.let { byOffset ->
                         byOffset.mapValues { (_, called) -> called.mapTo(mutableSetOf(), ::fn) }
                     }.orEmpty(),
@@ -63,7 +72,8 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
         val tables: Map<ClassDecl, List<Function?>> =
             slots.entries.associate { (c, fs) -> cls(c) to fs.map { it?.let(::fn) } }
-        BaseCandidates(tables).inferBases(classes.values, uses)
+        val pure = tables.mapValues { (_, fs) -> fs.indices.filterTo(mutableSetOf()) { fs[it] == null } }
+        BaseCandidates(tables, pure).inferBases(classes.values, uses)
         return classes.values.filter { it.bases.isNotEmpty() }
             .associate { c -> c.name to c.bases.map { it.cls.name to it.offset } }
     }
@@ -128,6 +138,83 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             "Y" to listOf("y1", "tie", null),
         )
         bases(emptyMap(), slots = slots) mustBe emptyMap()
+    }
+
+    @Test
+    fun `of tables tied for the shortest, the one pure where each other holds a function introduced theirs`() {
+        // M is abstract: C and D fill its pure second slot, and override its first, but add no slot of their own.
+        val slots = mapOf(
+            "M" to listOf("m1", null, "shared"),
+            "C" to listOf("c1", "c2", "shared"),
+            "D" to listOf("d1", "d2", "shared"),
+        )
+        bases(emptyMap(), slots = slots) mustBe mapOf("C" to listOf("M" to 0L), "D" to listOf("M" to 0L))
+    }
+
+    @Test
+    fun `a deleting destructor in a table destroying another class makes that class its base`() {
+        // C's and D's tables are alike, with no pure slot to tell M by: only their deleting destructor, which calls
+        // M's destructor, shows M between them and B, whose destructor M's calls.
+        val slots = mapOf(
+            "B" to listOf("bDelete", "b2"),
+            "C" to listOf("cdDelete", "c2", "shared"),
+            "D" to listOf("cdDelete", "c2", "shared"),
+        )
+        bases(
+            mapOf("mDtor" to setOf("M"), "bDtor" to setOf("B")),
+            mapOf("mDtor" to mapOf(0L to setOf("bDtor")), "cdDelete" to mapOf(0L to setOf("mDtor"))),
+            slots,
+            after = mapOf("mDtor" to setOf("bDtor")),
+        ) mustBe mapOf("M" to listOf("B" to 0L), "C" to listOf("M" to 0L), "D" to listOf("M" to 0L))
+    }
+
+    @Test
+    fun `a slot whose first argument is the object it returns makes no base`() {
+        // gcc's i386 code passes a class returned by value in memory ahead of this, and pops it: `ret 4`.
+        val slots = mapOf(
+            "B" to listOf("bDelete", "b2"),
+            "C" to listOf("cdMake", "c2", "shared"),
+            "D" to listOf("cdMake", "c2", "shared"),
+        )
+        builder.withTransaction {
+            fn("cdMake").setCallingConvention("__cdecl")
+            fn("cdMake").stackPurgeSize = 4
+        }
+        bases(
+            mapOf("mDtor" to setOf("M"), "bDtor" to setOf("B")),
+            mapOf("mDtor" to mapOf(0L to setOf("bDtor")), "cdMake" to mapOf(0L to setOf("mDtor"))),
+            slots,
+            after = mapOf("mDtor" to setOf("bDtor")),
+        ).filterKeys { it != "M" } mustBe emptyMap()
+    }
+
+    @Test
+    fun `a slot calling a constructor on this makes no base`() {
+        // As a virtual returning a class by value builds it: what cdMake calls builds M, before M's store calls B's.
+        val slots = mapOf(
+            "B" to listOf("bDelete", "b2"),
+            "C" to listOf("cdMake", "c2", "shared"),
+            "D" to listOf("cdMake", "c2", "shared"),
+        )
+        bases(
+            mapOf("mCtor" to setOf("M"), "bCtor" to setOf("B")),
+            mapOf("mCtor" to mapOf(0L to setOf("bCtor")), "cdMake" to mapOf(0L to setOf("mCtor"))),
+            slots,
+            before = mapOf("mCtor" to setOf("bCtor")),
+        ).filterKeys { it != "M" } mustBe emptyMap()
+    }
+
+    @Test
+    fun `a slot null for a function that never returns, but no pure virtual, breaks no tie`() {
+        val tables = mapOf(
+            "M" to listOf("m1", null, "shared"),
+            "C" to listOf("c1", "c2", "shared"),
+            "D" to listOf("d1", "d2", "shared"),
+        )
+        val uses = Dissections()
+        val fns = tables.mapKeys { cls(it.key) }.mapValues { (_, fs) -> fs.map { it?.let(::fn) } }
+        BaseCandidates(fns, fns.mapValues { emptySet() }).inferBases(classes.values, uses)
+        classes.values.filter { it.bases.isNotEmpty() } mustBe emptyList()
     }
 
     @Test

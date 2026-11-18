@@ -264,8 +264,7 @@ class VftableBuilder(
     /** Whether [target], by a label at it or past a thunk, is [abi]'s pure virtual stub. */
     private fun isPureVirtualStub(target: Address, abi: CxxAbi) =
         symtab.getSymbols(target).any { abi.isPureVirtualStub(it.name) } ||
-            program.functionManager.getFunctionAt(target)?.getThunkedFunction(true)?.name
-                ?.let(abi::isPureVirtualStub) == true
+            program.functionManager.getFunctionAt(target)?.thunked?.name?.let(abi::isPureVirtualStub) == true
 
     /** The definition [name] for a target with only its [linkage] name to go by; untyped if that isn't mangled. */
     private fun demangledDefinition(category: CategoryPath, name: String, linkage: String) =

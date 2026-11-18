@@ -73,10 +73,12 @@ class ClassPass(
         // The parser dissecting the storers as it parses reads them so, and this reads them off it.
         (parser as? DissectingParser)?.cache = cache
         val read = parser.parse(monitor)
-        stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
         val inspector = ThisFunctionDissector(program, read.classes, this, cache)
+        // Find the structors before stubbing the structs. Stubbing changes the program, and the parser's reads of
+        // the storers, which this reuses, would then be out of date.
         val found = inspector.find(read.holders, abi, monitor)
+        stubStructs(read.classes)
         val structors = found.roles
         var moved = 0
         monitor.initialize(owners.size.toLong(), "Moving virtual functions into their classes")
@@ -104,7 +106,7 @@ class ClassPass(
             val align = if (cls.vftables.isEmpty()) 1L else program.defaultPointerSize.toLong()
             end.alignedTo(align)
         }
-        val called = AllocationSizeFinder(program, abi, this).read(ctors, monitor)
+        val called = AllocationSizeFinder(program, abi, this, inspector).read(ctors, monitor, found.inlined)
         val allocated = (called.keys + found.inlinedSizes.keys).associateWith { cls ->
             maxOf(called[cls] ?: 0L, found.inlinedSizes[cls] ?: 0L)
         }
@@ -150,7 +152,7 @@ class ClassPass(
         for (cls in listOf(owner) + holders) {
             for (record in cls.vftables) {
                 val slot = record.slots(program).indexOfFirst { at ->
-                    program.functionManager.getFunctionAt(at)?.let { it.getThunkedFunction(true) ?: it } == func
+                    program.functionManager.getFunctionAt(at)?.orThunked == func
                 }
                 if (slot < 0) continue
                 val base = if (cls.vftables.size > 1) cls.servedBase(record, program) else null

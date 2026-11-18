@@ -49,7 +49,9 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         }
         guessed = guesses()
         guessed.isNotEmpty().mustBeTrue()
-        movedAgain = program.runTransaction("again") { MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY) }
+        movedAgain = program.runTransaction("again") {
+            MethodClassPass(program, DummySink).run(TaskMonitor.DUMMY).moved
+        }
     }
 
     @AfterAll

@@ -16,5 +16,6 @@
     "polymorphic-classes-tp": 11,
     "vftables-fn": 1,
     "vftables-fp": 1,
-    "vftables-tp": 10
+    "vftables-tp": 10,
+    "vfunctions-unattached": 2
 }
