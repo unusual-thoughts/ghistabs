@@ -103,22 +103,12 @@ jobs:
       # Recompiled even when the build cache has the classes (a restored compile prints nothing), so every
       # warning is annotated; --rerun still stores the result in the cache.
       - name: Compile
-        shell: bash
-        run: >-
-          ./gradlew --build-cache --warning-mode all
-          compileKotlin --rerun compileTestKotlin --rerun compileCliKotlin --rerun compileTestFixturesKotlin --rerun
-          compileJava --rerun compileTestJava --rerun
-          2>&1 | tee "$RUNNER_TEMP/compile.log"
-
-      # An annotation per compiler warning, on the PR's diff at its line; does not fail the job.
-      - name: Annotate compiler warnings
-        if: success() || failure()
-        run: python3 .github/scripts/build_warnings.py "$RUNNER_TEMP/compile.log" --kind compiler
-
-      # A step of their own: GitHub keeps 10 warning annotations per step, and the compiler's can fill them.
-      - name: Annotate Gradle deprecations
-        if: success() || failure()
-        run: python3 .github/scripts/build_warnings.py "$RUNNER_TEMP/compile.log" --kind gradle
+        uses: ./.github/actions/gradle-annotated
+        with:
+          arguments: >-
+            --build-cache
+            compileKotlin --rerun compileTestKotlin --rerun compileCliKotlin --rerun compileTestFixturesKotlin --rerun
+            compileJava --rerun compileTestJava --rerun
 
       - name: Run unit tests
         run: ./gradlew --build-cache test

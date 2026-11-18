@@ -1,7 +1,6 @@
 package ghistabs.harvest
 
 import ghidrakt.diagnose.DiagnosticSink
-import ghistabs.parse.*
 
 /**
  * A function being accumulated: its record-order params and its block tree

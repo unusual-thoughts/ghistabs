@@ -1,22 +1,12 @@
 package ghicpp
 
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeComponent
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
+import ghidra.program.database.data.DataTypeUtilities
+import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidrakt.*
-import ghidrakt.componentsOverlapping
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.holds
-import ghidrakt.includes
-import ghidrakt.lay
-import ghidrakt.range
-import ghidrakt.stretch
-import ghidrakt.withLength
 
 /**
  * Describes this struct as [owner]'s [table], led by the offset tag Ghidra 12.1's `ClassUtils.isVTable`
@@ -92,6 +82,27 @@ fun Program.classStruct(ns: GhidraClass) =
     dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
 
 /**
+ * Gives [ns] an empty [classStruct] where it has none. Done before any function moves into [ns]: a `__thiscall`
+ * method of a class with no struct makes Ghidra add an empty placeholder to type its `this` with, in the class's
+ * parent category (`/<Class>` for a global one), and its lookup (`findExistingClassStruct`) then takes that one over
+ * the [classStruct], being the shorter path. Such a placeholder an earlier run left is replaced by the [classStruct],
+ * so what it typed is typed with this.
+ */
+fun Program.stubClassStruct(ns: GhidraClass) {
+    val struct = classStruct(ns) ?: dataTypeManager.addDataType(
+        StructureDataType(ClassNaming.vftableCategory(ns), ns.name, 0),
+        DataTypeConflictHandler.KEEP_HANDLER,
+    ) as Structure
+    val found = DataTypeUtilities.findExistingClassStruct(dataTypeManager, ns) ?: return
+    if (found != struct && found.isZeroLength && found.description == GHIDRA_PLACEHOLDER) {
+        dataTypeManager.replaceDataType(found, struct, false)
+    }
+}
+
+/** The description `VariableUtilities` gives the placeholder struct it makes for a class with none. */
+private const val GHIDRA_PLACEHOLDER = "PlaceHolder Class Structure"
+
+/**
  * Gives [ns] a [classStruct] of [size] bytes, or grows its own to them. Where its last field is one of its own
  * `<Class>_data` structs, or, split around a deriving class's vptr, its own `_fields` run ending in one, that grows
  * with it, so the fields its constructors store past the old end are refilled there. A base's `_fields` part keeps
@@ -126,7 +137,7 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
  * But for [owner]'s own vptr right where it goes: one of a class's vptrs past its start is a secondary one, and what
  * its constructors build there is the base subobject holding it, as a member couldn't. It goes over that vptr, then
  * gives it back to [owner], split around it as a base is ([BaseSplitter.splitBase]), where the member has a vptr
- * of its own there; one known only from its constructors, which store the vptr as a plain field, keeps it whole.
+ * there; one known only from its constructors, which store the vptr as a plain field, keeps it whole.
  */
 internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Structure) {
     if (member == owner) return
@@ -180,9 +191,12 @@ internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Struc
         .onFailure { degradation("member-unplaced", "${owner.name}::$field", it.message) }
 }
 
-/** Whether this struct's own `{vfptr}` sits at [at]. */
-private fun Structure.holdsVfptrAt(at: Int) =
-    definedComponents.any { it.offset == at && it.fieldName == ClassUtils.VFPTR }
+/** Whether a `{vfptr}` starts at [at] in this struct, its own or one inherited through the base subobject there. */
+fun Structure.holdsVfptrAt(at: Int): Boolean {
+    val holder = takeIf { at in 0..<length }?.getComponentContaining(at) ?: return false
+    if (holder.fieldName == ClassUtils.VFPTR) return holder.offset == at
+    return holder.isBaseField() && (holder.dataType as? Structure)?.holdsVfptrAt(at - holder.offset) == true
+}
 
 /** Whether this is [member] laid at [at] already. */
 private fun DataTypeComponent.isAt(at: Int, member: Structure) = dataType == member && offset == at
@@ -230,6 +244,10 @@ fun Structure.ownData(): List<Pair<Int, Structure>> = definedComponents.flatMap 
         else -> emptyList()
     }
 }
+
+/** The bytes from [offset] to the next defined component or the end. */
+fun Structure.roomAt(offset: Int) =
+    (definedComponents.map { it.offset }.filter { it > offset }.minOrNull() ?: length) - offset
 
 /** Why [dt] can't go at [at] in this over undefined bytes alone, or null where it can. */
 fun Structure.layoutProblem(at: Int, dt: DataType): String? = when {

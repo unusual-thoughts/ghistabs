@@ -4,7 +4,7 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.must
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustNot

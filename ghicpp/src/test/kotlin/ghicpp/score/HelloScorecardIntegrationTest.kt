@@ -1,7 +1,6 @@
 package ghicpp.score
 
 import ghidrakt.test.TestBinaries
-import java.io.File
 
 /**
  * `features/hello.cc`'s classes as each bare build of it recovers them. The stripped Itanium builds are scored

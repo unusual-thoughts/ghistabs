@@ -2,8 +2,8 @@ package ghistabs.importer
 
 import ghicpp.MemberAttrs
 import ghicpp.MemberAttrs.Companion.writeMember
-import ghicpp.abi.CxxAbi.Companion.prevailingAbi
 import ghicpp.abi.itanium.Itanium.isInlineStdMember
+import ghicpp.abi.prevailingAbi
 import ghicpp.qualifiedName
 import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.cmd.function.CreateFunctionCmd
@@ -440,7 +440,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         val callee = flows.firstOrNull()?.let { funMgr.getFunctionAt(it) }
         val storage = callee?.getReturn()?.takeUnless { callee.returnType is VoidDataType }?.variableStorage
             ?: ctx.program.compilerSpec.defaultCallingConvention
-                ?.getReturnLocation(Undefined4DataType.dataType, ctx.program)
+                ?.getStorageLocations(ctx.program, arrayOf(Undefined4DataType.dataType), false, false)?.first()
         return storage?.registers.orEmpty().any { it.baseRegister == reg.baseRegister }
     }
 

@@ -13,13 +13,8 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghidra.program.model.util.CodeUnitInsertionException
 import ghidra.util.task.TaskMonitor
-import ghidrakt.DtmRegistry
-import ghidrakt.diagnose.AnalysisProbe
-import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.diagnose.Level
-import ghidrakt.diagnose.MessageLogSink
-import ghidrakt.diagnose.report
-import ghidrakt.forceCreateData
+import ghidrakt.*
+import ghidrakt.diagnose.*
 
 /**
  * Lays an Itanium typeinfo struct at every `_ZTI` symbol, then fills in the structs of the `__cxxabiv1`

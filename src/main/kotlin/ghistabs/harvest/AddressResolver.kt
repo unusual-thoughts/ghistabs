@@ -9,10 +9,9 @@ import ghidra.app.util.opinion.PeLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
-import ghidrakt.baseStackParamOffset
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
-import ghidrakt.plus
 import ghistabs.parse.*
 
 /**

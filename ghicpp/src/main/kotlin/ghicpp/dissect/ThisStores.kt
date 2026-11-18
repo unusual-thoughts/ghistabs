@@ -1,15 +1,23 @@
 package ghicpp.dissect
 
 import ghicpp.ClassDecl
-import ghicpp.abi.StructorConvention
-import ghicpp.abi.StructorRole
-import ghicpp.abi.StructorRole.*
+import ghicpp.ClassNaming
+import ghicpp.StructorConvention
+import ghicpp.StructorRole
+import ghicpp.StructorRole.*
+import ghicpp.classStruct
 import ghicpp.introducingClass
+import ghicpp.ownData
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.NoisyStructureBuilder
+import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
-import ghidrakt.withLength
+import ghidra.program.model.listing.GhidraClass
+import ghidra.program.model.listing.Program
+import ghidra.util.task.TaskMonitor
+import ghidrakt.*
+import ghidrakt.diagnose.DummySink
 
 /** Stores to a `this` variable within one method */
 typealias Stores = Map<Int, DataType>
@@ -71,6 +79,16 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
     val subobjectCalls: Map<Function, Map<Long, Set<Function>>> = from.mapValues { (_, r) -> r.subobjectCalls }
     val thisStores: ThisStores = from.mapValues { (_, r) -> r.thisStores }
     val inlined: List<InlinedConstruction> = from.flatMap { (_, r) -> r.inlined }
+
+    /** The calls each makes on an object, its own `this` or another, by the object's `this` argument. */
+    val objectCalls: Map<Function, List<ObjectCall>> = from.mapValues { (_, r) -> r.objectCalls }
+
+    /**
+     * The objects each vptr storer builds ([objectsBuilt]). For each object, maps its class to the constant
+     * addresses the function stores into it, by offset.
+     */
+    val objectsBuilt: Map<Function, Map<ClassDecl, Map<Long, Address>>> =
+        from.filterValues { it.objectsBuilt.isNotEmpty() }.mapValues { (_, r) -> r.objectsBuilt }
 
     /** The functions each calls on `this` itself. */
     private val thisCalls = subobjectCalls.mapValues { (_, calls) -> calls[0L].orEmpty() }
@@ -215,4 +233,34 @@ class FoundStructors(
             (byClass[cls].orEmpty() + parts[cls].orEmpty()).mergedStores()
         }
     }
+}
+
+/**
+ * Fills each of this class struct's own `<Class>_data` structs ([ownData]) with the fields of [store] it holds,
+ * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
+ * specific type, and the field keeps its name
+ */
+internal fun Structure.fillData(store: Stores) {
+    for ((offset, data) in ownData()) {
+        val inside = store.filter { (at, dt) -> offset.withLength(data.length).includes(at.withLength(dt.length)) }
+        val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
+        for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
+        for ((at, dt) in merged.iterator()) {
+            val old = data.getComponentAt(at.toInt())
+            if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
+            val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
+            data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
+        }
+    }
+}
+
+/**
+ * Retypes [ns]'s own fields off what [methods] load and store through `this`, decompiled again, as the class pass
+ * fills them: the `<Class>_data` structs its struct holds take the more specific type, and keep names and comments.
+ */
+fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor) {
+    val struct = classStruct(ns) ?: return
+    struct.fillData(
+        ThisFunctionDissector(this, emptyList(), DummySink).thisFields(methods, monitor).values.mergedStores(),
+    )
 }

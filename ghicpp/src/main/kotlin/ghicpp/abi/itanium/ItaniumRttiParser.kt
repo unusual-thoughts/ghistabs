@@ -4,9 +4,12 @@ import ghicpp.ClassBase
 import ghicpp.ClassDecl
 import ghicpp.ClassNaming
 import ghicpp.ClassPassInput
-import ghicpp.abi.RttiParser
-import ghicpp.abi.VtableRecord
+import ghicpp.RttiParser
+import ghicpp.VtableRecord
+import ghicpp.abi.rttiOf
 import ghicpp.abi.slotFunction
+import ghicpp.abi.slots
+import ghicpp.abi.vbaseOffset
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
@@ -14,8 +17,8 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolIterator
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.toClass
 
 /**
  * A class the Itanium RTTI describes: its [bases] off its typeinfo, its [vftables] off the `vtable` and

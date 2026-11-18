@@ -1,33 +1,32 @@
 package ghicpp
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DoubleDataType
-import ghidra.program.model.data.Float10DataType
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.VoidDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.lang.PrototypeModel
+import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.Parameter
-import ghidra.program.model.listing.ParameterImpl
-import ghidra.program.model.listing.Program
-import ghidra.program.model.listing.ReturnParameterImpl
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
-import ghidrakt.isInjected
-import ghidrakt.isMethod
+import ghidrakt.*
 
 /** Where `this` comes in: ECX under x86 `__thiscall`, the first argument register elsewhere. */
 fun Program.thisStorage(): Address? {
     val model = functionManager.getCallingConvention(THISCALL) ?: compilerSpec.defaultCallingConvention
-    return model.getArgLocation(0, null, PointerDataType(dataTypeManager), this).firstVarnode?.address
+    val signature = arrayOf<DataType>(VoidDataType.dataType, PointerDataType(dataTypeManager))
+    return model.getStorageLocations(this, signature, false, false)[1].firstVarnode?.address
 }
 
-/** Where [this]'s [i]th argument comes in, a pointer, under its calling convention or the program's default. */
-fun Function.argumentAt(i: Int): Address? = (callingConvention ?: program.compilerSpec.defaultCallingConvention)
-    .getArgLocation(i, null, PointerDataType(program.dataTypeManager), program).firstVarnode?.address
+/**
+ * Where [this]'s [i]th argument comes in, a pointer, under its calling convention or the program's default:
+ * the ones before it taken as pointers too, as a hidden return pointer ahead of `this` is.
+ */
+fun Function.argumentAt(i: Int): Address? {
+    val signature = arrayOf<DataType>(VoidDataType.dataType) + Array(i + 1) { PointerDataType(program.dataTypeManager) }
+    return (callingConvention ?: program.compilerSpec.defaultCallingConvention)
+        .getStorageLocations(program, signature, false, false).last().firstVarnode?.address
+}
 
 /**
  * Whether [this]'s first argument comes in at [thisStorage], where a method's `this` does: not a `cdecl`
@@ -37,10 +36,27 @@ fun Function.argumentAt(i: Int): Address? = (callingConvention ?: program.compil
 fun Function.takesThisAt(thisStorage: Address?) = !isExternal && thisStorage != null && argumentAt(0) == thisStorage
 
 /**
- * Which of its arguments is `this`: the second where a `__cdecl` function pops one word, which is gcc's
- * hidden pointer for a class returned in memory, and the first otherwise.
+ * Whether [this] takes a hidden pointer to the object it returns ahead of its arguments, and pops it itself:
+ * a 32-bit `__cdecl` function popping one word, as gcc's i386 code returns a class in memory. One whose
+ * convention Ghidra doesn't know goes by the program's default, so MSVC's, `__stdcall`, never counts.
  */
-fun Function.thisIndex() = if (callingConventionName == CDECL && stackPurgeSize == program.defaultPointerSize) 1 else 0
+fun Function.returnsInSlot(): Boolean {
+    if (program.defaultPointerSize != 4 || stackPurgeSize != 4) return false
+    val named = callingConventionName.takeUnless {
+        it == Function.UNKNOWN_CALLING_CONVENTION_STRING || it == Function.DEFAULT_CALLING_CONVENTION_STRING
+    }
+    return (named ?: program.compilerSpec.defaultCallingConvention.name) == CDECL
+}
+
+/** Which of its arguments is `this`: the second after a hidden return pointer ([returnsInSlot]), else the first. */
+fun Function.thisIndex() = if (returnsInSlot()) 1 else 0
+
+/**
+ * Where [this]'s `this` comes in: [thisStorage], the program's, or past a hidden return pointer
+ * ([returnsInSlot]), the second argument.
+ */
+fun Function.thisAt(thisStorage: Address? = program.thisStorage()): Address? =
+    if (returnsInSlot()) argumentAt(1) else thisStorage
 
 /** The argument a call passes [callee] as its `this`. */
 fun PcodeOp.thisArgument(callee: Function): Varnode? = callee.thisIndex().let { i ->
@@ -86,7 +102,7 @@ private fun Function.returnTypeUnder(model: PrototypeModel): DataType? {
         now.dataType
     }
     if (now.variableStorage.isVoidStorage || now.variableStorage.isUnassignedStorage) return type
-    val then = model.getStorageLocations(program, arrayOf(type), false)[0]
+    val then = model.getStorageLocations(program, arrayOf(type), false, false)[0]
     val keepsReturn = !then.isForcedIndirect && then.firstVarnode?.address == now.variableStorage.firstVarnode?.address
     return type.takeIf { keepsReturn }
 }
@@ -145,10 +161,11 @@ fun Function.thiscallFromDefaultConvention(): Boolean {
     }
     if (signatureSource.isHigherPriorityThan(SourceType.ANALYSIS)) return false
     val pointer = PointerDataType(program.dataTypeManager)
-    val thisAt = thiscall.getArgLocation(0, null, pointer, program)
+    val signature = arrayOf<DataType>(VoidDataType.dataType, pointer)
+    val thisAt = thiscall.getStorageLocations(program, signature, false, false)[1]
     val params = parameters.filterNot { it.isAutoParameter }
     val rest = when {
-        current.getArgLocation(0, null, pointer, program) == thisAt ->
+        current.getStorageLocations(program, signature, false, false)[1] == thisAt ->
             if (params.firstOrNull()?.variableStorage == thisAt) params.drop(1) else params
 
         // An analysis's signature only: a function just made has none yet, and its registers may yet show EDX.
@@ -174,7 +191,7 @@ fun Function.thiscallFromDefaultConvention(): Boolean {
 private fun List<Parameter>.keepStorageUnder(model: PrototypeModel, program: Program): Boolean {
     val types = arrayOf<DataType>(VoidDataType.dataType, PointerDataType(program.dataTypeManager)) +
         map { it.dataType }
-    val storage = model.getStorageLocations(program, types, false).drop(2)
+    val storage = model.getStorageLocations(program, types, false, false).drop(2)
     return zip(storage).all { (param, at) -> param.variableStorage == at }
 }
 

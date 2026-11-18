@@ -13,10 +13,7 @@ import ghicpp.analyzers.ItaniumClassAnalyzer
 import ghicpp.analyzers.MsvcClassAnalyzer
 import ghicpp.hierarchy.BaseEdit
 import ghicpp.hierarchy.ClassHierarchy
-import ghicpp.hierarchy.ClassHierarchy.ClassView
-import ghicpp.hierarchy.ClassHierarchy.Member
-import ghicpp.hierarchy.ClassHierarchy.MemberKind
-import ghicpp.hierarchy.ClassHierarchy.Origin
+import ghicpp.hierarchy.ClassHierarchy.*
 import ghicpp.hierarchy.reclause
 import ghidra.app.context.ProgramSymbolActionContext
 import ghidra.app.services.GoToService
@@ -108,6 +105,7 @@ class ClassTree(plugin: Plugin) :
     internal var inverted = false
     internal var expandAll = false
     internal var showEmpty = false
+    internal var showInherited = false
     internal lateinit var navigateIncoming: ToggleDockingAction
     internal lateinit var navigateOutgoing: ToggleDockingAction
     internal var lastLocation: ProgramLocation? = null
@@ -192,7 +190,7 @@ class ClassTree(plugin: Plugin) :
     internal fun reshow() {
         val p = program ?: return
         val h = shown ?: return
-        val root = ClassTreeRoot(p.name, h, memberKinds, inverted, showEmpty)
+        val root = ClassTreeRoot(p.name, h, memberKinds, inverted, showEmpty, showInherited)
         tree.replaceRoot(root)
         if (expandAll) tree.expandAll()
         reveal?.let { (steps, names) ->
@@ -253,6 +251,12 @@ class ClassTree(plugin: Plugin) :
         return shown?.overridden(cls, member)
     }
 
+    /** The node of the method the selected inherited slot holds, among the members of the class defining it. */
+    internal val selectedBaseMethod: GTreeNode? get() {
+        val inherited = (selectedNode as? InheritedSlotNode)?.inherited ?: return null
+        return (tree.modelRoot as? ClassTreeRoot)?.nodeAt(listOf(inherited.address)) as? MemberNode
+    }
+
     fun dispose() {
         program?.removeListener(this)
         program = null
@@ -275,16 +279,15 @@ internal fun ClassTree.select(loc: ProgramLocation) {
     val p = program?.takeIf { it === loc.program } ?: return
     val addr = loc.address ?: return
     val root = tree.modelRoot as? ClassTreeRoot ?: return
-    val at = listOfNotNull(addr, p.functionManager.getFunctionContaining(addr)?.entryPoint).map(Address::toString)
+    val at = listOfNotNull(addr, p.functionManager.getFunctionContaining(addr)?.entryPoint)
     // Already there: a click on a class goes to its vtable, which mustn't then select the vtable.
     if (selectedNode?.address in at) return
     root.nodeAt(at.distinct())?.let(tree::setSelectedNode)
 }
 
 /** Go to [at], an address as the tree keeps it, in the program shown. */
-internal fun ClassTree.goTo(at: String?) {
-    val address = program?.addressFactory?.let { f -> at?.let(f::getAddress) } ?: return
-    tool.getService(GoToService::class.java)?.goTo(address)
+internal fun ClassTree.goTo(address: Address?) {
+    tool.getService(GoToService::class.java)?.goTo(address ?: return)
 }
 
 /** Go to the selected node: a member, or a class's vtable or typeinfo. */

@@ -1,16 +1,22 @@
+@file:UseSerializers(AddressSerializer::class)
+
 package ghicpp.hierarchy
 
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassEdits
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
+import ghicpp.CxxAbi
 import ghicpp.MemberAttrs.Companion.memberAttrs
-import ghicpp.abi.CxxAbi
 import ghicpp.abi.gcc2.Gcc2
+import ghicpp.abi.holdsPureVirtualStub
 import ghicpp.abi.isPrimaryVftable
 import ghicpp.abi.itanium.*
+import ghicpp.abi.looksLikeThunk
+import ghicpp.abi.mangledBy
 import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.msvc.MsvcRttiParser
 import ghicpp.abi.msvc.MsvcStructor
+import ghicpp.abi.ofVftable
 import ghicpp.abi.vftableStructAt
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
@@ -20,11 +26,9 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.*
-import ghidrakt.Demangler
-import ghidrakt.isInjected
-import ghidrakt.paramTypes
-import ghidrakt.path
+import ghidrakt.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
 /**
  * Every class the program knows, with its direct bases, as the Class Hierarchy window shows them.
@@ -95,7 +99,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
     @Serializable
     data class Member(
         val name: String,
-        val address: String,
+        val address: Address,
         val kind: MemberKind,
         val signature: String? = null,
         val parameters: String? = null,
@@ -121,6 +125,22 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         /** The program's own function or label: a vtable, typeinfo or import stays where its name files it. */
         val isMovable: Boolean get() =
             symbolId != null && library == null && kind != MemberKind.VTABLE && kind != MemberKind.ABI
+    }
+
+    /**
+     * A slot of the class's own vftables that still holds a base's function, the class not overriding it:
+     * [name], a function of the class at [ownerPath], at [address]. Never a pure virtual slot.
+     */
+    @Serializable
+    data class InheritedSlot(
+        val ownerPath: List<String>,
+        val name: String,
+        val address: Address,
+        val slot: VirtualSlot,
+        val signature: String? = null,
+    ) {
+        /** `Base::f`, by the class's own name: the tooltip has the rest. */
+        val label: String get() = (ownerPath.lastOrNull()?.let { "$it::" }.orEmpty()) + name
     }
 
     enum class MemberKind {
@@ -150,10 +170,10 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val path: List<String>,
         val origin: Origin,
         /** Where its primary `vftable` label sits, for a polymorphic class. */
-        val vftable: String?,
+        val vftable: Address?,
         val vftableStructId: Long?,
         /** Its `_ZTI` typeinfo object or MSVC type descriptor, when the binary has one. */
-        val typeinfo: String?,
+        val typeinfo: Address?,
         /** The struct the stabs laid for it, by datatype id, and its name (shorter, once typedef shortening ran). */
         val structId: Long?,
         val structName: String?,
@@ -165,12 +185,14 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val bases: List<BaseRef>,
         /** Its size, as its struct has it, while that struct is not an empty stub. */
         val size: Long? = null,
+        /** The slots of its vftables a base's function fills, in slot order, each function once. */
+        val inherited: List<InheritedSlot> = emptyList(),
     ) {
         val name: String get() = path.last()
         val qualifiedName: String get() = path.joinToString("::")
 
         /** Where a double-click goes: the vtable, else the typeinfo. */
-        val address: String? get() = vftable ?: typeinfo
+        val address: Address? get() = vftable ?: typeinfo
 
         override fun toString() = qualifiedName
     }
@@ -303,9 +325,9 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                         ns.isExternal -> Origin.LIBRARY
                         else -> Origin.NAMESPACE
                     },
-                    vftable = vftable?.toString(),
+                    vftable = vftable,
                     vftableStructId = vftableStruct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
-                    typeinfo = (typeinfo ?: typeDescriptor)?.toString(),
+                    typeinfo = typeinfo ?: typeDescriptor,
                     structId = struct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
                     structName = struct?.name,
                     isAbstract = program.vftablesOf(ns).any { (addr, _) -> hasPureVirtualSlot(addr, rttiAbi) },
@@ -314,7 +336,9 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                     size = struct?.takeUnless { it.isZeroLength }?.length?.toLong(),
                 )
             }
-            return ClassHierarchy(classes.sortedBy { it.qualifiedName })
+            val built = ClassHierarchy(classes.sortedBy { it.qualifiedName })
+            val slots = VirtualSlots(program, built)
+            return ClassHierarchy(built.classes.map { it.copy(inherited = slots.inheritedOf(it)) })
         }
 
         fun basesOf(ns: GhidraClass, typeinfo: Address?, classIds: Map<Long, Long>, idOf: (List<String>) -> Long?) =
@@ -360,11 +384,13 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                         val kind = if (fn.isThunk || fn.isThunkLinkage()) MemberKind.THUNK else MemberKind.FUNCTION
                         Member(
                             sym.name,
-                            sym.address.toString(),
+                            sym.address,
                             kind,
                             fn.getPrototypeString(false, false),
                             fn.params,
-                            attrs = program.memberAttrs(sym.address)?.takeIf { it.source != SourceType.ANALYSIS }
+                            // A class pass's placement and a guess state no attributes of their own.
+                            attrs = program.memberAttrs(sym.address)
+                                ?.takeIf { it.source != SourceType.ANALYSIS && it.source != SourceType.DEFAULT }
                                 ?: fn.derivedAttrs(virtuals),
                             variants = symtab.getSymbols(sym.address).mapNotNull { ItaniumStructor.of(it.name) }
                                 .distinct().sorted(),
@@ -381,7 +407,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                             ?: MemberAttrs(virt = VirtKind.STATIC).takeIf { kind == MemberKind.LABEL }
                         Member(
                             sym.name,
-                            sym.address.toString(),
+                            sym.address,
                             kind,
                             attrs = attrs,
                             symbolId = sym.id,
@@ -466,12 +492,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         // A class's RTTI names its tables' ABI before their labels do: an MSVC type descriptor, an Itanium typeinfo.
         fun hasPureVirtualSlot(vftable: Address, known: CxxAbi? = null): Boolean {
             val abi = known ?: CxxAbi.ofVftable(program, vftable)
-            return program.slotTargets(vftable).any { target ->
-                val name = program.functionManager.getFunctionAt(target)?.let { fn ->
-                    fn.getThunkedFunction(true)?.name ?: fn.name
-                } ?: symtab.getPrimarySymbol(target)?.name
-                name != null && abi.isPureVirtualStub(name)
-            }
+            return program.slotTargets(vftable).any { program.holdsPureVirtualStub(it, abi::isPureVirtualStub) }
         }
     }
 }
@@ -526,3 +547,26 @@ private fun List<Symbol>.withoutRepeats(isMember: (Symbol) -> Boolean): Pair<Lis
     }.toSet()
     return filterNot { it in repeats } to repeats.groupBy({ it.address }, { it.name })
 }
+
+/**
+ * The functions a vftable slot holds that no class has, where they are: each class holding one shows it
+ * inherited from nowhere ([ClassHierarchy.InheritedSlot.ownerPath] empty). A trivial stub ([isTrivialStub]) is
+ * left out: the linker folds one alike across unrelated classes, so no one class has it. What remains is how far
+ * the bases recovered fall short of telling which class introduced each virtual function.
+ */
+fun ClassHierarchy.unattachedVirtuals(program: Program): Set<Address> =
+    classes.flatMap { it.inherited }.filter { it.ownerPath.isEmpty() }
+        .map { it.address }
+        .filterTo(sortedSetOf()) { at -> program.functionManager.getFunctionAt(at)?.isTrivialStub() != true }
+
+/**
+ * Whether this function is a stub alike in many classes: at most [TRIVIAL_STUB_INSTRUCTIONS] instructions and no
+ * call, as `ret`, `xor eax, eax; ret 4` or `mov eax, [ecx+0x10]; ret`.
+ */
+fun Function.isTrivialStub(): Boolean {
+    val instructions = program.listing.getInstructions(body, true).iterator().asSequence()
+        .take(TRIVIAL_STUB_INSTRUCTIONS + 1).toList()
+    return instructions.size <= TRIVIAL_STUB_INSTRUCTIONS && instructions.none { it.flowType.isCall }
+}
+
+private const val TRIVIAL_STUB_INSTRUCTIONS = 2

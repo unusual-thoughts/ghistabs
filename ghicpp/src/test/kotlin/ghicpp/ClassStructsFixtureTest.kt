@@ -8,17 +8,10 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.LoadedProgram
-import ghidrakt.loadProgram
-import ghidrakt.runTransaction
-import ghidrakt.set
+import ghidrakt.*
 import ghidrakt.test.TestBinaries
 import ghidrakt.test.mustBe
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Tag
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.*
 import java.io.File
 
 /**

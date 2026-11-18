@@ -3,7 +3,10 @@ package ghistabs.index
 import ghidrakt.test.mustBe
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
-import ghistabs.parse.*
+import ghistabs.parse.AggrKind
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SourceFile
+import ghistabs.parse.TypeDecl
 import ghistabs.test.typesOf
 import org.junit.jupiter.api.Test
 

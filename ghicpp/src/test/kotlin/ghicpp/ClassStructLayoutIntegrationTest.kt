@@ -1,12 +1,7 @@
 package ghicpp
 
 import ghidra.program.database.ProgramBuilder
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DWordDataType
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program

@@ -1,7 +1,5 @@
 package ghicpp
 
-import ghicpp.abi.StructorRole
-import ghicpp.abi.VtableRecord
 import ghidra.framework.options.CustomOption
 import ghidra.framework.options.GProperties
 import ghidra.program.model.address.Address
@@ -12,8 +10,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.ObjectStorage
 import ghidra.util.Saveable
-import ghidrakt.GPropertiesFormat
-import ghidrakt.toClass
+import ghidrakt.*
 import kotlinx.serialization.Serializable
 
 /** A C++ member's or base's access, as a stab's visibility marker or an RTTI base flag states it. */
@@ -36,6 +33,8 @@ data class ClassBase(
     override val isVirtual: Boolean,
     override val access: Access,
     override val offset: Long?,
+    /** Where a virtual base's [offset] is from: IMPORTED its ABI record, ANALYSIS its vtables, DEFAULT nowhere. */
+    val offsetSource: SourceType = SourceType.IMPORTED,
 ) : BaseDecl
 
 /**
@@ -66,6 +65,21 @@ interface ClassDecl {
      * records say: Itanium's vtable, MSVC's vbtable. Null where they don't.
      */
     val virtualBases: List<ClassBase> get() = emptyList()
+
+    /**
+     * Where its complete object's virtual bases start, as its records state them: [virtualBases]' offsets, and
+     * those of virtual bases no record names, such as a plain Itanium vtable's vbase offsets.
+     */
+    val vbaseOffsets: Set<Long> get() = virtualBases.mapNotNullTo(mutableSetOf()) { it.offset }
+
+    /** Its virtual bases: [virtualBases], and those of [bases] that are virtual where no record lists them. */
+    val allVirtualBases: List<ClassBase> get() = (virtualBases + bases.filter { it.isVirtual }).distinctBy { it.cls }
+
+    /** Whether it has virtual bases, named ([allVirtualBases]) or only by their offsets ([vbaseOffsets]). */
+    val hasVirtualBases: Boolean get() = allVirtualBases.isNotEmpty() || vbaseOffsets.isNotEmpty()
+
+    /** Where its first virtual base starts, which its non-virtual part ends before; null where none is placed. */
+    val nonVirtualSize: Long? get() = vbaseOffsets.minOrNull()
 
     /** Where its vbptrs sit, MSVC's, which point at its vbtables; Itanium keeps vbase offsets in the vtable. */
     val vbptrs: Set<Long> get() = emptySet()
@@ -159,10 +173,11 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
 }
 
 /**
- * A member function's or static data member's access, virtuality and cv-qualifiers, who stated them
- * ([source]: [SourceType.IMPORTED] the stabs, [SourceType.ANALYSIS] a class pass, [SourceType.USER_DEFINED] the
- * user), and the constructor or destructor it is where a class pass found it one ([structor]). Stabs give
- * all of the first; otherwise cv comes from the mangled name, virtuality from the vtables, and access stays null.
+ * A member function's or static data member's access, virtuality and cv-qualifiers, who stated them ([source]:
+ * [SourceType.IMPORTED] the stabs, [SourceType.ANALYSIS] a class pass, [SourceType.USER_DEFINED] the user,
+ * [SourceType.DEFAULT] no one, its class a guess off the objects it is called on), and the constructor or destructor it
+ * is where a class pass found it one ([structor]). Stabs give all of the first; otherwise cv comes from the mangled
+ * name, virtuality from the vtables, and access stays null.
  */
 @Serializable
 data class MemberAttrs(
@@ -248,6 +263,18 @@ data class MemberAttrs(
 
         /** Whether a class pass moved [func] into its class ([recordPlaced]). */
         fun Program.isPlacedByClassPass(func: Function) = memberAttrs(func.entryPoint)?.source == SourceType.ANALYSIS
+
+        /**
+         * Records that [func]'s class is a guess off the objects it is called on, at [SourceType.DEFAULT], unless
+         * something stated its attributes already.
+         */
+        fun Program.recordGuessed(func: Function) {
+            if (memberAttrs(func.entryPoint)?.source != null) return
+            writeMember(func.entryPoint, MemberAttrs(source = SourceType.DEFAULT))
+        }
+
+        /** Whether [func]'s class is a guess ([recordGuessed]) nothing has confirmed since. */
+        fun Program.isGuessedClass(func: Function) = memberAttrs(func.entryPoint)?.source == SourceType.DEFAULT
     }
 }
 

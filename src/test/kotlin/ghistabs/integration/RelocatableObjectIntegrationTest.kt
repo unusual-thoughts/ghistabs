@@ -4,10 +4,13 @@ import ghidra.program.model.data.Array
 import ghidra.program.model.data.Undefined
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.LoadedProgram
-import ghidrakt.loadProgram
-import ghidrakt.test.*
-import ghistabs.test.*
+import ghidrakt.*
+import ghidrakt.test.must
+import ghidrakt.test.mustBe
+import ghidrakt.test.mustNot
+import ghidrakt.test.mustNotBeEmpty
+import ghistabs.test.defaultContext
+import ghistabs.test.importAndAnalyze
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag

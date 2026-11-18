@@ -9,14 +9,12 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.CapturingSink
-import ghidrakt.runTransaction
 import ghidrakt.test.mustBeEmpty
-import ghidrakt.withProgram
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
-import ghistabs.importer.import
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.typedefAliases
 import ghistabs.test.disableWindowsResourceAnalyzer

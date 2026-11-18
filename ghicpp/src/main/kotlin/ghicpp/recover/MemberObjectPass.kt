@@ -4,9 +4,9 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.recordPlaced
-import ghicpp.abi.StructorRole
-import ghicpp.abi.StructorRole.CONSTRUCTOR
-import ghicpp.abi.StructorRole.DESTRUCTOR
+import ghicpp.StructorRole
+import ghicpp.StructorRole.CONSTRUCTOR
+import ghicpp.StructorRole.DESTRUCTOR
 import ghicpp.abi.generic.PlainClass
 import ghicpp.abi.generic.PlainVtables
 import ghicpp.dissect.*
@@ -17,9 +17,8 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
-import ghidrakt.buildClassNamespaces
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.toClass
 
 /**
  * The classes with no vtable that the classes a class pass found hold as members. What a constructor calls first
@@ -32,6 +31,9 @@ import ghidrakt.toClass
  * its constructors store, and laid in each class holding it at its offset. Its own members follow, down to
  * [MAX_DEPTH].
  *
+ * So does an object `operator new` allocates whose constructor stores no vptr: the first function called on what
+ * it returns, where that's no structor the class pass found, builds a class at least as large as allocated.
+ *
  * A call at `this` + 0 builds a base, which the class pass reads. An ordinary method a constructor calls first
  * on a member with no constructor of its own looks the same as one, so this is a guess, as the pass's are.
  */
@@ -40,6 +42,8 @@ class MemberObjectPass(
     sink: DiagnosticSink,
     /** Whether a field a constructor fills in a counted loop or with `memset` is an array ([ThisFunctionDissector]). */
     private val fillArrays: Boolean = true,
+    /** Whether the objects `operator new` allocates get classes too, where their constructors store no vptr. */
+    private val allocations: Boolean = true,
 ) : DiagnosticSink by sink {
     private val dtm = program.dataTypeManager
     private val thisStorage = program.thisStorage()
@@ -66,6 +70,9 @@ class MemberObjectPass(
         var stores: Stores = emptyMap()
         var cls: PlainClass? = null
 
+        /** The size `operator new` allocates it with, the largest; 0 where nothing allocates it. */
+        var allocated = 0L
+
         /** The structor this pass named [cls] after, and its role, where nothing named it already. */
         var namedAfter: Pair<Function, StructorRole>? = null
         val functions get() = ctors + dtors
@@ -85,11 +92,16 @@ class MemberObjectPass(
     /** The subobject at [offset] in [container]. */
     private data class Subobject(val container: ContainingClass, val offset: Long)
 
-    /** Recovers the classes of the member objects of [found]'s classes, and returns how many it made or found again. */
+    /**
+     * Recovers the classes of the member objects of [found]'s classes, and with [allocations] those of the objects
+     * `operator new` allocates whose constructor stores no vptr ([allocated]), and returns how many it made or found
+     * again.
+     */
     fun run(found: FoundStructors, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
-        val held = collect(found, monitor)
-        val root = merge(held.values.distinct())
-        val members = held.values.map(root::getValue).distinct()
+        val heap = if (allocations) allocated(found, monitor) else emptyList()
+        val held = collect(found, heap, monitor)
+        val root = merge((held.values + heap).distinct())
+        val members = (held.values + heap).map(root::getValue).distinct()
         for (m in members) m.cls = classFor(m)
         val classes = members.filter { it.cls != null }
         val sizes = sizes(classes, held.mapValues { (_, m) -> root.getValue(m) }, root)
@@ -97,11 +109,14 @@ class MemberObjectPass(
         for (m in classes) {
             monitor.increment()
             val ns = m.cls?.ns?.toClass() ?: continue
-            m.ctors.forEach { name(it, ns, CONSTRUCTOR) }
-            m.dtors.forEach { name(it, ns, DESTRUCTOR) }
+            // Its struct first, so its structors' `this` is typed with it, not a placeholder of Ghidra's.
+            runCatching { program.stubClassStruct(ns) }
+                .onFailure { warn("member-struct-unstubbed", "${ns.getName(true)}: $it") }
             val size = sizes[m] ?: 0
             runCatching { program.sizeClassStruct(ns, size) }
                 .onFailure { warn("member-struct-unsized", "${ns.getName(true)} -> $size: $it") }
+            m.ctors.forEach { name(it, ns, CONSTRUCTOR) }
+            m.dtors.forEach { name(it, ns, DESTRUCTOR) }
             m.namedAfter?.let { (f, role) -> describe(ns, f, role) }
         }
         monitor.message = "Filling member object class structs"
@@ -130,15 +145,21 @@ class MemberObjectPass(
      * The members [found]'s structors build and destroy, by where they are, then those members' own, decompiled,
      * down to [MAX_DEPTH].
      */
-    private fun collect(found: FoundStructors, monitor: TaskMonitor): Map<Subobject, NonPolymorphicClass> {
+    private fun collect(
+        found: FoundStructors,
+        heap: List<NonPolymorphicClass>,
+        monitor: TaskMonitor,
+    ): Map<Subobject, NonPolymorphicClass> {
         known.clear()
+        val dissector = ThisFunctionDissector(program, emptyList(), this, DissectionCache(fillArrays))
+        val allocated = dissector.readCalls(heap.flatMap { it.ctors }, monitor)
+        for (m in heap) m.stores = m.ctors.map { allocated.thisStores[it].orEmpty() }.mergedStores()
         // The constructors inlined after `operator new` are their classes' constructors too, with no function.
         var structors: List<Structor> = found.roles.map { (f, by) ->
             Structor(f, ContainingClass.Existing(by.first), by.second, found.subobjectCalls[f])
         } + found.inlined.flatMap { built ->
             built.parts.map { Structor(null, ContainingClass.Existing(it.cls), CONSTRUCTOR, it.calls) }
-        }
-        val dissector = ThisFunctionDissector(program, emptyList(), this, DissectionCache(fillArrays))
+        } + heap.flatMap { m -> m.ctors.map { Structor(it, m, CONSTRUCTOR, allocated.subobjectCalls[it]) } }
         val held = linkedMapOf<Subobject, NonPolymorphicClass>()
         for (depth in 1..MAX_DEPTH) {
             if (monitor.isCancelled) break
@@ -188,6 +209,48 @@ class MemberObjectPass(
     }
 
     /**
+     * The classes of the objects `operator new` allocates with a constant size whose constructor, the first function
+     * called on what it returns ([ThisFunctionDissector.allocations]), [found] doesn't know: one class for each,
+     * which [merge] merges with any member's it builds too, at least as large as allocated. Not where that function
+     * is no method, has a name of its own outside a class, as a library function has, takes it as the object it
+     * returns ([returnsInSlot]), or is the first called after allocations of different sizes, which no one class's
+     * constructor is.
+     */
+    private fun allocated(found: FoundStructors, monitor: TaskMonitor): List<NonPolymorphicClass> {
+        val cache = DissectionCache(fillArrays, operatorNewNames = PlainVtables.operatorNewNames)
+        val dissector = ThisFunctionDissector(program, emptyList(), this, cache)
+        val inlined = found.inlined.mapTo(mutableSetOf()) { it.at }
+        val byCtor = dissector.allocations(monitor).filter { it.at !in inlined }.groupBy { it.firstCalled }
+        return byCtor.mapNotNull { (ctor, allocs) ->
+            val sizes = allocs.mapTo(sortedSetOf()) { it.size }
+            when {
+                ctor in found.roles || ctor.isExternal -> null
+
+                // What it allocates is the object a function returning one by value fills, not its `this`.
+                ctor.returnsInSlot() -> {
+                    debug("member-allocated-return-slot", "${ctor.name} returns into what operator new allocates")
+                    null
+                }
+
+                !ctor.takesThis() -> null
+
+                ctor.symbol.source != SourceType.DEFAULT && ctor.parentNamespace !is GhidraClass -> null
+
+                sizes.size > 1 -> {
+                    debug("member-allocated-sizes", "${ctor.name} first called after allocations of sizes $sizes")
+                    null
+                }
+
+                else -> NonPolymorphicClass().apply {
+                    ctors += ctor
+                    allocated = sizes.single()
+                    debug("member-allocated", "${ctor.name} builds what operator new(${sizes.single()}) allocates")
+                }
+            }
+        }
+    }
+
+    /**
      * Each of [members] mapped to the one it's merged into with those it shares a structor with. A function that
      * both builds one and destroys one is neither's.
      */
@@ -207,6 +270,7 @@ class MemberObjectPass(
                 a.ctors += b.ctors
                 a.dtors += b.dtors
                 a.stores = listOf(a.stores, b.stores).mergedStores()
+                a.allocated = maxOf(a.allocated, b.allocated)
                 into[b] = a
             }
         }
@@ -241,8 +305,9 @@ class MemberObjectPass(
         held: Map<Subobject, NonPolymorphicClass>,
         root: Map<NonPolymorphicClass, NonPolymorphicClass>,
     ): Map<NonPolymorphicClass, Int> {
-        val size = classes.associateWith { m -> m.stores.maxOfOrNull { (at, dt) -> at + dt.length } ?: 0 }
-            .toMutableMap()
+        val size = classes.associateWith { m ->
+            maxOf(m.stores.maxOfOrNull { (at, dt) -> at + dt.length } ?: 0, m.allocated.toInt())
+        }.toMutableMap()
         repeat(MAX_DEPTH) {
             for ((sub, m) in held) {
                 val container = (sub.container as? NonPolymorphicClass)?.let(root::getValue) ?: continue
@@ -263,13 +328,18 @@ class MemberObjectPass(
         struct.description = "No vtable: named after its first $what, at ${structor.entryPoint}"
     }
 
-    /** Names [func] [ns]'s constructor or destructor and moves it there, where nothing named it. */
+    /**
+     * Names [func] [ns]'s constructor or destructor and moves it there, where nothing named it, its convention
+     * then a method's ([fixMethodConvention]: the `__fastcall` Ghidra takes a function reading only ECX for
+     * becomes a `__thiscall`).
+     */
     private fun name(func: Function, ns: GhidraClass, role: StructorRole) {
         if (func.symbol.source != SourceType.DEFAULT) return
         runCatching {
             func.parentNamespace = ns
             func.setName(if (role == CONSTRUCTOR) ns.name else "~${ns.name}", SourceType.ANALYSIS)
             program.recordPlaced(func, role, virtual = false)
+            func.fixMethodConvention(takesThis = true)
         }.onFailure { warn("member-structor-unnamed", "${func.name} -> ${ns.getName(true)}: $it", func.entryPoint) }
     }
 

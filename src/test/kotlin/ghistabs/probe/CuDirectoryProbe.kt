@@ -3,7 +3,7 @@ package ghistabs.probe
 import ghidra.app.util.importer.MessageLog
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.withProgram
+import ghidrakt.*
 import ghistabs.harvest.sourceFileOf
 import ghistabs.parse.SourceFile
 import ghistabs.parse.StabReader

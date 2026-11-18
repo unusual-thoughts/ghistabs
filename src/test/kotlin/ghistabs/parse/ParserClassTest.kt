@@ -2,7 +2,6 @@ package ghistabs.parse
 
 import ghicpp.Access
 import ghicpp.VirtKind
-import ghicpp.member
 import ghidrakt.test.mustBe
 import ghistabs.parse.TypeDecl.Aggregate.*
 import org.junit.jupiter.api.Test
