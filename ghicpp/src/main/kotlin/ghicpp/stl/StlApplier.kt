@@ -35,21 +35,7 @@ class StlApplier(
 
     private val dtm = program.dataTypeManager
 
-    /** The archive's classes by [untagged] path; a path two of them share finds neither. */
-    private val untaggedIndex: Map<String, Composite?> by lazy {
-        buildMap {
-            archive.allComposites.forEach { c ->
-                if (c.isNotYetDefined) return@forEach
-                val key = untagged(c.categoryPath.pathElements.joinToString("::") + "::" + c.name)
-                put(key, if (key in this) null else c)
-            }
-        }
-    }
-
-    /** The archive's class at [category] / [name], or the one that is spelled alike but for [untagged]. */
-    private fun lookup(category: CategoryPath, name: String): Composite? =
-        lookup(archive, category, name)
-            ?: untaggedIndex[untagged(category.pathElements.joinToString("::") + "::" + name)]
+    private val index by lazy { StlIndex(archive) }
 
     fun apply(): Result {
         val (replaced, filled) = replacePlaceholders()
@@ -62,7 +48,8 @@ class StlApplier(
         dtm.allStructures.forEach { stub ->
             if (!stub.isNotYetDefined) return@forEach
             val path = archivePath(stub.categoryPath, roots) ?: return@forEach
-            stubs.add(stub to (lookup(path, stub.name) ?: return@forEach))
+            val layout = lookup(archive, path, stub.name, index) ?: return@forEach
+            if (!layout.isNotYetDefined) stubs.add(stub to layout)
         }
         if (stubs.isEmpty()) return 0 to 0
 
@@ -85,8 +72,9 @@ class StlApplier(
     private fun layClasses(): Int = program.symbolTable.classNamespaces.asSequence().count { ns ->
         val scopes = ns.getPathList(true).dropLast(1)
         if (scopes.firstOrNull() !in roots) return@count false
-        val layout = lookup(CategoryPath(CategoryPath.ROOT, scopes), ns.name) ?: return@count false
-        if ((dtm.getDataType(layout.dataTypePath) as? Composite)?.isNotYetDefined == false) return@count false
+        val layout = lookup(archive, CategoryPath(CategoryPath.ROOT, scopes), ns.name, index)
+        val laid = layout != null && (dtm.getDataType(layout.dataTypePath) as? Composite)?.isNotYetDefined == false
+        if (layout == null || layout.isNotYetDefined || laid) return@count false
         dtm.resolve(layout, DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER)
         true
     }
@@ -99,17 +87,17 @@ class StlApplier(
     private fun record(): Int {
         if (classes.isEmpty()) return 0
         val namespaces = program.symbolTable.classNamespaces.asSequence().toList()
-            .groupBy { canonical(archive, it.getPathList(true)) }
+            .groupBy { StlIndex.key(canonical(archive, it.getPathList(true))) }
             .mapValues { (_, group) -> group.firstOrNull { !it.isExternal } ?: group.first() }
         val old = program.readClassRecord().orEmpty()
         val name = archive.name.removeSuffix(".gdt")
         val entries = classes.mapNotNull { cls ->
-            val ns: GhidraClass = namespaces[cls.segments] ?: return@mapNotNull null
+            val ns: GhidraClass = namespaces[StlIndex.key(cls.segments)] ?: return@mapNotNull null
             if (ns.id in old) return@mapNotNull null
             val struct = dtm.getDataType(cls.path) as? Structure
             val bases = cls.bases.map { base ->
                 val segments = StdClass(base.path).segments
-                val baseNs = namespaces[segments]
+                val baseNs = namespaces[StlIndex.key(segments)]
                 ClassHierarchyRecords.Base(
                     baseNs?.id,
                     if (baseNs == null) segments.joinToString("::") else null,
@@ -179,13 +167,21 @@ class StlApplier(
         /**
          * The class [archive] files at [category] / [name], through the typedefs it keeps for the names a
          * demangler gives a library template ([gnuAliases]), in the name or in any scope of the category;
-         * null if it has none, or only an empty one.
+         * failing that, the one [index] finds however the demangler spelled it. Null if it has none, or only
+         * an empty one.
          */
         @JvmStatic
-        fun lookup(archive: DataTypeManager, category: CategoryPath, name: String): Composite? {
-            val scopes = canonical(archive, category.pathElements.toList() + name)
+        @JvmOverloads
+        fun lookup(
+            archive: DataTypeManager,
+            category: CategoryPath,
+            name: String,
+            index: StlIndex? = null,
+        ): Composite? {
+            val path = category.pathElements.toList() + name
+            val scopes = canonical(archive, path)
             val found = archive.getDataType(DataTypePath(categoryOf(scopes.dropLast(1)), scopes.last()))
-            return (found as? Composite)?.takeUnless { it.isNotYetDefined }
+            return (found as? Composite)?.takeUnless { it.isNotYetDefined } ?: index?.find(path)
         }
 
         /** [path], each scope that names a typedef of [archive]'s replaced by the class it names. */
