@@ -72,6 +72,14 @@ class ScorerTest {
         Snapshot("subject", subject, fields),
     ).score()
 
+    /** Each `-fp` and `-fn` counter has as many instances as it counts. */
+    private fun Scorecard.mustListEveryMiss() {
+        for ((name, t) in tallies) {
+            (name to instances["$name-fp"].orEmpty().size) mustBe (name to t.fp)
+            (name to instances["$name-fn"].orEmpty().size) mustBe (name to t.fn)
+        }
+    }
+
     @Test
     fun `the truth's scope is what it describes and has a vtable or a function for`() {
         Truth.describedScope(truth) mustBe setOf(1L, 2L, 3L)
@@ -113,6 +121,21 @@ class ScorerTest {
         card.tallies["sizes"] mustBe Tally(tp = 1, fn = 1)
         card.tallies["fields"] mustBe Tally(tp = 2)
         card.tallies["field-sizes"] mustBe Tally(tp = 1, fp = 1)
+        card.instanceLines() mustBe listOf(
+            "classes-fn `Point` (stabs)",
+            "classes-fp invented `Klass_200` (inferred, vftable 00000200)",
+            "field-sizes-fp `Circle`+12: 4, is 8",
+            "methods-fn `Circle::Circle` 20",
+            "methods-fn `Shape::name` 14",
+            "methods-fp 30 of `Circle`: is `Point`'s",
+            "methods-fp 40 of unmatched `Klass_200`",
+            "polymorphic-classes-fp invented `Klass_200` (inferred, vftable 00000200)",
+            "sizes-fn `Circle`: none, is 20",
+            "structors-fn 20 of `Circle`",
+            "virtual-methods-fn `Shape::name` 14",
+            "virtual-methods-fp 40 of unmatched `Klass_200`",
+        )
+        card.mustListEveryMiss()
     }
 
     @Test
@@ -128,12 +151,15 @@ class ScorerTest {
         card.tallies["classes"] mustBe Tally(tp = 2, fp = 1, fn = 1)
         card.tallies["bases"] mustBe Tally(tp = 0, fp = 1, fn = 1)
         card.tallies["abstract"] mustBe Tally(fn = 1)
-        card.findings.any { it.startsWith("duplicate class `Klass_124`") } mustBe true
+        card.instances["classes-fp"] mustBe listOf("duplicate `Klass_124` (inferred, vftable 00000124) of `Circle`")
+        card.instances["bases-fp"] mustBe listOf("`Shape` (virtual) of `Circle`")
+        card.instances["bases-fn"] mustBe listOf("`Shape` of `Circle`")
+        card.mustListEveryMiss()
     }
 
     @Test
     fun `counters are each attribute's three tallies`() {
-        Scorecard(mapOf("classes" to Tally(3, 1, 2)), emptyList()).counters() mustBe
+        Scorecard(mapOf("classes" to Tally(3, 1, 2))).counters() mustBe
             mapOf("classes-tp" to 3L, "classes-fp" to 1L, "classes-fn" to 2L)
     }
 }
