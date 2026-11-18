@@ -123,8 +123,35 @@ tools/stl-archives/run.sh gdt <program> out/libstdcxx_x64.txt out/libstdcxx_x64.
 The workflow's `gcc-versions` job builds the probe with gcc 9, 11, 12 and 14 and fails if any of them lays
 out a class it shares with the runner's gcc differently ([`compare_layouts.py`](compare_layouts.py)).
 
+### gcc 3.3
+
+`libstdcxx5_x86.gdt` and `libstdcxx5_x64.gdt` hold gcc 3.3's libstdc++ (`libstdc++.so.5`), from before
+gcc 3.4 changed the C++ ABI and the containers' allocators: its `map` is 12 bytes on x86, not 24, and its
+containers take `std::__default_alloc_template` nodes. [`gcc3_probe.sh`](gcc3_probe.sh) builds
+[`stl_probe98.cpp`](stl_probe98.cpp), a C++98 probe that adds the `__gnu_cxx` extensions (`hash_map`, `slist`,
+`rope`) and `strstream`, with Debian etch's `g++-3.3` in a debootstrapped chroot (root and `debootstrap`
+needed). gcc 3.3 writes DWARF 2, which Ghidra reads, but without `-femit-class-debug-always` or namespaces:
+
+- the probe links statically against etch's debug `libstdc++.a` (`libstdc++5-3.3-dbg`), whose units define
+  the classes the headers only declare (`exception`, `logic_error`, `basic_filebuf`, the stream classes);
+- the script takes each class's namespace from the program's mangled names, since the DWARF files
+  `std::basic_string<…>` at the root, and widens the one-byte placeholder a unit left for a base it only
+  declared.
+
+```
+sudo tools/stl-archives/gcc3_probe.sh probe i386     # or amd64
+tools/stl-archives/run.sh gcc out/libstdcxx5_x86.gdt probe
+```
+
+gcc 3.0 to 3.2 (`libstdc++.so.3` and `.so.4`) and gcc 2.95 have no archive.
+
+### In ghicpp
+
 ghicpp's `libstdc++ layouts` analyzer applies the archive to an ELF that imports `libstdc++.so.6`, or a PE
 that imports `libstdc++-6.dll` (MinGW's), or either one linking it statically (which shows in its `std::` functions' Itanium mangled names, outside libc++'s `std::__1`).
+An ELF importing `libstdc++.so.5`, or linking gcc 3's library statically (which names
+`std::__default_alloc_template`), gets the gcc 3.3 archive. A program with debug info of its own (DWARF or
+stabs) is left alone, as its own types already lay the classes out.
 It works as the MSVC one does. The demangler and the DWARF spell some names differently
 (`pair<int_const,int>` against `pair<int_const,_int>`, `vector<std::string>` against the written-out
 `basic_string`, `0ul` against `0`), so a class not found at its exact path is looked up by a key that leaves
