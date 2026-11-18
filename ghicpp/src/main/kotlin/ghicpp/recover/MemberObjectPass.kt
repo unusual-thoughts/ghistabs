@@ -148,7 +148,8 @@ class MemberObjectPass(
     /**
      * The empty bases of the polymorphic classes [found] has constructors of. Such a class keeps its vptr at
      * `this` + 0, so a class with no vtable can only sit there too if it takes no bytes: an empty base. Its
-     * constructor does nothing, so its body is a bare return ([hasEmptyBody]). The decompiler then sees no
+     * constructor does nothing, so its body is a bare return ([hasEmptyBody]), and it is only ever called
+     * ([isAddressTaken]). The decompiler then sees no
      * parameter, and so no `this` passed at its calls. Each such function is given one first, and the class's
      * constructors read again: those calling it on `this` + 0 have an empty base it builds, one class for each.
      */
@@ -156,6 +157,7 @@ class MemberObjectPass(
         val ctors = found.roles.filterValues { (cls, role) -> role == CONSTRUCTOR && cls.vftables.isNotEmpty() }.keys
         val empty = ctors.flatMap { it.getCalledFunctions(monitor) }.distinct()
             .filter { it !in found.roles && it !in found.folded && !it.isExternal && it.hasEmptyBody() }
+            .filterNot { it.isAddressTaken() }
         if (empty.isEmpty()) return emptyMap()
         for (f in empty.filter { it.parameterCount == 0 }) runCatching { f.giveThis() }
         val callers = ctors.filter { f -> f.getCalledFunctions(monitor).any { it in empty } }
@@ -182,6 +184,13 @@ class MemberObjectPass(
             SourceType.ANALYSIS,
         )
     }
+
+    /**
+     * Whether code or data takes [this]'s address rather than calling it: a vtable slot, as a compiler shares one
+     * empty function among the no-op virtuals of many classes. A constructor is only ever called.
+     */
+    private fun Function.isAddressTaken() = program.referenceManager.getReferencesTo(entryPoint)
+        .any { !it.referenceType.isCall && !it.referenceType.isJump }
 
     /**
      * Whether [this] only returns: its body sets up and tears down a frame at most. Such are the constructors
