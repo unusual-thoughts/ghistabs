@@ -1,4 +1,8 @@
-# MSVC STL type archives
+# STL type archives
+
+Ghidra data type archives of the MSVC standard library (below) and of libstdc++ ([further down](#libstdc)).
+
+## MSVC
 
 Ghidra data type archives (`.gdt`) of the MSVC standard library layouts, one per runtime, architecture
 and CRT: `msvcp140_x86.gdt`, `msvcp140d_x64.gdt`, `msvcp90_x86.gdt` and so on. Types are named and
@@ -6,7 +10,7 @@ filed where Ghidra's Microsoft demangler puts a class (`/std/basic_string<char,s
 so the `this` of a demangled `std::` method matches the archive type by path: the demangler's
 placeholder is that path under `/Demangler`.
 
-The [`MSVC STL archives`](../../.github/workflows/stl-archives.yml) workflow builds them and uploads
+The [`STL archives`](../../.github/workflows/stl-archives.yml) workflow builds them and uploads
 them as one artifact per archive, each downloading as its `.gdt` file. The published archives are
 rebuilt on Ghidra 10.4 from the layouts text (see below), so 10.4 and every newer release opens them; the
 `compat` job checks that 11.4, 12.0, 12.1 and 12.3 read them back unchanged.
@@ -31,7 +35,7 @@ msvcp90 covers what the DLL itself instantiates (strings, iostreams, locale and 
 not header-only containers, and has no debug variant: neither needs more than a VS2008 toolchain
 running the same probe.
 
-## Building one yourself
+### Building one yourself
 
 [`build/MsvcStlArchiveScript.java`](build/MsvcStlArchiveScript.java) builds one. It uses ghicpp's classes and Ghidra 12.3+ APIs, so it needs the
 ghicpp extension installed. It sits in its own folder, beside `scripts/` rather than above it, because Ghidra compiles a script folder and its subfolders as one bundle, and the scripts in `scripts/` also run on 10.4, where this one cannot compile. Add that folder to the Script Manager's paths and run it on any program of the
@@ -47,7 +51,7 @@ Which runtime builds have typed public PDBs is not obvious: for msvcp80 and msvc
 2019 security rebuilds do, for msvcp100 build 40219.325 on x64 only, msvcp110 none, msvcp120 both.
 [`pdb_url.py`](pdb_url.py) prints the symbol server URL of a DLL's PDB.
 
-## In ghicpp
+### In ghicpp
 
 ghicpp ships the six 10.4 archives in `ghicpp/data/typeinfo/msvc/`, where Ghidra lists them with its own
 archives (the ghistabs extension carries them too). Its `MSVC standard library layouts` analyzer reads the
@@ -82,3 +86,44 @@ writes it (`run.sh layouts <program> <archive> <out.txt>`) and describes the for
 [`LayoutsToGdt.java`](scripts/LayoutsToGdt.java) turns it back into a `.gdt` on whichever Ghidra runs it
 (`run.sh gdt <program> <layouts.txt> <out.gdt>`). The round trip is needed: Ghidra 10.4 and 11.4 refuse a
 `.gdt` that 12.3 wrote ("data created with newer version and can not be read").
+
+## libstdc++
+
+`libstdcxx_x86.gdt` and `libstdcxx_x64.gdt` hold libstdc++'s layouts, filed where Ghidra's GNU demangler
+puts a class. One archive per architecture holds both string ABIs: the C++11 ABI's classes under
+`std::__cxx11` (`/std/__cxx11/basic_string<…>`), the copy-on-write ABI's under `std`, and
+`std::ios_base::failure[abi:cxx11]` beside the old `failure`, as the demangler names them. The `_GLIBCXX_DEBUG`
+containers are under `std::__debug`.
+
+[`gcc_probe.sh`](gcc_probe.sh) builds [`stl_probe.cpp`](stl_probe.cpp) as one binary of three units, the
+default ABI, the copy-on-write ABI and `_GLIBCXX_DEBUG`, with `g++ -g -femit-class-debug-always`, without
+which gcc only declares the classes whose vtables the library emits. [`build/GccStlArchiveScript.java`](build/GccStlArchiveScript.java)
+reads its DWARF on Ghidra 12.3, then:
+
+- files the `std` and `__gnu_cxx` types at their demangled paths and keeps a typedef for each name the
+  demangler puts for a library template since 11.4 (`std::string`, `std::__cxx11::wistringstream`);
+- lays a base that has virtual bases as its non-virtual part, which the DWARF importer cannot, as
+  ghicpp's class passes do;
+- names the vptrs `vfptr` and gives each class its `<Class>_vftable` from the slots' `DW_AT_vtable_elem_location`.
+  A destructor has none, so its complete and deleting entries go where the Itanium ABI puts them;
+- folds the copies the three units leave where they lay out alike. Where they don't (the copy-on-write
+  `_List_node_header`, the debug `match_results`), it names the second copy `X#1`.
+
+12.3 cannot give a new `.gdt` an architecture from a headless script, so the script lays the types out in
+the probe's own data type manager and writes them as layouts text, with the classes file beside it:
+
+```
+tools/stl-archives/gcc_probe.sh probe -m64
+tools/stl-archives/run.sh gcc out/libstdcxx_x64.gdt probe        # writes out/libstdcxx_x64.txt
+tools/stl-archives/run.sh gdt <program> out/libstdcxx_x64.txt out/libstdcxx_x64.gdt   # on 10.4
+```
+
+The workflow's `gcc-versions` job builds the probe with gcc 9, 11, 12 and 14 and fails if any of them lays
+out a class it shares with the runner's gcc differently ([`compare_layouts.py`](compare_layouts.py)).
+
+ghicpp's `libstdc++ layouts` analyzer applies the archive to an ELF that imports `libstdc++.so.6` or links
+it statically (which shows in its `std::` functions' Itanium mangled names, outside libc++'s `std::__1`).
+It works as the MSVC one does. The demangler and the DWARF spell some names differently
+(`pair<int_const,int>` against `pair<int_const,_int>`, `vector<std::string>` against the written-out
+`basic_string`, `0ul` against `0`), so a class not found at its exact path is looked up by a key that leaves
+those differences out (`ghicpp.stl.StlIndex`).
