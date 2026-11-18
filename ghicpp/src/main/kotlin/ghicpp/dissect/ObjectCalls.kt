@@ -2,6 +2,7 @@ package ghicpp.dissect
 
 import ghicpp.returnsInSlot
 import ghicpp.thisArgument
+import ghicpp.thisIndex
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.pcode.HighFunction
@@ -31,9 +32,10 @@ sealed interface CalledObject {
 }
 
 /**
- * A call at [at] of [callee], given as its `this` ([thisArgument]) a pointer [offset] bytes into [obj], or, with
- * [slot], as the hidden pointer to what it returns ([returnsInSlot]), which it builds; [returns], the object its
- * result points into, where it points into one.
+ * A call at [at] of [callee], given as its `this` ([thisArgument]) a pointer [offset] bytes into [obj]. With
+ * [slot], the pointer is instead the hidden pointer to what the call returns ([returnsInSlot]), which it builds.
+ * [returns] is the object its result points into, if any. [next] is the constant address it passes right after
+ * `this`, if any, such as the VTT pointer an Itanium base-object structor takes.
  */
 data class ObjectCall(
     val at: Address,
@@ -42,6 +44,7 @@ data class ObjectCall(
     val offset: Long,
     val returns: CalledObject.Returned? = null,
     val slot: Boolean = false,
+    val next: Address? = null,
 )
 
 /**
@@ -74,10 +77,22 @@ internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
             out.pointerInto()?.let { objectOf(out, it.root) as? CalledObject.Returned }
         }
         val slot = op.getInput(1).takeIf { callee.returnsInSlot() }
+        val next = (callee.thisIndex() + 2).takeIf { it < op.numInputs }
+            ?.let { op.getInput(it).constantAddress(function.program) }
         listOfNotNull(op.thisArgument(callee)?.let { it to false }, slot?.let { it to true }).asSequence()
             .mapNotNull { (arg, inSlot) ->
                 val obj = arg.pointerInto() ?: return@mapNotNull null
-                ObjectCall(op.seqnum.target, callee, objectOf(arg, obj.root), obj.offset, returns, inSlot)
+                ObjectCall(
+                    op.seqnum.target,
+                    callee,
+                    objectOf(arg, obj.root),
+                    obj.offset,
+                    returns,
+                    inSlot,
+                    next.takeUnless {
+                        inSlot
+                    },
+                )
             }
     }.toList()
 }
