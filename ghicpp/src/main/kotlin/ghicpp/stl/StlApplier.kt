@@ -35,6 +35,22 @@ class StlApplier(
 
     private val dtm = program.dataTypeManager
 
+    /** The archive's classes by [untagged] path; a path two of them share finds neither. */
+    private val untaggedIndex: Map<String, Composite?> by lazy {
+        buildMap {
+            archive.allComposites.forEach { c ->
+                if (c.isNotYetDefined) return@forEach
+                val key = untagged(c.categoryPath.pathElements.joinToString("::") + "::" + c.name)
+                put(key, if (key in this) null else c)
+            }
+        }
+    }
+
+    /** The archive's class at [category] / [name], or the one that is spelled alike but for [untagged]. */
+    private fun lookup(category: CategoryPath, name: String): Composite? =
+        (archive.getDataType(DataTypePath(category, name)) as? Composite)?.takeUnless { it.isNotYetDefined }
+            ?: untaggedIndex[untagged(category.pathElements.joinToString("::") + "::" + name)]
+
     fun apply(): Result {
         val (replaced, filled) = replacePlaceholders()
         val laid = layClasses()
@@ -46,8 +62,7 @@ class StlApplier(
         dtm.allStructures.forEach { stub ->
             if (!stub.isNotYetDefined) return@forEach
             val path = archivePath(stub.categoryPath, roots) ?: return@forEach
-            val layout = archive.getDataType(DataTypePath(path, stub.name)) as? Composite ?: return@forEach
-            if (!layout.isNotYetDefined) stubs.add(stub to layout)
+            stubs.add(stub to (lookup(path, stub.name) ?: return@forEach))
         }
         if (stubs.isEmpty()) return 0 to 0
 
@@ -70,10 +85,8 @@ class StlApplier(
     private fun layClasses(): Int = program.symbolTable.classNamespaces.asSequence().count { ns ->
         val scopes = ns.getPathList(true).dropLast(1)
         if (scopes.firstOrNull() !in roots) return@count false
-        val path = DataTypePath(CategoryPath(CategoryPath.ROOT, scopes), ns.name)
-        val layout = archive.getDataType(path) as? Composite
-        val laid = (dtm.getDataType(path) as? Composite)?.isNotYetDefined == false
-        if (layout == null || layout.isNotYetDefined || laid) return@count false
+        val layout = lookup(CategoryPath(CategoryPath.ROOT, scopes), ns.name) ?: return@count false
+        if ((dtm.getDataType(layout.dataTypePath) as? Composite)?.isNotYetDefined == false) return@count false
         dtm.resolve(layout, DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER)
         true
     }
@@ -114,6 +127,16 @@ class StlApplier(
     companion object {
         /** MSVC's standard library namespaces. */
         val MSVC_ROOTS = setOf("std", "stdext")
+
+        private val TAG = Regex("(?<=[<,(])(?:struct|class)_")
+
+        /**
+         * [name] without the keyword the Microsoft demangler puts before a template argument that is a
+         * class: it writes `basic_string<wchar_t,struct_std::char_traits<wchar_t>,class_std::allocator<wchar_t>_>`
+         * where the PDB, and so the archive, mostly writes `basic_string<wchar_t,std::char_traits<wchar_t>,…>`.
+         */
+        @JvmStatic
+        fun untagged(name: String): String = TAG.replace(name, "")
 
         /**
          * Where the archive files the type a placeholder at [category] stands for; null outside the
