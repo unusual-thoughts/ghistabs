@@ -526,27 +526,42 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
      * The class of a base subobject that no structor call names, off the secondary table of the class at that
      * offset. That table holds the base's slots in the base's order: the base's own functions where the class
      * doesn't override them, and this-adjusting thunks where it does. So the base is the class whose primary table
-     * is as long and holds the same function in the most slots. It is null on a tie, or where none shares a slot.
+     * is as long and holds the same function in the most slots. Pure virtual stubs don't count, since many unrelated
+     * classes hold them. It is null on a tie, or where none shares a slot.
+     *
+     * It is also null where a base the class is already known to have has a table at that offset. The subobject
+     * then belongs to that base, so the class there is an indirect base, not a direct one.
      */
     private fun sharingBase(classes: List<PlainClass>): (PlainClass, Long) -> ClassDecl? {
         val primaries by lazy { classes.associateWith { functionSlots(it.vftables.first().addressPoint) } }
         return { cls, offset ->
-            cls.vftables.drop(1).firstOrNull { it.vfptrOffset(program) == offset }?.let { table ->
-                val slots = functionSlots(table.addressPoint)
-                val shared = primaries.filterKeys { it != cls && !it.derivesFrom(cls) }
-                    .mapValues { (_, own) ->
-                        if (own.size !=
-                            slots.size
-                        ) {
-                            0
-                        } else {
-                            slots.indices.count { slots[it].offset != 0L && own[it] == slots[it] }
+            cls.vftables.drop(1).firstOrNull { it.vfptrOffset(program) == offset }
+                ?.takeIf { cls.bases.none { b -> b.offset?.let { b.cls.hasTableAt(offset - it) } == true } }
+                ?.let { table ->
+                    val slots = functionSlots(table.addressPoint)
+                    val shared = primaries
+                        .filter { (other, own) -> other != cls && !other.derivesFrom(cls) && own.size == slots.size }
+                        .mapValues { (_, own) ->
+                            slots.indices.count { own[it] == slots[it] && sharable(slots[it]) }
                         }
-                    }.filterValues { it > 0 }
-                val most = shared.values.maxOrNull()
-                shared.filterValues { it == most }.keys.singleOrNull()
-            }
+                        .filterValues { it > 0 }
+                    val most = shared.values.maxOrNull()
+                    shared.filterValues { it == most }.keys.singleOrNull()
+                }
         }
+    }
+
+    private fun sharable(slot: Address) =
+        slot.offset != 0L && !program.holdsPureVirtualStub(slot, PlainVtables::isPureVirtualStub)
+
+    /**
+     * Whether this class, or one of its bases at the right offset, has a table at [offset] from its start. The
+     * search stops at [depth] bases deep, in case the bases inferred so far form a cycle.
+     */
+    private fun ClassDecl.hasTableAt(offset: Long, depth: Int = MAX_BASE_DEPTH): Boolean {
+        if (offset < 0 || depth == 0) return false
+        return vftables.any { it.vfptrOffset(program) == offset } ||
+            bases.any { b -> b.offset?.let { b.cls.hasTableAt(offset - it, depth - 1) } == true }
     }
 
     /**
@@ -671,6 +686,9 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
     private companion object {
         /** How many vbase offsets to read in front of a primary table. */
         const val MAX_VBASE_WORDS = 8
+
+        /** How many bases deep [hasTableAt] looks. */
+        const val MAX_BASE_DEPTH = 16
 
         /** The labels the RTTI of a class with any is laid under: Itanium's typeinfo and vtable, MSVC's records. */
         val RTTI_LABELS = setOf(
