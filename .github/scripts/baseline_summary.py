@@ -5,7 +5,7 @@ CI runs integrationTest with -PignoreBaselines=true, so a counter that leaves it
 baseline does not stop the tests; it writes a shifted copy under build/test-output/shifted-baselines/,
 and the job's last step fails on it instead. This compares each shifted copy with the committed file
 it shifted from and prints, as Markdown, one table per fixture or scorecard case: counter, committed
-value, new value, delta, the delta led by 🟢 or 🔴 where the counter has a better direction (a
+value, new value, delta, the delta led by ✅ or ❌ where the counter has a better direction (a
 scorecard's -tp up, its -fp or -fn down, an import counter that names what it degrades down), and for
 a scorecard, as extra columns on each attribute's first row, its precision and recall old → new.
 With no shifted baselines it prints a one-line all-clear.
@@ -87,7 +87,7 @@ def fmt_delta(old, new):
     return f"{signed(nlo - olo)} / {signed(nhi - ohi)}"
 
 
-GOOD, BAD = "🟢", "🔴"
+GOOD, BAD = "✅", "❌"
 
 
 def direction(name, old, new):
@@ -110,7 +110,7 @@ def marker(sign):
 
 
 def fmt_coloured_delta(name, old, new):
-    """The delta, led by 🟢 or 🔴 when the counter has a better direction and moved one way."""
+    """The delta, led by ✅ or ❌ when the counter has a better direction and moved one way."""
     text = fmt_delta(old, new)
     if old is None or new is None:
         return text
@@ -307,7 +307,7 @@ def render(found, artifact=None, patch=None):
 
 
 def render_instances(f):
-    """A scorecard's instances that came (🔴, a new miss) or went (🟢, a miss fixed), folded."""
+    """A scorecard's instances that came (❌, a new miss) or went (✅, a miss fixed), folded."""
     moved = [(BAD, "+", line) for line in f.added] + [(GOOD, "−", line) for line in f.removed]
     # Sort by counter, then by instance, so that one counter's added and removed lines sit together.
     moved.sort(key=lambda m: (m[2].split(" ", 1)[0], m[2]))
