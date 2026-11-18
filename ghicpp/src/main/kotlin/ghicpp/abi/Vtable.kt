@@ -115,12 +115,13 @@ const val DESTRUCTOR_SLOTS = 2
 /**
  * The functions the slots of the [abi]'s vtable whose address point is [at] point at, in order. Nothing
  * records how many there are, so they end at the first entry that isn't code ([isSlotCode]) or an imported
- * function [imported] takes. Up to two nulls count when a function follows: gcc 12 leaves an abstract
- * class's destructor slots 0.
+ * function [imported] takes, or where another table starts ([startsTable]). Up to two null slots are kept when a
+ * function follows them, because gcc 12 leaves an abstract class's destructor slots null.
  */
 internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function) -> Boolean = { true }) = sequence {
     val nulls = mutableListOf<Address>()
     for (pfn in abi.slotOffsets(defaultPointerSize).map(at::add)) {
+        if (pfn != at && startsTable(pfn)) break
         val target = pointerAt(pfn) ?: break
         when {
             target.offset == 0L && nulls.size < DESTRUCTOR_SLOTS -> nulls += target
@@ -135,6 +136,15 @@ internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function
         }
     }
 }
+
+/**
+ * Whether another table starts at [pfn]: a symbol names it, or code takes its address, as a constructor takes
+ * its vtable's address point. Without RTTI, an Itanium vtable's `offset_to_top` and typeinfo words are both 0,
+ * so the next table in `.data.rel.ro` looks like two null slots followed by its functions.
+ */
+private fun Program.startsTable(pfn: Address): Boolean =
+    symbolTable.getPrimarySymbol(pfn)?.source?.let { it != SourceType.DEFAULT } == true ||
+        referenceManager.getReferencesTo(pfn).any { listing.getInstructionAt(it.fromAddress) != null }
 
 /**
  * Whether the slot at [pfn] points at code: executable memory, and not back into the read-only block the
