@@ -78,8 +78,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
     fun target(slot: VirtualSlot): Function? {
         val at = pointee(slot) ?: return null
         val f = program.functionManager.getFunctionAt(at) ?: return null
-        return (if (f.isThunk) f.getThunkedFunction(true) else f)
-            ?.takeUnless { it.isExternal || isPureVirtualStub(it.name) }
+        return f.orThunked.takeUnless { it.isExternal || isPureVirtualStub(it.name) }
     }
 
     /**
@@ -408,7 +407,7 @@ internal fun Program.slotsOf(ns: Namespace): Map<Address, VirtualSlot> = buildMa
     }.sortedBy { it.second }
     for ((target, slot) in slots) {
         putIfAbsent(target, slot)
-        functionManager.getFunctionAt(target)?.getThunkedFunction(true)?.let { putIfAbsent(it.entryPoint, slot) }
+        functionManager.getFunctionAt(target)?.thunked?.let { putIfAbsent(it.entryPoint, slot) }
     }
 }
 

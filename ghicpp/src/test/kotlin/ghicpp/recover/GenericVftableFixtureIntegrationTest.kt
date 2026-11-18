@@ -106,7 +106,7 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         val targets = (0 until shape.numComponents).map { shape.getComponent(it) }
         targets.map { (it.value as Address).offset }.take(2) mustBe listOf(0L, 0L)
         targets.all { it.dataType is Pointer }.mustBeTrue()
-        program.functionManager.getFunctionAt(targets[2].value as Address).getThunkedFunction(true).name mustBe
+        program.functionManager.getFunctionAt(targets[2].value as Address).thunked?.name mustBe
             "__cxa_pure_virtual"
     }
 

@@ -7,14 +7,10 @@ import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.TypeinfoReader
 import ghicpp.abi.itanium.startsVtableGroup
 import ghicpp.abi.itanium.vtableOffsetField
-import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.msvc.msvcSubobjectOffset
-import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.CommentType
-import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
@@ -154,19 +150,15 @@ internal fun Program.isSlotCode(pfn: Address, target: Address): Boolean =
  * The program's own function the slot pointing at [at] holds, past a jump stub, and made where code has
  * none ([functionAtOrCreate]); not an import nor [abi]'s pure virtual stub ([CxxAbi.isPureVirtualStub]).
  */
-fun Program.slotFunction(at: Address, abi: CxxAbi): Function? {
-    val func = functionAtOrCreate(at) ?: return null
-    val target = if (func.isThunk) func.getThunkedFunction(true) else func
-    return target?.takeUnless { it.isExternal || abi.isPureVirtualStub(it.name) }
-}
+fun Program.slotFunction(at: Address, abi: CxxAbi): Function? =
+    functionAtOrCreate(at)?.orThunked?.takeUnless { it.isExternal || abi.isPureVirtualStub(it.name) }
 
 /**
  * Whether [at] holds a pure virtual stub, as [isStub] tells one by name ([CxxAbi.isPureVirtualStub]): its function's
  * name, past a thunk to an import, else its label's.
  */
 fun Program.holdsPureVirtualStub(at: Address, isStub: (String) -> Boolean): Boolean {
-    val name = functionManager.getFunctionAt(at)?.let { it.getThunkedFunction(true)?.name ?: it.name }
-        ?: symbolTable.getPrimarySymbol(at)?.name
+    val name = functionManager.getFunctionAt(at)?.orThunked?.name ?: symbolTable.getPrimarySymbol(at)?.name
     return name != null && isStub(name)
 }
 
@@ -174,10 +166,10 @@ fun Program.holdsPureVirtualStub(at: Address, isStub: (String) -> Boolean): Bool
  * The imported function whose thunk is at [target], if [pfn] is relocated against it. Data imports share
  * the EXTERNAL block, so the thunk alone doesn't say: a typeinfo's vptr can land on one.
  */
-fun Program.importedFunction(pfn: Address, target: Address): Function? {
-    val thunk = functionManager.getFunctionAt(target)?.takeIf { it.isThunk } ?: return null
-    return thunk.takeIf { relocationTable.getRelocations(pfn).any { it.symbolName == thunk.name } }
-}
+fun Program.importedFunction(pfn: Address, target: Address): Function? =
+    functionManager.getFunctionAt(target)?.takeIf { it.isThunk }?.takeIf { thunk ->
+        relocationTable.getRelocations(pfn).any { it.symbolName == thunk.name }
+    }
 
 /** Labels [at], raising an existing label to [SourceType.IMPORTED], which is what [isVtableClaimed] reads. */
 private fun Program.labelVtable(at: Address, label: String, ns: Namespace, source: SourceType) {

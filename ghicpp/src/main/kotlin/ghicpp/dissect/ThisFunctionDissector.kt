@@ -13,6 +13,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.*
 import ghidra.program.model.scalar.Scalar
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 
 /**
@@ -216,7 +217,7 @@ class ThisFunctionDissector(
         return program.functionManager.getFunctionAt(getInput(0).address)?.isOperatorNew() == true
     }
 
-    private fun Function.isOperatorNew() = (getThunkedFunction(true) ?: this).name in operatorNewNames
+    private fun Function.isOperatorNew() = orThunked.name in operatorNewNames
 
     /**
      * The objects the callers of `operator new` build: for each call of it with a constant size, the first function
@@ -292,7 +293,7 @@ class ThisFunctionDissector(
     private fun memsetFill(call: PcodeOp, into: (PointerInto) -> Boolean): Pair<Int, DataType>? {
         if (call.numInputs < 4) return null
         val callee = program.functionManager.getFunctionAt(call.getInput(0).address) ?: return null
-        if ((callee.getThunkedFunction(true) ?: callee).name !in MEMSET_NAMES) return null
+        if (callee.orThunked.name !in MEMSET_NAMES) return null
         val at = call.getInput(1).uncopied().offsetInto(into) ?: return null
         val n = call.getInput(3).uncopied().takeIf { it.isConstant }?.offset?.toInt()?.takeIf { it in 1..MAX_FILL }
             ?: return null
