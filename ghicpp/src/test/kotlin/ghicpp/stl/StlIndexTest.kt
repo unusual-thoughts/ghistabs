@@ -20,11 +20,9 @@ class StlIndexTest {
                 key("__gnu_cxx", "__normal_iterator<char*,std::string>")
             ) mustBe
             false
+        val cow = "std::basic_string<char,_std::char_traits<char>,_std::allocator<char>_>"
         key("__gnu_cxx", "__normal_iterator<char_const*,std::string>") mustBe
-            key(
-                "__gnu_cxx",
-                "__normal_iterator<const_char*,_std::basic_string<char,_std::char_traits<char>,_std::allocator<char>_>_>",
-            )
+            key("__gnu_cxx", "__normal_iterator<const_char*,_${cow}_>")
     }
 
     @Test

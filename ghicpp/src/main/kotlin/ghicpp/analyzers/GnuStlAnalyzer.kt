@@ -17,6 +17,9 @@ import ghidrakt.diagnose.report
  * `std::basic_string<char,…>` method's `this` only as an empty struct. One archive per architecture holds
  * both string ABIs, the C++11 one's classes under `std::__cxx11`.
  *
+ * A program with its own debug info (DWARF or stabs) is left alone: that already lays out the library's
+ * classes as the compiler that built it did, and the archive's would only stand beside them.
+ *
  * After the GNU demangler, which makes those placeholders, and before the class passes.
  */
 class GnuStlAnalyzer :
@@ -33,7 +36,7 @@ class GnuStlAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun canAnalyze(program: Program) = archiveFor(program) != null
+    override fun canAnalyze(program: Program) = archiveFor(program) != null && !hasDebugInfo(program)
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val name = archiveFor(program) ?: return false
@@ -56,5 +59,10 @@ class GnuStlAnalyzer :
 
     companion object {
         const val NAME = "libstdc++ layouts"
+
+        /** The sections a compiler's type information lives in: DWARF's, compressed or not, and stabs'. */
+        private val DEBUG_SECTIONS = setOf(".debug_info", ".zdebug_info", ".stab")
+
+        fun hasDebugInfo(program: Program) = program.memory.blocks.any { it.name in DEBUG_SECTIONS }
     }
 }
