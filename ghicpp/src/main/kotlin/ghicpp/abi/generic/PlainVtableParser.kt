@@ -1,9 +1,6 @@
 package ghicpp.abi.generic
 
 import ghicpp.*
-import ghicpp.CxxAbi
-import ghicpp.RttiParser
-import ghicpp.VtableRecord
 import ghicpp.abi.holdsPureVirtualStub
 import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.ofVtableSymbol
@@ -49,8 +46,8 @@ class PlainClass(override val ns: Namespace, override val vftables: List<VtableR
 internal class BaseCandidates(
     private val slots: Map<out ClassDecl, List<Function?>>,
     private val pure: Map<out ClassDecl, Set<Int>> = emptyMap(),
-    private val sink: DiagnosticSink = DummySink,
-) {
+    sink: DiagnosticSink = DummySink,
+) : DiagnosticSink by sink {
     val byClass = mutableMapOf<ClassDecl, MutableSet<ClassDecl>>()
 
     /** What each candidate base was taken off, by derived class and base. */
@@ -66,7 +63,7 @@ internal class BaseCandidates(
 
     private val ClassDecl.at get() = vftables.firstOrNull()?.addressPoint
 
-    private fun Collection<ClassDecl>.names() = joinToString(", ") { it.name }
+    private val Collection<ClassDecl>.names get() = joinToString(", ") { it.name }
 
     private fun evidenceOf(derived: ClassDecl, base: ClassDecl): String {
         val all = evidence[derived to base].orEmpty()
@@ -90,11 +87,12 @@ internal class BaseCandidates(
                     add(derived, base, "${f.name} stores both, by table length")
                 }
             } else {
-                sink.log(
+                log(
                     "base-tie-stores",
-                    "${f.name} stores the vptrs of ${own.names()}, and their tables' lengths don't order them",
+                    "${f.name} stores all their vptrs, and their tables' lengths don't order them",
                     Level.INFO,
                     f.entryPoint,
+                    degrades = own.names,
                 )
             }
         }
@@ -128,12 +126,9 @@ internal class BaseCandidates(
                 if (classes.size > 1) ties.getOrPut(tied.sortedBy { it.name }) { mutableListOf() } += slot
                 continue
             }
-            val how = if (tied.size >
-                1
-            ) {
-                "shares $slot with it, tied for the shortest table but pure"
-            } else {
-                "shares $slot"
+            val how = when {
+                tied.size > 1 -> "shares $slot with it, tied for the shortest table but pure"
+                else -> "shares $slot"
             }
             for (cls in classes) {
                 when {
@@ -147,22 +142,24 @@ internal class BaseCandidates(
             }
         }
         for ((tied, shared) in ties) {
-            sink.log(
+            log(
                 "base-tie-slots",
-                "${tied.names()} tie for the shortest table holding ${shared.joinToString()}, none pure where " +
-                    "the others aren't: no introducer",
+                "tie for the shortest table holding ${shared.joinToString()}, none pure where the others " +
+                    "aren't: no introducer",
                 Level.INFO,
                 tied.first().at,
+                degrades = tied.names,
             )
         }
         for ((pair, shared) in past) {
             val (cls, introducer) = pair
-            sink.log(
+            log(
                 "base-slot-dropped",
-                "${cls.name} shares ${shared.joinToString()} with ${introducer.name}, but inherits a slot " +
+                "shares ${shared.joinToString()} with ${introducer.name}, but inherits a slot " +
                     "${introducer.name} overrides from further up: not taken as a direct base",
                 Level.INFO,
                 cls.at,
+                degrades = cls.name,
             )
         }
     }
@@ -215,9 +212,10 @@ internal class BaseCandidates(
             val base = direct[cls]
             if (base == null) {
                 if (candidates.isNotEmpty()) {
-                    sink.warn(
+                    degradation(
                         "base-candidates-unordered",
-                        "${cls.name}: no one of its candidate bases derives from the others, so none is taken: " +
+                        cls.name,
+                        "no one of its candidate bases derives from the others, so none is taken: " +
                             candidates.joinToString(" | ") { "${it.name}: ${evidenceOf(cls, it)}" },
                         cls.at,
                     )
@@ -225,8 +223,9 @@ internal class BaseCandidates(
                 continue
             }
             if (direct[base] == cls) {
-                sink.warn(
+                degradation(
                     "base-cycle",
+                    cls.name,
                     "${cls.name} and ${base.name} would derive from each other, so neither does: " +
                         "${evidenceOf(cls, base)} | ${evidenceOf(base, cls)}",
                     cls.at,
@@ -234,7 +233,7 @@ internal class BaseCandidates(
                 continue
             }
             cls.bases += ClassBase(base, isVirtual = false, Access.PUBLIC, 0L)
-            sink.debug("base-inferred", "${cls.name} : ${base.name}, as ${evidenceOf(cls, base)}", cls.at)
+            debug("base-inferred", "${cls.name} : ${base.name}, as ${evidenceOf(cls, base)}", cls.at)
         }
         for ((cls, offsets) in subobjects) {
             val found = offsets.mapNotNull { (offset, isVirtual) ->
@@ -244,12 +243,13 @@ internal class BaseCandidates(
             // not while a non-virtual subobject's class is unknown, as it may be the one deriving from it.
             val unknown = offsets.count { !it.value } > found.count { !it.isVirtual }
             for (base in found.filter { it.isVirtual && unknown }) {
-                sink.log(
+                log(
                     "base-virtual-dropped",
-                    "${cls.name}: virtual ${base.cls.name} at +${base.offset} left out, as a base subobject's class " +
+                    "virtual ${base.cls.name} at +${base.offset} left out, as a base subobject's class " +
                         "is unknown and may be the one deriving from it",
                     Level.INFO,
                     cls.at,
+                    degrades = cls.name,
                 )
             }
             for (base in found.filterNot { it.isVirtual && unknown }) {
