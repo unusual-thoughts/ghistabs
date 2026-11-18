@@ -15,8 +15,10 @@ import sys
 
 
 def read(path):
-    """The composites of a layouts text: path to (kind, size, [(offset, size, name)])."""
-    composites = {}
+    """The composites of a layouts text: path to (kind, size, [(offset, size, name, type)]), each member's
+    type followed through the typedefs the text lists (gcc 14 types a list's header by `_Node_traits`'
+    typedef of it)."""
+    composites, typedefs = {}, {}
     current = None
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -24,6 +26,8 @@ def read(path):
             if not line.startswith("\t"):
                 fields = line.split("\t")
                 current = None
+                if fields[0] == "T" and len(fields) > 2:
+                    typedefs[fields[1]] = fields[2]
                 if fields[0] in ("S", "U") and int(fields[2]) > 0:
                     current = composites[fields[1]] = (fields[0], int(fields[2]), [])
             elif current is not None:
@@ -32,14 +36,20 @@ def read(path):
                 if current[0] == "U":
                     member.insert(0, "0")
                 current[2].append((int(member[0]), int(member[1]), member[2], member[3] if len(member) > 3 else ""))
-    return composites
+    def target(spec, seen=()):
+        return target(typedefs[spec], seen + (spec,)) if spec in typedefs and spec not in seen else spec
+
+    return {p: (k, n, [(o, z, m, target(t)) for o, z, m, t in members])
+            for p, (k, n, members) in composites.items()}
 
 
 def flat(composites, path, at=0, seen=()):
-    """The (offset, size) of each field of the composite at [path], its class-typed fields' own in their place."""
+    """The (offset, size) of each field of the composite at [path], its library-class-typed fields' own in
+    their place."""
     out = []
     for offset, size, _name, spec in composites[path][2]:
-        if spec in composites and spec not in seen:
+        # glibc's types (`pthread_cond_t`) stay whole: they follow the C library, not the compiler.
+        if spec in composites and spec.startswith(ROOTS) and spec not in seen:
             out += flat(composites, spec, at + offset, seen + (path,))
         else:
             out.append((at + offset, size))
