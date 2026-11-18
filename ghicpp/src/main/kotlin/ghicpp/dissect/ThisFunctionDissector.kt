@@ -45,7 +45,7 @@ class ThisFunctionDissector(
         convention: StructorConvention,
         monitor: TaskMonitor,
     ): FoundStructors {
-        val uses = read(slots.keys, monitor)
+        val uses = readStorers(monitor, slots.keys)
         val roles = uses.roles(slots, convention).toMutableMap()
         val subobjectCalls = uses.subobjectCalls.toMutableMap()
         val thisStores = uses.thisStores.toMutableMap()
@@ -99,18 +99,12 @@ class ThisFunctionDissector(
     }
 
     /**
-     * Decompiles the functions that store the classes' vptrs. For each one, reads what it stores and calls
-     * through `this`, and the objects it builds.
+     * The stores of each function writing one of [tables], what those and [others] call on `this`, and the objects
+     * each builds, decompiled. A store counts only through `this` at the table's own offset, which leaves out locals
+     * built inline and member objects; a call, only with `this` first, which leaves out a local built and destroyed.
+     * A store into what `operator new` just returned is a constructor inlined there ([inlined]).
      */
-    fun readStorers(monitor: TaskMonitor): Dissections = read(emptyList(), monitor)
-
-    /**
-     * The stores of each function writing one of [tables], and what those and [others] call on `this`. A
-     * store counts only through `this` at the table's own offset, which leaves out locals built inline and
-     * member objects; a call, only with `this` first, which leaves out a local built and destroyed. A store into
-     * what `operator new` just returned is a constructor inlined there ([inlined]).
-     */
-    private fun read(others: Collection<Function>, monitor: TaskMonitor): Dissections {
+    fun readStorers(monitor: TaskMonitor, others: Collection<Function> = emptyList()): Dissections {
         monitor.message = "Finding vptr stores"
         val writes = program.vptrWriters(tables)
         if (writes.isEmpty()) return Dissections()
