@@ -98,7 +98,9 @@ private const val MAX_DEPTH = 64
 
 /**
  * Reads the sizes each class is allocated with: the `operator new(size)` result a constructor runs on,
- * found in the callers of [ctors] as [dissector] reads them.
+ * found in the callers of [ctors] as [dissector] reads them. Not where a constructor is inlined after that
+ * `operator new` ([InlinedConstruction.at]): there the constructor called first builds a base of the class the
+ * inlined one builds, which the allocation is the size of.
  */
 class AllocationSizeFinder(
     private val program: Program,
@@ -106,7 +108,12 @@ class AllocationSizeFinder(
     sink: DiagnosticSink,
     private val dissector: ThisFunctionDissector = ThisFunctionDissector(program, emptyList(), sink),
 ) : DiagnosticSink by sink {
-    fun read(ctors: Map<Function, ClassDecl>, monitor: TaskMonitor): Map<ClassDecl, Long> {
+    fun read(
+        ctors: Map<Function, ClassDecl>,
+        monitor: TaskMonitor,
+        inlined: Collection<InlinedConstruction> = emptyList(),
+    ): Map<ClassDecl, Long> {
+        val inlinedAt = inlined.mapTo(mutableSetOf()) { it.at }
         monitor.message = "Finding constructors' callers"
         val callers = ctors.keys.flatMapTo(mutableSetOf()) { it.getCallingFunctions(monitor) }
         val calls = dissector.readCalls(callers, monitor, "Decompiling constructors' callers for allocation sizes")
@@ -114,7 +121,7 @@ class AllocationSizeFinder(
         for (call in calls.objectCalls.values.flatten()) {
             val cls = ctors[call.callee] ?: continue
             val obj = call.obj as? CalledObject.Returned ?: continue
-            if (call.offset != 0L || obj.madeBy?.name !in abi.operatorNewNames) continue
+            if (call.offset != 0L || obj.madeBy?.name !in abi.operatorNewNames || obj.madeAt in inlinedAt) continue
             obj.arg?.let { sizes.getOrPut(cls) { mutableSetOf() } += it }
         }
         return sizes.mapValues { (cls, all) ->
