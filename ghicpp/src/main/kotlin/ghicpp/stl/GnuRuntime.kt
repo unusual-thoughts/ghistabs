@@ -23,7 +23,7 @@ data class GnuRuntime(val mingw: Boolean) {
 
     companion object {
         /** What [ARCHIVES] ships: the archives CI builds (see tools/stl-archives). */
-        val BUNDLED = setOf("libstdcxx_x86", "libstdcxx_x64")
+        val BUNDLED = setOf("libstdcxx_x86", "libstdcxx_x64", "libstdcxx_mingw_x86", "libstdcxx_mingw_x64")
 
         private val SHARED = Regex("""libstdc\+\+(?:\.so(?:\.\d+)*|-\d+\.dll)""", RegexOption.IGNORE_CASE)
 

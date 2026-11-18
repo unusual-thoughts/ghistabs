@@ -25,10 +25,11 @@ class GnuRuntimeTest {
     }
 
     @Test
-    fun `the archive is the architecture's, and MinGW's only once it ships`() {
+    fun `the archive is the architecture's, MinGW's apart`() {
         GnuRuntime(false).archive(8) mustBe "libstdcxx_x64"
         GnuRuntime(false).archive(4) mustBe "libstdcxx_x86"
         GnuRuntime(false).archive(2) mustBe null
-        GnuRuntime(true).archive(8) mustBe GnuRuntime.BUNDLED.firstOrNull { it == "libstdcxx_mingw_x64" }
+        GnuRuntime(true).archive(8) mustBe "libstdcxx_mingw_x64"
+        GnuRuntime(true).archive(4) mustBe "libstdcxx_mingw_x86"
     }
 }

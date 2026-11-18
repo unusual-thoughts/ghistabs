@@ -89,8 +89,10 @@ writes it (`run.sh layouts <program> <archive> <out.txt>`) and describes the for
 
 ## libstdc++
 
-`libstdcxx_x86.gdt` and `libstdcxx_x64.gdt` hold libstdc++'s layouts, filed where Ghidra's GNU demangler
-puts a class. One archive per architecture holds both string ABIs: the C++11 ABI's classes under
+`libstdcxx_x86.gdt` and `libstdcxx_x64.gdt` hold libstdc++'s layouts, and `libstdcxx_mingw_x86.gdt`
+and `libstdcxx_mingw_x64.gdt` MinGW-w64's, whose `wchar_t` is 2 bytes, `long` 4 on x64, and x86 alignment of
+8-byte types 8. They are filed where Ghidra's GNU demangler
+puts a class. One archive per target holds both string ABIs: the C++11 ABI's classes under
 `std::__cxx11` (`/std/__cxx11/basic_string<…>`), the copy-on-write ABI's under `std`, and
 `std::ios_base::failure[abi:cxx11]` beside the old `failure`, as the demangler names them. The `_GLIBCXX_DEBUG`
 containers are under `std::__debug`.
@@ -113,7 +115,7 @@ reads its DWARF on Ghidra 12.3, then:
 the probe's own data type manager and writes them as layouts text, with the classes file beside it:
 
 ```
-tools/stl-archives/gcc_probe.sh probe -m64
+tools/stl-archives/gcc_probe.sh probe -m64     # CXX=x86_64-w64-mingw32-g++-posix for MinGW
 tools/stl-archives/run.sh gcc out/libstdcxx_x64.gdt probe        # writes out/libstdcxx_x64.txt
 tools/stl-archives/run.sh gdt <program> out/libstdcxx_x64.txt out/libstdcxx_x64.gdt   # on 10.4
 ```
@@ -121,8 +123,8 @@ tools/stl-archives/run.sh gdt <program> out/libstdcxx_x64.txt out/libstdcxx_x64.
 The workflow's `gcc-versions` job builds the probe with gcc 9, 11, 12 and 14 and fails if any of them lays
 out a class it shares with the runner's gcc differently ([`compare_layouts.py`](compare_layouts.py)).
 
-ghicpp's `libstdc++ layouts` analyzer applies the archive to an ELF that imports `libstdc++.so.6` or links
-it statically (which shows in its `std::` functions' Itanium mangled names, outside libc++'s `std::__1`).
+ghicpp's `libstdc++ layouts` analyzer applies the archive to an ELF that imports `libstdc++.so.6`, or a PE
+that imports `libstdc++-6.dll` (MinGW's), or either one linking it statically (which shows in its `std::` functions' Itanium mangled names, outside libc++'s `std::__1`).
 It works as the MSVC one does. The demangler and the DWARF spell some names differently
 (`pair<int_const,int>` against `pair<int_const,_int>`, `vector<std::string>` against the written-out
 `basic_string`, `0ul` against `0`), so a class not found at its exact path is looked up by a key that leaves
