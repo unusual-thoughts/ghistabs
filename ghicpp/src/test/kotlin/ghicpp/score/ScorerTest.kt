@@ -284,4 +284,30 @@ class ScorerTest {
         ).score()
         card.tallies["structors"] mustBe Tally(tp = 2)
     }
+
+    @Test
+    fun `a vftable claimed for a polymorphic class the binary has no vtable of is not scored`() {
+        val up = cls(5, "Up", Origin.STABS, members = listOf(fn(0x50, "g", true)))
+        val plain = cls(6, "Plain", Origin.STABS, members = listOf(fn(0x60, "h")))
+        val upTruth = ClassHierarchy(listOf(up, plain))
+        val card = Scorer(
+            Truth(
+                truthSnapshot.copy(hierarchy = upTruth, vtables = emptyList()),
+                Truth.describedScope(upTruth),
+                true,
+                true,
+            ),
+            Snapshot(
+                "subject",
+                ClassHierarchy(
+                    listOf(
+                        cls(10, "Up", Origin.ITANIUM_RTTI, 0x140, listOf(fn(0x50, "g", true))),
+                        cls(11, "Plain", Origin.ITANIUM_RTTI, 0x160, listOf(fn(0x60, "h"))),
+                    ),
+                ),
+            ),
+        ).score()
+        card.tallies["vftables"] mustBe Tally(fp = 1)
+        card.instances["vftables-fp"] mustBe listOf("${DetachedAddresses.at(0x160)} of `Plain`")
+    }
 }
