@@ -146,26 +146,38 @@ class MemberObjectPass(
     /**
      * The empty bases of the polymorphic classes [found] has constructors of. Such a class keeps its vptr at
      * `this` + 0, so a class with no vtable can only sit there too if it takes no bytes: an empty base. Its
-     * constructor is a function the class's constructor calls on `this` + 0 that [found] doesn't know, and that
-     * stores nothing into its object and calls nothing on it. Each such function builds one class.
+     * constructor does nothing, so its body is a bare return ([hasEmptyBody]). The decompiler then sees no
+     * parameter, and so no `this` passed at its calls. Each such function is given one first, and the class's
+     * constructors read again: those calling it on `this` + 0 have an empty base it builds, one class for each.
      */
     private fun emptyBases(found: FoundStructors, monitor: TaskMonitor): Map<ClassDecl, List<NonPolymorphicClass>> {
-        val candidates = found.roles.filterValues { (cls, role) -> role == CONSTRUCTOR && cls.vftables.isNotEmpty() }
-            .mapValues { (f, _) ->
-                found.subobjectCalls[f].orEmpty()[0L].orEmpty()
-                    .filter { it != f && it !in found.roles && it !in found.folded && it.takesThis() }
-            }.filterValues { it.isNotEmpty() }
-        if (candidates.isEmpty()) return emptyMap()
-        val callees = candidates.values.flatten().distinct()
+        val ctors = found.roles.filterValues { (cls, role) -> role == CONSTRUCTOR && cls.vftables.isNotEmpty() }.keys
+        val empty = ctors.flatMap { it.getCalledFunctions(monitor) }.distinct()
+            .filter { it !in found.roles && it !in found.folded && !it.isExternal && it.hasEmptyBody() }
+        if (empty.isEmpty()) return emptyMap()
+        for (f in empty) {
+            if (!f.takesThisAt(thisStorage)) runCatching { f.fixMethodConvention(takesThis = true) }
+        }
+        val callers = ctors.filter { f -> f.getCalledFunctions(monitor).any { it in empty } }
         val uses = ThisFunctionDissector(program, emptyList(), this, DissectionCache(fillArrays))
-            .readCalls(callees, monitor)
-        val byFunction = callees.filter { f ->
-            uses.thisStores[f].isNullOrEmpty() && uses.subobjectCalls[f].isNullOrEmpty() &&
-                uses.objectCalls[f].isNullOrEmpty()
-        }.associateWith { f -> NonPolymorphicClass().also { it.ctors += f } }
-        return candidates.entries.groupBy({ found.roles.getValue(it.key).first }, { it.value })
-            .mapValues { (_, calls) -> calls.flatten().distinct().mapNotNull(byFunction::get) }
-            .filterValues { it.isNotEmpty() }
+            .readCalls(callers, monitor, "Decompiling constructors that call empty functions")
+        val byFunction = empty.associateWith { f -> NonPolymorphicClass().also { it.ctors += f } }
+        return callers.groupBy({ found.roles.getValue(it).first }) { f ->
+            uses.subobjectCalls[f].orEmpty()[0L].orEmpty().mapNotNull(byFunction::get)
+        }.mapValues { (_, bases) -> bases.flatten().distinct() }.filterValues { it.isNotEmpty() }
+    }
+
+    /**
+     * Whether [this] only returns: its body sets up and tears down a frame at most. Such are the constructors
+     * of an empty class, as gcc emits them out of line.
+     */
+    private fun Function.hasEmptyBody(): Boolean {
+        val instructions = program.listing.getInstructions(
+            body,
+            true,
+        ).iterator().asSequence().take(MAX_EMPTY_BODY + 1).toList()
+        return instructions.size <= MAX_EMPTY_BODY && instructions.lastOrNull()?.flowType?.isTerminal == true &&
+            instructions.all { it.toString().replace(" ", "") in EMPTY_BODY }
     }
 
     /** Adds each of [empty]'s classes as a base at offset 0 of its class, and returns the classes given one. */
@@ -404,5 +416,14 @@ class MemberObjectPass(
 
         /** The prefix of a non-polymorphic class this pass names after its first constructor's address. */
         const val NON_POLYMORPHIC_PREFIX = "NPKlass_"
+
+        /** How many instructions an empty body ([hasEmptyBody]) runs to at most. */
+        private const val MAX_EMPTY_BODY = 6
+
+        /** The instructions an empty body is made of, spaces left out: a frame set up and torn down, and a return. */
+        private val EMPTY_BODY = setOf(
+            "PUSHEBP", "MOVEBP,ESP", "POPEBP", "PUSHRBP", "MOVRBP,RSP", "POPRBP", "LEAVE", "RET", "NOP", "ENDBR32",
+            "ENDBR64",
+        )
     }
 }
