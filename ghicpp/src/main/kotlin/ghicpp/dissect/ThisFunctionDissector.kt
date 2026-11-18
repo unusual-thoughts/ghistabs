@@ -13,6 +13,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.*
 import ghidra.program.model.scalar.Scalar
 import ghidra.util.task.TaskMonitor
+import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 
 /**
@@ -208,8 +209,7 @@ class ThisFunctionDissector(
 
     private fun PcodeOp.isOperatorNew(): Boolean {
         if (opcode != PcodeOp.CALL || numInputs < 2) return false
-        val f = program.functionManager.getFunctionAt(getInput(0).address) ?: return false
-        return (f.getThunkedFunction(true) ?: f).name in operatorNewNames
+        return program.functionManager.getFunctionAt(getInput(0).address)?.orThunked?.name in operatorNewNames
     }
 
     /**
@@ -264,7 +264,7 @@ class ThisFunctionDissector(
     private fun memsetFill(call: PcodeOp, into: (PointerInto) -> Boolean): Pair<Int, DataType>? {
         if (call.numInputs < 4) return null
         val callee = program.functionManager.getFunctionAt(call.getInput(0).address) ?: return null
-        if ((callee.getThunkedFunction(true) ?: callee).name !in MEMSET_NAMES) return null
+        if (callee.orThunked.name !in MEMSET_NAMES) return null
         val at = call.getInput(1).uncopied().offsetInto(into) ?: return null
         val n = call.getInput(3).uncopied().takeIf { it.isConstant }?.offset?.toInt()?.takeIf { it in 1..MAX_FILL }
             ?: return null

@@ -226,7 +226,7 @@ internal class BaseCandidates(
                 degradation(
                     "base-cycle",
                     cls.name,
-                    "${cls.name} and ${base.name} would derive from each other, so neither does: " +
+                    "it and ${base.name} would derive from each other, so neither does: " +
                         "${evidenceOf(cls, base)} | ${evidenceOf(base, cls)}",
                     cls.at,
                 )

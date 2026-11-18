@@ -152,7 +152,7 @@ class ClassPass(
         for (cls in listOf(owner) + holders) {
             for (record in cls.vftables) {
                 val slot = record.slots(program).indexOfFirst { at ->
-                    program.functionManager.getFunctionAt(at)?.let { it.getThunkedFunction(true) ?: it } == func
+                    program.functionManager.getFunctionAt(at)?.orThunked == func
                 }
                 if (slot < 0) continue
                 val base = if (cls.vftables.size > 1) cls.servedBase(record, program) else null
