@@ -59,28 +59,36 @@ jobs:
           if-no-files-found: error
 
   # The same probe for libstdc++: one binary of three units, the C++11 string ABI's, the copy-on-write
-  # one's and _GLIBCXX_DEBUG's, with every class's DWARF.
+  # one's and _GLIBCXX_DEBUG's, with every class's DWARF. MinGW-w64's, a PE whose wchar_t, long and x86
+  # alignment differ, from the Ubuntu cross compiler (the posix thread model, which has std::thread).
   gcc-probe:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        arch: [ x86, x64 ]
+        include:
+          - { name: x86, flags: -m32, packages: g++-multilib }
+          - { name: x64, flags: -m64 }
+          - { name: mingw_x86, cxx: i686-w64-mingw32-g++-posix, packages: g++-mingw-w64-i686-posix }
+          - { name: mingw_x64, cxx: x86_64-w64-mingw32-g++-posix, packages: g++-mingw-w64-x86-64-posix }
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install the 32-bit libraries
-        if: matrix.arch == 'x86'
-        run: sudo apt-get update -q && sudo apt-get install -yq g++-multilib
+      - name: Install the compiler
+        if: matrix.packages
+        run: sudo apt-get update -q && sudo apt-get install -yq ${{ matrix.packages }}
 
       - name: Build the probe
+        env:
+          CXX: ${{ matrix.cxx || 'g++' }}
         run: |
-          g++ --version | head -1
-          tools/stl-archives/gcc_probe.sh gcc_probe ${{ matrix.arch == 'x86' && '-m32' || '-m64' }}
+          $CXX --version | head -1
+          tools/stl-archives/gcc_probe.sh gcc_probe ${{ matrix.flags }}
+          [ -f gcc_probe ] || mv gcc_probe.exe gcc_probe
 
       - uses: actions/upload-artifact@v7
         with:
-          name: gcc-probe-${{ matrix.arch }}
+          name: gcc-probe-${{ matrix.name }}
           path: gcc_probe
           if-no-files-found: error
 
@@ -194,8 +202,8 @@ jobs:
       # the classes file beside it; the portable job makes the .gdt.
       - name: Build the libstdc++ archives
         run: |
-          for arch in x86 x64; do
-            tools/stl-archives/run.sh gcc archives/libstdcxx_$arch.gdt probes/gcc-probe-$arch/gcc_probe
+          for name in x86 x64 mingw_x86 mingw_x64; do
+            tools/stl-archives/run.sh gcc archives/libstdcxx_$name.gdt probes/gcc-probe-$name/gcc_probe
           done
 
       - name: Check against Microsoft's msvcp140 layouts
@@ -284,7 +292,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp120_x86, msvcp120_x64, msvcp90_x86, msvcp90_x64, msvcp80_x86, msvcp70_x86, msvcp60_x86, msvcp50_x86, libstdcxx_x86, libstdcxx_x64]
+        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp120_x86, msvcp120_x64, msvcp90_x86, msvcp90_x64, msvcp80_x86, msvcp70_x86, msvcp60_x86, msvcp50_x86, libstdcxx_x86, libstdcxx_x64, libstdcxx_mingw_x86, libstdcxx_mingw_x64]
     steps:
       - uses: actions/download-artifact@v7
         with:
