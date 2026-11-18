@@ -8,6 +8,7 @@ import ghicpp.hierarchy.ClassHierarchy.ClassView
 import ghicpp.hierarchy.ClassHierarchy.Member
 import ghicpp.hierarchy.ClassHierarchy.MemberKind
 import ghicpp.hierarchy.ClassHierarchy.Origin
+import ghidrakt.DetachedAddresses
 
 /**
  * OOAnalyzer's Prolog results (`ooprolog --results`), read back as the [Snapshot] a recovery leaves, for the
@@ -72,14 +73,23 @@ class OoResults(
                     else -> "FUN_%08x".format(m)
                 }
                 val virt = if ("virtual" in p) VirtKind.VIRTUAL else null
-                Member(fname, "%08x".format(m), MemberKind.FUNCTION, attrs = virt?.let { MemberAttrs(virt = it) })
+                Member(
+                    fname,
+                    DetachedAddresses.at(m),
+                    MemberKind.FUNCTION,
+                    attrs = virt?.let {
+                        MemberAttrs(virt = it)
+                    },
+                )
             }
-            val vtable = c.vftable?.let { listOf(Member("vftable", "%08x".format(it), MemberKind.VTABLE)) }.orEmpty()
+            val vtable = c.vftable?.let {
+                listOf(Member("vftable", DetachedAddresses.at(it), MemberKind.VTABLE))
+            }.orEmpty()
             ClassView(
                 id = c.id,
                 path = path,
                 origin = if (c.vftable?.let(vftNames::get) != null) Origin.MSVC_RTTI else Origin.INFERRED,
-                vftable = c.vftable?.let { "%08x".format(it) },
+                vftable = c.vftable?.let(DetachedAddresses::at),
                 vftableStructId = null,
                 typeinfo = null,
                 structId = null,
