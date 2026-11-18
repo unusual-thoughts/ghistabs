@@ -336,6 +336,10 @@ jobs:
           name: portable-archives
           path: archives
 
+      # Ghidra 11 and on cannot restore the architecture of an archive 10.4 wrote, as x86's language
+      # version has moved since, so they read it with the default data organization: no A record, and
+      # B records (the built-ins' sizes) that follow it. A program that takes the archive's types lays
+      # out the built-ins its own way, so only the other records must read back the same there.
       - name: Read the archives
         run: |
           mkdir -p readback
@@ -343,7 +347,14 @@ jobs:
           for txt in layouts/*.txt; do
             name=$(basename "$txt" .txt)
             tools/stl-archives/run.sh layouts ghicpp/src/test/resources/binaries/features/hello_msvc.exe archives/$name.gdt readback/$name.txt
-            cmp -s "$txt" readback/$name.txt || { echo "::error::$name reads differently"; diff -u "$txt" readback/$name.txt | head -40; status=1; }
+            expected=$txt
+            if grep -q '^A' "$txt" && ! grep -q '^A' readback/$name.txt; then
+              echo "::notice::$name: this Ghidra does not restore the archive's architecture"
+              expected=readback/$name.expected
+              grep -v '^[AB]'$'\t' "$txt" > $expected
+              grep -v '^B'$'\t' readback/$name.txt > readback/$name.tmp && mv readback/$name.tmp readback/$name.txt
+            fi
+            cmp -s "$expected" readback/$name.txt || { echo "::error::$name reads differently"; diff -u "$expected" readback/$name.txt | head -40; status=1; }
           done
           exit $status
 
