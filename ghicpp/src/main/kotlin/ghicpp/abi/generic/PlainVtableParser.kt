@@ -243,13 +243,12 @@ internal class BaseCandidates(
             // not while a non-virtual subobject's class is unknown, as it may be the one deriving from it.
             val unknown = offsets.count { !it.value } > found.count { !it.isVirtual }
             for (base in found.filter { it.isVirtual && unknown }) {
-                log(
+                degradation(
                     "base-virtual-dropped",
+                    cls.name,
                     "virtual ${base.cls.name} at +${base.offset} left out, as a base subobject's class " +
                         "is unknown and may be the one deriving from it",
-                    Level.INFO,
                     cls.at,
-                    degrades = cls.name,
                 )
             }
             for (base in found.filterNot { it.isVirtual && unknown }) {
