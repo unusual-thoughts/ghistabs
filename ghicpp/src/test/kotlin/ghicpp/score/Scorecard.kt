@@ -69,8 +69,9 @@ data class Truth(
 }
 
 /**
- * One recovery scored against its [Truth]: a [Tally] per attribute; each false positive and false negative,
- * by its counter (`<attribute>-fp`, `-fn`), as [instances]; and [notes] on what was left unscored.
+ * One recovery scored against its [Truth]. [tallies] holds a [Tally] per attribute, [instances] lists each false
+ * positive and false negative under its counter (`<attribute>-fp` or `-fn`), and [notes] says what was left
+ * unscored.
  */
 data class Scorecard(
     val tallies: Map<String, Tally>,
@@ -148,20 +149,24 @@ private val NAMED = setOf(Origin.MSVC_RTTI, Origin.ITANIUM_RTTI, Origin.SWEPT_RT
 /**
  * Scores [subject], what a recovery from a bare binary made of its classes, against [truth].
  *
- * Each subject class is matched to a truth class by its qualified name, else by the vtable it labels,
- * else by the truth class more of its functions belong to than any other, its own structors breaking a tie.
- * A subject class with no match is a false class. One matched to a class the truth already has a better
- * match for is a split, a piece of that class the recovery set apart: `class-splits` counts it, not
- * `classes`, and its functions count for that class. One matched to a truth class out of [Truth.scope] (a
- * library's, its vtable known but not described) is left unscored. Every other attribute is scored over
- * the matched pairs in scope, the truth class's bases, vtable, members and layout against the subject's:
- * by address where [Truth.sameBinary], by offset where [Truth.sameLayout], and not at all where the truth
- * cannot tell.
+ * Each subject class is matched to a truth class by its qualified name, else by the vtable it labels, else by
+ * the truth class that most of its functions belong to. When two truth classes tie on functions, the subject
+ * class's own structors decide.
+ *
+ * A subject class with no match is a false class. When a truth class already has a better match, another
+ * subject class matched to it is a split: a piece of that class that the recovery set apart. Splits count under
+ * `class-splits` instead of `classes`, and their functions count for the class they were split from. A subject
+ * class matched to a truth class outside [Truth.scope] (a library class whose vtable is known but not
+ * described) is not scored.
+ *
+ * Every other attribute is scored over the matched pairs in scope, comparing the truth class's bases, vtable,
+ * members and layout with the subject's. They are compared by address where [Truth.sameBinary], by offset where
+ * [Truth.sameLayout], and not at all where the truth can't tell.
  */
 class Scorer(
     private val truth: Truth,
     private val subject: Snapshot,
-    /** What the words of the truth's vtables hold, where the binary is at hand to read them: null where not. */
+    /** The addresses that the truth's vtable words hold, read from the binary. Null when the binary isn't at hand. */
     private val vtableSlots: Set<Long>? = null,
 ) {
     private val t = truth.hierarchy
@@ -169,12 +174,12 @@ class Scorer(
     private val instances = linkedMapOf<String, MutableList<String>>()
     private val notes = mutableListOf<String>()
 
-    /** [what] is one of [attribute]'s false positives. */
+    /** Records [what] as a false positive of [attribute]. */
     private fun fp(attribute: String, what: String) {
         instances.getOrPut("$attribute-fp") { mutableListOf() } += what
     }
 
-    /** [what] is one of [attribute]'s false negatives. */
+    /** Records [what] as a false negative of [attribute]. */
     private fun fn(attribute: String, what: String) {
         instances.getOrPut("$attribute-fn") { mutableListOf() } += what
     }
@@ -193,9 +198,10 @@ class Scorer(
         truthVtables.lastOrNull { it.start <= at }?.takeIf { at < it.end }?.classId
 
     /**
-     * The truth class [cls] stands for, and how strongly: 3 by name, 2 by its vtable, 1 by most of its functions,
-     * 0 by the name alone of a class with neither a vtable nor a function. Exception records name a class with no
-     * RTTI to give it a vtable (MSVC's `catch` type descriptors), so another class can stand for it better.
+     * The truth class that [cls] stands for, and how strong the match is: 3 by name, 2 by vtable, 1 by most of its
+     * functions, and 0 by name alone for a class with neither a vtable nor any functions. A name alone is the
+     * weakest match because exception records (MSVC's `catch` type descriptors) name classes even without RTTI,
+     * so another subject class may be a better match for the same truth class.
      */
     private fun matchOf(cls: ClassView): Pair<Long, Int>? {
         truthByName[cls.qualifiedName]?.let { named ->
@@ -208,7 +214,8 @@ class Scorer(
         val votes = functions.mapNotNull { truthFunctionOwner[it.at] }.groupingBy { it }.eachCount()
         val most = votes.values.maxOrNull() ?: return null
         val leaders = votes.filterValues { it == most }.keys
-        // A class holding a stray function of another's, its base's say, is still the class its structors are.
+        // A class that holds a stray function of another class, such as its base, is still the class its structors
+        // belong to.
         val owner = leaders.singleOrNull()
             ?: functions.filter { cls.isStructorName(it.name) }.mapNotNull { truthFunctionOwner[it.at] }
                 .distinct().filter { it in leaders }.singleOrNull()
@@ -286,7 +293,7 @@ class Scorer(
         return Tally(tp, fp, missed.size)
     }
 
-    /** The truth classes in scope found whole, against the pieces split off them. */
+    /** Counts the truth classes in scope that were found as one class, and the pieces split off the others. */
     private fun classSplits(): Tally {
         val found = pairs.keys.filter { it in truth.scope }
         val pieces = found.flatMap { tid ->
@@ -303,7 +310,7 @@ class Scorer(
     private fun BaseRef.ownKey(): String = targetId?.let { "#$it" } ?: truthByName[name]?.firstOrNull()
         ?.let { "#${it.id}" } ?: "?$name"
 
-    /** Whether the truth class [this] keys has no vtable and no function: a class a recovery has nothing of. */
+    /** Whether the truth class with this key has no vtable and no functions, leaving a recovery nothing to find. */
     private fun String.isUnreachable() = removePrefix("#").toLongOrNull()?.let { t[it] }
         ?.let { it.vftable == null && it.functions().isEmpty() } == true
 
@@ -315,8 +322,8 @@ class Scorer(
         var offsets = Tally()
         for ((tc, sc) in scoredPairs) {
             val claimed = sc.bases.associateBy { it.truthKey() to it.isVirtual }
-            // A base with no vtable and no function of its own leaves nothing a recovery could find it by: found,
-            // it counts, but missed it is no miss.
+            // A base with no vtable and no functions of its own gives a recovery nothing to find it by. Finding it
+            // still counts, but missing it is not counted as a miss.
             val actualMap = tc.bases.associateBy { it.ownKey() to it.isVirtual }
                 .filterKeys { it in claimed || !it.first.isUnreachable() }
             for (key in tc.bases.map { it.ownKey() to it.isVirtual } - actualMap.keys) {
@@ -346,7 +353,7 @@ class Scorer(
         if (truth.sameLayout) tallies["base-offsets"] = offsets
     }
 
-    /** [name]'s [claimed] value against its [actual] one: right, wrong, or not claimed. */
+    /** Compares the [claimed] value of [name] with its [actual] one: right, wrong, or not claimed. */
     private fun <T> attribute(name: String, claimed: T?, actual: T, what: () -> String): Tally = when (claimed) {
         actual -> Tally(tp = 1)
         null -> Tally(fn = 1).also { fn(name, "${what()}: none, is $actual") }
@@ -380,8 +387,9 @@ class Scorer(
     }
 
     /**
-     * The functions each class and its splits claim that [pick] keeps, by address, against the truth's. A
-     * function an unmatched class claims is false too: it belongs to no class the recovery found.
+     * Compares, by address, the functions that each class and its splits claim with the truth's, keeping only
+     * those [pick] selects. A function claimed by an unmatched class is a false positive too, since it belongs
+     * to no class that the recovery found.
      */
     private fun methods(name: String, actualPick: (ClassView, Member) -> Boolean, pick: (Member) -> Boolean): Tally {
         var total = Tally()
@@ -411,10 +419,12 @@ class Scorer(
     }
 
     /**
-     * A truth member that is virtual. Some stabs mark only the deleting variant of a virtual destructor so; the
-     * complete one, which an Itanium vtable holds too, comes out plain. The base-object one no vtable holds, nor,
-     * in gcc 5 and later, an abstract class's own: its slots are null. A destructor no vtable holds no recovery
-     * can tell is virtual.
+     * Whether a truth member is virtual. Some stabs mark only the deleting variant of a virtual destructor as
+     * virtual, and leave the complete-object variant plain even though an Itanium vtable holds it too.
+     *
+     * No vtable holds the base-object destructor. From gcc 5 on, an abstract class's own vtable doesn't hold its
+     * destructors either, because it leaves those slots null. A recovery can't tell that a destructor is virtual
+     * when no vtable holds it, so such a destructor doesn't count as a virtual method.
      */
     private fun isTrulyVirtual(cls: ClassView, m: Member): Boolean {
         val marked = m.attrs?.virt == VirtKind.VIRTUAL || (

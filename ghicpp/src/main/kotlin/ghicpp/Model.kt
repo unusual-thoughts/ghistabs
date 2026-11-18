@@ -24,7 +24,10 @@ enum class Access { PRIVATE, PROTECTED, PUBLIC }
 interface BaseDecl {
     val isVirtual: Boolean
 
-    /** How the class holds the base, or null where nothing tells, as with no RTTI. */
+    /**
+     * Whether the class inherits the base as public, protected or private. Null when the binary doesn't say, as
+     * without RTTI.
+     */
     val access: Access?
     val offset: Long?
 }
