@@ -1,11 +1,13 @@
 package ghicpp.dissect
 
+import ghicpp.returnsInSlot
 import ghicpp.thisArgument
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
+import ghidra.program.model.pcode.Varnode
 import ghidrakt.orThunked
 
 /** The object a call is made on, as the calling function has it. */
@@ -29,8 +31,9 @@ sealed interface CalledObject {
 }
 
 /**
- * A call at [at] of [callee], given as its `this` ([thisArgument]) a pointer [offset] bytes into [obj];
- * [returns], the object its result points into, where it points into one.
+ * A call at [at] of [callee], given as its `this` ([thisArgument]) a pointer [offset] bytes into [obj], or, with
+ * [slot], as the hidden pointer to what it returns ([returnsInSlot]), which it builds; [returns], the object its
+ * result points into, where it points into one.
  */
 data class ObjectCall(
     val at: Address,
@@ -38,6 +41,7 @@ data class ObjectCall(
     val obj: CalledObject,
     val offset: Long,
     val returns: CalledObject.Returned? = null,
+    val slot: Boolean = false,
 )
 
 /**
@@ -45,25 +49,53 @@ data class ObjectCall(
  * callee's `this` argument points into a variable, and each one's result where it points into one.
  */
 internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
-    val ids = mutableMapOf<HighVariable, CalledObject>()
-    fun objectOf(root: HighVariable): CalledObject = ids.getOrPut(root) {
-        if (PointerInto(root, 0).isThis(thisAt)) return@getOrPut CalledObject.This
-        root.instances.firstNotNullOfOrNull { it.def?.takeIf { op -> op.opcode == PcodeOp.CALL } }?.let { call ->
-            CalledObject.Returned(
-                ids.size,
-                call.seqnum.target,
-                directCallee(call),
-                call.takeIf { it.numInputs > 1 }?.getInput(1)?.takeIf { it.isConstant }?.offset,
-            )
-        } ?: CalledObject.Local(ids.size)
+    val ids = mutableMapOf<Any, CalledObject>()
+
+    // The decompiler may merge what two calls return into one variable, as two `operator new`s into EAX:
+    // the call [pointer] comes off tells their objects apart, and only where none does, the variable.
+    fun objectOf(pointer: Varnode, root: HighVariable): CalledObject {
+        if (PointerInto(root, 0).isThis(thisAt)) return CalledObject.This
+        val call = pointer.returnedBy()
+            ?: root.instances.firstNotNullOfOrNull { it.def?.takeIf { op -> op.opcode == PcodeOp.CALL } }
+        return ids.getOrPut(call ?: root) {
+            call?.let {
+                CalledObject.Returned(
+                    ids.size,
+                    it.seqnum.target,
+                    directCallee(it),
+                    it.takeIf { c -> c.numInputs > 1 }?.getInput(1)?.takeIf { v -> v.isConstant }?.offset,
+                )
+            } ?: CalledObject.Local(ids.size)
+        }
     }
-    return pcodeOps.asSequence().mapNotNull { op ->
-        val callee = directCallee(op) ?: return@mapNotNull null
-        val obj = op.thisArgument(callee)?.pointerInto() ?: return@mapNotNull null
-        val returns = op.output?.pointerInto()?.let { objectOf(it.root) as? CalledObject.Returned }
-        ObjectCall(op.seqnum.target, callee, objectOf(obj.root), obj.offset, returns)
+    return pcodeOps.asSequence().flatMap { op ->
+        val callee = directCallee(op) ?: return@flatMap emptySequence()
+        val returns = op.output?.let { out ->
+            out.pointerInto()?.let { objectOf(out, it.root) as? CalledObject.Returned }
+        }
+        val slot = op.getInput(1).takeIf { callee.returnsInSlot() }
+        listOfNotNull(op.thisArgument(callee)?.let { it to false }, slot?.let { it to true }).asSequence()
+            .mapNotNull { (arg, inSlot) ->
+                val obj = arg.pointerInto() ?: return@mapNotNull null
+                ObjectCall(op.seqnum.target, callee, objectOf(arg, obj.root), obj.offset, returns, inSlot)
+            }
     }.toList()
 }
+
+/** The call [this] pointer is the result of, through copies, casts and constant offsets; null for none. */
+private fun Varnode.returnedBy(depth: Int = 0): PcodeOp? {
+    val op = def ?: return null
+    return when {
+        op.opcode == PcodeOp.CALL -> op
+        depth >= MAX_TRACE_BACK -> null
+        op.opcode in TRACED -> op.getInput(0).returnedBy(depth + 1)
+        else -> null
+    }
+}
+
+private val TRACED = setOf(PcodeOp.CAST, PcodeOp.COPY, PcodeOp.INT_ADD, PcodeOp.PTRSUB, PcodeOp.PTRADD)
+
+private const val MAX_TRACE_BACK = 16
 
 /** The function [op] calls directly, through a thunk to what it thunks, or null for no direct call. */
 internal fun HighFunction.directCallee(op: PcodeOp): Function? {

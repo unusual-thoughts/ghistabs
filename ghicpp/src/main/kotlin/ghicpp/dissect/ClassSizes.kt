@@ -119,7 +119,7 @@ class AllocationSizeFinder(
         val calls = dissector.readCalls(callers, monitor, "Decompiling constructors' callers for allocation sizes")
         val sizes = mutableMapOf<ClassDecl, MutableSet<Long>>()
         for (call in calls.objectCalls.values.flatten()) {
-            val cls = ctors[call.callee] ?: continue
+            val cls = ctors[call.callee]?.takeUnless { call.slot } ?: continue
             val obj = call.obj as? CalledObject.Returned ?: continue
             if (call.offset != 0L || obj.madeBy?.name !in abi.operatorNewNames || obj.madeAt in inlinedAt) continue
             obj.arg?.let { sizes.getOrPut(cls) { mutableSetOf() } += it }

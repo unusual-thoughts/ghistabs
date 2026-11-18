@@ -109,6 +109,40 @@ internal class BaseCandidates(
         }
     }
 
+    /**
+     * Adds bases off the deleting destructors the tables hold. A deleting destructor that stores no vptr itself,
+     * but calls on `this` a destructor that stores exactly one other class's vptr, destroys an object of the class
+     * whose table holds it. That class's own destructor had nothing to do, so it was folded away. The class whose
+     * vptr the callee stores is then a base of the class whose table holds the deleting destructor. No constructor
+     * may show this: a constructor that inlines an abstract base's constructor drops the base's vptr store, since
+     * the derived class's store overwrites it.
+     *
+     * A slot whose first argument is the object it returns ([returnsInSlot]) is skipped, as its calls build that
+     * object. So is a callee not seen destroying ([destroys]). Otherwise the constructors that a virtual returning a
+     * class by value calls would make every class returning one derive from it.
+     */
+    fun addDeletingSlots(uses: Dissections) {
+        for ((cls, fs) in slots) {
+            for (f in fs.filterNotNull().distinct().filterNot { it in uses.stores || it.returnsInSlot() }) {
+                val callees = uses.subobjectCalls[f].orEmpty()[0L].orEmpty().filter { uses.destroys(it) }
+                val destroyed = callees.flatMapTo(mutableSetOf()) { uses.stores[it]?.classes.orEmpty() }
+                destroyed.singleOrNull()?.let { add(cls, it, "its table's ${f.name} destroys one") }
+            }
+        }
+    }
+
+    /**
+     * Whether [f] is seen destroying an object. It stores a vptr, then calls on `this` itself, not on a member, a
+     * function that stores another class's vptr: its base's destructor. Before its own store it calls no such
+     * function, as a constructor building its bases would.
+     */
+    private fun Dissections.destroys(f: Function): Boolean {
+        val own = stores[f] ?: return false
+        val onThis = subobjectCalls[f].orEmpty()[0L].orEmpty()
+        fun storesOther(g: Function) = g != f && g in onThis && stores[g]?.classes.orEmpty().any { it !in own.classes }
+        return own.after.any(::storesOther) && own.before.none(::storesOther)
+    }
+
     /** Off the functions several tables hold in one slot, each introduced by the shortest. */
     fun addSharedSlots() {
         val held = slots.flatMap { (c, fs) -> fs.mapIndexedNotNull { i, f -> f?.let { Triple(it, i, c) } } }
@@ -181,7 +215,8 @@ internal class BaseCandidates(
      * pure virtual stub doesn't.
      *
      * A function storing D's vptr that calls on `this` a function storing B's makes B a base of D, as a constructor
-     * builds its bases and a destructor destroys them.
+     * builds its bases and a destructor destroys them. So does a deleting destructor in D's table that stores no
+     * vptr itself ([addDeletingSlots]).
      * A function storing several classes' vptrs at once, inlining its bases', stores a base's first in a
      * constructor and last in a destructor, so there their tables' lengths order them: a derived class's table
      * holds at least its base's slots. A constructor inlined after `operator new` can only build, so there the
@@ -205,6 +240,7 @@ internal class BaseCandidates(
         subobjects: Map<PlainClass, Map<Long, Boolean>> = emptyMap(),
     ) {
         addStructors(uses)
+        addDeletingSlots(uses)
         addSharedSlots()
         val direct = byClass.mapValues { (_, cs) -> cs.mostDerived(byClass) }
         for (cls in classes) {
@@ -353,8 +389,11 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         }
         // An unnamed pure virtual stub never returns: it aborts.
         val slots = own.mapValues { (_, fs) -> fs.map { f -> f?.takeUnless { it.hasNoReturn() } } }
+        // Read the slots' functions too. addDeletingSlots needs the destructors that deleting destructors call, and
+        // the class pass reads the same functions next, through the same cache.
+        val held = slots.values.flatMapTo(mutableSetOf()) { it.filterNotNull() }
         val holders = holders(classes)
-        val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
+        val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor, held)
         monitor.message = "Inferring bases from constructors"
         BaseCandidates(
             slots,

@@ -205,6 +205,8 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
         ctors: Map<Function, GhidraClass>,
         own: GhidraClass?,
     ): List<ThisCall> {
+        // A return slot is what a call builds, not its `this`.
+        val calls = calls.filterNot { it.slot }
         // The objects the function built, by where they point, from their constructor's argument and result.
         val built = buildMap {
             for (call in calls) {

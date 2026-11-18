@@ -100,10 +100,13 @@ class ThisFunctionDissector(
     }
 
     /**
-     * The stores of each function writing one of [tables], what those and [others] call on `this`, and the objects
-     * each builds, decompiled. A store counts only through `this` at the table's own offset, which leaves out locals
-     * built inline and member objects; a call, only with `this` first, which leaves out a local built and destroyed.
-     * A store into what `operator new` just returned is a constructor inlined there ([inlined]).
+     * Decompiles the functions that store the classes' vptrs, and [others]. For each one, reads what it stores
+     * and calls through `this`, and the objects it builds.
+     *
+     * A vptr store counts only when it goes through `this` at the table's own offset, so locals built inline and
+     * member objects are left out. A call counts only when `this` is its first argument, so a local built and
+     * destroyed is left out. A store into what `operator new` just returned is a constructor inlined after the
+     * call ([inlined]).
      */
     fun readStorers(monitor: TaskMonitor, others: Collection<Function> = emptyList()): Dissections {
         monitor.message = "Finding vptr stores"
@@ -142,7 +145,7 @@ class ThisFunctionDissector(
             val intoThis: (PointerInto) -> Boolean = { it.isThis(thisAt) }
             val objectCalls = high.objectCalls(thisAt)
             val inlined = writes[func]?.let { fill.inlined(high, it, objectCalls) }.orEmpty()
-            val calls = objectCalls.filter { it.obj == CalledObject.This }
+            val calls = objectCalls.filter { it.obj == CalledObject.This && !it.slot }
             val filled = fill.fillThis(high, thisAt)
             val stores = writes[func]?.let { filled.vptrStores(it, calls) }
             val fills = if (fillArrays) high.fills(intoThis).associate { it.second } else emptyMap()
@@ -187,7 +190,9 @@ class ThisFunctionDissector(
         fun part(where: Address) = starts.count { it <= where }
         val into: (PointerInto) -> Boolean = { it.root == fresh }
         val made = new.seqnum.target
-        val calls = objectCalls.filter { (it.obj as? CalledObject.Returned)?.madeAt == made && it.at > made }
+        val calls = objectCalls.filter {
+            (it.obj as? CalledObject.Returned)?.madeAt == made && it.at > made && !it.slot
+        }
         val types = componentMap.iterator().asSequence().associate { (offset, dt) -> offset.toInt() to dt }
         val fields = stores.mapNotNull { store ->
             val dt = types[store.offset.toInt()]?.takeIf { it.length > 0 } ?: return@mapNotNull null
@@ -209,7 +214,31 @@ class ThisFunctionDissector(
 
     private fun PcodeOp.isOperatorNew(): Boolean {
         if (opcode != PcodeOp.CALL || numInputs < 2) return false
-        return program.functionManager.getFunctionAt(getInput(0).address)?.orThunked?.name in operatorNewNames
+        return program.functionManager.getFunctionAt(getInput(0).address)?.isOperatorNew() == true
+    }
+
+    private fun Function.isOperatorNew() = orThunked.name in operatorNewNames
+
+    /**
+     * The objects the callers of `operator new` build: for each call of it with a constant size, the first function
+     * called after it with what it returns first, through copies, casts and offsets, at its start. That is the
+     * constructor of a class with no vptr to store; or, where its constructor is inlined, a method, or another
+     * function entirely, which the caller tells apart.
+     */
+    fun allocations(monitor: TaskMonitor): List<Allocation> {
+        if (operatorNewNames.isEmpty()) return emptyList()
+        val news = program.functionManager.getFunctions(true).filter { it.isOperatorNew() }
+        val callers = news.flatMapTo(sortedSetOf(compareBy { it.entryPoint })) { it.getCallingFunctions(monitor) }
+        val read = readCalls(callers, monitor, "Decompiling operator new's callers for what they build")
+        return read.objectCalls.flatMap { (func, calls) ->
+            calls.mapNotNull { call ->
+                val obj = call.obj as? CalledObject.Returned ?: return@mapNotNull null
+                val sized = obj.madeBy?.isOperatorNew() == true && (obj.arg ?: 0L) > 0L
+                (obj to call).takeIf { sized && call.offset == 0L && call.at > obj.madeAt }
+            }.groupBy({ it.first }, { it.second })
+                .map { (obj, on) -> Allocation(func, obj.madeAt, obj.arg!!, on.minBy { it.at }.callee) }
+                .sortedBy { it.at }
+        }
     }
 
     /**
@@ -345,6 +374,9 @@ class ThisFunctionDissector(
         const val MAX_COPIES = 8
     }
 }
+
+/** A call of `operator new([size])` at [at] in [caller], and the first function [caller] calls on what it returns. */
+class Allocation(val caller: Function, val at: Address, val size: Long, val firstCalled: Function)
 
 /**
  * How [ThisFunctionDissector]s read functions: with [fillArrays], a field one fills in a counted loop or with
