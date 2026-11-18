@@ -18,6 +18,7 @@ import java.util.*;
 import ghicpp.stl.MsvcPdbClasses;
 import ghicpp.stl.StlShape;
 import ghicpp.stl.StdClasses;
+import ghicpp.stl.StlArchiveTypes;
 import ghidra.app.script.GhidraScript;
 import ghidra.app.util.bin.format.pdb2.pdbreader.*;
 import ghidra.app.util.bin.format.pdb2.pdbreader.symbol.AbstractPublicMsSymbol;
@@ -348,65 +349,16 @@ public class MsvcStlArchiveScript extends GhidraScript {
 	 * `_Cvtvec`) under the root, as the CRT archives would.
 	 */
 	private int prune(DataTypeManager dtm, CategoryPath pdbRoot) throws Exception {
+		int dropped = StlArchiveTypes.prune(dtm, ROOTS, monitor);
 		List<DataType> types = new ArrayList<>();
 		dtm.getAllDataTypes(types);
-		Set<DataType> keep = new HashSet<>();
-		Deque<DataType> work = new ArrayDeque<>();
 		for (DataType dt : types) {
-			if (!(dt instanceof FunctionDefinition) && !dt.getCategoryPath().isAncestorOrSelf(pdbRoot) &&
-				!dt.getCategoryPath().isRoot() && ROOTS.contains(dt.getCategoryPath().asList().get(0))) {
-				work.add(dt);
-			}
-		}
-		while (!work.isEmpty()) {
-			DataType dt = work.pop();
-			if (keep.add(dt)) {
-				work.addAll(dependencies(dt));
-			}
-		}
-		List<DataType> drop = types.stream().filter(dt -> !keep.contains(dt)).toList();
-		dtm.remove(drop, monitor);
-		for (DataType dt : keep) {
-			if (dt.getCategoryPath().isAncestorOrSelf(pdbRoot) && !dt.isDeleted()) {
+			if (dt.getCategoryPath().isAncestorOrSelf(pdbRoot)) {
 				moveUnder(dt, pdbRoot, CategoryPath.ROOT);
 			}
 		}
-		removeEmptyCategories(dtm.getRootCategory());
-		return drop.size();
-	}
-
-	private void removeEmptyCategories(Category category) {
-		for (Category sub : category.getCategories()) {
-			removeEmptyCategories(sub);
-			if (sub.getDataTypes().length == 0 && sub.getCategories().length == 0) {
-				category.removeEmptyCategory(sub.getName(), monitor);
-			}
-		}
-	}
-
-	private static List<DataType> dependencies(DataType dt) {
-		List<DataType> deps = new ArrayList<>();
-		if (dt instanceof Composite c) {
-			for (DataTypeComponent component : c.getDefinedComponents()) {
-				deps.add(component.getDataType());
-			}
-		}
-		else if (dt instanceof Pointer p && p.getDataType() != null) {
-			deps.add(p.getDataType());
-		}
-		else if (dt instanceof Array a) {
-			deps.add(a.getDataType());
-		}
-		else if (dt instanceof TypeDef t) {
-			deps.add(t.getDataType());
-		}
-		else if (dt instanceof FunctionDefinition f) {
-			deps.add(f.getReturnType());
-			for (ParameterDefinition param : f.getArguments()) {
-				deps.add(param.getDataType());
-			}
-		}
-		return deps;
+		StlArchiveTypes.removeEmptyCategories(dtm.getRootCategory(), monitor);
+		return dropped;
 	}
 
 	private int addTypedefs(DataTypeManager dtm) {
