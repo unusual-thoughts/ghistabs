@@ -800,8 +800,6 @@ bases-fn `?messages_base` of `std::messages<char>`
 bases-fn `?messages_base` of `std::messages<wchar_t>`
 bases-fn `?time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
 bases-fn `?time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
-bases-fn `Base` of `CryptoPP::Rijndael::Dec`
-bases-fn `Base` of `CryptoPP::Rijndael::Enc`
 bases-fn `CryptoPP::CryptoParameters` of `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`
 bases-fn `CryptoPP::CryptoParameters` of `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`
 bases-fn `CryptoPP::CryptoParameters` of `CryptoPP::DL_GroupParameters<CryptoPP::Integer>`
@@ -855,13 +853,6 @@ bases-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509Public
 bases-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
 bases-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
 bases-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
-bases-fn `DES_EDE2_Info` of `CryptoPP::TwoBases<CryptoPP::BlockCipher,CryptoPP::DES_EDE2_Info>`
-bases-fn `DES_EDE3_Info` of `CryptoPP::TwoBases<CryptoPP::BlockCipher,CryptoPP::DES_EDE3_Info>`
-bases-fn `DES_XEX3_Info` of `CryptoPP::TwoBases<CryptoPP::BlockCipher,CryptoPP::DES_XEX3_Info>`
-bases-fn `TF_Base<CryptoPP::RandomizedTrapdoorFunction,CryptoPP::PK_EncryptionMessageEncodingMethod>` of `CryptoPP::TF_CryptoSystemBase<CryptoPP::PK_Encryptor,CryptoPP::TF_Base<CryptoPP::RandomizedTrapdoorFunction,CryptoPP::PK_EncryptionMessageEncodingMethod>>`
-bases-fn `TF_Base<CryptoPP::RandomizedTrapdoorFunctionInverse,CryptoPP::PK_SignatureMessageEncodingMethod>` of `CryptoPP::TF_SignatureSchemeBase<CryptoPP::PK_Signer,CryptoPP::TF_Base<CryptoPP::RandomizedTrapdoorFunctionInverse,CryptoPP::PK_SignatureMessageEncodingMethod>>`
-bases-fn `TF_Base<CryptoPP::TrapdoorFunction,CryptoPP::PK_SignatureMessageEncodingMethod>` of `CryptoPP::TF_SignatureSchemeBase<CryptoPP::PK_Verifier,CryptoPP::TF_Base<CryptoPP::TrapdoorFunction,CryptoPP::PK_SignatureMessageEncodingMethod>>`
-bases-fn `TF_Base<CryptoPP::TrapdoorFunctionInverse,CryptoPP::PK_EncryptionMessageEncodingMethod>` of `CryptoPP::TF_CryptoSystemBase<CryptoPP::PK_Decryptor,CryptoPP::TF_Base<CryptoPP::TrapdoorFunctionInverse,CryptoPP::PK_EncryptionMessageEncodingMethod>>`
 bases-fn `std::iostream` of `std::fstream`
 bases-fn `std::istream` of `std::ifstream`
 bases-fn `std::istream` of `std::iostream`
