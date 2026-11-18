@@ -100,9 +100,11 @@ class MemberObjectPass(
     fun run(found: FoundStructors, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
         val heap = if (allocations) allocated(found, monitor) else emptyList()
         val held = collect(found, heap, monitor)
-        val root = merge((held.values + heap).distinct())
-        val members = (held.values + heap).map(root::getValue).distinct()
+        val empty = emptyBases(found, monitor)
+        val root = merge((held.values + heap + empty.values.flatten()).distinct())
+        val members = (held.values + heap + empty.values.flatten()).map(root::getValue).distinct()
         for (m in members) m.cls = classFor(m)
+        val derived = addEmptyBases(empty.mapValues { (_, bs) -> bs.map(root::getValue) })
         val classes = members.filter { it.cls != null }
         val sizes = sizes(classes, held.mapValues { (_, m) -> root.getValue(m) }, root)
         monitor.initialize(classes.size.toLong(), "Naming member object classes' constructors and destructors")
@@ -137,9 +139,47 @@ class MemberObjectPass(
             val member = cls?.let(::structOf)?.takeUnless { it.isZeroLength } ?: continue
             containerOf(sub)?.let { placeMember(it, sub.offset.toInt(), member) }
         }
-        writeRecords(classes.mapNotNull { it.cls })
+        writeRecords(classes.mapNotNull { it.cls } + derived)
         return classes.size
     }
+
+    /**
+     * The empty bases of the polymorphic classes [found] has constructors of. Such a class keeps its vptr at
+     * `this` + 0, so a class with no vtable can only sit there too if it takes no bytes: an empty base. Its
+     * constructor is a function the class's constructor calls on `this` + 0 that [found] doesn't know, and that
+     * stores nothing into its object and calls nothing on it. Each such function builds one class.
+     */
+    private fun emptyBases(found: FoundStructors, monitor: TaskMonitor): Map<ClassDecl, List<NonPolymorphicClass>> {
+        val candidates = found.roles.filterValues { (cls, role) -> role == CONSTRUCTOR && cls.vftables.isNotEmpty() }
+            .mapValues { (f, _) ->
+                found.subobjectCalls[f].orEmpty()[0L].orEmpty()
+                    .filter { it != f && it !in found.roles && it !in found.folded && it.takesThis() }
+            }.filterValues { it.isNotEmpty() }
+        if (candidates.isEmpty()) return emptyMap()
+        val callees = candidates.values.flatten().distinct()
+        val uses = ThisFunctionDissector(program, emptyList(), this, DissectionCache(fillArrays))
+            .readCalls(callees, monitor)
+        val byFunction = callees.filter { f ->
+            uses.thisStores[f].isNullOrEmpty() && uses.subobjectCalls[f].isNullOrEmpty() &&
+                uses.objectCalls[f].isNullOrEmpty()
+        }.associateWith { f -> NonPolymorphicClass().also { it.ctors += f } }
+        return candidates.entries.groupBy({ found.roles.getValue(it.key).first }, { it.value })
+            .mapValues { (_, calls) -> calls.flatten().distinct().mapNotNull(byFunction::get) }
+            .filterValues { it.isNotEmpty() }
+    }
+
+    /** Adds each of [empty]'s classes as a base at offset 0 of its class, and returns the classes given one. */
+    private fun addEmptyBases(empty: Map<ClassDecl, List<NonPolymorphicClass>>): List<ClassDecl> =
+        empty.mapNotNull { (cls, bases) ->
+            val own = (cls as? PlainClass)?.bases ?: return@mapNotNull null
+            val added = bases.mapNotNull { it.cls }.distinct()
+                .filter { b -> b != cls && own.none { it.cls == b } }
+                .onEach { b ->
+                    own += ClassBase(b, isVirtual = false, access = null, 0L)
+                    debug("base-inferred-empty", "${cls.name} : ${b.name}, off the constructor it calls on `this`")
+                }
+            cls.takeIf { added.isNotEmpty() }
+        }
 
     /**
      * The members [found]'s structors build and destroy, by where they are, then those members' own, decompiled,
