@@ -240,6 +240,7 @@ internal class BaseCandidates(
         classes: Collection<PlainClass>,
         uses: Dissections,
         subobjects: Map<PlainClass, Map<Long, Boolean>> = emptyMap(),
+        sharing: (PlainClass, Long) -> ClassDecl? = { _, _ -> null },
     ) {
         addStructors(uses)
         addDeletingSlots(uses)
@@ -273,9 +274,24 @@ internal class BaseCandidates(
             cls.bases += ClassBase(base, isVirtual = false, access = null, 0L)
             debug("base-inferred", "${cls.name} : ${base.name}, as ${evidenceOf(cls, base)}", cls.at)
         }
+        addSubobjectBases(uses, subobjects, sharing)
+    }
+
+    /**
+     * Adds the bases at [subobjects]' offsets: off the structor calls on each ([subobjectBase]), else off the
+     * class's table there ([sharing]).
+     */
+    private fun addSubobjectBases(
+        uses: Dissections,
+        subobjects: Map<PlainClass, Map<Long, Boolean>>,
+        sharing: (PlainClass, Long) -> ClassDecl?,
+    ) {
         for ((cls, offsets) in subobjects) {
             val found = offsets.mapNotNull { (offset, isVirtual) ->
-                subobjectBase(cls, offset, uses)?.let { ClassBase(it, isVirtual, access = null, offset) }
+                val base = subobjectBase(cls, offset, uses) ?: sharing(cls, offset)?.also {
+                    debug("base-inferred-sharing", "${cls.name} : ${it.name} at +$offset, off its table there", cls.at)
+                }
+                base?.let { ClassBase(it, isVirtual, access = null, offset) }
             }
             // A virtual base may be one of another base's, which the complete-object constructor builds as well:
             // not while a non-virtual subobject's class is unknown, as it may be the one deriving from it.
@@ -402,7 +418,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             slots,
             pureSlots(targets, own),
             sink,
-        ).inferBases(classes, uses, classes.associateWith { subobjects(it, uses) })
+        ).inferBases(classes, uses, classes.associateWith { subobjects(it, uses) }, sharingBase(classes))
         for (v in vtt) {
             if (v.built == v.base || v.built.bases.any { it.cls == v.base } || v.base.derivesFrom(v.built)) continue
             val isVirtual = v.offset in v.built.headerVbaseOffsets
@@ -504,6 +520,33 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             }
         }
         return found.takeUnless { seeded }
+    }
+
+    /**
+     * The class of a base subobject that no structor call names, off the secondary table of the class at that
+     * offset. That table holds the base's slots in the base's order: the base's own functions where the class
+     * doesn't override them, and this-adjusting thunks where it does. So the base is the class whose primary table
+     * is as long and holds the same function in the most slots. It is null on a tie, or where none shares a slot.
+     */
+    private fun sharingBase(classes: List<PlainClass>): (PlainClass, Long) -> ClassDecl? {
+        val primaries by lazy { classes.associateWith { functionSlots(it.vftables.first().addressPoint) } }
+        return { cls, offset ->
+            cls.vftables.drop(1).firstOrNull { it.vfptrOffset(program) == offset }?.let { table ->
+                val slots = functionSlots(table.addressPoint)
+                val shared = primaries.filterKeys { it != cls && !it.derivesFrom(cls) }
+                    .mapValues { (_, own) ->
+                        if (own.size !=
+                            slots.size
+                        ) {
+                            0
+                        } else {
+                            slots.indices.count { slots[it].offset != 0L && own[it] == slots[it] }
+                        }
+                    }.filterValues { it > 0 }
+                val most = shared.values.maxOrNull()
+                shared.filterValues { it == most }.keys.singleOrNull()
+            }
+        }
     }
 
     /**
