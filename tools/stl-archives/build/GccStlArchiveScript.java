@@ -98,6 +98,7 @@ public class GccStlArchiveScript extends GhidraScript {
 		int vfptrs = nameVfptrs(dtm);
 		int dropped = StlArchiveTypes.prune(dtm, ROOTS, monitor);
 		int selfBases = StlSelfBases.apply(dtm, read.classes().getClasses(), pointerSize);
+		int beside = StlSelfBases.layDropped(dtm, read.classes().getClasses());
 		StlShape.Result shape = StlShape.apply(dtm, read.classes().getClasses(), pointerSize, read::typeOf);
 		// The slots' function types, which the vftables brought in.
 		refile(dtm);
@@ -111,11 +112,12 @@ public class GccStlArchiveScript extends GhidraScript {
 		int methods = checkAgainstMethods(dtm);
 		println(String.format(
 			"%s: %d std types filed at their demangled paths, %d unrelated types dropped, " +
-				"%d typedefs, %d vfptrs named, %d bases laid as their non-virtual part, %d bases named, " +
+				"%d typedefs, %d vfptrs named, %d bases laid as their non-virtual part, %d beside an empty one, " +
+				"%d bases named, " +
 				"%d own vftables, " +
 				"%d classes split around one; %d method classes resolve to an archive type; " +
 				"%d classes with bases; %d copies folded",
-			name, moved, dropped, typedefs, vfptrs, selfBases, shape.getBases(), shape.getVftables(), shape.getSplit(),
+			name, moved, dropped, typedefs, vfptrs, selfBases, beside, shape.getBases(), shape.getVftables(), shape.getSplit(),
 			methods, read.classes().getClasses().stream().filter(c -> !c.getBases().isEmpty()).count(), folded));
 		read.moved().write(classesFile);
 	}
