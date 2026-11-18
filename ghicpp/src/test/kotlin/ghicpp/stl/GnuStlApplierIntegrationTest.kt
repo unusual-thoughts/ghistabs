@@ -22,7 +22,8 @@ import org.junit.jupiter.api.Test
 
 /**
  * A libstdc++ method as the GNU demangler types it: its `this` starts out as the demangler's empty
- * placeholder and ends as the archive's class, in whichever string ABI the mangled name says.
+ * placeholder and ends as the archive's class, in whichever string ABI the mangled name says. A class the
+ * demangler names by an alias (`std::string`) goes by that alias, which is where Ghidra looks for it.
  */
 @Tag("integration")
 class GnuStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -31,7 +32,7 @@ class GnuStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         ProgramBuilder._X64,
         "libstdcxx_x64",
         "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7reserveEm",
-        "/std/__cxx11/basic_string<char,_std::char_traits<char>,_std::allocator<char>_>",
+        "/std/__cxx11/string",
         32,
     )
 
@@ -40,7 +41,7 @@ class GnuStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         ProgramBuilder._X86,
         "libstdcxx_x86",
         "_ZNSs7reserveEj",
-        "/std/basic_string<char,_std::char_traits<char>,_std::allocator<char>_>",
+        "/std/string",
         4,
         shift = 12,
     )
@@ -59,7 +60,7 @@ class GnuStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         ProgramBuilder._X64,
         "libstdcxx_mingw_x64",
         "_ZNSt7__cxx1112basic_stringIwSt11char_traitsIwESaIwEE7reserveEy",
-        "/std/__cxx11/basic_string<wchar_t,_std::char_traits<wchar_t>,_std::allocator<wchar_t>_>",
+        "/std/__cxx11/wstring",
         32,
     )
 
