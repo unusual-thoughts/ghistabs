@@ -447,7 +447,7 @@ class Scorer(
         val claimed = sc.functions().filter { sc.isStructor(it) }.map { it.at }.filter {
             it !in truthThunks
         }
-        val actual = tc.functions().filter { it.name == tc.name || it.name == "~${tc.name}" }.map { it.at }
+        val actual = tc.functions().filter { tc.isStructorName(it.name) }.map { it.at }
         (claimed.toSet() - actual.toSet()).forEach { fp("structors", "${"%x".format(it)} of `${tc.qualifiedName}`") }
         (actual.toSet() - claimed.toSet()).forEach { fn("structors", "${"%x".format(it)} of `${tc.qualifiedName}`") }
         acc + Tally.of(claimed, actual)
