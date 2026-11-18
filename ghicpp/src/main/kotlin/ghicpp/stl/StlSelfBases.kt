@@ -22,13 +22,30 @@ import ghidra.program.model.gclass.ClassUtils
 object StlSelfBases {
     @JvmStatic
     fun apply(dtm: DataTypeManager, classes: List<StdClass>, pointerSize: Int): Int {
-        val byPath = classes.associateBy { it.path }
-        val virtual = mutableMapOf<String, Boolean>()
+        val shapes = Shapes(dtm, classes, pointerSize)
+        var laid = 0
+        for (cls in StlShape.baseFirst(classes)) {
+            val struct = dtm.getDataType(cls.path) as? Structure ?: continue
+            val direct = cls.bases.filterNot { it.isVirtual }
+            laid += direct.count { shapes.laySelfBase(struct, it, direct.size) }
+        }
+        return laid
+    }
+
+    /** Whether [type] is the class at [path] or its self-base. */
+    private fun isOf(type: String, path: String) = type == path || type.startsWith("$path/")
+
+    /** What the classes' non-virtual parts are, off their structs as laid so far. */
+    private class Shapes(val dtm: DataTypeManager, classes: List<StdClass>, val pointerSize: Int) {
+        private val byPath = classes.associateBy { it.path }
+        private val virtual = mutableMapOf<String, Boolean>()
+        private val sizes = mutableMapOf<String, Int>()
+
         fun hasVirtualBases(path: String, seen: Set<String> = emptySet()): Boolean = virtual.getOrPut(path) {
             val cls = byPath[path] ?: return@getOrPut false
             path !in seen && cls.bases.any { it.isVirtual || hasVirtualBases(it.path, seen + path) }
         }
-        val sizes = mutableMapOf<String, Int>()
+
         fun nonVirtualSize(path: String): Int? {
             sizes[path]?.let { return it }
             val struct = dtm.getDataType(path) as? Structure ?: return null
@@ -39,29 +56,22 @@ object StlSelfBases {
             } ?: 0
             return ((end + pointerSize - 1) / pointerSize * pointerSize).also { sizes[path] = it }
         }
-        var laid = 0
-        for (cls in StlShape.baseFirst(classes)) {
-            val struct = dtm.getDataType(cls.path) as? Structure ?: continue
-            val direct = cls.bases.filterNot { it.isVirtual }
-            for (base in direct) {
-                val at = base.offset?.toInt() ?: continue
-                if (!hasVirtualBases(base.path)) continue
-                val whole = dtm.getDataType(base.path) as? Structure ?: continue
-                val size = nonVirtualSize(base.path)?.takeIf { it in 1..<whole.length } ?: continue
-                val self = selfBase(dtm, whole, size)
-                for (c in struct.definedComponents.reversed()) {
-                    if (c.offset < at + size && c.offset + c.length > at) struct.clearAtOffset(c.offset)
-                }
-                if (at + size > struct.length) continue
-                val name = ClassNaming.baseFieldName(false, CategoryPath(base.path).name, direct.size)
-                runCatching { struct.replaceAtOffset(at, self, size, name, null) }.onSuccess { laid++ }
-            }
-        }
-        return laid
-    }
 
-    /** Whether [type] is the class at [path] or its self-base. */
-    private fun isOf(type: String, path: String) = type == path || type.startsWith("$path/")
+        /** Lays [base] of [struct], one of [bases] direct ones, as its self-base, if it has virtual bases. */
+        fun laySelfBase(struct: Structure, base: StdBase, bases: Int): Boolean {
+            val at = base.offset?.toInt() ?: return false
+            if (!hasVirtualBases(base.path)) return false
+            val whole = dtm.getDataType(base.path) as? Structure ?: return false
+            val size = nonVirtualSize(base.path)?.takeIf { it in 1..<whole.length } ?: return false
+            val self = selfBase(dtm, whole, size)
+            for (c in struct.definedComponents.reversed()) {
+                if (c.offset < at + size && c.offset + c.length > at) struct.clearAtOffset(c.offset)
+            }
+            if (at + size > struct.length) return false
+            val name = ClassNaming.baseFieldName(false, CategoryPath(base.path).name, bases)
+            return runCatching { struct.replaceAtOffset(at, self, size, name, null) }.isSuccess
+        }
+    }
 
     private fun selfBase(dtm: DataTypeManager, cls: Structure, size: Int): Structure {
         val path = ClassUtils.getBaseClassDataTypePath(cls)

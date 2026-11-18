@@ -30,9 +30,8 @@ class StlIndex(archive: DataTypeManager) {
         private val ALIAS = run {
             val names = ALIASES.keys.sortedByDescending { it.length }.joinToString("|")
             // Spelled as the demangler and the importer do, a space as `_`: `std::string_const`.
-            Regex(
-                "(?<![A-Za-z0-9:])(std::(?:__cxx11::)?)($names)(?=$|[^A-Za-z0-9_<]|_(?:const|volatile)(?![A-Za-z0-9])|_[*&>,])",
-            )
+            val end = "$|[^A-Za-z0-9_<]|_(?:const|volatile)(?![A-Za-z0-9])|_[*&>,]"
+            Regex("(?<![A-Za-z0-9:])(std::(?:__cxx11::)?)($names)(?=$end)")
         }
         private val LEADING_CV = Regex("(?<=^|[<,(]|[<,(]_)(const|volatile)_")
         private val SUFFIX = Regex("(?<![A-Za-z0-9])(\\d+)(?:ull|ul|ll|u|l)(?![A-Za-z0-9])", RegexOption.IGNORE_CASE)
