@@ -1,7 +1,7 @@
 package ghicpp.gui
 
 import ghicpp.hierarchy.SlotRenames
-import ghicpp.recover.FieldRetype
+import ghicpp.dissect.FieldRetype
 
 // What the class actions that rework the program say they did, in the dialog that ends each.
 

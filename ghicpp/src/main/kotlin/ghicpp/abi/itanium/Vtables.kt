@@ -1,8 +1,10 @@
 package ghicpp.abi.itanium
 
 import ghicpp.ClassNaming
-import ghicpp.abi.VtableRecord
+import ghicpp.VtableRecord
 import ghicpp.abi.functionSlots
+import ghicpp.abi.opensGroup
+import ghicpp.abi.slots
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program

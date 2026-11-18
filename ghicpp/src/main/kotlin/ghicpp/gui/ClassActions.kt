@@ -190,6 +190,17 @@ private fun ClassTree.addMemberActions() {
         },
     )
     addLocalAction(
+        object : DockingAction("Go to Base Method", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                selectedBaseMethod?.let(tree::setSelectedNode)
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Go to Base Method"), "0")
+            popupWhen { selectedNode is InheritedSlotNode }
+            enabledWhen { selectedBaseMethod != null }
+        },
+    )
+    addLocalAction(
         object : DockingAction("Set Member Attributes", owner) {
             override fun actionPerformed(context: ActionContext?) {
                 program?.setMemberAttrs(selectedMembers, tool, component)
@@ -421,6 +432,19 @@ private fun ClassTree.addViewToggles() {
             },
         )
     }
+    addLocalAction(
+        object : ToggleDockingAction("Show Inherited Slots", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                showInherited = isSelected
+                reshow()
+            }
+        }.apply {
+            toolBarData = ToolBarData(INHERITED_ICON, null)
+            description = "Also show, muted, each vftable slot a class leaves to its base's function " +
+                "(Base::f), in slot order among its own virtual functions; pure virtual slots left out"
+            helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+        },
+    )
     addLocalAction(
         object : ToggleDockingAction("Show Empty Classes", owner) {
             override fun actionPerformed(context: ActionContext?) {

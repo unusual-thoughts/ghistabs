@@ -1,7 +1,8 @@
 package ghicpp.abi.gcc2
 
-import ghicpp.abi.VtableRecord
+import ghicpp.VtableRecord
 import ghicpp.abi.itanium.Itanium
+import ghicpp.abi.slots
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.VoidDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest

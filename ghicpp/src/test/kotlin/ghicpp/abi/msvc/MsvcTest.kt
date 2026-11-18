@@ -1,10 +1,11 @@
 package ghicpp.abi.msvc
 
 import ghicpp.Access
+import ghicpp.CxxAbi
 import ghicpp.TestClass
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.VtableRecord
+import ghicpp.VtableRecord
 import ghicpp.abi.itanium.Itanium
+import ghicpp.abi.prevailing
 import ghicpp.introducingClass
 import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace

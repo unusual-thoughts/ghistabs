@@ -1,16 +1,15 @@
 package ghicpp.abi.generic
 
 import ghicpp.*
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.RttiParser
-import ghicpp.abi.VtableRecord
+import ghicpp.abi.holdsPureVirtualStub
 import ghicpp.abi.msvc.Msvc
+import ghicpp.abi.ofVtableSymbol
 import ghicpp.abi.slotFunction
+import ghicpp.abi.slots
 import ghicpp.dissect.DissectingParser
 import ghicpp.dissect.DissectionCache
 import ghicpp.dissect.Dissections
 import ghicpp.dissect.ThisFunctionDissector
-import ghicpp.recover.GenericVftableFinder
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -22,6 +21,7 @@ import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
+import ghidrakt.diagnose.Level
 
 /**
  * A class known by its vftables alone, with no RTTI to give it bases: those its structors show ([inferBases]). Its
@@ -31,16 +31,44 @@ class PlainClass(override val ns: Namespace, override val vftables: List<VtableR
     override val name: String get() = ns.name
     override val bases = mutableListOf<ClassBase>()
     override val virtualBases get() = bases.filter { it.isVirtual }.map { it.copy(offsetSource = SourceType.ANALYSIS) }
+
+    /** The vbase offsets in front of its primary's `offset_to_top`, where it has an Itanium header. */
+    var headerVbaseOffsets: Set<Long> = emptySet()
+
+    override val vbaseOffsets get() = super.vbaseOffsets + headerVbaseOffsets
 }
 
-/** The candidate bases of each class, as [inferBases] finds them, off their tables' [slots]. */
-internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Function?>>) {
+/**
+ * The candidate bases of each class, as [inferBases] finds them, off their tables' [slots], and which of those are
+ * [pure] virtual, by index. It tells [sink] what it takes each base off, and the evidence it can't use: tables or
+ * stores tied, candidates no one of which derives from the others.
+ */
+internal class BaseCandidates(
+    private val slots: Map<out ClassDecl, List<Function?>>,
+    private val pure: Map<out ClassDecl, Set<Int>> = emptyMap(),
+    sink: DiagnosticSink = DummySink,
+) : DiagnosticSink by sink {
     val byClass = mutableMapOf<ClassDecl, MutableSet<ClassDecl>>()
+
+    /** What each candidate base was taken off, by derived class and base. */
+    private val evidence = mutableMapOf<Pair<ClassDecl, ClassDecl>, MutableSet<String>>()
 
     private fun length(c: ClassDecl) = slots[c]?.size ?: 0
 
-    private fun add(derived: ClassDecl, base: ClassDecl) {
-        if (derived != base) byClass.getOrPut(derived) { mutableSetOf() } += base
+    private fun add(derived: ClassDecl, base: ClassDecl, why: String) {
+        if (derived == base) return
+        byClass.getOrPut(derived) { mutableSetOf() } += base
+        evidence.getOrPut(derived to base) { linkedSetOf() } += why
+    }
+
+    private val ClassDecl.at get() = vftables.firstOrNull()?.addressPoint
+
+    private val Collection<ClassDecl>.names get() = joinToString(", ") { it.name }
+
+    private fun evidenceOf(derived: ClassDecl, base: ClassDecl): String {
+        val all = evidence[derived to base].orEmpty()
+        val shown = all.take(MAX_EVIDENCE_SHOWN).joinToString("; ")
+        return if (all.size > MAX_EVIDENCE_SHOWN) "$shown; and ${all.size - MAX_EVIDENCE_SHOWN} more" else shown
     }
 
     /** Off the calls of each structor on `this`, and the vptrs it stores together. */
@@ -48,37 +76,136 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
         for ((f, stores) in uses.stores) {
             val own = stores.classes
             val callees = uses.subobjectCalls[f].orEmpty()[0L].orEmpty()
-            for (base in callees.flatMap { uses.stores[it]?.classes.orEmpty() }.filterNot { it in own }) {
-                own.forEach { add(it, base) }
+            for (callee in callees) {
+                for (base in uses.stores[callee]?.classes.orEmpty().filterNot { it in own }) {
+                    own.forEach { add(it, base, "${f.name} calls ${callee.name} on this") }
+                }
             }
             val inlined = own.groupBy(::length).toSortedMap().values
-            if (inlined.all { it.size == 1 }) inlined.zipWithNext { (base), (derived) -> add(derived, base) }
+            if (inlined.all { it.size == 1 }) {
+                inlined.zipWithNext { (base), (derived) ->
+                    add(derived, base, "${f.name} stores both, by table length")
+                }
+            } else {
+                log(
+                    "base-tie-stores",
+                    "${f.name} stores all their vptrs, and their tables' lengths don't order them",
+                    Level.INFO,
+                    f.entryPoint,
+                    degrades = own.names,
+                )
+            }
         }
         for (built in uses.inlined) {
             // After `operator new` it can only be building, so each vptr stored is a base of the next.
-            built.order.zipWithNext { base, derived -> add(derived, base) }
+            built.order.zipWithNext { base, derived -> add(derived, base, "${built.function.name} builds both") }
             for (part in built.parts) {
-                val callees = part.calls[0L].orEmpty()
-                for (base in callees.flatMap { uses.stores[it]?.classes.orEmpty() }.filterNot { it in built.order }) {
-                    add(part.cls, base)
+                for (callee in part.calls[0L].orEmpty()) {
+                    for (base in uses.stores[callee]?.classes.orEmpty().filterNot { it in built.order }) {
+                        add(part.cls, base, "${built.function.name} calls ${callee.name} on what it builds")
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Adds bases off the deleting destructors the tables hold. A deleting destructor that stores no vptr itself,
+     * but calls on `this` a destructor that stores exactly one other class's vptr, destroys an object of the class
+     * whose table holds it. That class's own destructor had nothing to do, so it was folded away. The class whose
+     * vptr the callee stores is then a base of the class whose table holds the deleting destructor. No constructor
+     * may show this: a constructor that inlines an abstract base's constructor drops the base's vptr store, since
+     * the derived class's store overwrites it.
+     *
+     * A slot whose first argument is the object it returns ([returnsInSlot]) is skipped, as its calls build that
+     * object. So is a callee not seen destroying ([destroys]). Otherwise the constructors that a virtual returning a
+     * class by value calls would make every class returning one derive from it.
+     */
+    fun addDeletingSlots(uses: Dissections) {
+        for ((cls, fs) in slots) {
+            for (f in fs.filterNotNull().distinct().filterNot { it in uses.stores || it.returnsInSlot() }) {
+                val callees = uses.subobjectCalls[f].orEmpty()[0L].orEmpty().filter { uses.destroys(it) }
+                val destroyed = callees.flatMapTo(mutableSetOf()) { uses.stores[it]?.classes.orEmpty() }
+                destroyed.singleOrNull()?.let { add(cls, it, "its table's ${f.name} destroys one") }
+            }
+        }
+    }
+
+    /**
+     * Whether [f] is seen destroying an object. It stores a vptr, then calls on `this` itself, not on a member, a
+     * function that stores another class's vptr: its base's destructor. Before its own store it calls no such
+     * function, as a constructor building its bases would.
+     */
+    private fun Dissections.destroys(f: Function): Boolean {
+        val own = stores[f] ?: return false
+        val onThis = subobjectCalls[f].orEmpty()[0L].orEmpty()
+        fun storesOther(g: Function) = g != f && g in onThis && stores[g]?.classes.orEmpty().any { it !in own.classes }
+        return own.after.any(::storesOther) && own.before.none(::storesOther)
     }
 
     /** Off the functions several tables hold in one slot, each introduced by the shortest. */
     fun addSharedSlots() {
         val held = slots.flatMap { (c, fs) -> fs.mapIndexedNotNull { i, f -> f?.let { Triple(it, i, c) } } }
         val holders = held.groupBy({ it.first to it.second }, { it.third })
-        for ((_, at) in held.groupBy { it.first }) {
+        val ties = mutableMapOf<List<ClassDecl>, MutableList<String>>()
+        val past = mutableMapOf<Pair<ClassDecl, ClassDecl>, MutableList<String>>()
+        for ((func, at) in held.groupBy { it.first }) {
             if (at.map { it.second }.distinct().size != 1) continue
+            val slot = "${func.name} in slot ${at.first().second}"
             val classes = at.map { it.third }.distinct()
             val shortest = classes.minOf(::length)
-            val introducer = classes.singleOrNull { length(it) == shortest } ?: continue
+            val tied = classes.filter { length(it) == shortest }
+            val introducer = tied.singleOrNull() ?: tied.singleOrNull { c -> tied.all { it == c || c.isPurerThan(it) } }
+            if (introducer == null) {
+                if (classes.size > 1) ties.getOrPut(tied.sortedBy { it.name }) { mutableListOf() } += slot
+                continue
+            }
+            val how = when {
+                tied.size > 1 -> "shares $slot with it, tied for the shortest table but pure"
+                else -> "shares $slot"
+            }
             for (cls in classes) {
-                if (cls != introducer && !cls.inheritsPast(introducer, slots, holders, ::length)) add(cls, introducer)
+                when {
+                    cls == introducer -> {}
+
+                    cls.inheritsPast(introducer, slots, holders, ::length) ->
+                        past.getOrPut(cls to introducer) { mutableListOf() } += slot
+
+                    else -> add(cls, introducer, how)
+                }
             }
         }
+        for ((tied, shared) in ties) {
+            log(
+                "base-tie-slots",
+                "tie for the shortest table holding ${shared.joinToString()}, none pure where the others " +
+                    "aren't: no introducer",
+                Level.INFO,
+                tied.first().at,
+                degrades = tied.names,
+            )
+        }
+        for ((pair, shared) in past) {
+            val (cls, introducer) = pair
+            log(
+                "base-slot-dropped",
+                "shares ${shared.joinToString()} with ${introducer.name}, but inherits a slot " +
+                    "${introducer.name} overrides from further up: not taken as a direct base",
+                Level.INFO,
+                cls.at,
+                degrades = cls.name,
+            )
+        }
+    }
+
+    /**
+     * Whether this class's table is [pure] where [other]'s holds a function, and [other]'s nowhere this one's isn't:
+     * pure where [other] overrides, as a base can be and a class deriving from one that isn't can't.
+     */
+    private fun ClassDecl.isPurerThan(other: ClassDecl): Boolean {
+        val own = pure[this].orEmpty()
+        val theirs = pure[other].orEmpty()
+        return own.any { it !in theirs && slots[other].orEmpty().getOrNull(it) != null } && own.containsAll(theirs)
     }
 
     /**
@@ -88,13 +215,17 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
      * pure virtual stub doesn't.
      *
      * A function storing D's vptr that calls on `this` a function storing B's makes B a base of D, as a constructor
-     * builds its bases and a destructor destroys them. A function storing several classes' vptrs at once, inlining
-     * its bases', stores a base's first in a constructor and last in a destructor, so there their tables' lengths
-     * order them: a derived class's table holds at least its base's slots. A constructor inlined after `operator
-     * new` can only build, so there the order of its stores says.
+     * builds its bases and a destructor destroys them. So does a deleting destructor in D's table that stores no
+     * vptr itself ([addDeletingSlots]).
+     * A function storing several classes' vptrs at once, inlining its bases', stores a base's first in a
+     * constructor and last in a destructor, so there their tables' lengths order them: a derived class's table
+     * holds at least its base's slots. A constructor inlined after `operator new` can only build, so there the
+     * order of its stores says.
      *
      * A function several tables hold, in the same slot of each, was introduced by a class all of theirs derive from:
-     * the one with the shortest table, if no other is as short, which is then a candidate base of the others. Not
+     * the one with the shortest table, which is then a candidate base of the others. Of several as short, the one
+     * pure where each other overrides ([isPurerThan]): MSVC drops an abstract base's vptr store from the
+     * constructor inlining it, as the derived class's overwrites it, so only its table tells it from them. Not
      * where that class overrides a slot that the other inherits from a class with a shorter table still, which a class
      * deriving from it couldn't ([inheritsPast]); and not for a function in different slots, as the linker folds
      * functions alike across unrelated classes.
@@ -109,11 +240,36 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
         subobjects: Map<PlainClass, Map<Long, Boolean>> = emptyMap(),
     ) {
         addStructors(uses)
+        addDeletingSlots(uses)
         addSharedSlots()
         val direct = byClass.mapValues { (_, cs) -> cs.mostDerived(byClass) }
         for (cls in classes) {
-            val base = direct[cls] ?: continue
-            if (direct[base] != cls) cls.bases += ClassBase(base, isVirtual = false, Access.PUBLIC, 0L)
+            val candidates = byClass[cls].orEmpty()
+            val base = direct[cls]
+            if (base == null) {
+                if (candidates.isNotEmpty()) {
+                    degradation(
+                        "base-candidates-unordered",
+                        cls.name,
+                        "no one of its candidate bases derives from the others, so none is taken: " +
+                            candidates.joinToString(" | ") { "${it.name}: ${evidenceOf(cls, it)}" },
+                        cls.at,
+                    )
+                }
+                continue
+            }
+            if (direct[base] == cls) {
+                degradation(
+                    "base-cycle",
+                    cls.name,
+                    "it and ${base.name} would derive from each other, so neither does: " +
+                        "${evidenceOf(cls, base)} | ${evidenceOf(base, cls)}",
+                    cls.at,
+                )
+                continue
+            }
+            cls.bases += ClassBase(base, isVirtual = false, Access.PUBLIC, 0L)
+            debug("base-inferred", "${cls.name} : ${base.name}, as ${evidenceOf(cls, base)}", cls.at)
         }
         for ((cls, offsets) in subobjects) {
             val found = offsets.mapNotNull { (offset, isVirtual) ->
@@ -122,6 +278,15 @@ internal class BaseCandidates(private val slots: Map<out ClassDecl, List<Functio
             // A virtual base may be one of another base's, which the complete-object constructor builds as well:
             // not while a non-virtual subobject's class is unknown, as it may be the one deriving from it.
             val unknown = offsets.count { !it.value } > found.count { !it.isVirtual }
+            for (base in found.filter { it.isVirtual && unknown }) {
+                degradation(
+                    "base-virtual-dropped",
+                    cls.name,
+                    "virtual ${base.cls.name} at +${base.offset} left out, as a base subobject's class " +
+                        "is unknown and may be the one deriving from it",
+                    cls.at,
+                )
+            }
             for (base in found.filterNot { it.isVirtual && unknown }) {
                 if (cls.bases.none { it.cls == base.cls }) cls.bases += base
             }
@@ -164,6 +329,9 @@ private fun ClassDecl.inheritsPast(
             holders[d to i].orEmpty().any { it != this && length(it) < length(this) }
     }
 }
+
+/** How many of the pieces of evidence for one base a diagnostic names. */
+private const val MAX_EVIDENCE_SHOWN = 3
 
 /** The one of these that every other is a candidate base of, directly or not. */
 private fun Set<ClassDecl>.mostDerived(candidates: Map<ClassDecl, Set<ClassDecl>>): ClassDecl? {
@@ -211,17 +379,28 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
                     .sortedBy { it.first }.map { it.second }
                 PlainClass(ns, (labels + secondaries).map { PlainVtables.recordAt(program, it.address) })
             }
-        val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
-        val slots = classes.associateWith { c ->
-            c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty().map { at ->
-                // An unnamed pure virtual stub never returns: it aborts.
-                at.takeIf { it.offset != 0L }?.let { program.slotFunction(it, PlainVtables) }
-                    ?.takeUnless { it.hasNoReturn() }
-            }
+        // Look up the slots' functions before reading the storers. Looking one up can create it, which changes
+        // the program, and the class pass would then have to decompile the storers again.
+        val targets = classes.associateWith { c ->
+            c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty()
         }
+        val own = targets.mapValues { (_, ats) ->
+            ats.map { at -> at.takeIf { it.offset != 0L }?.let { program.slotFunction(it, PlainVtables) } }
+        }
+        // An unnamed pure virtual stub never returns: it aborts.
+        val slots = own.mapValues { (_, fs) -> fs.map { f -> f?.takeUnless { it.hasNoReturn() } } }
+        // Read the slots' functions too. addDeletingSlots needs the destructors that deleting destructors call, and
+        // the class pass reads the same functions next, through the same cache.
+        val held = slots.values.flatMapTo(mutableSetOf()) { it.filterNotNull() }
+        val holders = holders(classes)
+        val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor, held)
         monitor.message = "Inferring bases from constructors"
-        BaseCandidates(slots).inferBases(classes, uses, classes.associateWith(::subobjects))
-        return ClassPassInput(classes, classes, holders(classes))
+        BaseCandidates(
+            slots,
+            pureSlots(targets, own),
+            sink,
+        ).inferBases(classes, uses, classes.associateWith(::subobjects))
+        return ClassPassInput(classes, classes, holders)
     }
 
     /**
@@ -231,16 +410,38 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
      */
     private fun subobjects(cls: PlainClass): Map<Long, Boolean> {
         val primary = cls.vftables.firstOrNull()?.addressPoint ?: return emptyMap()
-        val vbaseOffsets = (3..2 + MAX_VBASE_WORDS).mapNotNull { primary.signedWordBefore(it) }
-            .takeWhile { it in 1 until GenericVftableFinder.MAX_SUBOBJECT_OFFSET }.toSet()
+        val vbaseOffsets = if (primary.signedWordBefore(program, 2) == 0L) {
+            (3..2 + MAX_VBASE_WORDS).asSequence().map { primary.signedWordBefore(program, it) }
+                .takeWhile { it != null && it in ptr until PlainVtables.MAX_SUBOBJECT_OFFSET }
+                .filterNotNull().toSet()
+        } else {
+            emptySet()
+        }
+        cls.headerVbaseOffsets = vbaseOffsets
         return cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } }
             .associateWith { it in vbaseOffsets }
     }
 
-    private fun Address.signedWordBefore(words: Int): Long? = runCatching {
-        val at = subtractNoWrap(words * ptr)
-        if (ptr == 8L) program.memory.getLong(at) else program.memory.getInt(at).toLong()
-    }.getOrNull()
+    /**
+     * The indices of each class's primary table's pure virtual slots, off what its slots point at ([targets]) and
+     * the program's own functions those are ([own]): null, a pure virtual stub [PlainVtables] names
+     * ([holdsPureVirtualStub]), or an unnamed one, which never returns and fills more than one slot. A function the
+     * analysis wrongly thinks never returns fills one.
+     */
+    private fun pureSlots(
+        targets: Map<PlainClass, List<Address>>,
+        own: Map<PlainClass, List<Function?>>,
+    ): Map<PlainClass, Set<Int>> {
+        val slotsHeld = own.values.flatMap { fs -> fs.withIndex().mapNotNull { (i, f) -> f?.let { it to i } } }
+            .groupBy({ it.first }, { it.second }).mapValues { it.value.toSet().size }
+        return targets.mapValues { (cls, ats) ->
+            ats.indices.filterTo(mutableSetOf()) { i ->
+                val f = own.getValue(cls)[i]
+                ats[i].offset == 0L || program.holdsPureVirtualStub(ats[i], PlainVtables::isPureVirtualStub) ||
+                    (f != null && f.hasNoReturn() && slotsHeld.getValue(f) > 1)
+            }
+        }
+    }
 
     /** Whether [this] labels a table no ABI's records describe, in a class that has none. */
     private fun Symbol.isPlain(): Boolean {
