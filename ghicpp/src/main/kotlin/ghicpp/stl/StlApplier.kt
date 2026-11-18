@@ -48,7 +48,7 @@ class StlApplier(
 
     /** The archive's class at [category] / [name], or the one that is spelled alike but for [untagged]. */
     private fun lookup(category: CategoryPath, name: String): Composite? =
-        (archive.getDataType(DataTypePath(category, name)) as? Composite)?.takeUnless { it.isNotYetDefined }
+        lookup(archive, category, name)
             ?: untaggedIndex[untagged(category.pathElements.joinToString("::") + "::" + name)]
 
     fun apply(): Result {
@@ -99,7 +99,7 @@ class StlApplier(
     private fun record(): Int {
         if (classes.isEmpty()) return 0
         val namespaces = program.symbolTable.classNamespaces.asSequence().toList()
-            .groupBy { it.getPathList(true) }
+            .groupBy { canonical(archive, it.getPathList(true)) }
             .mapValues { (_, group) -> group.firstOrNull { !it.isExternal } ?: group.first() }
         val old = program.readClassRecord().orEmpty()
         val name = archive.name.removeSuffix(".gdt")
@@ -137,6 +137,68 @@ class StlApplier(
          */
         @JvmStatic
         fun untagged(name: String): String = TAG.replace(name, "")
+
+        /** libstdc++'s: `__gnu_cxx` holds its extensions and the iterators of its containers. */
+        @JvmField
+        val GNU_ROOTS = setOf("std", "__gnu_cxx")
+
+        /**
+         * The names Ghidra's GNU demangler (11.4 on) puts in place of a library template, with the class each
+         * stands for, as the demangler and the DWARF importer spell it: `string` for
+         * `basic_string<char,_std::char_traits<char>,_std::allocator<char>_>`. A GNU archive keeps each as a
+         * typedef of the class, in `std` and in `std::__cxx11`, which [lookup] follows.
+         */
+        @JvmStatic
+        fun gnuAliases(): Map<String, String> = buildMap {
+            for ((prefix, char) in listOf("" to "char", "w" to "wchar_t")) {
+                val traits = "std::char_traits<$char>"
+                val alloc = "std::allocator<$char>"
+                for (name in listOf(
+                    "ios", "streambuf", "istream", "ostream", "iostream", "filebuf",
+                    "ifstream", "ofstream", "fstream",
+                )) {
+                    put("$prefix$name", spelled("basic_$name<$char, $traits >"))
+                }
+                for (name in listOf("string", "stringbuf", "istringstream", "ostringstream", "stringstream")) {
+                    put("$prefix$name", spelled("basic_$name<$char, $traits, $alloc >"))
+                }
+            }
+            for (char in listOf("char8_t", "char16_t", "char32_t")) {
+                put(
+                    char.removeSuffix("_t").replace("char", "u") + "string",
+                    spelled("basic_string<$char, std::char_traits<$char>, std::allocator<$char> >"),
+                )
+            }
+        }
+
+        private fun categoryOf(scopes: List<String>) =
+            if (scopes.isEmpty()) CategoryPath.ROOT else CategoryPath(CategoryPath.ROOT, scopes)
+
+        private fun spelled(cxx: String) = cxx.replace(' ', '_')
+
+        /**
+         * The class [archive] files at [category] / [name], through the typedefs it keeps for the names a
+         * demangler gives a library template ([gnuAliases]), in the name or in any scope of the category;
+         * null if it has none, or only an empty one.
+         */
+        @JvmStatic
+        fun lookup(archive: DataTypeManager, category: CategoryPath, name: String): Composite? {
+            val scopes = canonical(archive, category.pathElements.toList() + name)
+            val found = archive.getDataType(DataTypePath(categoryOf(scopes.dropLast(1)), scopes.last()))
+            return (found as? Composite)?.takeUnless { it.isNotYetDefined }
+        }
+
+        /** [path], each scope that names a typedef of [archive]'s replaced by the class it names. */
+        fun canonical(archive: DataTypeManager, path: List<String>): List<String> {
+            val out = mutableListOf<String>()
+            for (segment in path) {
+                val category = categoryOf(out)
+                val typedef = archive.getDataType(category, segment) as? TypeDef
+                val target = typedef?.baseDataType as? Composite
+                out.add(if (target != null && target.categoryPath == category) target.name else segment)
+            }
+            return out
+        }
 
         /**
          * Where the archive files the type a placeholder at [category] stands for; null outside the
