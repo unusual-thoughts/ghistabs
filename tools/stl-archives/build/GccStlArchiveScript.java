@@ -56,9 +56,29 @@ public class GccStlArchiveScript extends GhidraScript {
 	}
 
 	/** The classes' bases and slots, off the DWARF, by their path in the archive. */
-	private record Read(StdClasses classes, Map<String, DataType> slotTypes) {
+	private record Read(StdClasses classes, Map<String, DataType> slotTypes, Map<String, DataType> types,
+			Set<String> abiTagged) {
 		DataType typeOf(StdClass cls, StdSlot slot) {
 			return slotTypes.get(cls.getPath() + "@" + slot.getOffset());
+		}
+
+		/** Where the class read at [path] is now: renamed, or folded into the copy of the name it had. */
+		String now(String path) {
+			DataType dt = types.get(path);
+			return dt != null && !dt.isDeleted() ? dt.getPathName() : CONFLICT.matcher(path).replaceFirst("");
+		}
+
+		/** The classes at the paths their types are at now. */
+		StdClasses moved() {
+			List<StdClass> out = new ArrayList<>();
+			for (StdClass c : classes.getClasses()) {
+				List<StdBase> bases = new ArrayList<>();
+				for (StdBase b : c.getBases()) {
+					bases.add(new StdBase(now(b.getPath()), b.getAccess(), b.isVirtual(), b.getOffset()));
+				}
+				out.add(new StdClass(now(c.getPath()), bases, c.getSlots()));
+			}
+			return new StdClasses(out);
 		}
 	}
 
@@ -78,10 +98,11 @@ public class GccStlArchiveScript extends GhidraScript {
 		// The slots' function types, which the vftables brought in.
 		refile(dtm);
 		int typedefs = addTypedefs(dtm);
-		int methods = checkAgainstMethods(dtm);
 		// Last, as laying the classes brings the built-ins back.
 		portableBuiltins(dtm);
 		int folded = foldConflicts(dtm);
+		tagAbi(dtm, read);
+		int methods = checkAgainstMethods(dtm);
 		println(String.format(
 			"%s: %d std types filed at their demangled paths, %d unrelated types dropped, " +
 				"%d typedefs, %d vfptrs named, %d bases laid as their non-virtual part, %d bases named, " +
@@ -90,7 +111,7 @@ public class GccStlArchiveScript extends GhidraScript {
 				"%d classes with bases; %d copies folded",
 			name, moved, dropped, typedefs, vfptrs, selfBases, shape.getBases(), shape.getVftables(), shape.getSplit(),
 			methods, read.classes().getClasses().stream().filter(c -> !c.getBases().isEmpty()).count(), folded));
-		read.classes().write(classesFile);
+		read.moved().write(classesFile);
 	}
 
 	/**
@@ -236,24 +257,43 @@ public class GccStlArchiveScript extends GhidraScript {
 			}
 			return true;
 		}
-		if (a instanceof Composite x && b instanceof Composite y) {
-			if ((x instanceof Union) != (y instanceof Union)) {
-				return false;
-			}
-			DataTypeComponent[] p = x.getDefinedComponents(), q = y.getDefinedComponents();
-			if (p.length != q.length) {
-				return false;
-			}
-			for (int i = 0; i < p.length; i++) {
-				if (p[i].getOffset() != q[i].getOffset() || p[i].getLength() != q[i].getLength() ||
-					!Objects.equals(p[i].getFieldName(), q[i].getFieldName()) ||
-					!alike(p[i].getDataType(), q[i].getDataType(), depth + 1)) {
-					return false;
-				}
-			}
+		if (a instanceof Composite x && b instanceof Composite y && sameFields(x, y, depth)) {
 			return true;
 		}
-		return a.getClass() == b.getClass();
+		// A wrapper, `std::__cow_string`'s union of a `std::string` and its bytes, is alike what it wraps.
+		return wraps(a, b, depth) || wraps(b, a, depth) ||
+			!(a instanceof Composite) && !(b instanceof Composite) && a.getClass() == b.getClass();
+	}
+
+	private static boolean sameFields(Composite x, Composite y, int depth) {
+		if ((x instanceof Union) != (y instanceof Union)) {
+			return false;
+		}
+		DataTypeComponent[] p = x.getDefinedComponents(), q = y.getDefinedComponents();
+		if (p.length != q.length) {
+			return false;
+		}
+		for (int i = 0; i < p.length; i++) {
+			if (p[i].getOffset() != q[i].getOffset() || p[i].getLength() != q[i].getLength() ||
+				!Objects.equals(p[i].getFieldName(), q[i].getFieldName()) ||
+				!alike(p[i].getDataType(), q[i].getDataType(), depth + 1)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** Whether [outer] is a struct of one field, or a union with a member, that spans it and is alike [inner]. */
+	private static boolean wraps(DataType outer, DataType inner, int depth) {
+		if (!(outer instanceof Composite c) || c instanceof Structure && c.getNumDefinedComponents() != 1) {
+			return false;
+		}
+		for (DataTypeComponent m : c.getDefinedComponents()) {
+			if (m.getOffset() == 0 && m.getLength() == outer.getLength() && alike(m.getDataType(), inner, depth + 1)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** The built-in integers newer than Ghidra 10.4, which the DWARF importer takes `<stdint.h>`'s typedefs as. */
@@ -302,6 +342,9 @@ public class GccStlArchiveScript extends GhidraScript {
 		Map<String, DataType> slotTypes = new HashMap<>();
 		Map<Long, DIEAggregate> byOffset = new HashMap<>();
 		Map<String, DIEAggregate> byPath = new HashMap<>();
+		Map<String, DataType> types = new HashMap<>();
+		Set<String> abiTagged = new HashSet<>();
+		DataTypeManager dtm = currentProgram.getDataTypeManager();
 		for (DIEAggregate die : dwarf.allAggregates()) {
 			monitor.checkCancelled();
 			if (!die.getTag().isStructureType() || die.getTag() == DWARFTag.DW_TAG_union_type ||
@@ -313,7 +356,12 @@ public class GccStlArchiveScript extends GhidraScript {
 				continue;
 			}
 			byOffset.put(die.getOffset(), die);
-			byPath.putIfAbsent(path, die);
+			if (byPath.putIfAbsent(path, die) == null) {
+				types.put(path, dtm.getDataType(dwarfTypes.getDataType(die, null).getDataTypePath()));
+				if (abiTagged(die)) {
+					abiTagged.add(path);
+				}
+			}
 		}
 		for (Map.Entry<String, DIEAggregate> e : byPath.entrySet()) {
 			String path = e.getKey();
@@ -350,7 +398,50 @@ public class GccStlArchiveScript extends GhidraScript {
 				classes.put(path, new StdClass(path, cls.getBases(), slots));
 			}
 		}
-		return new Read(new StdClasses(new ArrayList<>(classes.values())), slotTypes);
+		return new Read(new StdClasses(new ArrayList<>(classes.values())), slotTypes, types, abiTagged);
+	}
+
+	/**
+	 * Whether the class is the C++11 ABI's of a name both ABIs define, which its members' mangled names tag
+	 * `B5cxx11` (`std::ios_base::failure[abi:cxx11]`): DWARF names the two alike.
+	 */
+	private static boolean abiTagged(DIEAggregate die) {
+		String name = die.getName();
+		if (name == null) {
+			return false;
+		}
+		String tagged = name.length() + name + "B5cxx11";
+		for (DebugInfoEntry child : die.getHeadFragment().getChildren()) {
+			if (child.getTag() != DWARFTag.DW_TAG_subprogram) {
+				continue;
+			}
+			DIEAggregate fn = die.getProgram().getDIEContainer().getAggregate(child);
+			String linkage = fn == null ? null : fn.getString(DWARFAttributeId.DW_AT_linkage_name, null);
+			if (linkage != null && linkage.contains(tagged)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Names each class the C++11 ABI tags as the demangler does, `failure[abi:cxx11]`, and gives the
+	 * untagged name back to the other ABI's copy.
+	 */
+	private void tagAbi(DataTypeManager dtm, Read read) throws Exception {
+		for (String path : read.abiTagged()) {
+			DataType dt = read.types().get(path);
+			if (dt == null || dt.isDeleted()) {
+				continue;
+			}
+			String base = dt.getName().replaceFirst("#\\d+$", "");
+			dt.setName(base + "[abi:cxx11]");
+			DataType other = dtm.getDataType(dt.getCategoryPath(), base + "#1");
+			if (other != null && dtm.getDataType(dt.getCategoryPath(), base) == null &&
+				dtm.getDataType(dt.getCategoryPath(), base + "#2") == null) {
+				other.setName(base);
+			}
+		}
 	}
 
 	/** A class's vtable: how many entries, whether one is a virtual destructor, and those it introduces. */
@@ -500,21 +591,44 @@ public class GccStlArchiveScript extends GhidraScript {
 	/**
 	 * The names Ghidra's GNU demangler puts in place of a library template (its standard replacements,
 	 * since 11.4), each a typedef of the class, in std and in the C++11 ABI's std::__cxx11 where it has one.
+	 * The demangler's `std::string` is the copy-on-write `std::basic_string<char>`, but each unit's DWARF
+	 * files a `std::string` of its own ABI's: a field the C++11 unit typed `std::string` takes
+	 * `std::__cxx11::string` instead, which names the same class.
 	 */
-	private int addTypedefs(DataTypeManager dtm) {
-		int added = 0;
-		for (String ns : List.of("std", "std/__cxx11")) {
-			CategoryPath category = new CategoryPath("/" + ns);
+	private int addTypedefs(DataTypeManager dtm) throws Exception {
+		List<CategoryPath> categories = List.of(new CategoryPath("/std"), new CategoryPath("/std/__cxx11"));
+		Map<String, TypeDef> made = new HashMap<>();
+		for (CategoryPath category : categories) {
 			for (Map.Entry<String, String> e : StlApplier.gnuAliases().entrySet()) {
-				DataType target = dtm.getDataType(category, e.getValue());
-				if (target instanceof Composite) {
-					dtm.addDataType(new TypedefDataType(category, e.getKey(), target, dtm),
-						DataTypeConflictHandler.REPLACE_HANDLER);
-					added++;
+				if (dtm.getDataType(category, e.getValue()) instanceof Composite target) {
+					DataType t = dtm.addDataType(new TypedefDataType(category, e.getKey() + ".stl", target, dtm),
+						DataTypeConflictHandler.DEFAULT_HANDLER);
+					made.put(category.getPath() + "/" + e.getKey(), (TypeDef) t);
 				}
 			}
 		}
-		return added;
+		// The units' own, each in favor of the one of its class.
+		for (CategoryPath category : categories) {
+			Category cat = dtm.getCategory(category);
+			if (cat == null) {
+				continue;
+			}
+			for (DataType dt : cat.getDataTypes()) {
+				String alias = CONFLICT.matcher(dt.getName()).replaceFirst("");
+				if (!(dt instanceof TypeDef t) || made.containsValue(t) ||
+					!StlApplier.gnuAliases().containsKey(alias)) {
+					continue;
+				}
+				TypeDef own = made.get(t.getBaseDataType().getCategoryPath().getPath() + "/" + alias);
+				if (own != null && own.getBaseDataType().isEquivalent(t.getBaseDataType())) {
+					dtm.replaceDataType(t, own, false);
+				}
+			}
+		}
+		for (Map.Entry<String, TypeDef> e : made.entrySet()) {
+			e.getValue().setName(e.getValue().getName().replaceFirst("\\.stl$", ""));
+		}
+		return made.size();
 	}
 
 	/**
@@ -524,6 +638,7 @@ public class GccStlArchiveScript extends GhidraScript {
 	private int checkAgainstMethods(DataTypeManager dtm) {
 		Set<String> seen = new TreeSet<>();
 		Set<String> missing = new TreeSet<>();
+		StlIndex index = new StlIndex(dtm);
 		for (Symbol sym : currentProgram.getSymbolTable().getAllSymbols(false)) {
 			String name = sym.getName();
 			if (!name.startsWith("_ZN")) {
@@ -554,14 +669,16 @@ public class GccStlArchiveScript extends GhidraScript {
 			CategoryPath category = new CategoryPath(CategoryPath.ROOT, path);
 			String cls = SymbolUtilities.replaceInvalidChars(owner.getName(), true);
 			String key = category.getPath() + "/" + cls;
-			if (StlApplier.lookup(dtm, category, cls) != null) {
+			if (StlApplier.lookup(dtm, category, cls, index) != null) {
 				seen.add(key);
 			}
 			else {
 				missing.add(key);
 			}
 		}
+		missing.removeAll(seen);
 		missing.stream().limit(20).forEach(p -> println("method class without a type: " + p));
+		println(missing.size() + " method classes without a type");
 		return seen.size();
 	}
 }
