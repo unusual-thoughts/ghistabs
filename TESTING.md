@@ -96,6 +96,8 @@ them. `-Pregression` *includes*, so it does exactly that on purpose.
   it. Same for `src/test/resources/corpus/` descriptor exports. Generated dumps go to
   `build/test-output/` so `./gradlew clean` regenerates them.
 - The class scorecards' ground truth and baselines live in `ghicpp/src/test/resources/ghicpp/scorecard/`.
+  Each case's baseline is its counters (`<case>.json`) and every false positive and false negative they
+  count, one `<counter> <instance>` line each (`<case>.instances.txt`); either moving fails the case.
 - **No assertion may be keyed to a fixture name.** A test gated on `binaryName == "foo.exe"`, or
   looking up a class only one binary declares, is dead the moment that binary is not on disk — and a
   whole tier of them was, silently, for every clone without the non-redistributable fixtures. Drive the

@@ -1,0 +1,6 @@
+classes-fn `Boot` (stabs)
+classes-fn `Box` (stabs)
+classes-fn `Quals` (stabs)
+classes-fn `Stack<Point,2>` (stabs)
+classes-fn `extras(int)::Local` (stabs)
+classes-fn `outer::inner::Deep` (stabs)
