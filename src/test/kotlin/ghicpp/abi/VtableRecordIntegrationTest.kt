@@ -5,15 +5,17 @@ import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.Typeinfo
 import ghicpp.abi.itanium.vtableOffsetField
 import ghidra.program.model.address.Address
-import ghidrakt.get
-import ghidrakt.getScalar
+import ghidrakt.*
+import ghidrakt.test.TestBinaries
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeTrue
 import ghistabs.integration.FeatureFixtureTest
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.io.File
 
 /**
  * `features/hello.cc`'s `Diamond` inherits `Base` virtually, so its primary record opens with one
@@ -45,6 +47,27 @@ class VtableRecordIntegrationTest : FeatureFixtureTest() {
             .mustBeTrue("rtti word should point at _ZTI7Diamond")
         program.listing.getDataAt(ztv)?.get(vtableOffsetField(0))?.defaultValueRepresentation
             ?.endsWith("h").mustBe(false, "a laid vbase offset should render in decimal")
+    }
+
+    /**
+     * Under `-fno-rtti` the rtti word is 0, so no typeinfo ends the header: it ends where the slots start.
+     * `Diamond`, `Down` and `Both` each have one virtual base, so a vbase offset in front of `offset_to_top`.
+     */
+    @Test
+    fun `a primary record with no typeinfo ends its header where its slots start`() {
+        // No stabs to import: the loader's symbols are enough.
+        loadProgram(File(TestBinaries.HELLOS, "hello_elf64_gcc13_nortti"), "gcc").use { loaded ->
+            val program = loaded.program
+            for (name in listOf("_ZTV7Diamond", "_ZTV4Down", "_ZTV4Both")) {
+                val ztv = program.symbolTable.getSymbols(name).single().address
+                val record = Itanium.recordAt(program, ztv)
+                record.prefixWords.mustBe(1, name)
+                record.addressPoint.mustBe(ztv.add(3L * program.defaultPointerSize), name)
+            }
+            // No virtual base: the bare two words.
+            val core = program.symbolTable.getSymbols("_ZTV4Core").single().address
+            Itanium.recordAt(program, core).prefixWords mustBe 0
+        }
     }
 
     /**

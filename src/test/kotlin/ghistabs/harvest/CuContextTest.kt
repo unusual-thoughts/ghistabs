@@ -4,7 +4,6 @@ import ghidrakt.diagnose.CapturingSink
 import ghidrakt.test.*
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.SourceFile
-import ghistabs.test.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 

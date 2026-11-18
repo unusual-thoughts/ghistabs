@@ -2,10 +2,9 @@ package ghistabs.parse
 
 import ghicpp.Access
 import ghicpp.isVptrFieldName
-import ghicpp.member
 import ghidrakt.test.*
 import ghistabs.parse.TypeDecl.Aggregate.Field
-import ghistabs.test.*
+import ghistabs.test.longRange
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource

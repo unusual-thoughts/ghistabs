@@ -14,9 +14,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.Msg
 import ghidra.util.layout.PairLayout
-import ghidrakt.namespaceAt
-import ghidrakt.runTransaction
-import ghidrakt.startsWith
+import ghidrakt.*
 import java.awt.Component
 import java.math.BigInteger
 import javax.swing.JCheckBox
@@ -257,14 +255,10 @@ private fun askMemberAttrs(
     return declared
 }
 
-private fun Program.writeMemberAttrs(member: Member, attrs: MemberAttrs) {
-    addressFactory.getAddress(member.address)?.let { writeMember(it, attrs) }
-}
-
 /** Sets how each of [members], with the class listing it, is declared, as the user answers. */
 fun Program.setMemberAttrs(members: List<Pair<Member, ClassView>>, tool: PluginTool, component: Component) {
     val declared = askMemberAttrs(members, tool, component)?.takeIf { it.isNotEmpty() } ?: return
-    runTransaction("Set member attributes") { declared.forEach { (m, attrs) -> writeMemberAttrs(m, attrs) } }
+    runTransaction("Set member attributes") { declared.forEach { (m, attrs) -> writeMember(m.address, attrs) } }
 }
 
 fun Program.moveMembers(members: List<Member>, target: ClassView, tool: PluginTool, component: Component) {
@@ -284,7 +278,7 @@ fun Program.moveMembers(members: List<Member>, target: ClassView, tool: PluginTo
         moving.mapNotNull { m ->
             runCatching {
                 moveMember(m, target)
-                declared[m]?.let { writeMemberAttrs(m, it) }
+                declared[m]?.let { writeMember(m.address, it) }
             }.exceptionOrNull()?.let { "${m.label}: ${it.message}" }
         }
     }

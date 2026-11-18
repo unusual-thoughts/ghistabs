@@ -5,7 +5,7 @@ import ghicpp.ClassNaming
 import ghicpp.MemberAttrs
 import ghicpp.VirtKind
 import ghicpp.analyzers.VtableSweepAnalyzer
-import ghicpp.hierarchy.*
+import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.Origin
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
@@ -16,8 +16,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.Demangler
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeEmpty
 import ghidrakt.test.mustBeFalse
@@ -155,7 +154,7 @@ class SweptClassHierarchyIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             }
         }
         val members = ClassHierarchy.of(program).classes.single { it.qualifiedName == "Qux" }.members
-        fun attrs(address: String) = members.single { it.address.endsWith(address) }.attrs
+        fun attrs(address: String) = members.single { it.address.toString().endsWith(address) }.attrs
         attrs("402030") mustBe MemberAttrs(virt = VirtKind.VIRTUAL)
         attrs("402040") mustBe MemberAttrs(isConst = true)
         attrs("402050") mustBe MemberAttrs(isConst = true, isVolatile = true)

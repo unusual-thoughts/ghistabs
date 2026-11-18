@@ -2,8 +2,7 @@ package ghicpp.abi.gcc2
 
 import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidrakt.LoadedProgram
-import ghidrakt.loadProgram
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeNull
 import ghidrakt.test.mustBeTrue

@@ -1,15 +1,14 @@
 package ghistabs.materialize
 
 import ghicpp.isVptrFieldName
-import ghicpp.member
-import ghicpp.qualifiedName
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghidrakt.*
-import ghidrakt.componentsOverlapping
-import ghidrakt.runTransaction
 import ghistabs.harvest.Type
-import ghistabs.parse.*
+import ghistabs.parse.CATEGORY
+import ghistabs.parse.GlobalTypeDecl
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.TypeDecl
 import ghidra.program.model.data.Enum as GhidraEnum
 
 internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath, placeholder: DataType): DataType =

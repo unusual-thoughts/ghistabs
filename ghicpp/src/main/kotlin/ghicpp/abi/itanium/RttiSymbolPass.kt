@@ -1,6 +1,6 @@
 package ghicpp.abi.itanium
 
-import ghicpp.abi.CxxAbi.Companion.prevailingAbi
+import ghicpp.abi.prevailingAbi
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType

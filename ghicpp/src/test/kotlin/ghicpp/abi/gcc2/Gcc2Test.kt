@@ -1,7 +1,11 @@
 package ghicpp.abi.gcc2
 
-import ghicpp.abi.CxxAbi
+import ghicpp.CxxAbi
+import ghicpp.abi.isGeneratedData
 import ghicpp.abi.itanium.Itanium
+import ghicpp.abi.msvc.Msvc
+import ghicpp.abi.ofVtableSymbol
+import ghicpp.abi.prevailing
 import ghidrakt.test.must
 import ghidrakt.test.mustBe
 import ghidrakt.test.mustBeNull
@@ -160,12 +164,16 @@ class Gcc2Test {
             "_._Q217__class_type_info9base_info"
     }
 
-    /** Only gcc 2.x separates a secondary out; Itanium must not inherit a "no" from the default. */
+    /**
+     * gcc 2.x and MSVC give a secondary a symbol of its own, though MSVC's name only tells a class's only table.
+     */
     @Test
-    fun onlyGcc2HasSecondariesToScreenOut() {
-        Itanium.must { isPrimaryVtable("_ZTV10ThisStream") }
-        Gcc2Plain.must { isPrimaryVtable("_vt.14CExposedStream") }
-        Gcc2Plain.mustNot { isPrimaryVtable("_vt.14CExposedStream.11PRevertable") }
+    fun gcc2AndMsvcScreenOutSecondariesByName() {
+        Gcc2.must { looksLikePrimaryVtable("_vt.14CExposedStream") }
+        Gcc2.mustNot { looksLikePrimaryVtable("_vt.14CExposedStream.11PRevertable") }
+        Msvc.must { isOnlyVftable("??_7Foo@ns@@6B@") }
+        Msvc.mustNot { isOnlyVftable("??_7Label@@6BNamed@@@") }
+        Msvc.mustNot { isOnlyVftable("??0Foo@@QAE@XZ") }
     }
 
     /**

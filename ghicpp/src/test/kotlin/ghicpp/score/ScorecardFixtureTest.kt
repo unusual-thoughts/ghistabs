@@ -1,15 +1,10 @@
 package ghicpp.score
 
 import ghicpp.ClassRecordSource
-import ghicpp.analyzers.GenericVftableAnalyzer
-import ghicpp.analyzers.ItaniumClassAnalyzer
-import ghicpp.analyzers.MsvcClassAnalyzer
-import ghicpp.analyzers.RttiSymbolAnalyzer
-import ghicpp.analyzers.TypeinfoLayoutAnalyzer
-import ghicpp.analyzers.VirtualBaseAnalyzer
-import ghicpp.analyzers.VtableSweepAnalyzer
+import ghicpp.analyzers.*
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.MemberKind
+import ghicpp.hierarchy.unattachedVirtuals
 import ghicpp.ooa.OoFactExporter
 import ghicpp.score.Truth.Companion.withBasesOf
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
@@ -23,8 +18,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghidrakt.loadProgram
-import ghidrakt.runTransaction
+import ghidrakt.*
 import ghidrakt.test.TestBinaries
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
@@ -128,7 +122,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         )
         File(out, "subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), subject))
         File(out, "truth.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), truth.snapshot))
-        checkBaseline(case, card.counters())
+        checkBaseline(case, card.counters() + (UNATTACHED to subject.unattachedVirtuals.toLong()))
         if (prolog != null && facts != null) solve(case, truth, facts, prolog)
         System.getProperty("pharosResults").orEmpty().takeIf { it.isNotEmpty() }?.let { dir ->
             // A no-RTTI case takes the results of the same facts solved with `--rtti false`, where there are some.
@@ -329,6 +323,9 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
             Regex("""^rTTITypeDescriptor\(\w+, \w+, '([^']*)', '([^']*)'\)\.""", RegexOption.MULTILINE)
         private const val OOPROLOG_TIMEOUT_MINUTES = 30L
 
+        /** The counter of the subject's virtual functions in no class, trivial stubs left out: fewer is better. */
+        private const val UNATTACHED = "vfunctions-unattached"
+
         /** `-Pfixture=<subject>[,…]` narrows the cases to those subjects. */
         private fun accepts(subject: String) = System.getProperty("fixtureFilter").orEmpty()
             .split(',').map(String::trim).filter(String::isNotEmpty).let { it.isEmpty() || subject in it }
@@ -359,11 +356,10 @@ fun Program.snapshot(fixture: String): Snapshot {
     }.toMap()
     val vtables = hierarchy.classes.flatMap { cls ->
         cls.members.filter { it.kind == MemberKind.VTABLE && it.library == null }.map { m ->
-            val at = addressFactory.getAddress(m.address)
-            VtableExtent(at.offset, nextSymbolAfter(at).offset, cls.id)
+            VtableExtent(m.address.offset, nextSymbolAfter(m.address).offset, cls.id)
         }
     }.distinct()
-    return Snapshot(fixture, hierarchy, fields, vtables)
+    return Snapshot(fixture, hierarchy, fields, vtables, hierarchy.unattachedVirtuals(this).size)
 }
 
 private fun Program.nextSymbolAfter(at: Address): Address {

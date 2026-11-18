@@ -1,5 +1,9 @@
 package ghicpp
 
+import ghidra.program.model.data.IntegerDataType
+import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.gclass.ClassUtils
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
@@ -42,5 +46,36 @@ class BaseSplitTest {
     @Test
     fun `run bounds follow the pointer width`() {
         splitAround(baseLength = 24, vptrInBase = 8, ptrSize = 8) mustBe BaseSplit(0..<8, 16..<24)
+    }
+
+    private val vfptr = PointerDataType(IntegerDataType.dataType, 4)
+
+    /**
+     * MSVC's `RunFunctionTaskBase<T>` holds its first vptr in its first base, `QFutureInterface<T>`, and has a
+     * `{vfptr}` of its own past it, for `QRunnable`: a deriving class's vptr at +0 is the base's at +0.
+     */
+    @Test
+    fun `a vptr in a base of the base is where the deriving class says, not the base's own vfptr`() {
+        val first = StructureDataType("QFutureInterface", 4).apply {
+            replaceAtOffset(0, vfptr, 4, ClassUtils.VFPTR, null)
+        }
+        val base = StructureDataType("RunFunctionTaskBase", 16).apply {
+            replaceAtOffset(0, first, 4, "${ClassNaming.BASE_PREFIX}QFutureInterface", null)
+            replaceAtOffset(8, vfptr, 4, ClassUtils.VFPTR, null)
+            replaceAtOffset(12, IntegerDataType.dataType, 4, "own", null)
+        }
+        vptrInBase(base, expected = 0) mustBe 0
+        vptrInBase(base, expected = 8) mustBe 8
+    }
+
+    /** gcc 2.x appends a base's vptr after its fields, which the deriving class may not say. */
+    @Test
+    fun `a base with no vfptr where the deriving class says has its vptr at its own vfptr`() {
+        val base = StructureDataType("TiXmlBase", 12).apply {
+            replaceAtOffset(0, IntegerDataType.dataType, 4, "location", null)
+            replaceAtOffset(8, vfptr, 4, ClassUtils.VFPTR, null)
+        }
+        vptrInBase(base, expected = 0) mustBe 8
+        vptrInBase(StructureDataType("Plain", 8), expected = 4) mustBe 4
     }
 }

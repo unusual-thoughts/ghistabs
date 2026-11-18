@@ -1,9 +1,12 @@
+@file:UsesShims
+
 package ghicpp.abi
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.FunctionDefinitionDataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ParameterDefinitionImpl
+import ghidrakt.*
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 

@@ -1,7 +1,7 @@
 package ghistabs.index
 
 import ghidrakt.test.mustBe
-import ghistabs.harvest.*
+import ghistabs.harvest.sourceFileOf
 import org.junit.jupiter.api.Test
 
 /** Spellings in, normalised paths out — the fold decides which spelling wins, the identity decides

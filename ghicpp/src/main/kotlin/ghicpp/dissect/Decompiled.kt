@@ -10,7 +10,7 @@ import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.util.task.TaskMonitor
-import ghidrakt.useWith
+import ghidrakt.*
 
 /** How long a class pass waits on the decompiler for one function. */
 const val DECOMPILE_TIMEOUT_SECONDS = 30

@@ -1,10 +1,10 @@
 package ghicpp.abi.msvc
 
 import ghicpp.*
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.Structor
-import ghicpp.abi.StructorRole
-import ghicpp.abi.VtableRecord
+import ghicpp.CxxAbi
+import ghicpp.Structor
+import ghicpp.StructorRole
+import ghicpp.VtableRecord
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.app.util.demangler.DemangledObject
@@ -13,7 +13,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
-import ghidrakt.namespaces
+import ghidra.program.model.symbol.Symbol
+import ghidrakt.*
 
 /**
  * The Microsoft Visual C++ ABI: its `??` special names, and the labels Ghidra's RTTI analyzer puts on the
@@ -25,6 +26,9 @@ object Msvc : CxxAbi {
 
     /** A class's vftable: `??_7Foo@ns@@6B@` is `const ns::Foo::vftable`. */
     const val VFTABLE_PREFIX = "??_7"
+
+    /** How a class's only vftable ends, with no `{for <Base>}` qualifier. */
+    const val UNQUALIFIED_VFTABLE_SUFFIX = "6B@"
 
     // The labels the RTTI analyzer gives each RTTI record, in the namespace of the class it describes.
     const val TYPE_DESCRIPTOR = "RTTI_Type_Descriptor"
@@ -97,9 +101,20 @@ object Msvc : CxxAbi {
 
     override fun looksLikeVtable(symbolName: String) = symbolName.startsWith(VFTABLE_PREFIX)
 
+    /**
+     * A class's only table is unqualified, `??_7D@@6B@`. Once it has several, each is qualified with the base it
+     * is for, `??_7D@@6BB1@@@` for `B1`, the one at offset 0 too, which the name alone can't tell.
+     */
+    fun isOnlyVftable(symbolName: String) =
+        looksLikeVtable(symbolName) && symbolName.endsWith(UNQUALIFIED_VFTABLE_SUFFIX)
+
+    /** Its class's only table ([isOnlyVftable]), else one whose complete object locator gives offset 0. */
+    override fun isPrimaryTableSymbol(sym: Symbol) =
+        isOnlyVftable(sym.name) || sym.program.msvcSubobjectOffset(sym.address) == 0
+
     /** A template's name has no closed form, as its arguments mangle as types. */
     override fun vtableCandidates(className: String) = listOfNotNull(
-        "$VFTABLE_PREFIX${mangleClassName(className)}6B@".takeUnless { className.isTemplated },
+        "$VFTABLE_PREFIX${mangleClassName(className)}$UNQUALIFIED_VFTABLE_SUFFIX".takeUnless { className.isTemplated },
         className.member(ClassNaming.VFTABLE),
     )
 
