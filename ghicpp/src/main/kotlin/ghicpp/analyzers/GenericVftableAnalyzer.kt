@@ -1,7 +1,10 @@
 package ghicpp.analyzers
 
+import ghicpp.ClassRecordSource
 import ghicpp.VfptrModel
 import ghicpp.abi.generic.PlainVtableParser
+import ghicpp.hierarchy.ClassHierarchy
+import ghicpp.hierarchy.unattachedVirtuals
 import ghicpp.recover.ClassPass
 import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
 import ghicpp.recover.ClassPass.Companion.INLINED_CONSTRUCTORS
@@ -62,9 +65,13 @@ class GenericVftableAnalyzer :
         val result = pass.run(monitor)
         val members = result.found?.takeIf { options[MEMBER_OBJECTS] }
             ?.let { MemberObjectPass(program, sink, pass.fillArrays).run(it, monitor) } ?: 0
+        val unattached = ClassHierarchy.of(program, ClassRecordSource.describedElsewhere(program))
+            .unattachedVirtuals(program)
+        for (at in unattached) sink.debug(UNATTACHED, "held in a vftable slot, in no class", at)
         report(
             "$seeded vftable(s) seeded; ${result.classes} class(es), ${result.owned} virtual function(s) owned, " +
-                "${result.structors} constructor(s) and destructor(s) named, $members member object class(es)",
+                "${result.structors} constructor(s) and destructor(s) named, $members member object class(es); " +
+                "${unattached.size} virtual function(s) in no class, trivial stubs left out",
         )
         MethodClassAnalyzer.followClassPass(program, set)
         return true
@@ -72,6 +79,9 @@ class GenericVftableAnalyzer :
 
     companion object {
         const val NAME = "Vftables from pointer tables"
+
+        /** A virtual function no class has ([unattachedVirtuals]): its introducing class's bases went unrecovered. */
+        const val UNATTACHED = "vfunction-unattached"
 
         val MEMBER_OBJECTS = BoolOption(
             "Classes of member objects",
