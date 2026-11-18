@@ -1,7 +1,7 @@
 package ghicpp.gui
 
-import ghicpp.hierarchy.SlotRenames
 import ghicpp.dissect.FieldRetype
+import ghicpp.hierarchy.SlotRenames
 import ghidrakt.test.mustBe
 import org.junit.jupiter.api.Test
 
