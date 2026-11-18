@@ -640,7 +640,8 @@ public class GccStlArchiveScript extends GhidraScript {
 		Set<String> missing = new TreeSet<>();
 		StlIndex index = new StlIndex(dtm);
 		for (Symbol sym : currentProgram.getSymbolTable().getAllSymbols(false)) {
-			String name = sym.getName();
+			// An x86 PE's symbols carry a leading `_`.
+			String name = sym.getName().startsWith("__ZN") ? sym.getName().substring(1) : sym.getName();
 			if (!name.startsWith("_ZN")) {
 				continue;
 			}

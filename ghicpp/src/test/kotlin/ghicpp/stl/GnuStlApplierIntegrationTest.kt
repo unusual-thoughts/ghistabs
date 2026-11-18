@@ -51,6 +51,15 @@ class GnuStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         48,
     )
 
+    @Test
+    fun `MinGW's wide string, whose wchar_t is two bytes`() = check(
+        ProgramBuilder._X64,
+        "libstdcxx_mingw_x64",
+        "_ZNSt7__cxx1112basic_stringIwSt11char_traitsIwESaIwEE7reserveEy",
+        "/std/__cxx11/basic_string<wchar_t,_std::char_traits<wchar_t>,_std::allocator<wchar_t>_>",
+        32,
+    )
+
     private fun check(language: String, archiveName: String, mangled: String, path: String, size: Int) {
         val builder = ProgramBuilder("stl", language, "gcc", this)
         try {
