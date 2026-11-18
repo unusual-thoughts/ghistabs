@@ -70,7 +70,7 @@ object StlShape {
     }
 
     /** [classes], each after the ones it derives from. */
-    private fun baseFirst(classes: List<StdClass>): List<StdClass> {
+    internal fun baseFirst(classes: List<StdClass>): List<StdClass> {
         val byPath = classes.associateBy { it.path }
         val done = linkedMapOf<String, StdClass>()
         fun visit(cls: StdClass, seen: Set<String>) {
@@ -116,7 +116,9 @@ object StlShape {
     }
 
     private fun StructureDataType.lay(at: Int, dt: DataType, name: String?) {
-        if (at + dt.length > length) growStructure(at + dt.length - length)
+        // An empty struct reports a length of 1, but grows from 0.
+        val current = if (numComponents == 0 && isNotYetDefined) 0 else length
+        if (at + dt.length > current) growStructure(at + dt.length - current)
         replaceAtOffset(at, dt, dt.length, name, null)
     }
 }

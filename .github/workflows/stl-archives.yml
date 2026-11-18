@@ -1,9 +1,11 @@
-name: MSVC STL archives
+name: STL archives
 
-# Builds Ghidra data type archives of the MSVC standard library layouts. msvcp140 comes from a probe
-# compiled here against the runner's own Visual Studio, for x86 and x64 and the release and debug
-# CRTs, and is checked against the layouts in Microsoft's public msvcp140 PDB. msvcp90 has no
+# Builds Ghidra data type archives of the MSVC and libstdc++ standard library layouts. msvcp140 comes
+# from a probe compiled here against the runner's own Visual Studio, for x86 and x64 and the release and
+# debug CRTs, and is checked against the layouts in Microsoft's public msvcp140 PDB. msvcp90 has no
 # toolchain on the runners, so it comes from the typed public PDB of its last security rebuild.
+# libstdc++'s come from the same probe built with the runner's g++ -g, and are checked against the
+# probe built by other gccs.
 on:
   workflow_dispatch:
   pull_request:
@@ -12,6 +14,7 @@ on:
       - ghicpp/src/main/kotlin/ghicpp/stl/**
       - ghicpp/src/main/kotlin/ghicpp/BaseSplitter.kt
       - ghicpp/data/typeinfo/msvc/**
+      - ghicpp/data/typeinfo/libstdcxx/**
       - tools/stl-archives/**
       - .github/workflows/stl-archives.yml
 
@@ -55,8 +58,42 @@ jobs:
             tools/stl-archives/msvcp140.dll
           if-no-files-found: error
 
+  # The same probe for libstdc++: one binary of three units, the C++11 string ABI's, the copy-on-write
+  # one's and _GLIBCXX_DEBUG's, with every class's DWARF. MinGW-w64's, a PE whose wchar_t, long and x86
+  # alignment differ, from the Ubuntu cross compiler (the posix thread model, which has std::thread).
+  gcc-probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: x86, flags: -m32, packages: g++-multilib }
+          - { name: x64, flags: -m64 }
+          - { name: mingw_x86, cxx: i686-w64-mingw32-g++-posix, packages: g++-mingw-w64-i686-posix }
+          - { name: mingw_x64, cxx: x86_64-w64-mingw32-g++-posix, packages: g++-mingw-w64-x86-64-posix }
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the compiler
+        if: matrix.packages
+        run: sudo apt-get update -q && sudo apt-get install -yq ${{ matrix.packages }}
+
+      - name: Build the probe
+        env:
+          CXX: ${{ matrix.cxx || 'g++' }}
+        run: |
+          $CXX --version | head -1
+          tools/stl-archives/gcc_probe.sh gcc_probe ${{ matrix.flags }}
+          [ -f gcc_probe ] || mv gcc_probe.exe gcc_probe
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gcc-probe-${{ matrix.name }}
+          path: gcc_probe
+          if-no-files-found: error
+
   archives:
-    needs: probe
+    needs: [ probe, gcc-probe ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -161,6 +198,14 @@ jobs:
           $run archive archives/msvcp50_x86.gdt refs/vc5/MSVCP50D.DLL refs/vc5/msvcp50d.v6.pdb
           $run archive archives/msvcp60_x86.gdt refs/vc6/MSVCP60D.DLL refs/vc6/MSVCP60D.PDB
 
+      # Laid out in the probe's own types and written as layouts text (see GccStlArchiveScript), with
+      # the classes file beside it; the portable job makes the .gdt.
+      - name: Build the libstdc++ archives
+        run: |
+          for name in x86 x64 mingw_x86 mingw_x64; do
+            tools/stl-archives/run.sh gcc archives/libstdcxx_$name.gdt probes/gcc-probe-$name/gcc_probe
+          done
+
       - name: Check against Microsoft's msvcp140 layouts
         run: |
           for arch in x86 x64; do
@@ -174,14 +219,19 @@ jobs:
           mkdir -p layouts bundled
           program=ghicpp/src/test/resources/binaries/features/hello_msvc.exe
           for gdt in archives/*.gdt; do
-            name=$(basename "$gdt" .gdt)
-            tools/stl-archives/run.sh layouts $program "$gdt" layouts/$name.txt
-            [ -f ghicpp/data/typeinfo/msvc/$name.gdt ] ||
+            tools/stl-archives/run.sh layouts $program "$gdt" layouts/$(basename "$gdt" .gdt).txt
+          done
+          cp archives/libstdcxx_*.txt layouts/
+          for txt in layouts/*.txt; do
+            name=$(basename "$txt" .txt)
+            case $name in libstdcxx*) dir=libstdcxx ;; *) dir=msvc ;; esac
+            bundled=ghicpp/data/typeinfo/$dir/$name
+            [ -f $bundled.gdt ] ||
               { echo "::warning::ghicpp bundles no $name.gdt yet; add it from this run's artifacts"; continue; }
-            tools/stl-archives/run.sh layouts $program ghicpp/data/typeinfo/msvc/$name.gdt bundled/$name.txt
-            cmp -s layouts/$name.txt bundled/$name.txt ||
+            tools/stl-archives/run.sh layouts $program $bundled.gdt bundled/$name.txt
+            cmp -s "$txt" bundled/$name.txt ||
               echo "::warning::$name.gdt built here differs from ghicpp's bundled copy; refresh it from this run's artifacts"
-            cmp -s archives/$name.classes.xml.gz ghicpp/data/typeinfo/msvc/$name.classes.xml.gz ||
+            cmp -s archives/$name.classes.xml.gz $bundled.classes.xml.gz ||
               echo "::warning::$name.classes.xml.gz built here differs from ghicpp's bundled copy; refresh it from the classes artifact"
           done
 
@@ -242,7 +292,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp120_x86, msvcp120_x64, msvcp90_x86, msvcp90_x64, msvcp80_x86, msvcp70_x86, msvcp60_x86, msvcp50_x86]
+        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp120_x86, msvcp120_x64, msvcp90_x86, msvcp90_x64, msvcp80_x86, msvcp70_x86, msvcp60_x86, msvcp50_x86, libstdcxx_x86, libstdcxx_x64, libstdcxx_mingw_x86, libstdcxx_mingw_x64]
     steps:
       - uses: actions/download-artifact@v7
         with:
@@ -286,6 +336,10 @@ jobs:
           name: portable-archives
           path: archives
 
+      # Ghidra 11 and on cannot restore the architecture of an archive 10.4 wrote, as x86's language
+      # version has moved since, so they read it with the default data organization: no A record, and
+      # B records (the built-ins' sizes) that follow it. A program that takes the archive's types lays
+      # out the built-ins its own way, so only the other records must read back the same there.
       - name: Read the archives
         run: |
           mkdir -p readback
@@ -293,6 +347,55 @@ jobs:
           for txt in layouts/*.txt; do
             name=$(basename "$txt" .txt)
             tools/stl-archives/run.sh layouts ghicpp/src/test/resources/binaries/features/hello_msvc.exe archives/$name.gdt readback/$name.txt
-            cmp -s "$txt" readback/$name.txt || { echo "::error::$name reads differently"; diff -u "$txt" readback/$name.txt | head -40; status=1; }
+            expected=$txt
+            if grep -q '^A' "$txt" && ! grep -q '^A' readback/$name.txt; then
+              echo "::notice::$name: this Ghidra does not restore the archive's architecture"
+              expected=readback/$name.expected
+              grep -v '^[AB]'$'\t' "$txt" > $expected
+              grep -v '^B'$'\t' readback/$name.txt > readback/$name.tmp && mv readback/$name.tmp readback/$name.txt
+            fi
+            cmp -s "$expected" readback/$name.txt || { echo "::error::$name reads differently"; diff -u "$expected" readback/$name.txt | head -40; status=1; }
           done
           exit $status
+
+  # One libstdc++ archive serves every gcc's programs while the gccs lay out alike the classes they
+  # share: the probe built by each, against its own libstdc++, must agree with the runner's.
+  gcc-versions:
+    needs: archives
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gcc: [ '9', '11', '12', '14' ]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the probe with gcc ${{ matrix.gcc }}
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w gcc:${{ matrix.gcc }} \
+            bash -c 'g++ --version | head -1 && tools/stl-archives/gcc_probe.sh gcc_probe -m64'
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: '12.3'
+          repo: unusual-thoughts/ghidra
+
+      - name: Install ghicpp
+        run: |
+          ./gradlew --build-cache :ghicpp:buildExtension
+          props=/opt/ghidra/Ghidra/application.properties
+          version=$(sed -n 's/^application.version=//p' $props)
+          release=$(sed -n 's/^application.release.name=//p' $props)
+          extensions=~/.config/ghidra/ghidra_${version}_${release}/Extensions
+          mkdir -p "$extensions"
+          unzip -q ghicpp/dist/*.zip -d "$extensions"
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: layouts
+          path: layouts
+
+      - name: Compare with the runner's gcc
+        run: |
+          tools/stl-archives/run.sh gcc out/gcc${{ matrix.gcc }}_x64.gdt gcc_probe
+          python3 -I tools/stl-archives/compare_layouts.py layouts/libstdcxx_x64.txt out/gcc${{ matrix.gcc }}_x64.txt
