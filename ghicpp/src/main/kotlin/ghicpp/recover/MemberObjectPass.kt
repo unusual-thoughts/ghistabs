@@ -11,9 +11,11 @@ import ghicpp.abi.generic.PlainClass
 import ghicpp.abi.generic.PlainVtables
 import ghicpp.dissect.*
 import ghicpp.recover.MemberObjectPass.Companion.MAX_DEPTH
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
+import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
@@ -155,9 +157,7 @@ class MemberObjectPass(
         val empty = ctors.flatMap { it.getCalledFunctions(monitor) }.distinct()
             .filter { it !in found.roles && it !in found.folded && !it.isExternal && it.hasEmptyBody() }
         if (empty.isEmpty()) return emptyMap()
-        for (f in empty) {
-            if (!f.takesThisAt(thisStorage)) runCatching { f.fixMethodConvention(takesThis = true) }
-        }
+        for (f in empty.filter { it.parameterCount == 0 }) runCatching { f.giveThis() }
         val callers = ctors.filter { f -> f.getCalledFunctions(monitor).any { it in empty } }
         val uses = ThisFunctionDissector(program, emptyList(), this, DissectionCache(fillArrays))
             .readCalls(callers, monitor, "Decompiling constructors that call empty functions")
@@ -165,6 +165,22 @@ class MemberObjectPass(
         return callers.groupBy({ found.roles.getValue(it).first }) { f ->
             uses.subobjectCalls[f].orEmpty()[0L].orEmpty().mapNotNull(byFunction::get)
         }.mapValues { (_, bases) -> bases.flatten().distinct() }.filterValues { it.isNotEmpty() }
+    }
+
+    /**
+     * Gives [this], a function with no parameter, a `this`: as a method's where its convention can be made one
+     * ([fixMethodConvention]), else as a first pointer parameter, where a `__cdecl` method such as gcc's takes it.
+     */
+    private fun Function.giveThis() {
+        if (fixMethodConvention(takesThis = true) && parameterCount > 0) return
+        updateFunction(
+            callingConventionName,
+            null,
+            listOf(ParameterImpl(Function.THIS_PARAM_NAME, PointerDataType(dtm), program, SourceType.ANALYSIS)),
+            Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+            true,
+            SourceType.ANALYSIS,
+        )
     }
 
     /**
