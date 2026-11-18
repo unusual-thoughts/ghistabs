@@ -161,6 +161,16 @@ fun Program.slotFunction(at: Address, abi: CxxAbi): Function? {
 }
 
 /**
+ * Whether [at] holds a pure virtual stub, as [isStub] tells one by name ([CxxAbi.isPureVirtualStub]): its function's
+ * name, past a thunk to an import, else its label's.
+ */
+fun Program.holdsPureVirtualStub(at: Address, isStub: (String) -> Boolean): Boolean {
+    val name = functionManager.getFunctionAt(at)?.let { it.getThunkedFunction(true)?.name ?: it.name }
+        ?: symbolTable.getPrimarySymbol(at)?.name
+    return name != null && isStub(name)
+}
+
+/**
  * The imported function whose thunk is at [target], if [pfn] is relocated against it. Data imports share
  * the EXTERNAL block, so the thunk alone doesn't say: a typeinfo's vptr can land on one.
  */

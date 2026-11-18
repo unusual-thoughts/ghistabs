@@ -8,6 +8,7 @@ import ghicpp.CxxAbi
 import ghicpp.abi.functionSlots
 import ghicpp.abi.gcc2.Gcc2Abi
 import ghicpp.abi.gcc2.Gcc2Plain
+import ghicpp.abi.holdsPureVirtualStub
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.abi.msvc.Msvc
@@ -242,11 +243,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
     private fun holdsStub(slot: VirtualSlot): Boolean {
         val def = definition(slot) ?: return false
         if (def.arguments.isNotEmpty() && field(slot)?.second?.let(::isTypedOff) != true) return false
-        val at = pointee(slot) ?: return false
-        val func = program.functionManager.getFunctionAt(at)?.let {
-            if (it.isThunk) it.getThunkedFunction(true) else it
-        }
-        return (func?.name ?: program.symbolTable.getPrimarySymbol(at)?.name)?.let(::isPureVirtualStub) == true
+        return pointee(slot)?.let { program.holdsPureVirtualStub(it, ::isPureVirtualStub) } == true
     }
 
     private fun isTypedOff(field: DataTypeComponent) = field.comment?.startsWith(TYPED_OFF) == true
