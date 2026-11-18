@@ -249,6 +249,42 @@ class ScorerTest {
     }
 
     @Test
+    fun `a truth base named without its namespace goes by its leaf name, and one with no class is not missed`() {
+        val unqualified = ClassHierarchy(
+            truth.classes.map {
+                when (it.id) {
+                    2L -> it.copy(bases = it.bases + base("Empty", null, offset = 4) + base("Nowhere", null))
+                    4L -> it.copy(path = listOf("ns", "Empty"))
+                    else -> it
+                }
+            },
+        )
+        val card = Scorer(
+            Truth(truthSnapshot.copy(hierarchy = unqualified), Truth.describedScope(unqualified), true, true),
+            Snapshot(
+                "subject",
+                ClassHierarchy(
+                    listOf(
+                        cls(
+                            10,
+                            "Circle",
+                            Origin.ITANIUM_RTTI,
+                            0x120,
+                            bases = listOf(base("Shape", null), base("Empty", 11)),
+                        ),
+                        ClassHierarchy.ClassView(
+                            11, listOf("ns", "Empty"), Origin.ITANIUM_RTTI,
+                            null, null, null, null, null, false, emptyList(), emptyList(), null,
+                        ),
+                    ),
+                ),
+            ),
+        ).score()
+        card.tallies["bases"] mustBe Tally(tp = 2)
+        card.notes mustBe listOf("base `?Nowhere` of `Circle`: no vtable nor function to find it by")
+    }
+
+    @Test
     fun `a destructor variant no truth vtable slot holds is not a virtual method`() {
         val d0 = fn(0x10, "~Shape", true).copy(variants = listOf(ItaniumStructor.DELETING_DTOR))
         val unslotted = ClassHierarchy(
