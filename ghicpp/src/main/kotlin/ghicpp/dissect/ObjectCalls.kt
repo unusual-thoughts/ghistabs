@@ -6,6 +6,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.pcode.HighFunction
 import ghidra.program.model.pcode.HighVariable
 import ghidra.program.model.pcode.PcodeOp
+import ghidrakt.orThunked
 
 /** The object a call is made on, as the calling function has it. */
 sealed interface CalledObject {
@@ -67,6 +68,5 @@ internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
 /** The function [op] calls directly, through a thunk to what it thunks, or null for no direct call. */
 internal fun HighFunction.directCallee(op: PcodeOp): Function? {
     if (op.opcode != PcodeOp.CALL || op.numInputs < 2) return null
-    val f = function.program.functionManager.getFunctionAt(op.getInput(0).address) ?: return null
-    return f.getThunkedFunction(true) ?: f
+    return function.program.functionManager.getFunctionAt(op.getInput(0).address)?.orThunked
 }
