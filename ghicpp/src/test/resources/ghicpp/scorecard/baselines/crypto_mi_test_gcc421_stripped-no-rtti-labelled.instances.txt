@@ -138,6 +138,9 @@ base-access-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_Dec
 base-access-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>` of `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`: none, is public
 base-access-fn `CryptoPP::CryptoMaterial` of `CryptoPP::GeneratableCryptoMaterial`: none, is public
 base-access-fn `CryptoPP::CryptoMaterial` of `CryptoPP::PublicKey`: none, is public
+base-access-fn `CryptoPP::CryptoParameters` of `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`: none, is public
+base-access-fn `CryptoPP::CryptoParameters` of `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`: none, is public
+base-access-fn `CryptoPP::CryptoParameters` of `CryptoPP::DL_GroupParameters<CryptoPP::Integer>`: none, is public
 base-access-fn `CryptoPP::CustomFlushPropagation<CryptoPP::Filter>` of `CryptoPP::Multichannel<CryptoPP::Filter>`: none, is public
 base-access-fn `CryptoPP::CustomFlushPropagation<CryptoPP::Sink>` of `CryptoPP::CustomSignalPropagation<CryptoPP::Sink>`: none, is public
 base-access-fn `CryptoPP::CustomSignalPropagation<CryptoPP::Sink>` of `CryptoPP::OutputProxy`: none, is public
@@ -167,6 +170,13 @@ base-access-fn `CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<Cryp
 base-access-fn `CryptoPP::DL_FixedBasePrecomputation<CryptoPP::EC2NPoint>` of `CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>`: none, is public
 base-access-fn `CryptoPP::DL_FixedBasePrecomputation<CryptoPP::ECPPoint>` of `CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>`: none, is public
 base-access-fn `CryptoPP::DL_FixedBasePrecomputation<CryptoPP::Integer>` of `CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>`: none, is public
+base-access-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>` of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`: none, is public
+base-access-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>` of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`: none, is public
+base-access-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>` of `CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>`: none, is public
+base-access-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>` of `CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>`: none, is public
+base-access-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>` of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`: none, is public
+base-access-fn `CryptoPP::DL_GroupParameters_GFP` of `CryptoPP::DL_GroupParameters_DSA`: none, is public
+base-access-fn `CryptoPP::DL_GroupParameters_GFP` of `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`: none, is public
 base-access-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>` of `CryptoPP::DL_GroupParameters_GFP`: none, is public
 base-access-fn `CryptoPP::DL_GroupParameters_IntegerBased` of `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`: none, is public
 base-access-fn `CryptoPP::DL_GroupPrecomputation<CryptoPP::EC2NPoint>` of `CryptoPP::EcPrecomputation<CryptoPP::EC2N>`: none, is public
@@ -180,6 +190,16 @@ base-access-fn `CryptoPP::DL_Key<CryptoPP::Integer>` of `CryptoPP::DL_PrivateKey
 base-access-fn `CryptoPP::DL_Key<CryptoPP::Integer>` of `CryptoPP::DL_PublicKey<CryptoPP::Integer>`: none, is public
 base-access-fn `CryptoPP::DL_KeyAgreementAlgorithm<CryptoPP::Integer>` of `CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`: none, is public
 base-access-fn `CryptoPP::DL_KeyDerivationAlgorithm<CryptoPP::Integer>` of `CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>`: none, is public
+base-access-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`: none, is public
+base-access-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: none, is public
+base-access-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: none, is public
+base-access-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`: none, is public
+base-access-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: none, is public
+base-access-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`: none, is public
+base-access-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: none, is public
+base-access-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: none, is public
+base-access-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`: none, is public
+base-access-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: none, is public
 base-access-fn `CryptoPP::DL_ObjectImpl<CryptoPP::DL_DecryptorBase<CryptoPP::Integer>,CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>,CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>>` of `CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`: none, is public
 base-access-fn `CryptoPP::DL_ObjectImpl<CryptoPP::DL_EncryptorBase<CryptoPP::Integer>,CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>>` of `CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`: none, is public
 base-access-fn `CryptoPP::DL_ObjectImpl<CryptoPP::DL_SignerBase<CryptoPP::EC2NPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>>` of `CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>`: none, is public
@@ -204,6 +224,14 @@ base-access-fn `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::
 base-access-fn `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>` of `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: none, is public
 base-access-fn `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>` of `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: none, is public
 base-access-fn `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>>` of `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>>`: none, is public
+base-access-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>` of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: none, is public
+base-access-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>` of `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`: none, is public
+base-access-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>` of `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`: none, is public
+base-access-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>` of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>`: none, is public
+base-access-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>` of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: none, is public
+base-access-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>` of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>`: none, is public
+base-access-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>` of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>`: none, is public
+base-access-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>` of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`: none, is public
 base-access-fn `CryptoPP::DL_PublicKey<CryptoPP::EC2NPoint>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: none, is public
 base-access-fn `CryptoPP::DL_PublicKey<CryptoPP::ECPPoint>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: none, is public
 base-access-fn `CryptoPP::DL_PublicKey<CryptoPP::Integer>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`: none, is public
@@ -271,6 +299,8 @@ base-access-fn `CryptoPP::Filter` of `CryptoPP::InputRejecting<CryptoPP::Filter>
 base-access-fn `CryptoPP::Filter` of `CryptoPP::Unflushable<CryptoPP::Filter>`: none, is public
 base-access-fn `CryptoPP::GF2NP` of `CryptoPP::GF2NPP`: none, is public
 base-access-fn `CryptoPP::GF2NP` of `CryptoPP::GF2NT`: none, is public
+base-access-fn `CryptoPP::GeneratableCryptoMaterial` of `CryptoPP::CryptoParameters`: none, is public
+base-access-fn `CryptoPP::GeneratableCryptoMaterial` of `CryptoPP::PrivateKey`: none, is public
 base-access-fn `CryptoPP::HMAC_Base` of `CryptoPP::SimpleKeyingInterfaceImpl<CryptoPP::HMAC_Base,CryptoPP::HMAC<CryptoPP::SHA1>>`: none, is public
 base-access-fn `CryptoPP::HashTransformation` of `CryptoPP::IteratedHashBase<unsigned_int,CryptoPP::HashTransformation>`: none, is public
 base-access-fn `CryptoPP::HashTransformation` of `CryptoPP::IteratedHashBase<unsigned_long_long,CryptoPP::HashTransformation>`: none, is public
@@ -315,6 +345,11 @@ base-access-fn `CryptoPP::NotImplemented` of `CryptoPP::InputRejecting<CryptoPP:
 base-access-fn `CryptoPP::NotImplemented` of `CryptoPP::InputRejecting<CryptoPP::Filter>::InputRejected`: none, is public
 base-access-fn `CryptoPP::OAEP_Base` of `CryptoPP::OAEP<CryptoPP::SHA1,CryptoPP::P1363_MGF1>`: none, is public
 base-access-fn `CryptoPP::OFB_ModePolicy` of `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>`: none, is public
+base-access-fn `CryptoPP::PKCS8PrivateKey` of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`: none, is public
+base-access-fn `CryptoPP::PKCS8PrivateKey` of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`: none, is public
+base-access-fn `CryptoPP::PKCS8PrivateKey` of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`: none, is public
+base-access-fn `CryptoPP::PKCS8PrivateKey` of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`: none, is public
+base-access-fn `CryptoPP::PKCS8PrivateKey` of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`: none, is public
 base-access-fn `CryptoPP::PK_CryptoSystem` of `CryptoPP::PK_Decryptor`: none, is public
 base-access-fn `CryptoPP::PK_CryptoSystem` of `CryptoPP::PK_Encryptor`: none, is public
 base-access-fn `CryptoPP::PK_Decryptor` of `CryptoPP::DL_CryptoSystemBase<CryptoPP::PK_Decryptor,CryptoPP::DL_PrivateKey<CryptoPP::Integer>>`: none, is public
@@ -404,6 +439,11 @@ base-access-fn `CryptoPP::Unflushable<CryptoPP::Filter>` of `CryptoPP::PK_Defaul
 base-access-fn `CryptoPP::Unflushable<CryptoPP::Filter>` of `CryptoPP::SignerFilter`: none, is public
 base-access-fn `CryptoPP::Unflushable<CryptoPP::Multichannel<CryptoPP::Filter>>` of `CryptoPP::EqualityComparisonFilter`: none, is public
 base-access-fn `CryptoPP::Waitable` of `CryptoPP::BufferedTransformation`: none, is public
+base-access-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`: none, is public
+base-access-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`: none, is public
+base-access-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`: none, is public
+base-access-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`: none, is public
+base-access-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`: none, is public
 base-access-fn `std::ctype<char>` of `std::ctype_byname<char>`: none, is public
 base-access-fn `std::exception` of `CryptoPP::Exception`: none, is public
 base-access-fn `std::exception` of `std::bad_alloc`: none, is public
@@ -499,59 +539,19 @@ bases-fn `?money_base` of `std::moneypunct<wchar_t,false>`
 bases-fn `?money_base` of `std::moneypunct<wchar_t,true>`
 bases-fn `?time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
 bases-fn `?time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
-bases-fn `CryptoPP::CryptoParameters` of `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`
-bases-fn `CryptoPP::CryptoParameters` of `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`
-bases-fn `CryptoPP::CryptoParameters` of `CryptoPP::DL_GroupParameters<CryptoPP::Integer>`
 bases-fn `CryptoPP::DES_Info` of `CryptoPP::TwoBases<CryptoPP::BlockCipher,CryptoPP::DES_Info>`
-bases-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>` of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`
-bases-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>` of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`
 bases-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>` of `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`
-bases-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>` of `CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>`
-bases-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>` of `CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>`
-bases-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>` of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`
-bases-fn `CryptoPP::DL_GroupParameters_GFP` of `CryptoPP::DL_GroupParameters_DSA`
-bases-fn `CryptoPP::DL_GroupParameters_GFP` of `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`
-bases-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
-bases-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
-bases-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`
-bases-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
-bases-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
-bases-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
-bases-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
-bases-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`
-bases-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
-bases-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>` of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
 bases-fn `CryptoPP::DL_PrivateKey<CryptoPP::EC2NPoint>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
 bases-fn `CryptoPP::DL_PrivateKey<CryptoPP::ECPPoint>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`
 bases-fn `CryptoPP::DL_PrivateKey<CryptoPP::Integer>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
 bases-fn `CryptoPP::DL_PrivateKey<CryptoPP::Integer>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
 bases-fn `CryptoPP::DL_PrivateKey<CryptoPP::Integer>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
-bases-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>` of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`
-bases-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>` of `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`
-bases-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>` of `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`
-bases-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>` of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>`
-bases-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>` of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
-bases-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>` of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>`
-bases-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>` of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>`
-bases-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>` of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`
 bases-fn `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,16u,CryptoPP::NullAllocator<unsigned_int>,false>>` of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,16u,false>`
 bases-fn `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,16u,CryptoPP::NullAllocator<unsigned_int>,true>>` of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,16u,true>`
 bases-fn `CryptoPP::FixedSizeSecBlock<unsigned_int,60u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,60u,CryptoPP::NullAllocator<unsigned_int>,true>>` of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,60u,true>`
-bases-fn `CryptoPP::GeneratableCryptoMaterial` of `CryptoPP::CryptoParameters`
-bases-fn `CryptoPP::GeneratableCryptoMaterial` of `CryptoPP::PrivateKey`
-bases-fn `CryptoPP::PKCS8PrivateKey` of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-bases-fn `CryptoPP::PKCS8PrivateKey` of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
-bases-fn `CryptoPP::PKCS8PrivateKey` of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
-bases-fn `CryptoPP::PKCS8PrivateKey` of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-bases-fn `CryptoPP::PKCS8PrivateKey` of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 bases-fn `CryptoPP::PrivateKey` of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>`
 bases-fn `CryptoPP::PublicKey` of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>`
 bases-fn `CryptoPP::Rijndael_Info` of `CryptoPP::TwoBases<CryptoPP::BlockCipher,CryptoPP::Rijndael_Info>`
-bases-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-bases-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
-bases-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
-bases-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-bases-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 bases-fn `std::__codecvt_abstract_base<char,char,int>` of `std::codecvt<char,char,int>`
 bases-fn `std::__codecvt_abstract_base<wchar_t,char,int>` of `std::codecvt<wchar_t,char,int>`
 bases-fn `std::__ctype_abstract_base<wchar_t>` of `std::ctype<wchar_t>`
@@ -583,9 +583,12 @@ bases-fp `CryptoPP::CryptoMaterial` of `CryptoPP::DL_GroupParametersImpl<CryptoP
 bases-fp `CryptoPP::CryptoMaterial` of `CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>`
 bases-fp `CryptoPP::CryptoMaterial` of `CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>`
 bases-fp `CryptoPP::CryptoMaterial` of `CryptoPP::PrivateKey`
+bases-fp `CryptoPP::DL_GroupParameters<CryptoPP::Integer>` (virtual) of `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`
 bases-fp `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>` of `CryptoPP::DL_GroupParameters_DSA`
 bases-fp `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>` of `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`
 bases-fp `CryptoPP::DL_GroupParameters_IntegerBased` of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`
+bases-fp `CryptoPP::PrivateKey` (virtual) of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>`
+bases-fp `CryptoPP::PublicKey` (virtual) of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>`
 bases-fp `std::locale::facet` of `std::codecvt<char,char,int>`
 bases-fp `std::locale::facet` of `std::codecvt<wchar_t,char,int>`
 bases-fp `std::locale::facet` of `std::ctype<wchar_t>`
@@ -633,16 +636,13 @@ class-splits-fp `Klass_005f78b8` (inferred, vftable 005f78b8) of `CryptoPP::DL_G
 class-splits-fp `Klass_005f7e08` (inferred, vftable 005f7e08) of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>`
 class-splits-fp `Klass_005f7f08` (inferred, vftable 005f7f08) of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>`
 class-splits-fp `Klass_005f8008` (inferred, vftable 005f8008) of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`
-class-splits-fp `NPKlass_0048a218` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048a838` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048ae60` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048b488` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048bab0` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048c10c` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048c780` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048cf08` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048d584` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048dc00` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
+class-splits-fp `NPKlass_00489e00` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
+class-splits-fp `NPKlass_0048a420` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
+class-splits-fp `NPKlass_0048aa48` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
+class-splits-fp `NPKlass_0048b070` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
+class-splits-fp `NPKlass_0048b698` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
+class-splits-fp `NPKlass_0048d130` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
+class-splits-fp `NPKlass_0048d7ac` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 class-splits-fp `NPKlass_00521e84` (inferred) of `CryptoPP::Integer`
 classes-fn `CryptoPP::AllocatorWithCleanup<char,false>` (stabs)
 classes-fn `CryptoPP::AllocatorWithCleanup<unsigned_char,false>` (stabs)
@@ -741,7 +741,6 @@ classes-fn `std::vector<unsigned_int,std::allocator<unsigned_int>>` (stabs)
 classes-fn `std::vector<unsigned_short,std::allocator<unsigned_short>>` (stabs)
 classes-fp invented `Klass_005c2c10` (inferred, vftable 005c2c10)
 classes-fp invented `Klass_005d74cc` (inferred, vftable 005d74cc)
-classes-fp invented `Klass_005d750c` (inferred, vftable 005d750c)
 classes-fp invented `Klass_005d754c` (inferred, vftable 005d754c)
 classes-fp invented `Klass_005d758c` (inferred, vftable 005d758c)
 classes-fp invented `Klass_005d75cc` (inferred, vftable 005d75cc)
@@ -762,10 +761,6 @@ field-sizes-fp `CryptoPP::IteratedHashBase<unsigned_long_long,CryptoPP::MessageA
 field-sizes-fp `CryptoPP::MaurerRandomnessTest`+16: 4, is 8
 field-sizes-fp `CryptoPP::NullStore`+24: 4, is 8
 field-sizes-fp `std::ios_base`+36: 4, is 64
-fields-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`+4:4
-fields-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`+8:4
-fields-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>`+4:4
-fields-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>`+4:4
 fields-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::PolynomialMod2>`+16:4
 fields-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::PolynomialMod2>`+20:4
 fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>`+16:4
@@ -1304,13 +1299,7 @@ fields-fn `CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>`+56:4
 fields-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`+4:4
 fields-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`+4:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+100:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+104:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+108:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+116:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+120:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+124:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+128:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+12:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+132:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+136:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+16:4
@@ -1318,38 +1307,18 @@ fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP:
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+28:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+36:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+40:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+44:1
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+4:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+52:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+56:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+64:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+68:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+72:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+76:1
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+84:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+88:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+8:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+96:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+100:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+12:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+16:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+20:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+24:1
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+28:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+36:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+40:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+44:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+48:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+4:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+56:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+60:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+64:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+68:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+72:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+80:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+84:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+88:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+8:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+92:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+96:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`+12:4
@@ -1496,7 +1465,6 @@ fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomp
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+36:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+40:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+44:4
-fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+4:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+52:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+56:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+60:4
@@ -3049,10 +3017,6 @@ fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+136:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+140:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+144:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+148:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+152:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+160:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+164:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+168:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+16:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+20:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+24:1
@@ -3071,7 +3035,6 @@ fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+76:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+80:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+84:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+88:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+8:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+92:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+96:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+104:4
@@ -3086,10 +3049,6 @@ fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultS
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+140:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+144:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+148:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+152:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+160:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+164:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+168:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+16:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+20:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+24:1
@@ -3108,7 +3067,6 @@ fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultS
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+80:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+84:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+88:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+8:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+92:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+96:4
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`+104:4
@@ -3164,7 +3122,6 @@ fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`+68:4
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`+76:4
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`+80:4
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`+88:4
-fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`+8:4
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`+92:4
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`+96:1
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`+100:4
@@ -3215,7 +3172,6 @@ fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`+72:4
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`+76:1
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`+80:4
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`+88:4
-fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`+8:4
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`+92:4
 fields-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`+96:4
 fields-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`+104:4
@@ -3252,7 +3208,6 @@ fields-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`+76:4
 fields-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`+80:4
 fields-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`+84:4
 fields-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`+88:4
-fields-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`+8:4
 fields-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`+92:4
 fields-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`+96:4
 fields-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>`+104:4
@@ -3471,19 +3426,8 @@ fields-fn `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+100:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+104:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+108:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+112:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+116:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+124:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+128:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+12:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+132:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+136:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+140:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+148:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+152:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+156:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+160:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+164:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+168:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+16:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+20:4
@@ -3501,7 +3445,6 @@ fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+72:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+76:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+80:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+88:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+8:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+92:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+96:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+100:4
@@ -3530,19 +3473,12 @@ fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+196:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+200:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+204:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+208:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+20:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+212:1
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+220:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+224:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+232:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+236:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+240:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+244:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+24:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+252:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+256:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+260:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+264:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+268:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+272:4
@@ -3558,7 +3494,6 @@ fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+80:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+84:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+88:1
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+8:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+96:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+100:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+104:4
@@ -3579,22 +3514,7 @@ fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+164:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+168:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+16:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+172:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+176:1
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+180:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+188:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+192:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+196:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+200:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+208:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+20:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+212:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+216:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+220:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+224:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+232:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+236:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+240:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+244:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+248:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+24:4
@@ -3612,25 +3532,13 @@ fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+76:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+80:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+84:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+8:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+92:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+96:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+100:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+104:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+108:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+112:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+116:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+124:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+128:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+12:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+132:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+136:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+140:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+148:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+152:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+156:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+160:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+164:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+168:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+16:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+20:4
@@ -3648,25 +3556,13 @@ fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+72:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+76:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+80:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+88:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+8:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+92:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+96:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+100:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+104:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+108:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+112:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+116:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+124:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+128:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+12:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+132:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+136:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+140:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+148:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+152:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+156:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+160:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+164:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+168:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+16:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+20:4
@@ -3684,7 +3580,6 @@ fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSa
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+76:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+80:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+88:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+8:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+92:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+96:4
 fields-fn `CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>`+100:4
@@ -5408,19 +5303,11 @@ fields-fp `std::ios_base`+40:4
 methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>::ASN1CryptoMaterial` 4b706c
 methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>::ASN1CryptoMaterial` 4b70d4
 methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>::operator=` 4b72ec
-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>::~ASN1CryptoMaterial` 4b7250
 methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>::ASN1CryptoMaterial` 4b6d98
 methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>::ASN1CryptoMaterial` 4b6e00
-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>::Load` 4b6d74
-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>::Save` 51199c
 methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>::operator=` 4b7018
-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>::~ASN1CryptoMaterial` 4b6f7c
 methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>::ASN1CryptoMaterial` 4b7340
-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>::Load` 4b731c
-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>::Save` 5119e4
 methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>::operator=` 4b7558
-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>::~ASN1CryptoMaterial` 4b74bc
-methods-fn `CryptoPP::ASN1Object::BEREncode` 4f6620
 methods-fn `CryptoPP::ASN1Object::operator=` 489a24
 methods-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::Integer>::Mod` 519178
 methods-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::PolynomialMod2>::Mod` 518cb0
@@ -5501,9 +5388,7 @@ methods-fn `CryptoPP::CryptoMaterial::SupportsPrecomputation` 50227c
 methods-fn `CryptoPP::CryptoMaterial::ThrowIfInvalid` 501ec0
 methods-fn `CryptoPP::CryptoMaterial::operator=` 49cfa8
 methods-fn `CryptoPP::CryptoParameters::CryptoParameters` 4a3d5c
-methods-fn `CryptoPP::CryptoParameters::CryptoParameters` 4a3da0
 methods-fn `CryptoPP::CryptoParameters::operator=` 4a3f2c
-methods-fn `CryptoPP::CryptoParameters::~CryptoParameters` 4a3eb8
 methods-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>::AccessGroupParameters` 4efcd4
 methods-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>::GetGroupParameters` 522c80
 methods-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>::StaticAlgorithmName` 4efbe8
@@ -5523,35 +5408,9 @@ methods-fn `CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>::operat
 methods-fn `CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>::PrepareCascade` 51c884
 methods-fn `CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>::operator=` 4dc49c
 methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::DL_GroupParameters` 4b8c24
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::ExponentiateBase` 5128c0
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::ExponentiateElement` 512964
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::GetCofactor` 512630
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::GetGroupOrder` 5127bc
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::GetSubgroupGenerator` 512a38
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::GetVoidValue` 512734
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::LoadPrecomputation` 4b8b80
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::Precompute` 4b8b0c
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::SavePrecomputation` 512918
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::SetSubgroupGenerator` 4b8bd8
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::SupportsPrecomputation` 512a84
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::Validate` 512a90
 methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::operator=` 4b8db8
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::~DL_GroupParameters` 4b8d44
 methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::DL_GroupParameters` 4b8954
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::ExponentiateBase` 512354
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::ExponentiateElement` 5123f8
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::GetCofactor` 5120c4
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::GetGroupOrder` 512250
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::GetSubgroupGenerator` 5124cc
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::GetVoidValue` 5121c8
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::LoadPrecomputation` 4b88b0
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::Precompute` 4b883c
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::SavePrecomputation` 5123ac
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::SetSubgroupGenerator` 4b8908
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::SupportsPrecomputation` 512518
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::Validate` 512524
 methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::operator=` 4b8ae8
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::~DL_GroupParameters` 4b8a74
 methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::DL_GroupParameters` 4b8634
 methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::DL_GroupParameters` 4b8684
 methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::ExponentiateBase` 511de8
@@ -5568,20 +5427,11 @@ methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::SetSubgroupGenerato
 methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::SupportsPrecomputation` 511fac
 methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::Validate` 511fb8
 methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::operator=` 4b8818
-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::~DL_GroupParameters` 4b87a4
-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>::DL_GroupParametersImpl` 4cfad0
-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>::GetGroupPrecomputation` 517550
 methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>::operator=` 4d0128
-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>::~DL_GroupParametersImpl` 4cff68
-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>::DL_GroupParametersImpl` 4cf430
-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>::GetGroupPrecomputation` 517538
 methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>::operator=` 4cfa74
-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>::~DL_GroupParametersImpl` 4cf8b4
 methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>::DL_GroupParametersImpl` 4d0184
 methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>::DL_GroupParametersImpl` 4d02d8
-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>::GetGroupPrecomputation` 517568
 methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>::operator=` 4d09cc
-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>::~DL_GroupParametersImpl` 4d07d8
 methods-fn `CryptoPP::DL_GroupParameters_DSA::operator=` 4d0e68
 methods-fn `CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>::CascadeExponentiate` 516864
 methods-fn `CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>::DEREncode` 51699c
@@ -5620,15 +5470,8 @@ methods-fn `CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>::StaticAlgorithmNameP
 methods-fn `CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>::operator==` 5151d0
 methods-fn `CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>::operator=` 4c8680
 methods-fn `CryptoPP::DL_GroupParameters_GFP::CascadeExponentiate` 42f18a
-methods-fn `CryptoPP::DL_GroupParameters_GFP::DL_GroupParameters_GFP` 4d0f6c
-methods-fn `CryptoPP::DL_GroupParameters_GFP::DL_GroupParameters_GFP` 4d0fc4
-methods-fn `CryptoPP::DL_GroupParameters_GFP::GetFieldType` 517598
-methods-fn `CryptoPP::DL_GroupParameters_GFP::GetVoidValue` 5175a4
-methods-fn `CryptoPP::DL_GroupParameters_GFP::IsIdentity` 517574
 methods-fn `CryptoPP::DL_GroupParameters_GFP::MultiplyElements` 42f2b4
-methods-fn `CryptoPP::DL_GroupParameters_GFP::SimultaneousExponentiate` 42f2f6
 methods-fn `CryptoPP::DL_GroupParameters_GFP::operator=` 4d13cc
-methods-fn `CryptoPP::DL_GroupParameters_GFP::~DL_GroupParameters_GFP` 4d1288
 methods-fn `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime::operator=` 4e38fc
 methods-fn `CryptoPP::DL_GroupParameters_IntegerBased::DL_GroupParameters_IntegerBased` 4de46c
 methods-fn `CryptoPP::DL_GroupParameters_IntegerBased::DL_GroupParameters_IntegerBased` 4de568
@@ -5637,14 +5480,11 @@ methods-fn `CryptoPP::DL_GroupParameters_IntegerBased::Initialize` 4de180
 methods-fn `CryptoPP::DL_GroupParameters_IntegerBased::Initialize` 4de30c
 methods-fn `CryptoPP::DL_GroupParameters_IntegerBased::StaticAlgorithmNamePrefix` 4de39c
 methods-fn `CryptoPP::DL_GroupParameters_IntegerBased::operator=` 4deb20
-methods-fn `CryptoPP::DL_GroupParameters_IntegerBased::~DL_GroupParameters_IntegerBased` 4de980
 methods-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>::DL_GroupParameters_IntegerBasedImpl` 4df500
-methods-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>::DL_GroupParameters_IntegerBasedImpl` 4df558
 methods-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>::GetGenerator` 520564
 methods-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>::operator!=` 5206bc
 methods-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>::operator==` 5205e8
 methods-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>::operator=` 4df960
-methods-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>::~DL_GroupParameters_IntegerBasedImpl` 4df81c
 methods-fn `CryptoPP::DL_GroupPrecomputation<CryptoPP::EC2NPoint>::operator=` 4d143c
 methods-fn `CryptoPP::DL_GroupPrecomputation<CryptoPP::ECPPoint>::operator=` 4d1424
 methods-fn `CryptoPP::DL_GroupPrecomputation<CryptoPP::Integer>::operator=` 4d140c
@@ -5653,74 +5493,37 @@ methods-fn `CryptoPP::DL_Key<CryptoPP::ECPPoint>::operator=` 4eb154
 methods-fn `CryptoPP::DL_Key<CryptoPP::Integer>::operator=` 4eb13c
 methods-fn `CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>::StaticAlgorithmName` 4d8edc
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::AccessGroupParameters` 48c96c
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48c978
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6930
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::DL_KeyImpl` 48c9a8
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::DL_KeyImpl` 48cab4
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::GetAlgorithmID` 4f68f8
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::GetGroupParameters` 4f6924
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::operator=` 48d0bc
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::AccessGroupParameters` 48c2f8
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48c304
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f68d0
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::DL_KeyImpl` 48c32c
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::GetAlgorithmID` 4f6898
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::GetGroupParameters` 4f68c4
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::operator=` 48c934
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::AccessGroupParameters` 48bc84
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48bc90
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6870
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::DL_KeyImpl` 48bcb8
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::GetAlgorithmID` 4f6838
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::GetGroupParameters` 4f6864
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::operator=` 48c2c0
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::AccessGroupParameters` 48d0f4
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48d100
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6998
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::DL_KeyImpl` 48d130
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::GetAlgorithmID` 4f6960
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::GetGroupParameters` 4f698c
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::operator=` 48d738
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::AccessGroupParameters` 48d770
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48d77c
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6a00
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::DL_KeyImpl` 48d7ac
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::GetAlgorithmID` 4f69c8
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::GetGroupParameters` 4f69f4
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::operator=` 48ddb4
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::AccessGroupParameters` 48aa0c
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48aa18
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6738
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::DL_KeyImpl` 48aa48
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::GetAlgorithmID` 4f6700
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::GetGroupParameters` 4f672c
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::operator=` 48b000
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::AccessGroupParameters` 48a3ec
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48a3f8
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f66d8
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::DL_KeyImpl` 48a420
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::GetAlgorithmID` 4f66a0
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::GetGroupParameters` 4f66cc
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::operator=` 48a9d8
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::AccessGroupParameters` 489dcc
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::BERDecodeAlgorithmParameters` 489dd8
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6678
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::DL_KeyImpl` 489e00
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::GetAlgorithmID` 4f6640
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::GetGroupParameters` 4f666c
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::operator=` 48a3b8
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::AccessGroupParameters` 48b034
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48b040
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f67a0
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::DL_KeyImpl` 48b070
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::GetAlgorithmID` 4f6768
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::GetGroupParameters` 4f6794
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::operator=` 48b628
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::AccessGroupParameters` 48b65c
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48b668
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6808
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::DL_KeyImpl` 48b698
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::GetAlgorithmID` 4f67d0
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::GetGroupParameters` 4f67fc
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::operator=` 48bc50
 methods-fn `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_SignerBase<CryptoPP::EC2NPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>>::AccessKey` 4af498
@@ -5741,113 +5544,29 @@ methods-fn `CryptoPP::DL_PrivateKey<CryptoPP::Integer>::AssignFrom` 49a540
 methods-fn `CryptoPP::DL_PrivateKey<CryptoPP::Integer>::GetVoidValue` 4ff0a0
 methods-fn `CryptoPP::DL_PrivateKey<CryptoPP::Integer>::MakePublicKey` 4ff138
 methods-fn `CryptoPP::DL_PrivateKey<CryptoPP::Integer>::operator=` 49a608
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::AccessAbstractGroupParameters` 4b2970
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::AssignFrom` 4b26b8
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::BERDecodePrivateKey` 4b2948
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::DEREncodePrivateKey` 50f620
 methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::DL_PrivateKeyImpl` 4b2988
 methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::DL_PrivateKeyImpl` 4b2ac4
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::GenerateRandom` 4b2708
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::GetAbstractGroupParameters` 50f64c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::GetPrivateExponent` 50f5e0
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::GetVoidValue` 50f59c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::LoadPrecomputation` 4b28f4
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::Precompute` 4b26d4
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::SavePrecomputation` 50f5f0
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::SetPrivateExponent` 4b2928
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::SupportsPrecomputation` 50f640
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::Validate` 50f664
 methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::operator=` 4b3178
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::~DL_PrivateKeyImpl` 4b2f94
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::AccessAbstractGroupParameters` 4b1f9c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::AssignFrom` 4b1ce4
 methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::DL_PrivateKeyImpl` 4b1fb0
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::GenerateRandom` 4b1d34
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::GetAbstractGroupParameters` 50f3a4
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::GetPrivateExponent` 50f338
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::GetVoidValue` 50f2f4
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::LoadPrecomputation` 4b1f20
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::Precompute` 4b1d00
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::SavePrecomputation` 50f348
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::SetPrivateExponent` 4b1f54
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::SupportsPrecomputation` 50f398
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::Validate` 50f3b8
 methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::operator=` 4b2664
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::~DL_PrivateKeyImpl` 4b2480
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::AccessAbstractGroupParameters` 4b15c8
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::AssignFrom` 4b1310
 methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::DL_PrivateKeyImpl` 4b15dc
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::GenerateRandom` 4b1360
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::GetAbstractGroupParameters` 50f0fc
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::GetPrivateExponent` 50f090
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::GetVoidValue` 50f04c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::LoadPrecomputation` 4b154c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::Precompute` 4b132c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::SavePrecomputation` 50f0a0
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::SetPrivateExponent` 4b1580
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::SupportsPrecomputation` 50f0f0
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::Validate` 50f110
 methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::operator=` 4b1c90
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::~DL_PrivateKeyImpl` 4b1aac
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::AccessAbstractGroupParameters` 4b3484
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::AssignFrom` 4b31cc
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::BERDecodePrivateKey` 4b345c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::DEREncodePrivateKey` 50f8cc
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::DL_PrivateKeyImpl` 4b349c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::GenerateRandom` 4b321c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::GetAbstractGroupParameters` 50f8f8
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::GetPrivateExponent` 50f88c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::GetVoidValue` 50f848
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::LoadPrecomputation` 4b3408
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::Precompute` 4b31e8
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::SavePrecomputation` 50f89c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::SetPrivateExponent` 4b343c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::SupportsPrecomputation` 50f8ec
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::Validate` 50f910
 methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::operator=` 4b3b50
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::~DL_PrivateKeyImpl` 4b396c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::AccessAbstractGroupParameters` 4b3e5c
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::AssignFrom` 4b3ba4
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::BERDecodePrivateKey` 4b3e34
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::DEREncodePrivateKey` 50fb78
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::DL_PrivateKeyImpl` 4b3e74
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::GenerateRandom` 4b3bf4
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::GetAbstractGroupParameters` 50fba4
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::GetPrivateExponent` 50fb38
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::GetVoidValue` 50faf4
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::LoadPrecomputation` 4b3de0
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::Precompute` 4b3bc0
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::SavePrecomputation` 50fb48
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::SetPrivateExponent` 4b3e14
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::SupportsPrecomputation` 50fb98
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::Validate` 50fbbc
 methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::operator=` 4b4528
-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::~DL_PrivateKeyImpl` 4b4344
-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>::BERDecodePrivateKey` 4a52a8
-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>::DEREncodePrivateKey` 50bd8c
-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>::DL_PrivateKey_EC` 4a5918
 methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>::Initialize` 4a50a4
 methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>::Initialize` 4a50e4
 methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>::Initialize` 4a5138
 methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>::Initialize` 4a516c
-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>::~DL_PrivateKey_EC` 4a5c04
-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>::BERDecodePrivateKey` 4a45e8
-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>::DEREncodePrivateKey` 50bc48
-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>::DL_PrivateKey_EC` 4a4c64
 methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>::Initialize` 4a43e4
 methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>::Initialize` 4a4424
 methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>::Initialize` 4a4478
 methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>::Initialize` 4a44ac
-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>::~DL_PrivateKey_EC` 4a4f50
-methods-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>::DL_PrivateKey_GFP` 4b4878
-methods-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>::DL_PrivateKey_GFP` 4b48e0
 methods-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>::Initialize` 4b457c
 methods-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>::Initialize` 4b45bc
 methods-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>::Initialize` 4b4600
 methods-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>::Initialize` 4b4644
 methods-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>::Initialize` 4b4744
 methods-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>::Initialize` 4b4858
-methods-fn `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>::~DL_PrivateKey_GFP` 4b4bcc
 methods-fn `CryptoPP::DL_PublicKey<CryptoPP::EC2NPoint>::AssignFrom` 493fdc
 methods-fn `CryptoPP::DL_PublicKey<CryptoPP::EC2NPoint>::GetVoidValue` 4f7fe8
 methods-fn `CryptoPP::DL_PublicKey<CryptoPP::EC2NPoint>::operator=` 494114
@@ -5857,23 +5576,13 @@ methods-fn `CryptoPP::DL_PublicKey<CryptoPP::ECPPoint>::operator=` 493fc4
 methods-fn `CryptoPP::DL_PublicKey<CryptoPP::Integer>::AssignFrom` 493d3c
 methods-fn `CryptoPP::DL_PublicKey<CryptoPP::Integer>::GetVoidValue` 4f7c00
 methods-fn `CryptoPP::DL_PublicKey<CryptoPP::Integer>::operator=` 493e74
-methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>::DL_PublicKeyImpl` 4a6ff4
 methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>::operator=` 4a76a0
-methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>::~DL_PublicKeyImpl` 4a74bc
-methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::DL_PublicKeyImpl` 4a6768
 methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::operator==` 50c2cc
 methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::operator=` 4a6e1c
-methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::~DL_PublicKeyImpl` 4a6c38
-methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::DL_PublicKeyImpl` 4a5edc
 methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::operator==` 50c084
 methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::operator=` 4a6590
-methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::~DL_PublicKeyImpl` 4a63ac
-methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>::DL_PublicKeyImpl` 4a7874
 methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>::operator=` 4a7f20
-methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>::~DL_PublicKeyImpl` 4a7d3c
-methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::DL_PublicKeyImpl` 4a80f4
 methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::operator=` 4a87a0
-methods-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::~DL_PublicKeyImpl` 4a85bc
 methods-fn `CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>::Initialize` 4a1854
 methods-fn `CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>::Initialize` 4a1894
 methods-fn `CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>::Initialize` 4a1324
@@ -5948,7 +5657,6 @@ methods-fn `CryptoPP::GeneratableCryptoMaterial::GeneratableCryptoMaterial` 4d4f
 methods-fn `CryptoPP::GeneratableCryptoMaterial::GenerateRandomWithKeySize` 4050f2
 methods-fn `CryptoPP::GeneratableCryptoMaterial::GenerateRandom` 4d4d90
 methods-fn `CryptoPP::GeneratableCryptoMaterial::operator=` 4d5078
-methods-fn `CryptoPP::GeneratableCryptoMaterial::~GeneratableCryptoMaterial` 4d501c
 methods-fn `CryptoPP::HMAC<CryptoPP::SHA1>::StaticAlgorithmName` 4e867c
 methods-fn `CryptoPP::HexDecoder::GetDefaultDecodingLookupArray` 418cb8
 methods-fn `CryptoPP::Integer::AbsoluteValue` 44eee8
@@ -6114,24 +5822,17 @@ methods-fn `CryptoPP::NameValuePairs::operator=` 49ef8c
 methods-fn `CryptoPP::OAEP<CryptoPP::SHA1,CryptoPP::P1363_MGF1>::StaticAlgorithmName` 4e8b7c
 methods-fn `CryptoPP::OFB_ModePolicy::StaticAlgorithmName` 49f08c
 methods-fn `CryptoPP::P1363_MGF1::StaticAlgorithmName` 48eb0c
-methods-fn `CryptoPP::PKCS8PrivateKey::BERDecodeOptionalAttributes` 433974
-methods-fn `CryptoPP::PKCS8PrivateKey::BERDecode` 4342ca
-methods-fn `CryptoPP::PKCS8PrivateKey::DEREncodeOptionalAttributes` 431fa8
-methods-fn `CryptoPP::PKCS8PrivateKey::DEREncode` 434bba
 methods-fn `CryptoPP::PKCS8PrivateKey::PKCS8PrivateKey` 4a27d8
 methods-fn `CryptoPP::PKCS8PrivateKey::PKCS8PrivateKey` 4a28d4
 methods-fn `CryptoPP::PKCS8PrivateKey::operator=` 4a2e90
-methods-fn `CryptoPP::PKCS8PrivateKey::~PKCS8PrivateKey` 4a2cf0
 methods-fn `CryptoPP::PK_SignatureMessageEncodingMethod::AllowNonrecoverablePart` 520058
 methods-fn `CryptoPP::PK_SignatureMessageEncodingMethod::IsProbabilistic` 51feac
 methods-fn `CryptoPP::PrivateKey::PrivateKey` 48ecd4
 methods-fn `CryptoPP::PrivateKey::PrivateKey` 48ed18
 methods-fn `CryptoPP::PrivateKey::operator=` 48eea4
-methods-fn `CryptoPP::PrivateKey::~PrivateKey` 48ee30
 methods-fn `CryptoPP::ProxyFilter::SetFilter` 4115d8
 methods-fn `CryptoPP::PublicKey::PublicKey` 4f1358
 methods-fn `CryptoPP::PublicKey::operator=` 4f1488
-methods-fn `CryptoPP::PublicKey::~PublicKey` 4f142c
 methods-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>::GetDomain` 4f8ba0
 methods-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>::GetModulus` 4f82bc
 methods-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>::operator==` 4f8bac
@@ -6165,11 +5866,8 @@ methods-fn `CryptoPP::TimerBase::ConvertTo` 429b14
 methods-fn `CryptoPP::TimerBase::ElapsedTimeAsDouble` 429bc2
 methods-fn `CryptoPP::TimerBase::ElapsedTime` 429c96
 methods-fn `CryptoPP::TimerBase::StartTimer` 4292f0
-methods-fn `CryptoPP::X509PublicKey::BERDecode` 434678
-methods-fn `CryptoPP::X509PublicKey::DEREncode` 434ee2
 methods-fn `CryptoPP::X509PublicKey::X509PublicKey` 49b2dc
 methods-fn `CryptoPP::X509PublicKey::operator=` 49b4ac
-methods-fn `CryptoPP::X509PublicKey::~X509PublicKey` 49b424
 methods-fn `CryptoPP::clonable_ptr<CryptoPP::GF2NP>::operator=` 496180
 methods-fn `CryptoPP::clonable_ptr<CryptoPP::ModularArithmetic>::operator=` 4960c0
 methods-fn `CryptoPP::value_ptr<CryptoPP::ECP>::operator=` 4f1cac
@@ -6524,6 +6222,16 @@ methods-fp 46b8e2 of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 4728a8 of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 474d9c of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 478b18 of `CryptoPP::Integer`: is `CryptoPP`'s
+methods-fp 489dcc of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`'s
+methods-fp 48a3ec of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`'s
+methods-fp 48aa0c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`'s
+methods-fp 48b034 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`'s
+methods-fp 48b65c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`'s
+methods-fp 48bc84 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`'s
+methods-fp 48c2f8 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`'s
+methods-fp 48c96c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`'s
+methods-fp 48d0f4 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`'s
+methods-fp 48d770 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`'s
 methods-fp 48f9ac of `CryptoPP::value_ptr<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>`: is `CryptoPP::member_ptr<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>`'s
 methods-fp 48fa18 of `CryptoPP::clonable_ptr<CryptoPP::ModularArithmetic>`: is `CryptoPP::member_ptr<CryptoPP::ModularArithmetic>`'s
 methods-fp 48fa28 of `CryptoPP::clonable_ptr<CryptoPP::ModularArithmetic>`: is `CryptoPP::member_ptr<CryptoPP::ModularArithmetic>`'s
@@ -6540,32 +6248,30 @@ methods-fp 49d0ac of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GF
 methods-fp 49d0dc of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: is `CryptoPP`'s
 methods-fp 49d13c of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: is `CryptoPP`'s
 methods-fp 49d19c of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: is `CryptoPP`'s
+methods-fp 49d1fc of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`: is `CryptoPP`'s
+methods-fp 49d22c of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`: is `CryptoPP`'s
+methods-fp 49d25c of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: is `CryptoPP`'s
+methods-fp 49d2bc of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: is `CryptoPP`'s
+methods-fp 49d31c of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: is `CryptoPP`'s
 methods-fp 49d37c of `CryptoPP::DL_GroupParameters_IntegerBased`: is `CryptoPP`'s
+methods-fp 49d3ac of `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`: is `CryptoPP`'s
 methods-fp 49d3dc of `CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>`: is `CryptoPP`'s
+methods-fp 49d40c of `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`: is `CryptoPP`'s
 methods-fp 49d43c of `CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>`: is `CryptoPP`'s
+methods-fp 49d46c of `CryptoPP::DL_GroupParameters_GFP`: is `CryptoPP`'s
 methods-fp 49d49c of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`: is `CryptoPP`'s
 methods-fp 4a3818 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`: is `CryptoPP`'s
 methods-fp 4a3840 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`: is `CryptoPP`'s
 methods-fp 4a3868 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: is `CryptoPP`'s
 methods-fp 4a38b8 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: is `CryptoPP`'s
 methods-fp 4a3908 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: is `CryptoPP`'s
+methods-fp 4a3958 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`: is `CryptoPP`'s
+methods-fp 4a3980 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`: is `CryptoPP`'s
+methods-fp 4a39a8 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: is `CryptoPP`'s
+methods-fp 4a39f8 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: is `CryptoPP`'s
+methods-fp 4a3a48 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: is `CryptoPP`'s
 methods-fp 4a3a70 of `CryptoPP::DL_GroupParameters_IntegerBased`: is `CryptoPP`'s
 methods-fp 4a3a98 of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`: is `CryptoPP`'s
-methods-fp 4a3da0 of `CryptoPP::DL_GroupParameters<CryptoPP::Integer>`: is `CryptoPP::CryptoParameters`'s
-methods-fp 4a4c64 of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>`: is `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`'s
-methods-fp 4a4f50 of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>`: is `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`'s
-methods-fp 4a5918 of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>`: is `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`'s
-methods-fp 4a5c04 of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>`: is `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`'s
-methods-fp 4a5edc of `CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>`: is `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`'s
-methods-fp 4a63ac of `CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>`: is `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`'s
-methods-fp 4a6768 of `CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>`: is `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`'s
-methods-fp 4a6c38 of `CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>`: is `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`'s
-methods-fp 4a6ff4 of `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: is `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`'s
-methods-fp 4a74bc of `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: is `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`'s
-methods-fp 4a7874 of `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>`: is `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`'s
-methods-fp 4a7d3c of `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>`: is `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`'s
-methods-fp 4a80f4 of `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: is `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`'s
-methods-fp 4a85bc of `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: is `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`'s
 methods-fp 4adfd4 of `CryptoPP::BERSequenceDecoder`: is `CryptoPP`'s
 methods-fp 4ae1f8 of `CryptoPP::DERSequenceEncoder`: is `CryptoPP`'s
 methods-fp 4ae2f4 of `CryptoPP::DERSequenceEncoder`: is `CryptoPP`'s
@@ -6575,19 +6281,10 @@ methods-fp 4af498 of `CryptoPP::PK_FinalTemplate<CryptoPP::DL_SignerImpl<CryptoP
 methods-fp 4af870 of `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>>`: is `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>>`'s
 methods-fp 4b03e0 of `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>>`: is `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::ECPPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>>`'s
 methods-fp 4b07b8 of `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>>`: is `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::EC2NPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>>`'s
-methods-fp 4b1360 of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`'s
-methods-fp 4b1aac of `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`'s
-methods-fp 4b1d34 of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`'s
-methods-fp 4b2480 of `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`'s
-methods-fp 4b2708 of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`'s
-methods-fp 4b2f94 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`'s
-methods-fp 4b349c of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`'s
-methods-fp 4b396c of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`'s
-methods-fp 4b3e74 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`'s
-methods-fp 4b4344 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`'s
-methods-fp 4b4878 of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`: is `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`'s
-methods-fp 4b48e0 of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`: is `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`'s
-methods-fp 4b4bcc of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`: is `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`'s
+methods-fp 4b15dc of `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`'s
+methods-fp 4b1fb0 of `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`'s
+methods-fp 4b2988 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`'s
+methods-fp 4b2ac4 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: is `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`'s
 methods-fp 4b5bd8 of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,16u,false>`: is `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,16u,CryptoPP::NullAllocator<unsigned_int>,false>>`'s
 methods-fp 4b5bf4 of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,16u,false>`: is `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,16u,CryptoPP::NullAllocator<unsigned_int>,false>>`'s
 methods-fp 4b5c28 of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,16u,false>`: is `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,16u,CryptoPP::NullAllocator<unsigned_int>,false>>`'s
@@ -6597,23 +6294,15 @@ methods-fp 4b5c78 of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,16u,true>`
 methods-fp 4b5ce0 of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,60u,true>`: is `CryptoPP::FixedSizeSecBlock<unsigned_int,60u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,60u,CryptoPP::NullAllocator<unsigned_int>,true>>`'s
 methods-fp 4b5cfc of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,60u,true>`: is `CryptoPP::FixedSizeSecBlock<unsigned_int,60u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,60u,CryptoPP::NullAllocator<unsigned_int>,true>>`'s
 methods-fp 4b5d18 of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,60u,true>`: is `CryptoPP::FixedSizeSecBlock<unsigned_int,60u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,60u,CryptoPP::NullAllocator<unsigned_int>,true>>`'s
-methods-fp 4b6f7c of `CryptoPP::PKCS8PrivateKey`: is `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>`'s
-methods-fp 4b7250 of `CryptoPP::DL_GroupParameters_IntegerBased`: is `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`'s
-methods-fp 4b74bc of `CryptoPP::X509PublicKey`: is `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>`'s
-methods-fp 4b8a74 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`: is `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`'s
-methods-fp 4b8d44 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`: is `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`'s
+methods-fp 4b8954 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`: is `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`'s
+methods-fp 4b8c24 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`: is `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`'s
 methods-fp 4cb78c of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`: is `CryptoPP::SimpleKeyingInterface`'s
 methods-fp 4cdf70 of `CryptoPP::HashVerificationFilter`: is `CryptoPP::BufferedTransformation`'s
 methods-fp 4ce824 of `CryptoPP::ByteQueue`: is `CryptoPP::BufferedTransformation`'s
-methods-fp 4cf430 of `CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>`: is `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`'s
-methods-fp 4cf8b4 of `CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>`: is `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`'s
-methods-fp 4cfad0 of `CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>`: is `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`'s
-methods-fp 4cff68 of `CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>`: is `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`'s
-methods-fp 4d07d8 of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`: is `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`'s
+methods-fp 4d02d8 of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`: is `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`'s
+methods-fp 4d4f48 of `CryptoPP::CryptoParameters`: is `CryptoPP::GeneratableCryptoMaterial`'s
 methods-fp 4d9e04 of `CryptoPP::ECP`: is `CryptoPP`'s
-methods-fp 4de980 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`: is `CryptoPP::DL_GroupParameters_IntegerBased`'s
-methods-fp 4df558 of `CryptoPP::DL_GroupParameters_GFP`: is `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`'s
-methods-fp 4df81c of `CryptoPP::DL_GroupParameters_GFP`: is `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`'s
+methods-fp 4df500 of `CryptoPP::DL_GroupParameters_GFP`: is `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`'s
 methods-fp 4eb808 of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 4eb8d8 of `CryptoPP::StringSource`: is `CryptoPP::Source`'s
 methods-fp 4ee38c of `CryptoPP::FixedSizeSecBlock<unsigned_char,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>>`: is `CryptoPP::SecBlock<unsigned_char,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>>`'s
@@ -6633,6 +6322,16 @@ methods-fp 4f200c of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 4f2138 of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 4f2180 of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 4f21a4 of `CryptoPP::Integer`: is `CryptoPP`'s
+methods-fp 4f666c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`'s
+methods-fp 4f66cc of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`'s
+methods-fp 4f672c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`'s
+methods-fp 4f6794 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`'s
+methods-fp 4f67fc of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`'s
+methods-fp 4f6864 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`'s
+methods-fp 4f68c4 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`'s
+methods-fp 4f6924 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`'s
+methods-fp 4f698c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`'s
+methods-fp 4f69f4 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`'s
 methods-fp 513394 of `CryptoPP::TF_DecryptorBase`: is `CryptoPP::TF_CryptoSystemBase<CryptoPP::PK_Decryptor,CryptoPP::TF_Base<CryptoPP::TrapdoorFunctionInverse,CryptoPP::PK_EncryptionMessageEncodingMethod>>`'s
 methods-fp 513630 of `CryptoPP::TF_EncryptorBase`: is `CryptoPP::TF_CryptoSystemBase<CryptoPP::PK_Encryptor,CryptoPP::TF_Base<CryptoPP::RandomizedTrapdoorFunction,CryptoPP::PK_EncryptionMessageEncodingMethod>>`'s
 methods-fp 517830 of `CryptoPP::DL_VerifierBase<CryptoPP::Integer>`: is `CryptoPP::DL_SignatureSchemeBase<CryptoPP::PK_Verifier,CryptoPP::DL_PublicKey<CryptoPP::Integer>>`'s
@@ -6688,7 +6387,6 @@ methods-fp 5b1c40 of `std::bad_alloc`: no method
 polymorphic-classes-fn `CryptoPP::ThreadUserTimer` (stabs, vftable 005ee808)
 polymorphic-classes-fp invented `Klass_005c2c10` (inferred, vftable 005c2c10)
 polymorphic-classes-fp invented `Klass_005d74cc` (inferred, vftable 005d74cc)
-polymorphic-classes-fp invented `Klass_005d750c` (inferred, vftable 005d750c)
 polymorphic-classes-fp invented `Klass_005d754c` (inferred, vftable 005d754c)
 polymorphic-classes-fp invented `Klass_005d758c` (inferred, vftable 005d758c)
 polymorphic-classes-fp invented `Klass_005d75cc` (inferred, vftable 005d75cc)
@@ -6714,7 +6412,6 @@ sizes-fn `CryptoPP::value_ptr<CryptoPP::MontgomeryRepresentation>`: none, is 4
 sizes-fn `std::deque<CryptoPP::MeterFilter::MessageRange,std::allocator<CryptoPP::MeterFilter::MessageRange>>`: none, is 40
 sizes-fn `std::deque<unsigned_int,std::allocator<unsigned_int>>`: none, is 40
 sizes-fn `std::deque<unsigned_long_long,std::allocator<unsigned_long_long>>`: none, is 40
-sizes-fp `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`: 8, is 12
 sizes-fp `CryptoPP::AbstractEuclideanDomain<CryptoPP::PolynomialMod2>`: 12, is 24
 sizes-fp `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>`: 28, is 40
 sizes-fp `CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>`: 28, is 44
@@ -6779,7 +6476,7 @@ sizes-fp `CryptoPP::DES::Base`: 12, is 160
 sizes-fp `CryptoPP::DES_EDE2::Base`: 12, is 304
 sizes-fp `CryptoPP::DES_EDE3::Base`: 12, is 448
 sizes-fp `CryptoPP::DES_XEX3::Base`: 12, is 72
-sizes-fp `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`: 12, is 104
+sizes-fp `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`: 16, is 104
 sizes-fp `CryptoPP::DL_BadElement`: 8, is 12
 sizes-fp `CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`: 12, is 184
 sizes-fp `CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`: 12, is 184
@@ -6788,14 +6485,14 @@ sizes-fp `CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>`: 72, is 
 sizes-fp `CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>`: 56, is 60
 sizes-fp `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`: 4, is 8
 sizes-fp `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`: 4, is 8
-sizes-fp `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`: 4, is 140
-sizes-fp `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`: 4, is 104
-sizes-fp `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`: 8, is 100
-sizes-fp `CryptoPP::DL_GroupParameters_DSA`: 8, is 100
-sizes-fp `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`: 8, is 100
-sizes-fp `CryptoPP::DL_GroupParameters_GFP`: 8, is 100
-sizes-fp `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`: 8, is 100
-sizes-fp `CryptoPP::DL_GroupParameters_IntegerBased`: 8, is 32
+sizes-fp `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`: 128, is 140
+sizes-fp `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`: 92, is 104
+sizes-fp `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`: 12, is 100
+sizes-fp `CryptoPP::DL_GroupParameters_DSA`: 12, is 100
+sizes-fp `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`: 12, is 100
+sizes-fp `CryptoPP::DL_GroupParameters_GFP`: 12, is 100
+sizes-fp `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`: 12, is 100
+sizes-fp `CryptoPP::DL_GroupParameters_IntegerBased`: 12, is 32
 sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`: 8, is 148
 sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`: 8, is 244
 sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`: 8, is 208
@@ -6833,8 +6530,6 @@ sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Intege
 sizes-fp `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`: 12, is 172
 sizes-fp `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: 12, is 268
 sizes-fp `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: 12, is 232
-sizes-fp `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`: 12, is 172
-sizes-fp `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: 12, is 172
 sizes-fp `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`: 12, is 268
 sizes-fp `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`: 12, is 232
 sizes-fp `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: 12, is 172
@@ -6843,11 +6538,11 @@ sizes-fp `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSa
 sizes-fp `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>`: 12, is 268
 sizes-fp `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>`: 12, is 232
 sizes-fp `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`: 12, is 172
-sizes-fp `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`: 12, is 172
-sizes-fp `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: 12, is 276
-sizes-fp `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: 12, is 256
-sizes-fp `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`: 12, is 172
-sizes-fp `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: 12, is 172
+sizes-fp `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`: 168, is 172
+sizes-fp `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: 264, is 276
+sizes-fp `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: 244, is 256
+sizes-fp `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`: 168, is 172
+sizes-fp `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: 168, is 172
 sizes-fp `CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>`: 12, is 276
 sizes-fp `CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>`: 12, is 256
 sizes-fp `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: 12, is 172
@@ -6940,26 +6635,15 @@ sizes-fp `std::type_info`: 4, is 8
 sizes-fp `std::vector<CryptoPP::Integer,std::allocator<CryptoPP::Integer>>`: 8, is 12
 structors-fn 48ecd4 of `CryptoPP::PrivateKey`
 structors-fn 48ed18 of `CryptoPP::PrivateKey`
-structors-fn 48ee30 of `CryptoPP::PrivateKey`
 structors-fn 49b2dc of `CryptoPP::X509PublicKey`
-structors-fn 49b424 of `CryptoPP::X509PublicKey`
 structors-fn 4a27d8 of `CryptoPP::PKCS8PrivateKey`
 structors-fn 4a28d4 of `CryptoPP::PKCS8PrivateKey`
-structors-fn 4a2cf0 of `CryptoPP::PKCS8PrivateKey`
 structors-fn 4a3d5c of `CryptoPP::CryptoParameters`
-structors-fn 4a3da0 of `CryptoPP::CryptoParameters`
-structors-fn 4a3eb8 of `CryptoPP::CryptoParameters`
-structors-fn 4d0f6c of `CryptoPP::DL_GroupParameters_GFP`
-structors-fn 4d0fc4 of `CryptoPP::DL_GroupParameters_GFP`
-structors-fn 4d1288 of `CryptoPP::DL_GroupParameters_GFP`
 structors-fn 4d4f1c of `CryptoPP::GeneratableCryptoMaterial`
 structors-fn 4d4f48 of `CryptoPP::GeneratableCryptoMaterial`
-structors-fn 4d501c of `CryptoPP::GeneratableCryptoMaterial`
 structors-fn 4de46c of `CryptoPP::DL_GroupParameters_IntegerBased`
 structors-fn 4de568 of `CryptoPP::DL_GroupParameters_IntegerBased`
-structors-fn 4de980 of `CryptoPP::DL_GroupParameters_IntegerBased`
 structors-fn 4f1358 of `CryptoPP::PublicKey`
-structors-fn 4f142c of `CryptoPP::PublicKey`
 structors-fp 489a48 of `CryptoPP::Bufferless<CryptoPP::BufferedTransformation>`
 structors-fp 489a74 of `CryptoPP::Bufferless<CryptoPP::BufferedTransformation>`
 structors-fp 489ab8 of `CryptoPP::Bufferless<CryptoPP::BufferedTransformation>`
@@ -6974,24 +6658,34 @@ structors-fp 489ce4 of `CryptoPP::Bufferless<CryptoPP::Filter>`
 structors-fp 489d28 of `CryptoPP::Bufferless<CryptoPP::Filter>`
 structors-fp 489ef0 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
 structors-fp 48a084 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
+structors-fp 48a218 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
 structors-fp 48a510 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
 structors-fp 48a6a4 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
+structors-fp 48a838 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
 structors-fp 48ab38 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
 structors-fp 48accc of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
+structors-fp 48ae60 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
 structors-fp 48b160 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
 structors-fp 48b2f4 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
+structors-fp 48b488 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
 structors-fp 48b788 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 structors-fp 48b91c of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
+structors-fp 48bab0 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 structors-fp 48bdbc of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
 structors-fp 48bf64 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
+structors-fp 48c10c of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
 structors-fp 48c430 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
 structors-fp 48c5d8 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
+structors-fp 48c780 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
 structors-fp 48cbb8 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
 structors-fp 48cd60 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
+structors-fp 48cf08 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
 structors-fp 48d234 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
 structors-fp 48d3dc of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
+structors-fp 48d584 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
 structors-fp 48d8b0 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 structors-fp 48da58 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
+structors-fp 48dc00 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 structors-fp 4926fc of `CryptoPP::Unflushable<CryptoPP::Multichannel<CryptoPP::Filter>>`
 structors-fp 492740 of `CryptoPP::Unflushable<CryptoPP::Multichannel<CryptoPP::Filter>>`
 structors-fp 492784 of `CryptoPP::Unflushable<CryptoPP::Multichannel<CryptoPP::Filter>>`
@@ -7372,20 +7066,34 @@ structors-fp 4a42bc of `CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOpti
 structors-fp 4a42f4 of `CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`
 structors-fp 4a4344 of `CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`
 structors-fp 4a4394 of `CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`
+structors-fp 4a4c64 of `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`
 structors-fp 4a4cc8 of `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`
 structors-fp 4a4e0c of `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`
+structors-fp 4a4f50 of `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`
+structors-fp 4a5918 of `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`
 structors-fp 4a597c of `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`
 structors-fp 4a5ac0 of `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`
+structors-fp 4a5c04 of `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`
+structors-fp 4a5edc of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`
 structors-fp 4a6004 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`
 structors-fp 4a61d8 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`
+structors-fp 4a63ac of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`
+structors-fp 4a6768 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
 structors-fp 4a6890 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
 structors-fp 4a6a64 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
+structors-fp 4a6c38 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
+structors-fp 4a6ff4 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
 structors-fp 4a711c of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
 structors-fp 4a72ec of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
+structors-fp 4a74bc of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
+structors-fp 4a7874 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
 structors-fp 4a799c of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
 structors-fp 4a7b6c of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
+structors-fp 4a7d3c of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
+structors-fp 4a80f4 of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
 structors-fp 4a821c of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
 structors-fp 4a83ec of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
+structors-fp 4a85bc of `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
 structors-fp 4a89a4 of `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>`
 structors-fp 4a8a94 of `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>`
 structors-fp 4a8bd8 of `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>`
@@ -7513,16 +7221,26 @@ structors-fp 4b1128 of `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_EncryptorBase<C
 structors-fp 4b121c of `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_EncryptorBase<CryptoPP::Integer>,CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>>`
 structors-fp 4b1704 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`
 structors-fp 4b18d8 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`
+structors-fp 4b1aac of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`
 structors-fp 4b20d8 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
 structors-fp 4b22ac of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
+structors-fp 4b2480 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
 structors-fp 4b2bec of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
 structors-fp 4b2dc0 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
+structors-fp 4b2f94 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
+structors-fp 4b349c of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
 structors-fp 4b35c4 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
 structors-fp 4b3798 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
+structors-fp 4b396c of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
+structors-fp 4b3e74 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
 structors-fp 4b3f9c of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
 structors-fp 4b4170 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
+structors-fp 4b4344 of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
+structors-fp 4b4878 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`
+structors-fp 4b48e0 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`
 structors-fp 4b4944 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`
 structors-fp 4b4a88 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`
+structors-fp 4b4bcc of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`
 structors-fp 4b4d20 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>`
 structors-fp 4b4e10 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>`
 structors-fp 4b4f54 of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>`
@@ -7547,10 +7265,13 @@ structors-fp 4b5bbc of `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::F
 structors-fp 4b5c10 of `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,16u,CryptoPP::NullAllocator<unsigned_int>,false>>`
 structors-fp 4b6e5c of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>`
 structors-fp 4b6eec of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>`
+structors-fp 4b6f7c of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>`
 structors-fp 4b7130 of `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`
 structors-fp 4b71c0 of `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`
+structors-fp 4b7250 of `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`
 structors-fp 4b739c of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>`
 structors-fp 4b742c of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>`
+structors-fp 4b74bc of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>`
 structors-fp 4b7d2c of `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`
 structors-fp 4b7d64 of `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`
 structors-fp 4b7db4 of `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`
@@ -7563,10 +7284,13 @@ structors-fp 4b84a4 of `CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>`
 structors-fp 4b85e8 of `CryptoPP::DL_GroupParameters<CryptoPP::Integer>`
 structors-fp 4b86cc of `CryptoPP::DL_GroupParameters<CryptoPP::Integer>`
 structors-fp 4b8738 of `CryptoPP::DL_GroupParameters<CryptoPP::Integer>`
+structors-fp 4b87a4 of `CryptoPP::DL_GroupParameters<CryptoPP::Integer>`
 structors-fp 4b899c of `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`
 structors-fp 4b8a08 of `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`
+structors-fp 4b8a74 of `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`
 structors-fp 4b8c6c of `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`
 structors-fp 4b8cd8 of `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`
+structors-fp 4b8d44 of `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`
 structors-fp 4ba730 of `CryptoPP::StringSinkTemplate<std::string>`
 structors-fp 4ba768 of `CryptoPP::StringSinkTemplate<std::string>`
 structors-fp 4ba7a0 of `CryptoPP::StringSinkTemplate<std::string>`
@@ -7660,12 +7384,17 @@ structors-fp 4cf2ec of `CryptoPP::CustomFlushPropagation<CryptoPP::Sink>`
 structors-fp 4cf358 of `CryptoPP::CustomFlushPropagation<CryptoPP::Filter>`
 structors-fp 4cf39c of `CryptoPP::CustomFlushPropagation<CryptoPP::Filter>`
 structors-fp 4cf3e0 of `CryptoPP::CustomFlushPropagation<CryptoPP::Filter>`
+structors-fp 4cf430 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`
 structors-fp 4cf544 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`
 structors-fp 4cf6fc of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`
+structors-fp 4cf8b4 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`
+structors-fp 4cfad0 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`
 structors-fp 4cfbf8 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`
 structors-fp 4cfdb0 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`
+structors-fp 4cff68 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`
 structors-fp 4d0408 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`
 structors-fp 4d05f0 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`
+structors-fp 4d07d8 of `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`
 structors-fp 4d13ec of `CryptoPP::DL_GroupPrecomputation<CryptoPP::Integer>`
 structors-fp 4d13fc of `CryptoPP::DL_GroupPrecomputation<CryptoPP::Integer>`
 structors-fp 4d1414 of `CryptoPP::DL_GroupPrecomputation<CryptoPP::ECPPoint>`
@@ -7845,8 +7574,10 @@ structors-fp 4df28c of `CryptoPP::IteratedHashWithStaticTransform<unsigned_int,C
 structors-fp 4df2d8 of `CryptoPP::DL_ElgamalLikeSignatureAlgorithm<CryptoPP::Integer>`
 structors-fp 4df2e8 of `CryptoPP::DL_ElgamalLikeSignatureAlgorithm<CryptoPP::ECPPoint>`
 structors-fp 4df2f8 of `CryptoPP::DL_ElgamalLikeSignatureAlgorithm<CryptoPP::EC2NPoint>`
+structors-fp 4df558 of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`
 structors-fp 4df5ac of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`
 structors-fp 4df6e4 of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`
+structors-fp 4df81c of `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`
 structors-fp 4dfad0 of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`
 structors-fp 4dfbf0 of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`
 structors-fp 4dfcf4 of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`
@@ -8267,40 +7998,11 @@ structors-fp 59d960 of `std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,
 structors-fp 59d980 of `std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
 structors-fp 59d9b0 of `std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
 structors-fp 59d9d0 of `std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
-virtual-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>::Load` 4b6d74
-virtual-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>::Save` 51199c
-virtual-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>::Load` 4b731c
-virtual-methods-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>::Save` 5119e4
-virtual-methods-fn `CryptoPP::ASN1Object::BEREncode` 4f6620
 virtual-methods-fn `CryptoPP::CryptoMaterial::LoadPrecomputation` 49cb78
 virtual-methods-fn `CryptoPP::CryptoMaterial::Precompute` 49c924
 virtual-methods-fn `CryptoPP::CryptoMaterial::SavePrecomputation` 5020bc
 virtual-methods-fn `CryptoPP::CryptoMaterial::SupportsPrecomputation` 50227c
 virtual-methods-fn `CryptoPP::CryptoMaterial::ThrowIfInvalid` 501ec0
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::ExponentiateBase` 5128c0
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::ExponentiateElement` 512964
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::GetCofactor` 512630
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::GetGroupOrder` 5127bc
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::GetSubgroupGenerator` 512a38
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::GetVoidValue` 512734
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::LoadPrecomputation` 4b8b80
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::Precompute` 4b8b0c
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::SavePrecomputation` 512918
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::SetSubgroupGenerator` 4b8bd8
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::SupportsPrecomputation` 512a84
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>::Validate` 512a90
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::ExponentiateBase` 512354
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::ExponentiateElement` 5123f8
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::GetCofactor` 5120c4
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::GetGroupOrder` 512250
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::GetSubgroupGenerator` 5124cc
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::GetVoidValue` 5121c8
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::LoadPrecomputation` 4b88b0
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::Precompute` 4b883c
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::SavePrecomputation` 5123ac
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::SetSubgroupGenerator` 4b8908
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::SupportsPrecomputation` 512518
-virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>::Validate` 512524
 virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::ExponentiateBase` 511de8
 virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::ExponentiateElement` 511e8c
 virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::GetCofactor` 511b58
@@ -8313,120 +8015,7 @@ virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::SavePrecomp
 virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::SetSubgroupGenerator` 4b859c
 virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::SupportsPrecomputation` 511fac
 virtual-methods-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>::Validate` 511fb8
-virtual-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>::GetGroupPrecomputation` 517550
-virtual-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>::GetGroupPrecomputation` 517538
-virtual-methods-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>::GetGroupPrecomputation` 517568
-virtual-methods-fn `CryptoPP::DL_GroupParameters_GFP::GetFieldType` 517598
-virtual-methods-fn `CryptoPP::DL_GroupParameters_GFP::GetVoidValue` 5175a4
-virtual-methods-fn `CryptoPP::DL_GroupParameters_GFP::IsIdentity` 517574
-virtual-methods-fn `CryptoPP::DL_GroupParameters_GFP::SimultaneousExponentiate` 42f2f6
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48c978
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6930
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::GetAlgorithmID` 4f68f8
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48c304
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f68d0
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::GetAlgorithmID` 4f6898
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48bc90
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6870
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::GetAlgorithmID` 4f6838
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48d100
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6998
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::GetAlgorithmID` 4f6960
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48d77c
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6a00
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::GetAlgorithmID` 4f69c8
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48aa18
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6738
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::GetAlgorithmID` 4f6700
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48a3f8
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f66d8
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::GetAlgorithmID` 4f66a0
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::BERDecodeAlgorithmParameters` 489dd8
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6678
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::GetAlgorithmID` 4f6640
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48b040
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f67a0
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::GetAlgorithmID` 4f6768
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::BERDecodeAlgorithmParameters` 48b668
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::DEREncodeAlgorithmParameters` 4f6808
-virtual-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::GetAlgorithmID` 4f67d0
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::AccessAbstractGroupParameters` 4b2970
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::AssignFrom` 4b26b8
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::BERDecodePrivateKey` 4b2948
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::DEREncodePrivateKey` 50f620
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::GenerateRandom` 4b2708
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::GetAbstractGroupParameters` 50f64c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::GetPrivateExponent` 50f5e0
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::GetVoidValue` 50f59c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::LoadPrecomputation` 4b28f4
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::Precompute` 4b26d4
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::SavePrecomputation` 50f5f0
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::SetPrivateExponent` 4b2928
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::SupportsPrecomputation` 50f640
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>::Validate` 50f664
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::AccessAbstractGroupParameters` 4b1f9c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::AssignFrom` 4b1ce4
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::GenerateRandom` 4b1d34
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::GetAbstractGroupParameters` 50f3a4
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::GetPrivateExponent` 50f338
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::GetVoidValue` 50f2f4
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::LoadPrecomputation` 4b1f20
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::Precompute` 4b1d00
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::SavePrecomputation` 50f348
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::SetPrivateExponent` 4b1f54
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::SupportsPrecomputation` 50f398
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>::Validate` 50f3b8
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::AccessAbstractGroupParameters` 4b15c8
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::AssignFrom` 4b1310
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::GenerateRandom` 4b1360
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::GetAbstractGroupParameters` 50f0fc
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::GetPrivateExponent` 50f090
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::GetVoidValue` 50f04c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::LoadPrecomputation` 4b154c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::Precompute` 4b132c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::SavePrecomputation` 50f0a0
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::SetPrivateExponent` 4b1580
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::SupportsPrecomputation` 50f0f0
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>::Validate` 50f110
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::AccessAbstractGroupParameters` 4b3484
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::AssignFrom` 4b31cc
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::BERDecodePrivateKey` 4b345c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::DEREncodePrivateKey` 50f8cc
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::GenerateRandom` 4b321c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::GetAbstractGroupParameters` 50f8f8
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::GetPrivateExponent` 50f88c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::GetVoidValue` 50f848
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::LoadPrecomputation` 4b3408
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::Precompute` 4b31e8
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::SavePrecomputation` 50f89c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::SetPrivateExponent` 4b343c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::SupportsPrecomputation` 50f8ec
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>::Validate` 50f910
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::AccessAbstractGroupParameters` 4b3e5c
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::AssignFrom` 4b3ba4
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::BERDecodePrivateKey` 4b3e34
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::DEREncodePrivateKey` 50fb78
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::GenerateRandom` 4b3bf4
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::GetAbstractGroupParameters` 50fba4
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::GetPrivateExponent` 50fb38
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::GetVoidValue` 50faf4
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::LoadPrecomputation` 4b3de0
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::Precompute` 4b3bc0
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::SavePrecomputation` 50fb48
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::SetPrivateExponent` 4b3e14
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::SupportsPrecomputation` 50fb98
-virtual-methods-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>::Validate` 50fbbc
-virtual-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>::BERDecodePrivateKey` 4a52a8
-virtual-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>::DEREncodePrivateKey` 50bd8c
-virtual-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>::BERDecodePrivateKey` 4a45e8
-virtual-methods-fn `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>::DEREncodePrivateKey` 50bc48
 virtual-methods-fn `CryptoPP::GeneratableCryptoMaterial::GenerateRandom` 4d4d90
-virtual-methods-fn `CryptoPP::PKCS8PrivateKey::BERDecodeOptionalAttributes` 433974
-virtual-methods-fn `CryptoPP::PKCS8PrivateKey::BERDecode` 4342ca
-virtual-methods-fn `CryptoPP::PKCS8PrivateKey::DEREncodeOptionalAttributes` 431fa8
-virtual-methods-fn `CryptoPP::PKCS8PrivateKey::DEREncode` 434bba
-virtual-methods-fn `CryptoPP::X509PublicKey::BERDecode` 434678
-virtual-methods-fn `CryptoPP::X509PublicKey::DEREncode` 434ee2
 virtual-methods-fn `std::codecvt<char,char,int>::do_always_noconv` 529680
 virtual-methods-fn `std::codecvt<char,char,int>::do_encoding` 529660
 virtual-methods-fn `std::codecvt<char,char,int>::do_in` 529690
