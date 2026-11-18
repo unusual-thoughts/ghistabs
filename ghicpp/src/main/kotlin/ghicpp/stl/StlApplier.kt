@@ -144,6 +144,16 @@ class StlApplier(
         /** MSVC's standard library namespaces. */
         val MSVC_ROOTS = setOf("std", "stdext")
 
+        private val TAG = Regex("(?<=[<,(])(?:struct|class)_")
+
+        /**
+         * [name] without the keyword the Microsoft demangler puts before a template argument that is a
+         * class: it writes `basic_string<wchar_t,struct_std::char_traits<wchar_t>,class_std::allocator<wchar_t>_>`
+         * where the PDB, and so the archive, mostly writes `basic_string<wchar_t,std::char_traits<wchar_t>,…>`.
+         */
+        @JvmStatic
+        fun untagged(name: String): String = TAG.replace(name, "")
+
         /** libstdc++'s: `__gnu_cxx` holds its extensions and the iterators of its containers. */
         @JvmField
         val GNU_ROOTS = setOf("std", "__gnu_cxx")

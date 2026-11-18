@@ -52,7 +52,23 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         size = 28,
     )
 
-    private fun check(language: String, archiveName: String, size: Int) {
+    /** The demangler writes a class argument with its keyword, where the PDB the archive came from does not. */
+    @Test
+    fun `msvcp140 x64 wide string spelled with its arguments' keywords`() = check(
+        ProgramBuilder._X64,
+        "msvcp140_x64",
+        size = 32,
+        placeholder = "basic_string<wchar_t,struct_std::char_traits<wchar_t>,class_std::allocator<wchar_t>_>",
+        expected = WSTRING,
+    )
+
+    private fun check(
+        language: String,
+        archiveName: String,
+        size: Int,
+        placeholder: String = STRING,
+        expected: String = STRING,
+    ) {
         val builder = ProgramBuilder("stl", language, "windows", this)
         try {
             builder.createMemory(".text", "0x10001000", 0x100)
@@ -61,11 +77,11 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             // What the Microsoft demangler leaves for an imported method of the class: its `this`, a
             // pointer to an empty struct at the class's namespace path under /Demangler.
             builder.withTransaction {
-                val placeholder = program.dataTypeManager.addDataType(
-                    StructureDataType(CategoryPath("/Demangler/std"), STRING, 0),
+                val stub = program.dataTypeManager.addDataType(
+                    StructureDataType(CategoryPath("/Demangler/std"), placeholder, 0),
                     DataTypeConflictHandler.DEFAULT_HANDLER,
                 )
-                val self = ParameterImpl("this", PointerDataType(placeholder), program)
+                val self = ParameterImpl("this", PointerDataType(stub), program)
                 fn.replaceParameters(
                     Function.FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS,
                     true,
@@ -73,7 +89,7 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     self,
                 )
             }
-            placeholders(program) mustBe listOf("/Demangler/std/$STRING")
+            placeholders(program) mustBe listOf("/Demangler/std/$placeholder")
 
             MsvcRuntime.ARCHIVES.open(archiveName).use { opened ->
                 val archive = opened.dataTypeManager
@@ -82,7 +98,7 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 placeholders(program) mustBe emptyList()
                 val self = program.functionManager.getFunctionAt(fn.entryPoint).getParameter(0).dataType
                     .let { (it as Pointer).dataType as Structure }
-                self.pathName mustBe "/std/$STRING"
+                self.pathName mustBe "/std/$expected"
                 self.length mustBe size
                 // Linked to the archive it came from, not a copy.
                 self.sourceArchive.sourceArchiveID mustBe archive.universalID
@@ -186,6 +202,7 @@ class MsvcStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     companion object {
         const val STRING = "basic_string<char,std::char_traits<char>,std::allocator<char>_>"
+        const val WSTRING = "basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>_>"
         const val FILEBUF = "basic_filebuf<char,std::char_traits<char>_>"
         const val STREAMBUF = "basic_streambuf<char,std::char_traits<char>_>"
     }
