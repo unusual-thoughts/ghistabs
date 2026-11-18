@@ -44,7 +44,8 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     /**
      * The bases [inferBases] gives each class, by name and offset, off functions storing the vptrs of the
-     * classes [stores] names and calling the functions [calls] names at `this` + the offset each gives.
+     * classes [stores] names and calling the functions [calls] names at `this` + the offset each gives, with
+     * tables holding the functions [slots] names, pure virtual where null.
      */
     private fun bases(
         stores: Map<String, Set<String>>,
@@ -63,7 +64,8 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
         val tables: Map<ClassDecl, List<Function?>> =
             slots.entries.associate { (c, fs) -> cls(c) to fs.map { it?.let(::fn) } }
-        BaseCandidates(tables).inferBases(classes.values, uses)
+        val pure = tables.mapValues { (_, fs) -> fs.indices.filterTo(mutableSetOf()) { fs[it] == null } }
+        BaseCandidates(tables, pure).inferBases(classes.values, uses)
         return classes.values.filter { it.bases.isNotEmpty() }
             .associate { c -> c.name to c.bases.map { it.cls.name to it.offset } }
     }
@@ -122,6 +124,30 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             "Y" to listOf("y1", "tie", null),
         )
         bases(emptyMap(), slots = slots) mustBe emptyMap()
+    }
+
+    @Test
+    fun `of tables tied for the shortest, the one pure where each other holds a function introduced theirs`() {
+        // M is abstract: C and D fill its pure second slot, and override its first, but add no slot of their own.
+        val slots = mapOf(
+            "M" to listOf("m1", null, "shared"),
+            "C" to listOf("c1", "c2", "shared"),
+            "D" to listOf("d1", "d2", "shared"),
+        )
+        bases(emptyMap(), slots = slots) mustBe mapOf("C" to listOf("M" to 0L), "D" to listOf("M" to 0L))
+    }
+
+    @Test
+    fun `a slot null for a function that never returns, but no pure virtual, breaks no tie`() {
+        val tables = mapOf(
+            "M" to listOf("m1", null, "shared"),
+            "C" to listOf("c1", "c2", "shared"),
+            "D" to listOf("d1", "d2", "shared"),
+        )
+        val uses = Dissections()
+        val fns = tables.mapKeys { cls(it.key) }.mapValues { (_, fs) -> fs.map { it?.let(::fn) } }
+        BaseCandidates(fns, fns.mapValues { emptySet() }).inferBases(classes.values, uses)
+        classes.values.filter { it.bases.isNotEmpty() } mustBe emptyList()
     }
 
     @Test
