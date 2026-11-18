@@ -202,7 +202,7 @@ private fun Program.bookmarkUnfixed(merge: Address, into: Map<Address, Long>) = 
 /** MinGW import stubs `_Name@N` whose external target records a purge other than the `N` it pops. */
 internal fun Program.fixImportPurges(): Int = functionManager.getFunctions(true).count { stub ->
     val pops = STDCALL_SUFFIX.find(stub.name)?.groupValues?.get(1)?.toInt()
-    val target = if (stub.isThunk) stub.getThunkedFunction(true) else null
+    val target = stub.thunked
     if (pops == null || target == null || !target.isExternal || target.stackPurgeSize == pops) return@count false
     bookmarkManager.setBookmark(
         stub.entryPoint,
@@ -440,7 +440,7 @@ private class EspWalk(private val program: Program, private val f: Function) {
     private fun PcodeOp.calleePurge(): Int? {
         val callee = getInput(0).takeIf { opcode == PcodeOp.CALL }
             ?.let { program.functionManager.getFunctionAt(it.address) }
-            ?.let { if (it.isThunk) it.getThunkedFunction(true) else it }
+            ?.orThunked
         if (callee?.hasNoReturn() == true) return null
         callee?.stackPurgeSize?.takeUnless {
             it == Function.UNKNOWN_STACK_DEPTH_CHANGE || it == Function.INVALID_STACK_DEPTH_CHANGE

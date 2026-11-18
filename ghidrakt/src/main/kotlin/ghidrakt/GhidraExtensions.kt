@@ -37,6 +37,16 @@ operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)
 operator fun Address.plus(rhs: Int): Address = addNoWrap(rhs.toLong())
 fun Address.alignTo(size: Long): Address = add((size - offset % size) % size)
 
+/** [this] rounded up to a multiple of [n]; itself where [n] isn't positive. */
+fun Long.alignedTo(n: Long) = if (n <= 0) this else (this + n - 1) / n * n
+
+/** The signed pointer-sized word [words] words before [this], in [program]'s memory; null where unreadable. */
+fun Address.signedWordBefore(program: Program, words: Int): Long? = runCatching {
+    val ptr = program.defaultPointerSize
+    val at = subtractNoWrap(words.toLong() * ptr)
+    if (ptr == 8) program.memory.getLong(at) else program.memory.getInt(at).toLong()
+}.getOrNull()
+
 operator fun Address.minus(rhs: Long): Address = subtractNoWrap(rhs)
 operator fun Address.minus(rhs: Int): Address = subtractNoWrap(rhs.toLong())
 operator fun Address.minus(rhs: Address): Long = subtract(rhs)
@@ -127,6 +137,15 @@ fun FunctionManager.getFunctionWrapping(addr: Address) = getFunctionContaining(a
 fun FunctionManager.inHull(addr: Address) = getFunctionWrapping(addr) != null
 
 val Function.isMethod get() = parentNamespace is GhidraClass
+
+/**
+ * The function this thunk ends at, following a chain of thunks to the last ([Function.getThunkedFunction] with
+ * `recursive`): often an import's external function. Null when this isn't a thunk.
+ */
+val Function.thunked get(): Function? = getThunkedFunction(true)
+
+/** The function a call of this one runs: the one it ends at if a thunk ([thunked]), else itself. */
+val Function.orThunked get() = thunked ?: this
 
 fun Namespace.toClass(): GhidraClass? = this as? GhidraClass
     ?: runCatching { NamespaceUtils.convertNamespaceToClass(this) }.getOrNull()

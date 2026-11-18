@@ -4,13 +4,13 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.recordPlaced
-import ghicpp.abi.RttiParser
-import ghicpp.abi.StructorRole
+import ghicpp.RttiParser
+import ghicpp.StructorRole
+import ghicpp.abi.slots
 import ghicpp.dissect.*
+import ghicpp.hierarchy.typePureSlots
 import ghidra.framework.options.Options
-import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -73,10 +73,12 @@ class ClassPass(
         // The parser dissecting the storers as it parses reads them so, and this reads them off it.
         (parser as? DissectingParser)?.cache = cache
         val read = parser.parse(monitor)
-        stubStructs(read.classes)
         val owners = read.holders.mapValues { (_, hs) -> introducingClass(hs) }
         val inspector = ThisFunctionDissector(program, read.classes, this, cache)
+        // Find the structors before stubbing the structs. Stubbing changes the program, and the parser's reads of
+        // the storers, which this reuses, would then be out of date.
         val found = inspector.find(read.holders, abi, monitor)
+        stubStructs(read.classes)
         val structors = found.roles
         var moved = 0
         monitor.initialize(owners.size.toLong(), "Moving virtual functions into their classes")
@@ -102,9 +104,9 @@ class ClassPass(
         val reached = stores.mapValues { (cls, at) ->
             val end = at.maxOfOrNull { (offset, dt) -> offset + dt.length }?.toLong() ?: 0L
             val align = if (cls.vftables.isEmpty()) 1L else program.defaultPointerSize.toLong()
-            (end + align - 1) / align * align
+            end.alignedTo(align)
         }
-        val called = AllocationSizeFinder(program, abi, this).read(ctors, monitor)
+        val called = AllocationSizeFinder(program, abi, this, inspector).read(ctors, monitor, found.inlined)
         val allocated = (called.keys + found.inlinedSizes.keys).associateWith { cls ->
             maxOf(called[cls] ?: 0L, found.inlinedSizes[cls] ?: 0L)
         }
@@ -117,6 +119,8 @@ class ClassPass(
         monitor.message = "Recording classes"
         for ((func, _) in placed) program.recordPlaced(func, structors[func]?.second, virtual = func in owners)
         writeRecords(read.recorded)
+        monitor.message = "Typing pure virtual slots"
+        program.typePureSlots(this)
         return Result(read.recorded.size, owners.size - shared, moved, shared, named, sizes.size, filled)
             .also { it.found = found }
     }
@@ -148,7 +152,7 @@ class ClassPass(
         for (cls in listOf(owner) + holders) {
             for (record in cls.vftables) {
                 val slot = record.slots(program).indexOfFirst { at ->
-                    program.functionManager.getFunctionAt(at)?.let { it.getThunkedFunction(true) ?: it } == func
+                    program.functionManager.getFunctionAt(at)?.orThunked == func
                 }
                 if (slot < 0) continue
                 val base = if (cls.vftables.size > 1) cls.servedBase(record, program) else null
@@ -188,20 +192,11 @@ class ClassPass(
     private fun Function.guessed() = symbol.source == SourceType.DEFAULT ||
         (symbol.source == SourceType.ANALYSIS && parentNamespace is GhidraClass)
 
-    /**
-     * An empty struct for each class with none, where `RecoverClassesFromRTTIScript` files one, before any
-     * function moves in: a `__thiscall` function landing in a class with no struct makes Ghidra add a
-     * placeholder in the class's parent category, `/<Class>` for a global one, which its lookup then prefers.
-     */
+    /** An empty struct for each class with none, before any function moves in ([stubClassStruct]). */
     private fun stubStructs(classes: Collection<ClassDecl>) {
         for (ns in classes.mapNotNull { it.ns?.toClass() }) {
-            if (program.classStruct(ns) != null) continue
-            runCatching {
-                program.dataTypeManager.addDataType(
-                    StructureDataType(ClassNaming.vftableCategory(ns), ns.name, 0),
-                    DataTypeConflictHandler.KEEP_HANDLER,
-                )
-            }.onFailure { warn("class-struct-unstubbed", "${ns.getName(true)}: $it") }
+            runCatching { program.stubClassStruct(ns) }
+                .onFailure { warn("class-struct-unstubbed", "${ns.getName(true)}: $it") }
         }
     }
 

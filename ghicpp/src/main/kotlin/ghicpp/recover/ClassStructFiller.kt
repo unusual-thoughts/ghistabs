@@ -1,22 +1,20 @@
 package ghicpp.recover
 
 import ghicpp.*
-import ghicpp.abi.CxxAbi
+import ghicpp.CxxAbi
+import ghicpp.VtableRecord
 import ghicpp.abi.SlotDefinitions
 import ghicpp.abi.VftableBuilder
-import ghicpp.abi.VtableRecord
+import ghicpp.abi.slots
 import ghicpp.dissect.Stores
-import ghicpp.dissect.ThisFunctionDissector
-import ghicpp.dissect.mergedStores
+import ghicpp.dissect.fillData
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
-import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
-import ghidrakt.diagnose.DummySink
 
 /**
  * Fills each class struct a class pass sized but left empty, off what the pass knows of the class: each
@@ -68,7 +66,7 @@ class ClassStructFiller(
         // Any struct with fields is another's, the stabs import's, the script's, a PDB's, or an earlier pass's.
         if (struct.numDefinedComponents > 0 || struct.isZeroLength) return false.also { struct.fillData(store) }
         val bases = bases.filterNot { it.isVirtual }
-        for (base in bases) struct.placeBase(base, bases.size, ns)
+        for (base in bases) struct.placeBase(base, bases, ns)
         for (at in vbptrs) struct.placeVbptr(at.toInt(), ns)
         vbases.placeAll(listOf(this))
         val records = vftables.mapNotNull { r ->
@@ -83,12 +81,14 @@ class ClassStructFiller(
         return true
     }
 
-    private fun Structure.placeBase(base: ClassBase, count: Int, ns: GhidraClass) {
+    private fun Structure.placeBase(base: ClassBase, all: List<ClassBase>, ns: GhidraClass) {
+        val count = all.size
         val at = base.offset?.toInt() ?: return
         val qualified = ns.getName(true)
         val whole = base.cls.ns?.toClass()?.let(program::classStruct)?.takeUnless { it.isZeroLength }
         if (whole == null) return degradation("base-undefined", qualified.member(base.cls.name), "no struct for it")
-        val dt = nonVirtualSize(base.cls)?.takeIf { it < whole.length }?.let { selfBaseOf(whole, it) } ?: whole
+        val dt = (base.cls.nonVirtualSize?.toInt() ?: roomForNonVirtualPart(base.cls, at, whole, all))
+            ?.takeIf { it < whole.length }?.let { selfBaseOf(whole, it) } ?: whole
         layoutProblem(at, dt)?.let { return degradation("base-layout-failed", qualified.member(dt.name), it) }
         placeBase(
             this,
@@ -101,8 +101,23 @@ class ClassStructFiller(
         )
     }
 
-    /** Where [cls]'s first virtual base sits, which its non-virtual part ends before; null without one. */
-    private fun nonVirtualSize(cls: ClassDecl) = cls.virtualBases.mapNotNull { it.offset?.toInt() }.minOrNull()
+    /**
+     * The room this struct has at [at] for [cls], a base whose virtual bases sit where nothing says: up to the next
+     * of the class's bases ([all]), or field laid already, or the end. The non-virtual part fits there, where the
+     * whole class, its virtual bases counted in its size, may run on over the fields after it. Null for a class
+     * without virtual bases, or where the whole of it fits.
+     */
+    private fun Structure.roomForNonVirtualPart(
+        cls: ClassDecl,
+        at: Int,
+        whole: Structure,
+        all: List<ClassBase>,
+    ): Int? {
+        if (cls.allVirtualBases.isEmpty()) return null
+        val room = (all.mapNotNull { it.offset?.toInt()?.minus(at) }.filter { it > 0 } + roomAt(at)).min()
+        if (whole.length <= room && layoutProblem(at, whole) == null) return null
+        return room.takeIf { it > 0 }
+    }
 
     /**
      * [cls]'s first [size] bytes as a struct of their own, filed where Ghidra's PDB importer files a class's
@@ -200,34 +215,4 @@ class ClassStructFiller(
             .onFailure { degradation("vftable-unlaid", "${ns.getName(true)}::$name", it.message, record.addressPoint) }
         return vftable
     }
-}
-
-/**
- * Fills each of this class struct's own `<Class>_data` structs ([ownData]) with the fields of [store] it holds,
- * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
- * specific type, and the field keeps its name
- */
-private fun Structure.fillData(store: Stores) {
-    for ((offset, data) in ownData()) {
-        val inside = store.filter { (at, dt) -> offset.withLength(data.length).includes(at.withLength(dt.length)) }
-        val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
-        for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
-        for ((at, dt) in merged.iterator()) {
-            val old = data.getComponentAt(at.toInt())
-            if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
-            val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
-            data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
-        }
-    }
-}
-
-/**
- * Retypes [ns]'s own fields off what [methods] load and store through `this`, decompiled again, as the class pass
- * fills them: the `<Class>_data` structs its struct holds take the more specific type, and keep names and comments.
- */
-fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor) {
-    val struct = classStruct(ns) ?: return
-    struct.fillData(
-        ThisFunctionDissector(this, emptyList(), DummySink).thisFields(methods, monitor).values.mergedStores(),
-    )
 }

@@ -1,10 +1,10 @@
 package ghicpp.abi.msvc
 
 import ghicpp.*
-import ghicpp.abi.CxxAbi
-import ghicpp.abi.Structor
-import ghicpp.abi.StructorRole
-import ghicpp.abi.VtableRecord
+import ghicpp.CxxAbi
+import ghicpp.Structor
+import ghicpp.StructorRole
+import ghicpp.VtableRecord
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.app.util.demangler.DemangledObject
@@ -13,6 +13,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.Symbol
 import ghidrakt.*
 
 /**
@@ -104,8 +105,12 @@ object Msvc : CxxAbi {
      * A class's only table is unqualified, `??_7D@@6B@`. Once it has several, each is qualified with the base it
      * is for, `??_7D@@6BB1@@@` for `B1`, the one at offset 0 too, which the name alone can't tell.
      */
-    override fun isPrimaryVtable(symbolName: String) =
+    fun isOnlyVftable(symbolName: String) =
         looksLikeVtable(symbolName) && symbolName.endsWith(UNQUALIFIED_VFTABLE_SUFFIX)
+
+    /** Its class's only table ([isOnlyVftable]), else one whose complete object locator gives offset 0. */
+    override fun isPrimaryTableSymbol(sym: Symbol) =
+        isOnlyVftable(sym.name) || sym.program.msvcSubobjectOffset(sym.address) == 0
 
     /** A template's name has no closed form, as its arguments mangle as types. */
     override fun vtableCandidates(className: String) = listOfNotNull(

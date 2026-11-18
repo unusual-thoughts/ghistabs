@@ -45,8 +45,8 @@ CPP_STAGES = [
     ["ghicpp.dissect", "ghicpp.eh", "ghicpp.fixup"],
     ["ghicpp.abi"],
     ["ghicpp.structs"],
-    ["ghicpp.recover"],
     ["ghicpp.hierarchy"],
+    ["ghicpp.recover"],
     ["ghicpp.analyzers"],
     ["ghicpp.gui"],
 ]

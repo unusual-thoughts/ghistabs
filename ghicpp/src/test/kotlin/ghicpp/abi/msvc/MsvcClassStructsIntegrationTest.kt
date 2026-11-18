@@ -2,7 +2,7 @@ package ghicpp.abi.msvc
 
 import ghicpp.ClassDecl
 import ghicpp.ClassStructsFixtureTest
-import ghicpp.abi.isPrimaryTableSymbol
+import ghicpp.abi.slots
 import ghicpp.analyzers.MsvcClassAnalyzer
 import ghicpp.hierarchy.*
 import ghicpp.qualifiedName
@@ -55,8 +55,8 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
             }
         }
         try {
-            symbols.map { Msvc.isPrimaryVtable(it.name) } mustBe listOf(false, false)
-            symbols.map { isPrimaryTableSymbol(it, Msvc) } mustBe listOf(true, false)
+            symbols.map { Msvc.isOnlyVftable(it.name) } mustBe listOf(false, false)
+            symbols.map { Msvc.isPrimaryTableSymbol(it) } mustBe listOf(true, false)
         } finally {
             program.runTransaction { symbols.forEach { it.delete() } }
         }
@@ -210,6 +210,16 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
         MsvcStructor.ofName("~Circle", "Circle") mustBe MsvcStructor.DESTRUCTOR
         MsvcStructor.ofName("`scalar_deleting_destructor'", "Circle") mustBe MsvcStructor.SCALAR_DELETING_DESTRUCTOR
         MsvcStructor.ofMangled("??_ECircle@@UAEPAXI@Z") mustBe MsvcStructor.VECTOR_DELETING_DESTRUCTOR
+    }
+
+    /** `Shape::area` is pure: its slot holds `_purecall`, and is typed off `Circle`'s override instead. */
+    @Test
+    fun `a pure virtual slot is typed off an override, this its own class`() {
+        val slot = program.classStruct("Shape_vftable").getComponent(1)
+        val def = (slot.dataType as Pointer).dataType as FunctionDefinition
+        def.getPrototypeString(true) mustBe "double __thiscall vfunction2(Shape * this)"
+        slot.fieldName mustBe "vfunction2"
+        slot.comment mustBe "pure virtual, typed off Circle::vfunction2"
     }
 
     @Test
