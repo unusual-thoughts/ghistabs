@@ -23,7 +23,12 @@ enum class Access { PRIVATE, PROTECTED, PUBLIC }
  */
 interface BaseDecl {
     val isVirtual: Boolean
-    val access: Access
+
+    /**
+     * Whether the class inherits the base as public, protected or private. Null when the binary doesn't say, as
+     * without RTTI.
+     */
+    val access: Access?
     val offset: Long?
 
     /**
@@ -38,7 +43,7 @@ interface BaseDecl {
 data class ClassBase(
     val cls: ClassDecl,
     override val isVirtual: Boolean,
-    override val access: Access,
+    override val access: Access?,
     override val offset: Long?,
     /** Where a virtual base's [offset] is from: IMPORTED its ABI record, ANALYSIS its vtables, DEFAULT nowhere. */
     val offsetSource: SourceType = SourceType.IMPORTED,
@@ -128,7 +133,7 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         val namespaceId: Long?,
         val name: String?,
         override val isVirtual: Boolean,
-        override val access: Access,
+        override val access: Access?,
         override val offset: Long? = null,
         override val source: SourceType = SourceType.IMPORTED,
     ) : BaseDecl
@@ -311,13 +316,15 @@ fun introducingClass(holders: Set<ClassDecl>): ClassDecl? {
 
 /**
  * The classes an ABI's own records describe, as its [ghicpp.abi.RttiParser] read them for the class
- * pass: [classes], every one seen; those whose bases it knows, to record ([recorded]); and each function a
- * vftable slot holds, with the classes whose tables hold it ([holders]).
+ * pass. [classes] holds every class seen, and [recorded] those whose bases it knows. [holders] maps each function a
+ * vftable slot holds to the classes whose tables hold it. [vttStructors] maps each base-object structor that loads
+ * its vptrs from a VTT, and so stores no vtable address itself, to its class.
  */
 class ClassPassInput(
     val classes: Collection<ClassDecl>,
     val recorded: Collection<ClassDecl>,
     val holders: Map<Function, Set<ClassDecl>>,
+    val vttStructors: Map<Function, ClassDecl> = emptyMap(),
 )
 
 /**

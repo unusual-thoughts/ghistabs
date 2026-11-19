@@ -82,11 +82,14 @@ data class TruthFile(val snapshot: Snapshot, val runtime: Map<String, Long> = em
  * subject binaries and this package; `-PregenerateTruth=true` rebuilds the files from the truth binaries,
  * which takes the stabs importer. Review their diff as you would a fixture's.
  *
- * Each score is a counter per attribute (`<attribute>-tp`, `-fp`, `-fn`), held to
- * `src/test/resources/ghicpp/scorecard/baselines/<case>.json`. A counter that moves fails the test, or under
- * `-PignoreBaselines=true` only writes the new baseline to `build/test-output/shifted-baselines/`, which CI
- * uploads; `-PregenerateBaselines=true` rewrites the committed ones. Each case's scorecard, its findings and
- * both serialized class views land in `build/test-output/scorecards/<case>/`.
+ * Each score is a counter per attribute (`<attribute>-tp`, `-fp`, `-fn`), checked against
+ * `src/test/resources/ghicpp/scorecard/baselines/<case>.json`. The instances behind each `-fp` and `-fn` counter,
+ * one `<counter> <instance>` line each, are checked against `<case>.instances.txt` next to it.
+ *
+ * The test fails when a counter moves or an instance appears or disappears. With `-PignoreBaselines=true` it
+ * writes the new baseline to `build/test-output/shifted-baselines/` instead, which CI uploads.
+ * `-PregenerateBaselines=true` rewrites the committed baselines. Each case's scorecard, its instances by
+ * attribute, and both serialized class views are written to `build/test-output/scorecards/<case>/`.
  */
 @Tag("integration")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -109,8 +112,11 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         val prolog = System.getProperty("ooprolog").orEmpty().takeIf { it.isNotEmpty() }?.let(::File)
         // Decompiles every function of the subject, so only on request: -PooFacts, or -Pooprolog to solve them.
         val facts = File(out, "ooanalyzer.facts").takeIf { prolog != null || System.getProperty("ooFacts") == "true" }
-        val subject = snapshotOf(subjectFile, case.compiler, facts) { prepare(case.recovery, runtime) }
-        val card = Scorer(truth, subject).score()
+        var slots: Set<Long>? = null
+        val subject = snapshotOf(subjectFile, case.compiler, facts, setup = { prepare(case.recovery, runtime) }) {
+            if (truth.sameBinary) slots = slotTargets(truth.snapshot.vtables)
+        }
+        val card = Scorer(truth, subject, slots).score()
 
         val against = listOfNotNull(case.twin, case.source).joinToString(" + ")
         val labels = runtime.entries.joinToString("\n", "\n## Labelled before the analysis\n\n", "\n") {
@@ -122,7 +128,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         )
         File(out, "subject.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), subject))
         File(out, "truth.json").writeText(PRETTY.encodeToString(Snapshot.serializer(), truth.snapshot))
-        checkBaseline(case, card.counters() + (UNATTACHED to subject.unattachedVirtuals.toLong()))
+        checkBaseline(case, card.counters() + (UNATTACHED to subject.unattachedVirtuals.toLong()), card.instanceLines())
         if (prolog != null && facts != null) solve(case, truth, facts, prolog)
         System.getProperty("pharosResults").orEmpty().takeIf { it.isNotEmpty() }?.let { dir ->
             // A no-RTTI case takes the results of the same facts solved with `--rtti false`, where there are some.
@@ -217,7 +223,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
             val bin = File(case.dir, binary)
             assumeTrue(bin.isFile, "$binary is not on disk, and no truth is committed for it")
             var runtime = emptyMap<String, Long>()
-            val snapshot = snapshotOf(bin, compiler) { runtime = runtimeFunctions() }
+            val snapshot = snapshotOf(bin, compiler, setup = { runtime = runtimeFunctions() })
             TruthFile(snapshot, runtime).also {
                 file.parentFile.mkdirs()
                 GZIPOutputStream(file.outputStream()).bufferedWriter().use { w ->
@@ -228,18 +234,32 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     /** [file] analyzed after [setup], as a [Snapshot]; its OOAnalyzer facts written to [facts] too, if given. */
-    private fun snapshotOf(file: File, compiler: String, facts: File? = null, setup: Program.() -> Unit): Snapshot =
-        loadProgram(file, compiler).use { loaded ->
-            val program = loaded.program
-            program.runTransaction("options") {
-                // Runs a Ghidra script on a PE, which the headless harness has no bundle host for.
-                program.getOptions(Program.ANALYSIS_PROPERTIES).setBoolean("WindowsResourceReference", false)
-            }
-            program.setup()
-            analyzeAll(program)
-            facts?.bufferedWriter()?.use { OoFactExporter(program).write(it) }
-            program.snapshot(file.name)
+    private fun snapshotOf(
+        file: File,
+        compiler: String,
+        facts: File? = null,
+        setup: Program.() -> Unit,
+        analysed: Program.() -> Unit = {},
+    ): Snapshot = loadProgram(file, compiler).use { loaded ->
+        val program = loaded.program
+        program.runTransaction("options") {
+            // Runs a Ghidra script on a PE, which the headless harness has no bundle host for.
+            program.getOptions(Program.ANALYSIS_PROPERTIES).setBoolean("WindowsResourceReference", false)
         }
+        program.setup()
+        analyzeAll(program)
+        facts?.bufferedWriter()?.use { OoFactExporter(program).write(it) }
+        program.analysed()
+        program.snapshot(file.name)
+    }
+
+    /** The addresses that the words of the truth's [vtables] hold, read from this program, the binary they describe. */
+    private fun Program.slotTargets(vtables: List<VtableExtent>): Set<Long> = vtables.flatMapTo(HashSet()) { v ->
+        val ptr = defaultPointerSize.toLong()
+        (v.start until v.end step ptr).mapNotNull { at ->
+            runCatching { pointerAt(addressFactory.defaultAddressSpace.getAddress(at)) }.getOrNull()?.offset
+        }
+    }
 
     private fun Program.prepare(recovery: Recovery, runtime: Map<String, Long>) {
         // A subject that still carries stabs (a `_stripped` PE keeps them) is recovered as if it had none.
@@ -290,21 +310,29 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
-    private fun checkBaseline(case: ScorecardCase, counters: Map<String, Long>) {
+    private fun checkBaseline(case: ScorecardCase, counters: Map<String, Long>, instances: List<String>) {
         val committed = File(BASELINE_DIR, "${case.id}.json")
+        val committedInstances = File(BASELINE_DIR, "${case.id}.instances.txt")
         val text = PRETTY.encodeToString(COUNTERS, counters.toSortedMap()) + "\n"
+        val instanceText = instances.joinToString("") { "$it\n" }
         if (System.getProperty("regenerateBaselines") == "true") {
             committed.parentFile.mkdirs()
             committed.writeText(text)
+            committedInstances.writeText(instanceText)
             return
         }
         assumeTrue(committed.isFile, "no committed baseline for ${case.id}")
         val baseline = COMPACT.decodeFromString(COUNTERS, committed.readText())
-        if (baseline == counters) return
-        File(SHIFTED_DIR, "scorecard-${case.id}.json").apply { parentFile.mkdirs() }.writeText(text)
+        val baselineInstances = committedInstances.takeIf { it.isFile }?.readLines().orEmpty()
+        if (baseline == counters && baselineInstances == instances) return
+        SHIFTED_DIR.mkdirs()
+        File(SHIFTED_DIR, "scorecard-${case.id}.json").writeText(text)
+        File(SHIFTED_DIR, "scorecard-${case.id}.instances.txt").writeText(instanceText)
         val drift = (baseline.keys + counters.keys).toSortedSet()
             .filter { baseline[it] != counters[it] }
-            .map { "$it: ${baseline[it]} -> ${counters[it]}" }
+            .map { "$it: ${baseline[it]} -> ${counters[it]}" } +
+            (instances - baselineInstances.toSet()).map { "+ $it" } +
+            (baselineInstances - instances.toSet()).map { "- $it" }
         if (System.getProperty("ignoreBaselines") != "true") {
             assertEquals(emptyList<String>(), drift, "${case.id} scorecard moved")
         }

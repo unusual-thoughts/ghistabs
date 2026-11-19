@@ -102,8 +102,9 @@ interface StructorConvention {
     val mangledOperatorDelete: Set<String> get() = emptySet()
 
     private companion object {
-        val DEMANGLED_OPERATOR_NEW = setOf("operator_new", "operator new")
-        val DEMANGLED_OPERATOR_DELETE = setOf("operator_delete", "operator delete")
+        // Ghidra names an ELF's imported `operator delete` (`_ZdlPvj@CXXABI_1.3.9`) `operator.delete`.
+        val DEMANGLED_OPERATOR_NEW = setOf("operator_new", "operator new", "operator.new")
+        val DEMANGLED_OPERATOR_DELETE = setOf("operator_delete", "operator delete", "operator.delete")
     }
 }
 

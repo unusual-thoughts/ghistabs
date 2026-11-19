@@ -78,6 +78,7 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             0x6988L to 3, // Logger
             0x69b8L to 3, // Both
             0x6b58L to 3, // Down
+            0x6a88L to 1, // Up, seeded off its construction table in Both: Up's own table no code stores
             0x6bc8L to 3, // Core
             0x6bf0L to 5, // Label
             0x6c48L to 5, // Rect
@@ -120,12 +121,13 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         val bases = program.readClassRecord().orEmpty().entries
             .filter { (_, e) -> e.bases.isNotEmpty() }
             .associate { (id, e) -> table(id) to e.bases.map { table(it.namespaceId) } }
-        // A base at an offset, off the class's secondary table there and the constructor called on it. Both's Up
-        // and Down have no tables of their own, only construction ones, so Both's bases go unseen, and with them
-        // whether its virtual Core is its own.
+        // A base at a nonzero offset is found from the class's secondary table there and the constructor called on
+        // that subobject. Both's Up and Down are built by base-object constructors that take Both's VTT, and the
+        // construction vtables it points at identify them.
         bases mustBe mapOf(
             0x6930L to listOf(SHAPE), // Circle
             0x6960L to listOf(0x6988L), // Secret : Logger
+            0x69b8L to listOf(0x6b58L, 0x6a88L), // Both : Down, Up
             0x6b58L to listOf(0x6bc8L), // Down : virtual Core
             0x6bf0L to listOf(0x6c48L, 0x6d00L), // Label : Rect, Named
             0x6c48L to listOf(SHAPE), // Rect
@@ -135,11 +137,12 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
 
     @Test
     fun `a virtual base is laid where its secondary table puts it, as one`() {
-        // Down : virtual Core, whose vptr Down's own table for it, at +16, takes over.
+        // Down derives virtually from Core. Down's own table for Core, at +16, replaces Core's vptr there. Because
+        // Down is also a base of Both, Down's own fields get a struct of their own.
         val down = program.dataTypeManager.getDataType("/ClassDataTypes/Klass_00106b58/Klass_00106b58") as Structure
         down.definedComponents.map { "+${it.offset} ${it.fieldName}" } mustBe
-            listOf("+0 vfptr", "+8 Klass_00106b58_data", "+16 vfptr", "+24 _vbase_")
-        down.getComponentAt(24).comment mustBe "public virtual Klass_00106bc8 at +0x10, by its vftables"
+            listOf("+0 vfptr", "+8 ${ClassNaming.FIELDS}", "+16 vfptr", "+24 _vbase_")
+        down.getComponentAt(24).comment mustBe "virtual Klass_00106bc8 at +0x10, by its vftables"
     }
 
     /**

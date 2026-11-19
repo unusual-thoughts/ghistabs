@@ -3,6 +3,7 @@ package ghicpp.score
 import ghicpp.Access
 import ghicpp.MemberAttrs
 import ghicpp.VirtKind
+import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.*
 import ghidrakt.DetachedAddresses
@@ -72,6 +73,14 @@ class ScorerTest {
         Snapshot("subject", subject, fields),
     ).score()
 
+    /** Each `-fp` and `-fn` counter has as many instances as it counts. */
+    private fun Scorecard.mustListEveryMiss() {
+        for ((name, t) in tallies) {
+            (name to instances["$name-fp"].orEmpty().size) mustBe (name to t.fp)
+            (name to instances["$name-fn"].orEmpty().size) mustBe (name to t.fn)
+        }
+    }
+
     @Test
     fun `the truth's scope is what it describes and has a vtable or a function for`() {
         Truth.describedScope(truth) mustBe setOf(1L, 2L, 3L)
@@ -113,10 +122,25 @@ class ScorerTest {
         card.tallies["sizes"] mustBe Tally(tp = 1, fn = 1)
         card.tallies["fields"] mustBe Tally(tp = 2)
         card.tallies["field-sizes"] mustBe Tally(tp = 1, fp = 1)
+        card.instanceLines() mustBe listOf(
+            "classes-fn `Point` (stabs)",
+            "classes-fp invented `Klass_200` (inferred, vftable 00000200)",
+            "field-sizes-fp `Circle`+12: 4, is 8",
+            "methods-fn `Circle::Circle` 20",
+            "methods-fn `Shape::name` 14",
+            "methods-fp 30 of `Circle`: is `Point`'s",
+            "methods-fp 40 of unmatched `Klass_200`",
+            "polymorphic-classes-fp invented `Klass_200` (inferred, vftable 00000200)",
+            "sizes-fn `Circle`: none, is 20",
+            "structors-fn 20 of `Circle`",
+            "virtual-methods-fn `Shape::name` 14",
+            "virtual-methods-fp 40 of unmatched `Klass_200`",
+        )
+        card.mustListEveryMiss()
     }
 
     @Test
-    fun `a second class off the same truth class is a duplicate, and a wrong base is false and missed`() {
+    fun `a second class off the same truth class is a split, and a wrong base is false and missed`() {
         val subject = ClassHierarchy(
             listOf(
                 cls(10, "Shape", Origin.ITANIUM_RTTI, 0x100),
@@ -125,15 +149,165 @@ class ScorerTest {
             ),
         )
         val card = score(subject)
-        card.tallies["classes"] mustBe Tally(tp = 2, fp = 1, fn = 1)
+        card.tallies["classes"] mustBe Tally(tp = 2, fp = 0, fn = 1)
+        card.tallies["class-splits"] mustBe Tally(tp = 1, fp = 1)
         card.tallies["bases"] mustBe Tally(tp = 0, fp = 1, fn = 1)
         card.tallies["abstract"] mustBe Tally(fn = 1)
-        card.findings.any { it.startsWith("duplicate class `Klass_124`") } mustBe true
+        card.instances["classes-fp"] mustBe null
+        card.instances["class-splits-fp"] mustBe listOf("`Klass_124` (inferred, vftable 00000124) of `Circle`")
+        card.instances["bases-fp"] mustBe listOf("`Shape` (virtual) of `Circle`")
+        card.instances["bases-fn"] mustBe listOf("`Shape` of `Circle`")
+        card.mustListEveryMiss()
+    }
+
+    @Test
+    fun `a class only named, with no vtable or function, stands for its truth class only when no other does`() {
+        val subject = ClassHierarchy(
+            listOf(
+                cls(
+                    10,
+                    "Shape",
+                    Origin.NAMESPACE,
+                    members = listOf(Member("RTTI_Type_Descriptor", DetachedAddresses.at(0x500), MemberKind.ABI)),
+                ),
+                cls(11, "Klass_100", Origin.INFERRED, 0x100, abstract = true),
+                cls(12, "Klass_120", Origin.INFERRED, 0x120, bases = listOf(base("Klass_100", 11))),
+            ),
+        )
+        val card = score(subject)
+        card.tallies["vftables"] mustBe Tally(tp = 2)
+        card.tallies["bases"] mustBe Tally(tp = 1)
+        card.tallies["abstract"] mustBe Tally(tp = 1)
+        card.instances["class-splits-fp"] mustBe listOf("`Shape` (namespace) of `Shape`")
+        card.mustListEveryMiss()
+    }
+
+    @Test
+    fun `a split's functions count for the class it is a piece of`() {
+        val subject = ClassHierarchy(
+            listOf(
+                cls(10, "NPKlass_20", Origin.INFERRED, members = listOf(fn(0x20, "NPKlass_20"))),
+                cls(11, "NPKlass_24", Origin.INFERRED, members = listOf(fn(0x24, "NPKlass_24"))),
+            ),
+        )
+        val card = score(subject)
+        card.tallies["classes"] mustBe Tally(tp = 1, fp = 0, fn = 2)
+        card.tallies["class-splits"] mustBe Tally(tp = 0, fp = 1)
+        card.tallies["methods"] mustBe Tally(tp = 2, fp = 0, fn = 0)
+        card.mustListEveryMiss()
+    }
+
+    @Test
+    fun `a class holding one function of another's goes by its structor`() {
+        val subject = ClassHierarchy(
+            listOf(cls(10, "NPKlass_20", Origin.INFERRED, members = listOf(fn(0x20, "NPKlass_20"), fn(0x30, "f")))),
+        )
+        val card = score(subject)
+        card.tallies["classes"] mustBe Tally(tp = 1, fp = 0, fn = 2)
+        card.instances["methods-fp"] mustBe listOf("30 of `Circle`: is `Point`'s")
+        card.mustListEveryMiss()
     }
 
     @Test
     fun `counters are each attribute's three tallies`() {
-        Scorecard(mapOf("classes" to Tally(3, 1, 2)), emptyList()).counters() mustBe
+        Scorecard(mapOf("classes" to Tally(3, 1, 2))).counters() mustBe
             mapOf("classes-tp" to 3L, "classes-fp" to 1L, "classes-fn" to 2L)
+    }
+
+    @Test
+    fun `a base with no vtable nor function counts found, but not missed`() {
+        val withEmpty = ClassHierarchy(
+            truth.classes.map { if (it.id == 2L) it.copy(bases = it.bases + base("Empty", 4, offset = 4)) else it },
+        )
+        fun card(subject: ClassHierarchy) = Scorer(
+            Truth(truthSnapshot.copy(hierarchy = withEmpty), Truth.describedScope(withEmpty), true, true),
+            Snapshot("subject", subject),
+        ).score()
+        val missed =
+            card(
+                ClassHierarchy(
+                    listOf(cls(10, "Circle", Origin.ITANIUM_RTTI, 0x120, bases = listOf(base("Shape", null)))),
+                ),
+            )
+        missed.tallies["bases"] mustBe Tally(tp = 1)
+        missed.notes mustBe listOf("base `Empty` of `Circle`: no vtable nor function to find it by")
+        val found = card(
+            ClassHierarchy(
+                listOf(
+                    cls(
+                        10,
+                        "Circle",
+                        Origin.ITANIUM_RTTI,
+                        0x120,
+                        bases = listOf(base("Shape", null), base("Empty", 11)),
+                    ),
+                    cls(11, "Empty", Origin.ITANIUM_RTTI),
+                ),
+            ),
+        )
+        found.tallies["bases"] mustBe Tally(tp = 2)
+    }
+
+    @Test
+    fun `a destructor variant no truth vtable slot holds is not a virtual method`() {
+        val d0 = fn(0x10, "~Shape", true).copy(variants = listOf(ItaniumStructor.DELETING_DTOR))
+        val unslotted = ClassHierarchy(
+            truth.classes.map { c -> if (c.id == 1L) c.copy(members = listOf(d0) + c.members.drop(1)) else c },
+        )
+        fun card(slots: Set<Long>?) = Scorer(
+            Truth(truthSnapshot.copy(hierarchy = unslotted), Truth.describedScope(unslotted), true, true),
+            Snapshot(
+                "subject",
+                ClassHierarchy(
+                    listOf(cls(10, "Shape", Origin.ITANIUM_RTTI, 0x100), cls(11, "Circle", Origin.ITANIUM_RTTI, 0x120)),
+                ),
+            ),
+            slots,
+        ).score()
+        card(null).tallies["virtual-methods"] mustBe Tally(fn = 3)
+        card(setOf(0x14L, 0x24L)).tallies["virtual-methods"] mustBe Tally(fn = 2)
+    }
+
+    @Test
+    fun `a class template's structors go by its name less the template arguments`() {
+        // g++'s stabs name a template's constructor and destructor without its arguments.
+        val box = cls(5, "Box<int>", Origin.STABS, 0x140, listOf(fn(0x50, "Box"), fn(0x54, "~Box")))
+        val boxTruth = ClassHierarchy(listOf(box))
+        val card = Scorer(
+            Truth(truthSnapshot.copy(hierarchy = boxTruth), Truth.describedScope(boxTruth), true, true),
+            Snapshot(
+                "subject",
+                ClassHierarchy(
+                    listOf(cls(10, "Box<int>", Origin.ITANIUM_RTTI, 0x140, listOf(fn(0x50, "Box"), fn(0x54, "~Box")))),
+                ),
+            ),
+        ).score()
+        card.tallies["structors"] mustBe Tally(tp = 2)
+    }
+
+    @Test
+    fun `a vftable claimed for a polymorphic class the binary has no vtable of is not scored`() {
+        val up = cls(5, "Up", Origin.STABS, members = listOf(fn(0x50, "g", true)))
+        val plain = cls(6, "Plain", Origin.STABS, members = listOf(fn(0x60, "h")))
+        val upTruth = ClassHierarchy(listOf(up, plain))
+        val card = Scorer(
+            Truth(
+                truthSnapshot.copy(hierarchy = upTruth, vtables = emptyList()),
+                Truth.describedScope(upTruth),
+                true,
+                true,
+            ),
+            Snapshot(
+                "subject",
+                ClassHierarchy(
+                    listOf(
+                        cls(10, "Up", Origin.ITANIUM_RTTI, 0x140, listOf(fn(0x50, "g", true))),
+                        cls(11, "Plain", Origin.ITANIUM_RTTI, 0x160, listOf(fn(0x60, "h"))),
+                    ),
+                ),
+            ),
+        ).score()
+        card.tallies["vftables"] mustBe Tally(fp = 1)
+        card.instances["vftables-fp"] mustBe listOf("${DetachedAddresses.at(0x160)} of `Plain`")
     }
 }

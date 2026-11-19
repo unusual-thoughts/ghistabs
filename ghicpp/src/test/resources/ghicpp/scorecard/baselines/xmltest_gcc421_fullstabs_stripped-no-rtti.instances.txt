@@ -1,0 +1,1198 @@
+abstract-fn `TiXmlBase`
+abstract-fn `TiXmlNode`
+abstract-fn `std::__codecvt_abstract_base<char,char,int>`
+abstract-fn `std::__codecvt_abstract_base<wchar_t,char,int>`
+abstract-fn `std::__ctype_abstract_base<char>`
+abstract-fn `std::__ctype_abstract_base<wchar_t>`
+base-access-fn `TiXmlBase` of `TiXmlAttribute`: none, is public
+base-access-fn `TiXmlBase` of `TiXmlNode`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlComment`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlDeclaration`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlDocument`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlElement`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlText`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlUnknown`: none, is public
+base-access-fn `TiXmlVisitor` of `TiXmlPrinter`: none, is public
+base-access-fn `__cxxabiv1::__class_type_info` of `__cxxabiv1::__si_class_type_info`: none, is public
+base-access-fn `__cxxabiv1::__class_type_info` of `__cxxabiv1::__vmi_class_type_info`: none, is public
+base-access-fn `std::__codecvt_abstract_base<char,char,int>` of `std::codecvt<char,char,int>`: none, is public
+base-access-fn `std::__codecvt_abstract_base<wchar_t,char,int>` of `std::codecvt<wchar_t,char,int>`: none, is public
+base-access-fn `std::__ctype_abstract_base<wchar_t>` of `std::ctype<wchar_t>`: none, is public
+base-access-fn `std::codecvt<char,char,int>` of `std::codecvt_byname<char,char,int>`: none, is public
+base-access-fn `std::codecvt<wchar_t,char,int>` of `std::codecvt_byname<wchar_t,char,int>`: none, is public
+base-access-fn `std::collate<char>` of `std::collate_byname<char>`: none, is public
+base-access-fn `std::collate<wchar_t>` of `std::collate_byname<wchar_t>`: none, is public
+base-access-fn `std::ctype<char>` of `std::ctype_byname<char>`: none, is public
+base-access-fn `std::ctype<wchar_t>` of `std::ctype_byname<wchar_t>`: none, is public
+base-access-fn `std::exception` of `__gnu_cxx::__concurrence_lock_error`: none, is public
+base-access-fn `std::exception` of `__gnu_cxx::__concurrence_unlock_error`: none, is public
+base-access-fn `std::exception` of `__gnu_cxx::recursive_init_error`: none, is public
+base-access-fn `std::exception` of `std::bad_alloc`: none, is public
+base-access-fn `std::exception` of `std::bad_cast`: none, is public
+base-access-fn `std::exception` of `std::bad_exception`: none, is public
+base-access-fn `std::exception` of `std::bad_typeid`: none, is public
+base-access-fn `std::exception` of `std::ios_base::failure`: none, is public
+base-access-fn `std::exception` of `std::logic_error`: none, is public
+base-access-fn `std::exception` of `std::runtime_error`: none, is public
+base-access-fn `std::filebuf` of `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`: none, is public
+base-access-fn `std::ios_base` of `std::ios`: none, is public
+base-access-fn `std::ios_base` of `std::wios`: none, is public
+base-access-fn `std::ios` of `std::istream`: none, is public
+base-access-fn `std::ios` of `std::ostream`: none, is public
+base-access-fn `std::iostream` of `std::fstream`: none, is public
+base-access-fn `std::istream` of `std::ifstream`: none, is public
+base-access-fn `std::istream` of `std::iostream`: none, is public
+base-access-fn `std::locale::facet` of `std::__codecvt_abstract_base<char,char,int>`: none, is public
+base-access-fn `std::locale::facet` of `std::__codecvt_abstract_base<wchar_t,char,int>`: none, is public
+base-access-fn `std::locale::facet` of `std::__ctype_abstract_base<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::__ctype_abstract_base<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::__moneypunct_cache<char,false>`: none, is public
+base-access-fn `std::locale::facet` of `std::__moneypunct_cache<char,true>`: none, is public
+base-access-fn `std::locale::facet` of `std::__moneypunct_cache<wchar_t,false>`: none, is public
+base-access-fn `std::locale::facet` of `std::__moneypunct_cache<wchar_t,true>`: none, is public
+base-access-fn `std::locale::facet` of `std::__numpunct_cache<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::__numpunct_cache<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::__timepunct<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::__timepunct<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::__timepunct_cache<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::__timepunct_cache<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::collate<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::collate<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::ctype<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::messages<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::messages<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::moneypunct<char,false>`: none, is public
+base-access-fn `std::locale::facet` of `std::moneypunct<char,true>`: none, is public
+base-access-fn `std::locale::facet` of `std::moneypunct<wchar_t,false>`: none, is public
+base-access-fn `std::locale::facet` of `std::moneypunct<wchar_t,true>`: none, is public
+base-access-fn `std::locale::facet` of `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::numpunct<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::numpunct<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::logic_error` of `std::domain_error`: none, is public
+base-access-fn `std::logic_error` of `std::invalid_argument`: none, is public
+base-access-fn `std::logic_error` of `std::length_error`: none, is public
+base-access-fn `std::logic_error` of `std::out_of_range`: none, is public
+base-access-fn `std::messages<char>` of `std::messages_byname<char>`: none, is public
+base-access-fn `std::messages<wchar_t>` of `std::messages_byname<wchar_t>`: none, is public
+base-access-fn `std::moneypunct<char,false>` of `std::moneypunct_byname<char,false>`: none, is public
+base-access-fn `std::moneypunct<char,true>` of `std::moneypunct_byname<char,true>`: none, is public
+base-access-fn `std::moneypunct<wchar_t,false>` of `std::moneypunct_byname<wchar_t,false>`: none, is public
+base-access-fn `std::moneypunct<wchar_t,true>` of `std::moneypunct_byname<wchar_t,true>`: none, is public
+base-access-fn `std::numpunct<char>` of `std::numpunct_byname<char>`: none, is public
+base-access-fn `std::numpunct<wchar_t>` of `std::numpunct_byname<wchar_t>`: none, is public
+base-access-fn `std::ostream` of `std::iostream`: none, is public
+base-access-fn `std::ostream` of `std::ofstream`: none, is public
+base-access-fn `std::runtime_error` of `std::overflow_error`: none, is public
+base-access-fn `std::runtime_error` of `std::range_error`: none, is public
+base-access-fn `std::runtime_error` of `std::underflow_error`: none, is public
+base-access-fn `std::streambuf` of `__gnu_cxx::stdio_sync_filebuf<char,std::char_traits<char>>`: none, is public
+base-access-fn `std::streambuf` of `std::filebuf`: none, is public
+base-access-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>` of `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>` of `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>` of `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>` of `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::type_info` of `__cxxabiv1::__class_type_info`: none, is public
+base-access-fn `std::wfilebuf` of `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`: none, is public
+base-access-fn `std::wios` of `std::wistream`: none, is public
+base-access-fn `std::wios` of `std::wostream`: none, is public
+base-access-fn `std::wiostream` of `std::wfstream`: none, is public
+base-access-fn `std::wistream` of `std::wifstream`: none, is public
+base-access-fn `std::wistream` of `std::wiostream`: none, is public
+base-access-fn `std::wostream` of `std::wiostream`: none, is public
+base-access-fn `std::wostream` of `std::wofstream`: none, is public
+base-access-fn `std::wstreambuf` of `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>`: none, is public
+base-access-fn `std::wstreambuf` of `std::wfilebuf`: none, is public
+bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
+bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`
+bases-fn `?ctype_base` of `std::__ctype_abstract_base<char>`
+bases-fn `?ctype_base` of `std::__ctype_abstract_base<wchar_t>`
+bases-fn `?ctype_base` of `std::ctype<char>`
+bases-fn `?messages_base` of `std::messages<char>`
+bases-fn `?messages_base` of `std::messages<wchar_t>`
+bases-fn `?time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
+bases-fn `?time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+bases-fn `std::money_base` of `std::moneypunct<char,false>`
+bases-fn `std::money_base` of `std::moneypunct<char,true>`
+bases-fn `std::money_base` of `std::moneypunct<wchar_t,false>`
+bases-fn `std::money_base` of `std::moneypunct<wchar_t,true>`
+bases-fp `std::ios` (virtual) of `std::ifstream`
+bases-fp `std::ios` (virtual) of `std::ofstream`
+bases-fp `std::wios` (virtual) of `std::wifstream`
+bases-fp `std::wios` (virtual) of `std::wofstream`
+class-splits-fp `NPKlass_0044c864` (inferred) of `std::string`
+class-splits-fp `NPKlass_0045142c` (inferred) of `std::__basic_file<char>`
+classes-fn `__cxa_call_unexpected::end_catch_protect` (stabs)
+classes-fn `__cxa_guard_acquire::mutex_wrapper` (stabs)
+classes-fn `__cxxabiv1::__base_class_type_info` (stabs)
+classes-fn `__cxxabiv1::__class_type_info::__dyncast_result` (stabs)
+classes-fn `__cxxabiv1::__class_type_info::__upcast_result` (stabs)
+classes-fn `__eh_globals_init` (stabs)
+classes-fn `__gnu_cxx::__mutex` (stabs)
+classes-fn `__gnu_cxx::__normal_iterator<char*,std::string>` (stabs)
+classes-fn `__gnu_cxx::__normal_iterator<char_const*,std::string>` (stabs)
+classes-fn `__gnu_cxx::__normal_iterator<wchar_t*,std::wstring>` (stabs)
+classes-fn `__gnu_cxx::__normal_iterator<wchar_t_const*,std::wstring>` (stabs)
+classes-fn `__gnu_cxx::__recursive_mutex` (stabs)
+classes-fn `__gnu_cxx::__scoped_lock` (stabs)
+classes-fn `__gnu_cxx::new_allocator<char>` (stabs)
+classes-fn `__gnu_cxx::new_allocator<wchar_t>` (stabs)
+classes-fn `__gnu_cxx::rope<char,std::allocator<char>>` (stabs)
+classes-fn `__gnu_cxx::rope<wchar_t,std::allocator<wchar_t>>` (stabs)
+classes-fn `std::__num_base` (stabs)
+classes-fn `std::__pad<char,std::char_traits<char>>` (stabs)
+classes-fn `std::__pad<wchar_t,std::char_traits<wchar_t>>` (stabs)
+classes-fn `std::__use_cache<std::__moneypunct_cache<char,false>>` (stabs)
+classes-fn `std::__use_cache<std::__moneypunct_cache<char,true>>` (stabs)
+classes-fn `std::__use_cache<std::__moneypunct_cache<wchar_t,false>>` (stabs)
+classes-fn `std::__use_cache<std::__moneypunct_cache<wchar_t,true>>` (stabs)
+classes-fn `std::__use_cache<std::__numpunct_cache<char>>` (stabs)
+classes-fn `std::__use_cache<std::__numpunct_cache<wchar_t>>` (stabs)
+classes-fn `std::allocator<char>` (stabs)
+classes-fn `std::allocator<wchar_t>` (stabs)
+classes-fn `std::bidirectional_iterator_tag` (stabs)
+classes-fn `std::char_traits<char>` (stabs)
+classes-fn `std::char_traits<wchar_t>` (stabs)
+classes-fn `std::forward_iterator_tag` (stabs)
+classes-fn `std::fpos<int>` (stabs)
+classes-fn `std::ios_base::Init` (stabs)
+classes-fn `std::ios_base::_Callback_list` (stabs)
+classes-fn `std::istream::sentry` (stabs)
+classes-fn `std::istreambuf_iterator<char,std::char_traits<char>>` (stabs)
+classes-fn `std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>` (stabs)
+classes-fn `std::less<char_const*>` (stabs)
+classes-fn `std::less<wchar_t_const*>` (stabs)
+classes-fn `std::locale::_Impl` (stabs)
+classes-fn `std::locale::id` (stabs)
+classes-fn `std::money_base` (stabs)
+classes-fn `std::numeric_limits<float>` (stabs)
+classes-fn `std::numeric_limits<int>` (stabs)
+classes-fn `std::numeric_limits<long>` (stabs)
+classes-fn `std::numeric_limits<long_long>` (stabs)
+classes-fn `std::numeric_limits<short>` (stabs)
+classes-fn `std::numeric_limits<unsigned_int>` (stabs)
+classes-fn `std::numeric_limits<unsigned_long>` (stabs)
+classes-fn `std::numeric_limits<unsigned_long_long>` (stabs)
+classes-fn `std::numeric_limits<unsigned_short>` (stabs)
+classes-fn `std::ostream::sentry` (stabs)
+classes-fn `std::ostreambuf_iterator<char,std::char_traits<char>>` (stabs)
+classes-fn `std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>` (stabs)
+classes-fn `std::random_access_iterator_tag` (stabs)
+classes-fn `std::reverse_iterator<__gnu_cxx::__normal_iterator<char*,std::string>>` (stabs)
+classes-fn `std::reverse_iterator<__gnu_cxx::__normal_iterator<char_const*,std::string>>` (stabs)
+classes-fn `std::reverse_iterator<__gnu_cxx::__normal_iterator<wchar_t*,std::wstring>>` (stabs)
+classes-fn `std::reverse_iterator<__gnu_cxx::__normal_iterator<wchar_t_const*,std::wstring>>` (stabs)
+classes-fn `std::string::_Alloc_hider` (stabs)
+classes-fn `std::string::_Rep` (stabs)
+classes-fn `std::wistream::sentry` (stabs)
+classes-fn `std::wostream::sentry` (stabs)
+classes-fn `std::wstring::_Alloc_hider` (stabs)
+classes-fn `std::wstring::_Rep` (stabs)
+classes-fn `std::wstring` (stabs)
+classes-fp invented `NPKlass_0047f880` (inferred)
+classes-fp invented `NPKlass_0047f960` (inferred)
+fields-fn `TiXmlAttribute`+20:4
+fields-fn `TiXmlAttribute`+24:4
+fields-fn `TiXmlAttribute`+4:4
+fields-fn `TiXmlAttribute`+8:4
+fields-fn `TiXmlBase`+4:4
+fields-fn `TiXmlBase`+8:4
+fields-fn `TiXmlComment`+32:4
+fields-fn `TiXmlComment`+4:4
+fields-fn `TiXmlComment`+8:4
+fields-fn `TiXmlDeclaration`+32:4
+fields-fn `TiXmlDeclaration`+44:4
+fields-fn `TiXmlDeclaration`+48:4
+fields-fn `TiXmlDeclaration`+4:4
+fields-fn `TiXmlDeclaration`+52:4
+fields-fn `TiXmlDeclaration`+8:4
+fields-fn `TiXmlDocument`+32:4
+fields-fn `TiXmlDocument`+44:1
+fields-fn `TiXmlDocument`+48:4
+fields-fn `TiXmlDocument`+4:4
+fields-fn `TiXmlDocument`+52:4
+fields-fn `TiXmlDocument`+60:4
+fields-fn `TiXmlDocument`+64:4
+fields-fn `TiXmlDocument`+8:4
+fields-fn `TiXmlElement`+32:4
+fields-fn `TiXmlElement`+44:4
+fields-fn `TiXmlElement`+48:4
+fields-fn `TiXmlElement`+4:4
+fields-fn `TiXmlElement`+52:4
+fields-fn `TiXmlElement`+56:4
+fields-fn `TiXmlElement`+60:4
+fields-fn `TiXmlElement`+64:4
+fields-fn `TiXmlElement`+68:4
+fields-fn `TiXmlElement`+8:4
+fields-fn `TiXmlNode`+32:4
+fields-fn `TiXmlNode`+4:4
+fields-fn `TiXmlNode`+8:4
+fields-fn `TiXmlPrinter`+12:4
+fields-fn `TiXmlPrinter`+16:4
+fields-fn `TiXmlPrinter`+20:4
+fields-fn `TiXmlText`+32:4
+fields-fn `TiXmlText`+4:4
+fields-fn `TiXmlText`+8:4
+fields-fn `TiXmlUnknown`+32:4
+fields-fn `TiXmlUnknown`+4:4
+fields-fn `TiXmlUnknown`+8:4
+fields-fn `__cxxabiv1::__class_type_info`+4:4
+fields-fn `__cxxabiv1::__si_class_type_info`+4:4
+fields-fn `__cxxabiv1::__si_class_type_info`+8:4
+fields-fn `__cxxabiv1::__vmi_class_type_info`+12:4
+fields-fn `__cxxabiv1::__vmi_class_type_info`+16:8
+fields-fn `__cxxabiv1::__vmi_class_type_info`+4:4
+fields-fn `__cxxabiv1::__vmi_class_type_info`+8:4
+fields-fn `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`+28:4
+fields-fn `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`+28:4
+fields-fn `__gnu_cxx::stdio_sync_filebuf<char,std::char_traits<char>>`+28:4
+fields-fn `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>`+28:4
+fields-fn `std::__moneypunct_cache<char,false>`+48:4
+fields-fn `std::__moneypunct_cache<char,false>`+52:4
+fields-fn `std::__moneypunct_cache<char,false>`+56:11
+fields-fn `std::__moneypunct_cache<char,true>`+48:4
+fields-fn `std::__moneypunct_cache<char,true>`+52:4
+fields-fn `std::__moneypunct_cache<char,true>`+56:11
+fields-fn `std::__moneypunct_cache<wchar_t,false>`+52:4
+fields-fn `std::__moneypunct_cache<wchar_t,false>`+56:4
+fields-fn `std::__moneypunct_cache<wchar_t,false>`+60:22
+fields-fn `std::__moneypunct_cache<wchar_t,true>`+52:4
+fields-fn `std::__moneypunct_cache<wchar_t,true>`+56:4
+fields-fn `std::__moneypunct_cache<wchar_t,true>`+60:22
+fields-fn `std::__numpunct_cache<char>`+38:36
+fields-fn `std::__numpunct_cache<char>`+74:26
+fields-fn `std::__numpunct_cache<wchar_t>`+112:52
+fields-fn `std::__numpunct_cache<wchar_t>`+40:72
+fields-fn `std::__timepunct<char>`+12:4
+fields-fn `std::__timepunct<wchar_t>`+12:4
+fields-fn `std::ctype<char>`+8:4
+fields-fn `std::ctype<wchar_t>`+13:128
+fields-fn `std::ctype<wchar_t>`+142:512
+fields-fn `std::ctype<wchar_t>`+654:32
+fields-fn `std::ctype<wchar_t>`+686:32
+fields-fn `std::ctype_byname<char>`+8:4
+fields-fn `std::ctype_byname<wchar_t>`+13:128
+fields-fn `std::ctype_byname<wchar_t>`+142:512
+fields-fn `std::ctype_byname<wchar_t>`+654:32
+fields-fn `std::ctype_byname<wchar_t>`+686:32
+fields-fn `std::domain_error`+4:4
+fields-fn `std::filebuf`+28:4
+fields-fn `std::fstream`+156:64
+fields-fn `std::fstream`+228:4
+fields-fn `std::fstream`+40:4
+fields-fn `std::ifstream`+152:64
+fields-fn `std::ifstream`+224:4
+fields-fn `std::ifstream`+36:4
+fields-fn `std::invalid_argument`+4:4
+fields-fn `std::ios_base::failure`+4:4
+fields-fn `std::ios_base`+36:64
+fields-fn `std::ios`+108:4
+fields-fn `std::ios`+36:64
+fields-fn `std::iostream`+120:4
+fields-fn `std::iostream`+48:64
+fields-fn `std::istream`+116:4
+fields-fn `std::istream`+44:64
+fields-fn `std::length_error`+4:4
+fields-fn `std::logic_error`+4:4
+fields-fn `std::messages<char>`+12:4
+fields-fn `std::messages<wchar_t>`+12:4
+fields-fn `std::messages_byname<char>`+12:4
+fields-fn `std::messages_byname<wchar_t>`+12:4
+fields-fn `std::ofstream`+148:64
+fields-fn `std::ofstream`+220:4
+fields-fn `std::ofstream`+32:4
+fields-fn `std::ostream`+112:4
+fields-fn `std::ostream`+40:64
+fields-fn `std::out_of_range`+4:4
+fields-fn `std::overflow_error`+4:4
+fields-fn `std::range_error`+4:4
+fields-fn `std::runtime_error`+4:4
+fields-fn `std::string`+0:4
+fields-fn `std::type_info`+4:4
+fields-fn `std::underflow_error`+4:4
+fields-fn `std::wfilebuf`+28:4
+fields-fn `std::wfstream`+160:64
+fields-fn `std::wfstream`+232:4
+fields-fn `std::wfstream`+40:4
+fields-fn `std::wifstream`+156:64
+fields-fn `std::wifstream`+228:4
+fields-fn `std::wifstream`+36:4
+fields-fn `std::wios`+108:4
+fields-fn `std::wios`+36:64
+fields-fn `std::wiostream`+120:4
+fields-fn `std::wiostream`+48:64
+fields-fn `std::wistream`+116:4
+fields-fn `std::wistream`+44:64
+fields-fn `std::wofstream`+152:64
+fields-fn `std::wofstream`+224:4
+fields-fn `std::wofstream`+32:4
+fields-fn `std::wostream`+112:4
+fields-fn `std::wostream`+40:64
+methods-fn `TiXmlAttribute::DoubleValue` 405b06
+methods-fn `TiXmlAttribute::IntValue` 405b3e
+methods-fn `TiXmlAttribute::NameTStr` 420e64
+methods-fn `TiXmlAttribute::Name` 420e10
+methods-fn `TiXmlAttribute::Next` 401c02
+methods-fn `TiXmlAttribute::Previous` 401b9c
+methods-fn `TiXmlAttribute::QueryDoubleValue` 40631c
+methods-fn `TiXmlAttribute::QueryIntValue` 4064a2
+methods-fn `TiXmlAttribute::SetDoubleValue` 405b64
+methods-fn `TiXmlAttribute::SetIntValue` 405c4a
+methods-fn `TiXmlAttribute::SetName` 41c97c
+methods-fn `TiXmlAttribute::SetName` 41c99c
+methods-fn `TiXmlAttribute::SetValue` 41c9bc
+methods-fn `TiXmlAttribute::SetValue` 41c9dc
+methods-fn `TiXmlAttribute::ValueStr` 420e70
+methods-fn `TiXmlBase::ConvertUTF32ToUTF8` 407f48
+methods-fn `TiXmlBase::EncodeString` 405cea
+methods-fn `TiXmlBase::GetChar` 41d784
+methods-fn `TiXmlBase::GetEntity` 408ece
+methods-fn `TiXmlBase::IsAlphaNum` 409704
+methods-fn `TiXmlBase::IsAlpha` 40973c
+methods-fn `TiXmlBase::IsWhiteSpaceCondensed` 41d774
+methods-fn `TiXmlBase::IsWhiteSpace` 41d6f4
+methods-fn `TiXmlBase::IsWhiteSpace` 41d738
+methods-fn `TiXmlBase::ReadName` 40aa52
+methods-fn `TiXmlBase::ReadText` 409220
+methods-fn `TiXmlBase::SkipWhiteSpace` 40822a
+methods-fn `TiXmlBase::StreamTo` 40833c
+methods-fn `TiXmlBase::StreamWhiteSpace` 4083c4
+methods-fn `TiXmlBase::StringEqual` 408c26
+methods-fn `TiXmlBase::ToLower` 41d890
+methods-fn `TiXmlComment::operator=` 401a98
+methods-fn `TiXmlDeclaration::Encoding` 420ea8
+methods-fn `TiXmlDeclaration::operator=` 401b2a
+methods-fn `TiXmlDocument::Error` 420df4
+methods-fn `TiXmlDocument::LoadFile` 4078f8
+methods-fn `TiXmlDocument::LoadFile` 407d4e
+methods-fn `TiXmlDocument::LoadFile` 407f18
+methods-fn `TiXmlDocument::SaveFile` 406ac8
+methods-fn `TiXmlDocument::SaveFile` 407cc4
+methods-fn `TiXmlDocument::SaveFile` 407d22
+methods-fn `TiXmlDocument::operator=` 4071b0
+methods-fn `TiXmlElement::Attribute` 401e60
+methods-fn `TiXmlElement::Attribute` 404042
+methods-fn `TiXmlElement::Attribute` 4063f4
+methods-fn `TiXmlElement::Attribute` 40644a
+methods-fn `TiXmlElement::Attribute` 4065d8
+methods-fn `TiXmlElement::Attribute` 40662e
+methods-fn `TiXmlElement::GetText` 401996
+methods-fn `TiXmlElement::QueryBoolAttribute` 407b4e
+methods-fn `TiXmlElement::QueryDoubleAttribute` 406368
+methods-fn `TiXmlElement::QueryDoubleAttribute` 4063ae
+methods-fn `TiXmlElement::QueryIntAttribute` 4064ee
+methods-fn `TiXmlElement::QueryIntAttribute` 406592
+methods-fn `TiXmlElement::QueryUnsignedAttribute` 406534
+methods-fn `TiXmlElement::RemoveAttribute` 404576
+methods-fn `TiXmlElement::SetAttribute` 404970
+methods-fn `TiXmlElement::SetAttribute` 404ab2
+methods-fn `TiXmlElement::SetAttribute` 405c7a
+methods-fn `TiXmlElement::SetDoubleAttribute` 405bbe
+methods-fn `TiXmlElement::SetDoubleAttribute` 405c04
+methods-fn `TiXmlElement::operator=` 4075e6
+methods-fn `TiXmlNode::Clear` 4013a0
+methods-fn `TiXmlNode::CopyTo` 4019f0
+methods-fn `TiXmlNode::FirstChildElement` 4013fe
+methods-fn `TiXmlNode::FirstChildElement` 40433a
+methods-fn `TiXmlNode::FirstChildElement` 41da00
+methods-fn `TiXmlNode::FirstChildElement` 41da1c
+methods-fn `TiXmlNode::FirstChild` 40420e
+methods-fn `TiXmlNode::FirstChild` 41d980
+methods-fn `TiXmlNode::FirstChild` 41d99c
+methods-fn `TiXmlNode::FirstChild` 420ef8
+methods-fn `TiXmlNode::GetDocument` 4014da
+methods-fn `TiXmlNode::GetDocument` 41d9b4
+methods-fn `TiXmlNode::Identify` 409774
+methods-fn `TiXmlNode::InsertAfterChild` 406c88
+methods-fn `TiXmlNode::InsertBeforeChild` 406da0
+methods-fn `TiXmlNode::InsertEndChild` 40785c
+methods-fn `TiXmlNode::IterateChildren` 405400
+methods-fn `TiXmlNode::IterateChildren` 40545e
+methods-fn `TiXmlNode::LastChild` 4041b4
+methods-fn `TiXmlNode::LastChild` 420f5c
+methods-fn `TiXmlNode::LinkEndChild` 406eb8
+methods-fn `TiXmlNode::NextSiblingElement` 40146c
+methods-fn `TiXmlNode::NextSiblingElement` 40413a
+methods-fn `TiXmlNode::NextSiblingElement` 41da34
+methods-fn `TiXmlNode::NextSiblingElement` 41da50
+methods-fn `TiXmlNode::NextSibling` 4040e0
+methods-fn `TiXmlNode::NextSibling` 41d9cc
+methods-fn `TiXmlNode::NextSibling` 41d9e8
+methods-fn `TiXmlNode::NextSibling` 420f10
+methods-fn `TiXmlNode::PreviousSibling` 404086
+methods-fn `TiXmlNode::RemoveChild` 4054b0
+methods-fn `TiXmlNode::ReplaceChild` 406b4e
+methods-fn `TiXmlNode::SetValue` 41da74
+methods-fn `TiXmlNode::Type` 420f28
+methods-fn `TiXmlNode::ValueTStr` 420f8c
+methods-fn `TiXmlNode::Value` 420f34
+methods-fn `TiXmlText::Blank` 4081ba
+methods-fn `TiXmlText::CDATA` 420f98
+methods-fn `__cxxabiv1::__class_type_info::__find_public_src` 4201a4
+methods-fn `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>::fd` 41dd78
+methods-fn `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>::file` 41dd94
+methods-fn `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>::fd` 41e330
+methods-fn `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>::file` 41e34c
+methods-fn `__gnu_cxx::stdio_sync_filebuf<char,std::char_traits<char>>::file` 41e9d8
+methods-fn `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>::file` 41ee0c
+methods-fn `std::__basic_file<char>::__basic_file` 4515e4
+methods-fn `std::__basic_file<char>::fd` 451234
+methods-fn `std::__basic_file<char>::file` 451244
+methods-fn `std::__basic_file<char>::open` 451250
+methods-fn `std::__basic_file<char>::seekoff` 4513f4
+methods-fn `std::__basic_file<char>::showmanyc` 4515c0
+methods-fn `std::__basic_file<char>::xsputn` 4513cc
+methods-fn `std::__basic_file<char>::~__basic_file` 451614
+methods-fn `std::__codecvt_abstract_base<char,char,int>::always_noconv` 425c34
+methods-fn `std::__codecvt_abstract_base<char,char,int>::encoding` 425d10
+methods-fn `std::__codecvt_abstract_base<char,char,int>::in` 425c58
+methods-fn `std::__codecvt_abstract_base<char,char,int>::length` 425cb8
+methods-fn `std::__codecvt_abstract_base<char,char,int>::max_length` 425c14
+methods-fn `std::__codecvt_abstract_base<char,char,int>::out` 425c88
+methods-fn `std::__codecvt_abstract_base<char,char,int>::unshift` 425ce4
+methods-fn `std::__codecvt_abstract_base<wchar_t,char,int>::always_noconv` 425d50
+methods-fn `std::__codecvt_abstract_base<wchar_t,char,int>::encoding` 425e2c
+methods-fn `std::__codecvt_abstract_base<wchar_t,char,int>::in` 425d74
+methods-fn `std::__codecvt_abstract_base<wchar_t,char,int>::length` 425dd4
+methods-fn `std::__codecvt_abstract_base<wchar_t,char,int>::max_length` 425d30
+methods-fn `std::__codecvt_abstract_base<wchar_t,char,int>::out` 425da4
+methods-fn `std::__codecvt_abstract_base<wchar_t,char,int>::unshift` 425e00
+methods-fn `std::__ctype_abstract_base<wchar_t>::is` 425ad8
+methods-fn `std::__ctype_abstract_base<wchar_t>::narrow` 425b74
+methods-fn `std::__ctype_abstract_base<wchar_t>::scan_not` 425be4
+methods-fn `std::__ctype_abstract_base<wchar_t>::toupper` 425bb0
+methods-fn `std::__ctype_abstract_base<wchar_t>::widen` 425b20
+methods-fn `std::__ctype_abstract_base<wchar_t>::widen` 425b44
+methods-fn `std::__timepunct<char>::_M_am_pm_format` 4242a4
+methods-fn `std::__timepunct<char>::_M_am_pm` 42458c
+methods-fn `std::__timepunct<char>::_M_date_formats` 4242b8
+methods-fn `std::__timepunct<char>::_M_date_time_formats` 42437c
+methods-fn `std::__timepunct<char>::_M_days_abbreviated` 424300
+methods-fn `std::__timepunct<char>::_M_days` 424510
+methods-fn `std::__timepunct<char>::_M_months_abbreviated` 4243a0
+methods-fn `std::__timepunct<char>::_M_months` 4245b0
+methods-fn `std::__timepunct<char>::_M_put` 424494
+methods-fn `std::__timepunct<char>::_M_time_formats` 4242dc
+methods-fn `std::__timepunct<wchar_t>::_M_am_pm_format` 424690
+methods-fn `std::__timepunct<wchar_t>::_M_am_pm` 42497c
+methods-fn `std::__timepunct<wchar_t>::_M_date_formats` 4246a4
+methods-fn `std::__timepunct<wchar_t>::_M_date_time_formats` 424768
+methods-fn `std::__timepunct<wchar_t>::_M_days_abbreviated` 4246ec
+methods-fn `std::__timepunct<wchar_t>::_M_days` 424900
+methods-fn `std::__timepunct<wchar_t>::_M_months_abbreviated` 42478c
+methods-fn `std::__timepunct<wchar_t>::_M_months` 4249a0
+methods-fn `std::__timepunct<wchar_t>::_M_put` 424880
+methods-fn `std::__timepunct<wchar_t>::_M_time_formats` 4246c8
+methods-fn `std::collate<char>::_M_transform` 42764c
+methods-fn `std::collate<char>::compare` 427984
+methods-fn `std::collate<char>::hash` 427960
+methods-fn `std::collate<char>::transform` 4279e4
+methods-fn `std::collate<wchar_t>::_M_transform` 427d78
+methods-fn `std::collate<wchar_t>::compare` 4280bc
+methods-fn `std::collate<wchar_t>::hash` 428098
+methods-fn `std::collate<wchar_t>::transform` 428124
+methods-fn `std::ctype<char>::_M_widen_init` 425f98
+methods-fn `std::ctype<char>::classic_table` 46c7ac
+methods-fn `std::ctype<char>::narrow` 426150
+methods-fn `std::ctype<char>::scan_is` 4261e8
+methods-fn `std::ctype<char>::scan_not` 4262ac
+methods-fn `std::ctype<char>::toupper` 426240
+methods-fn `std::ctype<char>::widen` 426078
+methods-fn `std::ctype<char>::widen` 4260ec
+methods-fn `std::ctype<wchar_t>::_M_convert_to_wmask` 4264d8
+methods-fn `std::filebuf::_M_allocate_internal_buffer` 4525cc
+methods-fn `std::filebuf::_M_create_pback` 451fdc
+methods-fn `std::filebuf::_M_destroy_internal_buffer` 452548
+methods-fn `std::filebuf::_M_seek` 453084
+methods-fn `std::filebuf::open` 45260c
+methods-fn `std::fstream::close` 456bfc
+methods-fn `std::fstream::fstream` 456fa8
+methods-fn `std::fstream::fstream` 457118
+methods-fn `std::fstream::is_open` 425568
+methods-fn `std::fstream::is_open` 456c40
+methods-fn `std::fstream::rdbuf` 42555c
+methods-fn `std::fstream::~fstream` 4575e0
+methods-fn `std::ifstream::close` 45f75c
+methods-fn `std::ifstream::ifstream` 45faec
+methods-fn `std::ifstream::ifstream` 45fc48
+methods-fn `std::ifstream::is_open` 425694
+methods-fn `std::ifstream::is_open` 45f7a0
+methods-fn `std::ifstream::rdbuf` 425688
+methods-fn `std::ifstream::~ifstream` 4600e8
+methods-fn `std::ios::_M_cache_locale` 478b3c
+methods-fn `std::ios::_M_setstate` 478afc
+methods-fn `std::ios::bad` 438388
+methods-fn `std::ios::clear` 478cd4
+methods-fn `std::ios::copyfmt` 478e9c
+methods-fn `std::ios::eof` 4383b0
+methods-fn `std::ios::exceptions` 43837c
+methods-fn `std::ios::exceptions` 478ad4
+methods-fn `std::ios::fail` 4383e4
+methods-fn `std::ios::fill` 43841c
+methods-fn `std::ios::fill` 478c2c
+methods-fn `std::ios::good` 438458
+methods-fn `std::ios::imbue` 478d4c
+methods-fn `std::ios::narrow` 4384b8
+methods-fn `std::ios::operator!` 438538
+methods-fn `std::ios::operator.cast.to.void*` 43850c
+methods-fn `std::ios::rdbuf` 438474
+methods-fn `std::ios::rdbuf` 478e6c
+methods-fn `std::ios::rdstate` 438500
+methods-fn `std::ios::setstate` 4790e0
+methods-fn `std::ios::tie` 4383d8
+methods-fn `std::ios::tie` 478c0c
+methods-fn `std::ios::widen` 438480
+methods-fn `std::ios_base::_M_getloc` 434704
+methods-fn `std::ios_base::_M_grow_words` 47405c
+methods-fn `std::ios_base::_M_init` 475e78
+methods-fn `std::ios_base::flags` 434620
+methods-fn `std::ios_base::flags` 475d30
+methods-fn `std::ios_base::getloc` 434638
+methods-fn `std::ios_base::imbue` 475d50
+methods-fn `std::ios_base::precision` 434710
+methods-fn `std::ios_base::precision` 4763cc
+methods-fn `std::ios_base::register_callback` 47494c
+methods-fn `std::ios_base::setf` 475cb8
+methods-fn `std::ios_base::setf` 475ce0
+methods-fn `std::ios_base::sync_with_stdio` 474378
+methods-fn `std::ios_base::width` 43462c
+methods-fn `std::ios_base::width` 475d98
+methods-fn `std::ios_base::xalloc` 475dd0
+methods-fn `std::istream::_M_extract<bool>` 442708
+methods-fn `std::istream::_M_extract<double>` 4428c4
+methods-fn `std::istream::_M_extract<float>` 442c3c
+methods-fn `std::istream::_M_extract<long>` 442fb4
+methods-fn `std::istream::_M_extract<long_double>` 442a80
+methods-fn `std::istream::_M_extract<long_long>` 4434e8
+methods-fn `std::istream::_M_extract<unsigned_int>` 442df8
+methods-fn `std::istream::_M_extract<unsigned_long>` 443170
+methods-fn `std::istream::_M_extract<unsigned_long_long>` 4436a4
+methods-fn `std::istream::_M_extract<unsigned_short>` 44332c
+methods-fn `std::istream::_M_extract<void*>` 44254c
+methods-fn `std::istream::gcount` 421f7c
+methods-fn `std::istream::get` 443860
+methods-fn `std::istream::get` 44389c
+methods-fn `std::istream::get` 443b14
+methods-fn `std::istream::get` 443b50
+methods-fn `std::istream::get` 443df0
+methods-fn `std::istream::get` 443fd0
+methods-fn `std::istream::getline` 445b88
+methods-fn `std::istream::getline` 445bc4
+methods-fn `std::istream::ignore` 444d80
+methods-fn `std::istream::ignore` 4450ec
+methods-fn `std::istream::ignore` 445580
+methods-fn `std::istream::istream` 4464c8
+methods-fn `std::istream::operator>>` 446688
+methods-fn `std::istream::operator>>` 4466a0
+methods-fn `std::istream::operator>>` 4466c8
+methods-fn `std::istream::operator>>` 4466f0
+methods-fn `std::istream::operator>>` 4468c4
+methods-fn `std::istream::operator>>` 4468e0
+methods-fn `std::istream::operator>>` 4468fc
+methods-fn `std::istream::operator>>` 446918
+methods-fn `std::istream::operator>>` 446934
+methods-fn `std::istream::operator>>` 446950
+methods-fn `std::istream::operator>>` 4469e8
+methods-fn `std::istream::operator>>` 446a04
+methods-fn `std::istream::operator>>` 446a20
+methods-fn `std::istream::operator>>` 446a3c
+methods-fn `std::istream::operator>>` 446ad8
+methods-fn `std::istream::operator>>` 446af4
+methods-fn `std::istream::operator>>` 446b10
+methods-fn `std::istream::peek` 4441a4
+methods-fn `std::istream::putback` 445fd4
+methods-fn `std::istream::read` 444354
+methods-fn `std::istream::readsome` 4461a0
+methods-fn `std::istream::seekg` 4446a4
+methods-fn `std::istream::seekg` 444890
+methods-fn `std::istream::sync` 444500
+methods-fn `std::istream::tellg` 444a60
+methods-fn `std::istream::unget` 444bbc
+methods-fn `std::locale::_S_initialize_once` 46d590
+methods-fn `std::locale::_S_initialize` 46d55c
+methods-fn `std::locale::_S_normalize_category` 46d60c
+methods-fn `std::locale::classic` 472224
+methods-fn `std::locale::facet::_M_add_reference` 426ba8
+methods-fn `std::locale::facet::_M_remove_reference` 426c48
+methods-fn `std::locale::facet::_S_clone_c_locale` 471f6c
+methods-fn `std::locale::facet::_S_create_c_locale` 471f78
+methods-fn `std::locale::facet::_S_destroy_c_locale` 471fd0
+methods-fn `std::locale::facet::_S_get_c_locale` 471f50
+methods-fn `std::locale::facet::_S_get_c_name` 471f44
+methods-fn `std::locale::facet::_S_initialize_once` 471fb0
+methods-fn `std::locale::global` 472098
+methods-fn `std::locale::locale` 472238
+methods-fn `std::locale::locale` 472348
+methods-fn `std::locale::locale` 472358
+methods-fn `std::locale::locale` 47237c
+methods-fn `std::locale::name` 4269b8
+methods-fn `std::locale::operator==` 426d40
+methods-fn `std::locale::operator=` 472490
+methods-fn `std::locale::~locale` 472474
+methods-fn `std::messages<char>::_M_convert_from_char` 434734
+methods-fn `std::messages<char>::_M_convert_to_char` 43471c
+methods-fn `std::messages<char>::close` 4347cc
+methods-fn `std::messages<char>::get` 434750
+methods-fn `std::messages<char>::open` 434784
+methods-fn `std::messages<char>::open` 4347a8
+methods-fn `std::messages<wchar_t>::_M_convert_from_char` 434838
+methods-fn `std::messages<wchar_t>::_M_convert_to_char` 434820
+methods-fn `std::messages<wchar_t>::close` 4348d0
+methods-fn `std::messages<wchar_t>::get` 434854
+methods-fn `std::messages<wchar_t>::open` 434888
+methods-fn `std::messages<wchar_t>::open` 4348ac
+methods-fn `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 439d38
+methods-fn `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 439d7c
+methods-fn `std::money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43b790
+methods-fn `std::money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43b7d4
+methods-fn `std::money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 43bbb4
+methods-fn `std::money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 43bbf8
+methods-fn `std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43ce88
+methods-fn `std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43ced0
+methods-fn `std::moneypunct<char,false>::curr_symbol` 422f34
+methods-fn `std::moneypunct<char,false>::decimal_point` 423050
+methods-fn `std::moneypunct<char,false>::frac_digits` 423030
+methods-fn `std::moneypunct<char,false>::grouping` 4233b4
+methods-fn `std::moneypunct<char,false>::neg_format` 422ef4
+methods-fn `std::moneypunct<char,false>::negative_sign` 423090
+methods-fn `std::moneypunct<char,false>::pos_format` 422f14
+methods-fn `std::moneypunct<char,false>::positive_sign` 4230b8
+methods-fn `std::moneypunct<char,false>::thousands_sep` 4230e0
+methods-fn `std::moneypunct<char,true>::curr_symbol` 42341c
+methods-fn `std::moneypunct<char,true>::decimal_point` 423538
+methods-fn `std::moneypunct<char,true>::frac_digits` 423518
+methods-fn `std::moneypunct<char,true>::grouping` 42389c
+methods-fn `std::moneypunct<char,true>::neg_format` 4233dc
+methods-fn `std::moneypunct<char,true>::negative_sign` 423578
+methods-fn `std::moneypunct<char,true>::pos_format` 4233fc
+methods-fn `std::moneypunct<char,true>::positive_sign` 4235a0
+methods-fn `std::moneypunct<char,true>::thousands_sep` 4235c8
+methods-fn `std::moneypunct<wchar_t,false>::curr_symbol` 423904
+methods-fn `std::moneypunct<wchar_t,false>::decimal_point` 423a20
+methods-fn `std::moneypunct<wchar_t,false>::frac_digits` 423a00
+methods-fn `std::moneypunct<wchar_t,false>::grouping` 423d8c
+methods-fn `std::moneypunct<wchar_t,false>::neg_format` 4238c4
+methods-fn `std::moneypunct<wchar_t,false>::negative_sign` 423a64
+methods-fn `std::moneypunct<wchar_t,false>::pos_format` 4238e4
+methods-fn `std::moneypunct<wchar_t,false>::positive_sign` 423a8c
+methods-fn `std::moneypunct<wchar_t,false>::thousands_sep` 423ab4
+methods-fn `std::moneypunct<wchar_t,true>::curr_symbol` 423df4
+methods-fn `std::moneypunct<wchar_t,true>::decimal_point` 423f10
+methods-fn `std::moneypunct<wchar_t,true>::frac_digits` 423ef0
+methods-fn `std::moneypunct<wchar_t,true>::grouping` 42427c
+methods-fn `std::moneypunct<wchar_t,true>::neg_format` 423db4
+methods-fn `std::moneypunct<wchar_t,true>::negative_sign` 423f54
+methods-fn `std::moneypunct<wchar_t,true>::pos_format` 423dd4
+methods-fn `std::moneypunct<wchar_t,true>::positive_sign` 423f7c
+methods-fn `std::moneypunct<wchar_t,true>::thousands_sep` 423fa4
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::_M_find<char>` 42c5a8
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42bc4c
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42bc7c
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42bcac
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42bcdc
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42bd0c
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42bd3c
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42bd6c
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42bd9c
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42bdcc
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42bdfc
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42be2c
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::_M_find<wchar_t>` 430e20
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43044c
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43047c
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 4304ac
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 4304dc
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43050c
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43053c
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43056c
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43059c
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 4305cc
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 4305fc
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43062c
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::_M_group_float` 431bcc
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::_M_group_int` 430ebc
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 4323e4
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 432418
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 432458
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 43249c
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 4324d4
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 432508
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 43253c
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 432580
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::_M_group_float` 433774
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::_M_group_int` 4329b4
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 433fdc
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 434018
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 434060
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 4340a8
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 4340e4
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 434120
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43415c
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 4341a4
+methods-fn `std::numpunct<char>::decimal_point` 434ba0
+methods-fn `std::numpunct<char>::falsename` 434c58
+methods-fn `std::numpunct<char>::grouping` 434c08
+methods-fn `std::numpunct<char>::thousands_sep` 434bc0
+methods-fn `std::numpunct<char>::truename` 434c30
+methods-fn `std::numpunct<wchar_t>::decimal_point` 434efc
+methods-fn `std::numpunct<wchar_t>::falsename` 434fbc
+methods-fn `std::numpunct<wchar_t>::grouping` 434f6c
+methods-fn `std::numpunct<wchar_t>::thousands_sep` 434f20
+methods-fn `std::numpunct<wchar_t>::truename` 434f94
+methods-fn `std::ofstream::close` 461978
+methods-fn `std::ofstream::is_open` 4256ec
+methods-fn `std::ofstream::is_open` 4619bc
+methods-fn `std::ofstream::ofstream` 461d08
+methods-fn `std::ofstream::ofstream` 461e64
+methods-fn `std::ofstream::rdbuf` 4256e0
+methods-fn `std::ofstream::~ofstream` 462304
+methods-fn `std::ostream::_M_insert<bool>` 447b68
+methods-fn `std::ostream::_M_insert<double>` 447dd8
+methods-fn `std::ostream::_M_insert<long>` 448290
+methods-fn `std::ostream::_M_insert<long_double>` 448050
+methods-fn `std::ostream::_M_insert<long_long>` 448708
+methods-fn `std::ostream::_M_insert<unsigned_long>` 4484cc
+methods-fn `std::ostream::_M_insert<unsigned_long_long>` 448980
+methods-fn `std::ostream::_M_insert<void_const*>` 44792c
+methods-fn `std::ostream::_M_write` 4478cc
+methods-fn `std::ostream::flush` 446d24
+methods-fn `std::ostream::operator<<` 448ea8
+methods-fn `std::ostream::operator<<` 448ec0
+methods-fn `std::ostream::operator<<` 448ee8
+methods-fn `std::ostream::operator<<` 448f10
+methods-fn `std::ostream::operator<<` 448f2c
+methods-fn `std::ostream::operator<<` 449134
+methods-fn `std::ostream::operator<<` 44915c
+methods-fn `std::ostream::operator<<` 449184
+methods-fn `std::ostream::operator<<` 4491a0
+methods-fn `std::ostream::operator<<` 4491c0
+methods-fn `std::ostream::operator<<` 449228
+methods-fn `std::ostream::operator<<` 449244
+methods-fn `std::ostream::operator<<` 449260
+methods-fn `std::ostream::operator<<` 44927c
+methods-fn `std::ostream::operator<<` 4492f4
+methods-fn `std::ostream::operator<<` 44931c
+methods-fn `std::ostream::operator<<` 449344
+methods-fn `std::ostream::ostream` 448d1c
+methods-fn `std::ostream::put` 446b2c
+methods-fn `std::ostream::seekp` 446ea8
+methods-fn `std::ostream::seekp` 447094
+methods-fn `std::ostream::tellp` 447264
+methods-fn `std::ostream::write` 4473c0
+methods-fn `std::streambuf::eback` 425750
+methods-fn `std::streambuf::getloc` 425780
+methods-fn `std::streambuf::in_avail` 464404
+methods-fn `std::streambuf::operator=` 4648a8
+methods-fn `std::streambuf::pbase` 425774
+methods-fn `std::streambuf::pubimbue` 464468
+methods-fn `std::streambuf::pubseekoff` 463d48
+methods-fn `std::streambuf::pubseekpos` 463d8c
+methods-fn `std::streambuf::pubsetbuf` 464548
+methods-fn `std::streambuf::pubsync` 4642f8
+methods-fn `std::streambuf::sbumpc` 46401c
+methods-fn `std::streambuf::setg` 463ddc
+methods-fn `std::streambuf::setp` 463dfc
+methods-fn `std::streambuf::sgetc` 463e64
+methods-fn `std::streambuf::sgetn` 463ed0
+methods-fn `std::streambuf::snextc` 46409c
+methods-fn `std::streambuf::sputbackc` 464578
+methods-fn `std::streambuf::sputc` 463ef4
+methods-fn `std::streambuf::sputn` 463f8c
+methods-fn `std::streambuf::sungetc` 464384
+methods-fn `std::string::_M_assign` 44b8fc
+methods-fn `std::string::_M_check_length` 422258
+methods-fn `std::string::_M_check` 422e14
+methods-fn `std::string::_M_copy` 44aff0
+methods-fn `std::string::_M_disjunct` 421fa8
+methods-fn `std::string::_M_leak_hard` 4493cc
+methods-fn `std::string::_M_leak` 44b038
+methods-fn `std::string::_M_limit` 422e40
+methods-fn `std::string::_M_move` 44b06c
+methods-fn `std::string::_M_mutate` 44b93c
+methods-fn `std::string::_M_rep` 4229cc
+methods-fn `std::string::_M_replace_aux` 4499c8
+methods-fn `std::string::_M_replace_safe` 449a34
+methods-fn `std::string::_S_construct<__gnu_cxx::__normal_iterator<char*,std::string>>` 449510
+methods-fn `std::string::_S_construct<__gnu_cxx::__normal_iterator<char*,std::string>>` 449530
+methods-fn `std::string::_S_construct<char*>` 4497b8
+methods-fn `std::string::_S_construct<char*>` 4497d8
+methods-fn `std::string::_S_construct<char_const*>` 449674
+methods-fn `std::string::_S_construct<char_const*>` 449694
+methods-fn `std::string::_S_construct_aux<__gnu_cxx::__normal_iterator<char*,std::string>>` 449a7c
+methods-fn `std::string::_S_construct_aux<char*>` 449ad4
+methods-fn `std::string::_S_construct_aux<char_const*>` 449aa8
+methods-fn `std::string::_S_construct` 449430
+methods-fn `std::string::_S_copy_chars` 449908
+methods-fn `std::string::_S_copy_chars` 449940
+methods-fn `std::string::_S_copy_chars` 449978
+methods-fn `std::string::_S_copy_chars` 4499a0
+methods-fn `std::string::_S_empty_rep` 4498fc
+methods-fn `std::string::append` 44a4dc
+methods-fn `std::string::append` 44a504
+methods-fn `std::string::append` 44a6f8
+methods-fn `std::string::assign` 44a8f0
+methods-fn `std::string::assign` 44ab80
+methods-fn `std::string::at` 422518
+methods-fn `std::string::at` 449b00
+methods-fn `std::string::begin` 422804
+methods-fn `std::string::capacity` 422e84
+methods-fn `std::string::clear` 44a370
+methods-fn `std::string::compare` 422aa4
+methods-fn `std::string::compare` 422b14
+methods-fn `std::string::compare` 422b90
+methods-fn `std::string::compare` 422c28
+methods-fn `std::string::compare` 422cac
+methods-fn `std::string::compare` 422d50
+methods-fn `std::string::copy` 4225c0
+methods-fn `std::string::end` 422558
+methods-fn `std::string::end` 449b4c
+methods-fn `std::string::erase` 44a394
+methods-fn `std::string::erase` 44a40c
+methods-fn `std::string::find_first_not_of` 4223f8
+methods-fn `std::string::find_first_not_of` 422420
+methods-fn `std::string::find_first_not_of` 422484
+methods-fn `std::string::find_first_of` 422144
+methods-fn `std::string::find_first_of` 42216c
+methods-fn `std::string::find_first_of` 4221e0
+methods-fn `std::string::find_first_of` 422214
+methods-fn `std::string::find_last_not_of` 42229c
+methods-fn `std::string::find_last_not_of` 4222c4
+methods-fn `std::string::find_last_not_of` 422344
+methods-fn `std::string::find_last_not_of` 422378
+methods-fn `std::string::find_last_of` 42203c
+methods-fn `std::string::find_last_of` 422064
+methods-fn `std::string::find_last_of` 4220ec
+methods-fn `std::string::find_last_of` 422120
+methods-fn `std::string::find` 422630
+methods-fn `std::string::find` 422658
+methods-fn `std::string::find` 42271c
+methods-fn `std::string::find` 422750
+methods-fn `std::string::get_allocator` 422238
+methods-fn `std::string::insert` 44ac98
+methods-fn `std::string::insert` 44acc4
+methods-fn `std::string::insert` 44acec
+methods-fn `std::string::insert` 44ae6c
+methods-fn `std::string::insert` 44ae98
+methods-fn `std::string::max_size` 422e98
+methods-fn `std::string::operator+=` 44c928
+methods-fn `std::string::operator[]` 422ed0
+methods-fn `std::string::push_back` 44bb98
+methods-fn `std::string::rbegin` 4229f4
+methods-fn `std::string::rbegin` 44af34
+methods-fn `std::string::rend` 4227c8
+methods-fn `std::string::rend` 449ff0
+methods-fn `std::string::replace` 44b0a0
+methods-fn `std::string::replace` 44b114
+methods-fn `std::string::replace` 44b144
+methods-fn `std::string::replace` 44b1a8
+methods-fn `std::string::replace` 44b1fc
+methods-fn `std::string::replace` 44b238
+methods-fn `std::string::replace` 44b29c
+methods-fn `std::string::replace` 44b310
+methods-fn `std::string::replace` 44b370
+methods-fn `std::string::replace` 44b3a0
+methods-fn `std::string::replace` 44b694
+methods-fn `std::string::replace` 44b6d0
+methods-fn `std::string::replace` 44b72c
+methods-fn `std::string::reserve` 44b784
+methods-fn `std::string::resize` 44af60
+methods-fn `std::string::resize` 44af7c
+methods-fn `std::string::rfind` 42285c
+methods-fn `std::string::rfind` 422884
+methods-fn `std::string::rfind` 422918
+methods-fn `std::string::rfind` 42294c
+methods-fn `std::string::string<__gnu_cxx::__normal_iterator<char*,std::string>>` 44c0c0
+methods-fn `std::string::string<__gnu_cxx::__normal_iterator<char*,std::string>>` 44c5cc
+methods-fn `std::string::string<char*>` 44c120
+methods-fn `std::string::string<char*>` 44c62c
+methods-fn `std::string::string<char_const*>` 44c0f0
+methods-fn `std::string::string<char_const*>` 44c5fc
+methods-fn `std::string::string` 44bc98
+methods-fn `std::string::string` 44bccc
+methods-fn `std::string::string` 44be5c
+methods-fn `std::string::string` 44bfc0
+methods-fn `std::string::string` 44c03c
+methods-fn `std::string::string` 44c150
+methods-fn `std::string::string` 44c1a4
+methods-fn `std::string::string` 44c1d8
+methods-fn `std::string::string` 44c208
+methods-fn `std::string::string` 44c368
+methods-fn `std::string::string` 44c4cc
+methods-fn `std::string::string` 44c548
+methods-fn `std::string::string` 44c580
+methods-fn `std::string::substr` 422a1c
+methods-fn `std::string::swap` 44a01c
+methods-fn `std::string::~string` 44c760
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::_M_extract_num` 4352c4
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::date_order` 434fe4
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_date` 43648c
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_monthname` 435294
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_time` 4364bc
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_weekday` 435258
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_year` 4364ec
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::_M_extract_num` 436828
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::date_order` 43651c
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get_date` 437d88
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get_monthname` 4367f8
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get_time` 437db8
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get_weekday` 4367bc
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get_year` 437de8
+methods-fn `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 437e18
+methods-fn `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 437f7c
+methods-fn `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 4380ac
+methods-fn `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43822c
+methods-fn `std::type_info::name` 43e254
+methods-fn `std::wfilebuf::_M_allocate_internal_buffer` 454be8
+methods-fn `std::wfilebuf::_M_create_pback` 4545e0
+methods-fn `std::wfilebuf::_M_destroy_internal_buffer` 454b64
+methods-fn `std::wfilebuf::_M_seek` 4556c4
+methods-fn `std::wfilebuf::open` 454c2c
+methods-fn `std::wfstream::close` 45780c
+methods-fn `std::wfstream::is_open` 425594
+methods-fn `std::wfstream::is_open` 457850
+methods-fn `std::wfstream::rdbuf` 425588
+methods-fn `std::wfstream::wfstream` 457bb8
+methods-fn `std::wfstream::wfstream` 457d28
+methods-fn `std::wfstream::~wfstream` 4581f0
+methods-fn `std::wifstream::close` 460310
+methods-fn `std::wifstream::is_open` 4256c0
+methods-fn `std::wifstream::is_open` 460354
+methods-fn `std::wifstream::rdbuf` 4256b4
+methods-fn `std::wifstream::wifstream` 4606a0
+methods-fn `std::wifstream::wifstream` 4607fc
+methods-fn `std::wifstream::~wifstream` 460c9c
+methods-fn `std::wios::_M_cache_locale` 479510
+methods-fn `std::wios::_M_setstate` 4794d0
+methods-fn `std::wios::bad` 43855c
+methods-fn `std::wios::clear` 4796b0
+methods-fn `std::wios::copyfmt` 479878
+methods-fn `std::wios::eof` 438584
+methods-fn `std::wios::exceptions` 438550
+methods-fn `std::wios::exceptions` 4794a8
+methods-fn `std::wios::fail` 4385b8
+methods-fn `std::wios::fill` 4385f0
+methods-fn `std::wios::fill` 479600
+methods-fn `std::wios::good` 438630
+methods-fn `std::wios::imbue` 479728
+methods-fn `std::wios::narrow` 438694
+methods-fn `std::wios::operator!` 43871c
+methods-fn `std::wios::operator.cast.to.void*` 4386f0
+methods-fn `std::wios::rdbuf` 43864c
+methods-fn `std::wios::rdbuf` 479848
+methods-fn `std::wios::rdstate` 4386e4
+methods-fn `std::wios::setstate` 479abc
+methods-fn `std::wios::tie` 4385ac
+methods-fn `std::wios::tie` 4795e0
+methods-fn `std::wios::widen` 438658
+methods-fn `std::wistream::_M_extract<bool>` 458570
+methods-fn `std::wistream::_M_extract<double>` 45872c
+methods-fn `std::wistream::_M_extract<float>` 458aa4
+methods-fn `std::wistream::_M_extract<long>` 458e1c
+methods-fn `std::wistream::_M_extract<long_double>` 4588e8
+methods-fn `std::wistream::_M_extract<long_long>` 459350
+methods-fn `std::wistream::_M_extract<unsigned_int>` 458c60
+methods-fn `std::wistream::_M_extract<unsigned_long>` 458fd8
+methods-fn `std::wistream::_M_extract<unsigned_long_long>` 45950c
+methods-fn `std::wistream::_M_extract<unsigned_short>` 459194
+methods-fn `std::wistream::_M_extract<void*>` 4583b4
+methods-fn `std::wistream::gcount` 4255b4
+methods-fn `std::wistream::get` 4596c8
+methods-fn `std::wistream::get` 459708
+methods-fn `std::wistream::get` 459988
+methods-fn `std::wistream::get` 4599c8
+methods-fn `std::wistream::get` 459c74
+methods-fn `std::wistream::get` 459e58
+methods-fn `std::wistream::getline` 45ba30
+methods-fn `std::wistream::getline` 45ba70
+methods-fn `std::wistream::ignore` 45ac18
+methods-fn `std::wistream::ignore` 45af64
+methods-fn `std::wistream::ignore` 45b410
+methods-fn `std::wistream::operator>>` 45c52c
+methods-fn `std::wistream::operator>>` 45c544
+methods-fn `std::wistream::operator>>` 45c56c
+methods-fn `std::wistream::operator>>` 45c594
+methods-fn `std::wistream::operator>>` 45c768
+methods-fn `std::wistream::operator>>` 45c784
+methods-fn `std::wistream::operator>>` 45c7a0
+methods-fn `std::wistream::operator>>` 45c7bc
+methods-fn `std::wistream::operator>>` 45c7d8
+methods-fn `std::wistream::operator>>` 45c7f4
+methods-fn `std::wistream::operator>>` 45c88c
+methods-fn `std::wistream::operator>>` 45c8a8
+methods-fn `std::wistream::operator>>` 45c8c4
+methods-fn `std::wistream::operator>>` 45c8e0
+methods-fn `std::wistream::operator>>` 45c97c
+methods-fn `std::wistream::operator>>` 45c998
+methods-fn `std::wistream::operator>>` 45c9b4
+methods-fn `std::wistream::peek` 45a034
+methods-fn `std::wistream::putback` 45be70
+methods-fn `std::wistream::read` 45a1ec
+methods-fn `std::wistream::readsome` 45c044
+methods-fn `std::wistream::seekg` 45a53c
+methods-fn `std::wistream::seekg` 45a728
+methods-fn `std::wistream::sync` 45a398
+methods-fn `std::wistream::tellg` 45a8f8
+methods-fn `std::wistream::unget` 45aa54
+methods-fn `std::wistream::wistream` 45c36c
+methods-fn `std::wofstream::close` 46252c
+methods-fn `std::wofstream::is_open` 425718
+methods-fn `std::wofstream::is_open` 462570
+methods-fn `std::wofstream::rdbuf` 42570c
+methods-fn `std::wofstream::wofstream` 4628bc
+methods-fn `std::wofstream::wofstream` 462a18
+methods-fn `std::wofstream::~wofstream` 462eb8
+methods-fn `std::wostream::_M_insert<bool>` 45da1c
+methods-fn `std::wostream::_M_insert<double>` 45dc90
+methods-fn `std::wostream::_M_insert<long>` 45e150
+methods-fn `std::wostream::_M_insert<long_double>` 45df0c
+methods-fn `std::wostream::_M_insert<long_long>` 45e5d8
+methods-fn `std::wostream::_M_insert<unsigned_long>` 45e394
+methods-fn `std::wostream::_M_insert<unsigned_long_long>` 45e854
+methods-fn `std::wostream::_M_insert<void_const*>` 45d7d8
+methods-fn `std::wostream::_M_write` 45d778
+methods-fn `std::wostream::flush` 45cbd0
+methods-fn `std::wostream::operator<<` 45ed80
+methods-fn `std::wostream::operator<<` 45ed98
+methods-fn `std::wostream::operator<<` 45edc0
+methods-fn `std::wostream::operator<<` 45ede8
+methods-fn `std::wostream::operator<<` 45ee04
+methods-fn `std::wostream::operator<<` 45f00c
+methods-fn `std::wostream::operator<<` 45f034
+methods-fn `std::wostream::operator<<` 45f05c
+methods-fn `std::wostream::operator<<` 45f078
+methods-fn `std::wostream::operator<<` 45f098
+methods-fn `std::wostream::operator<<` 45f100
+methods-fn `std::wostream::operator<<` 45f11c
+methods-fn `std::wostream::operator<<` 45f138
+methods-fn `std::wostream::operator<<` 45f154
+methods-fn `std::wostream::operator<<` 45f1cc
+methods-fn `std::wostream::operator<<` 45f1f4
+methods-fn `std::wostream::operator<<` 45f21c
+methods-fn `std::wostream::put` 45c9d0
+methods-fn `std::wostream::seekp` 45cd54
+methods-fn `std::wostream::seekp` 45cf40
+methods-fn `std::wostream::tellp` 45d110
+methods-fn `std::wostream::wostream` 45ebf4
+methods-fn `std::wostream::write` 45d26c
+methods-fn `std::wstreambuf::eback` 4257bc
+methods-fn `std::wstreambuf::getloc` 4257ec
+methods-fn `std::wstreambuf::in_avail` 464fbc
+methods-fn `std::wstreambuf::operator=` 465490
+methods-fn `std::wstreambuf::pbase` 4257e0
+methods-fn `std::wstreambuf::pubimbue` 465030
+methods-fn `std::wstreambuf::pubseekoff` 4648b0
+methods-fn `std::wstreambuf::pubseekpos` 4648f4
+methods-fn `std::wstreambuf::pubsetbuf` 465120
+methods-fn `std::wstreambuf::pubsync` 464ea4
+methods-fn `std::wstreambuf::sbumpc` 464ba4
+methods-fn `std::wstreambuf::setg` 464944
+methods-fn `std::wstreambuf::setp` 464964
+methods-fn `std::wstreambuf::sgetc` 4649cc
+methods-fn `std::wstreambuf::sgetn` 464a40
+methods-fn `std::wstreambuf::snextc` 464c2c
+methods-fn `std::wstreambuf::sputbackc` 465150
+methods-fn `std::wstreambuf::sputc` 464a64
+methods-fn `std::wstreambuf::sputn` 464b08
+methods-fn `std::wstreambuf::sungetc` 464f30
+methods-fp 406eb8 of `TiXmlDocument`: is `TiXmlNode`'s
+methods-fp 41da74 of `TiXmlText`: is `TiXmlNode`'s
+methods-fp 420f34 of `TiXmlElement`: is `TiXmlNode`'s
+methods-fp 425750 of `std::filebuf`: is `std::streambuf`'s
+methods-fp 425774 of `std::filebuf`: is `std::streambuf`'s
+methods-fp 4257bc of `std::wfilebuf`: is `std::wstreambuf`'s
+methods-fp 4257e0 of `std::wfilebuf`: is `std::wstreambuf`'s
+methods-fp 43f588 of `std::collate<wchar_t>`: is `std::wstring`'s
+methods-fp 440c9c of `std::collate<wchar_t>`: is `std::wstring`'s
+methods-fp 440e0c of `std::messages<wchar_t>`: is `std::wstring`'s
+methods-fp 441198 of `std::collate<wchar_t>`: is `std::wstring`'s
+methods-fp 44936c of `std::string`: is `std::string::_Alloc_hider`'s
+methods-fp 44bb98 of `std::collate<char>`: is `std::string`'s
+methods-fp 4525cc of `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`: is `std::filebuf`'s
+methods-fp 454be8 of `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`: is `std::wfilebuf`'s
+methods-fp 47f880 of unmatched `NPKlass_0047f880`
+methods-fp 47f960 of unmatched `NPKlass_0047f960`
+methods-fp 480c74 of unmatched `NPKlass_0047f880`
+methods-fp 480cc8 of unmatched `NPKlass_0047f960`
+sizes-fn `std::string`: none, is 4
+sizes-fp `TiXmlDeclaration`: 44, is 56
+sizes-fp `TiXmlPrinter`: 12, is 24
+sizes-fp `__cxxabiv1::__class_type_info`: 4, is 8
+sizes-fp `__cxxabiv1::__si_class_type_info`: 4, is 12
+sizes-fp `__cxxabiv1::__vmi_class_type_info`: 4, is 24
+sizes-fp `std::__basic_file<char>`: 5, is 8
+sizes-fp `std::ctype<wchar_t>`: 16, is 720
+sizes-fp `std::ctype_byname<wchar_t>`: 16, is 720
+sizes-fp `std::domain_error`: 4, is 8
+sizes-fp `std::invalid_argument`: 4, is 8
+sizes-fp `std::ios_base::failure`: 4, is 8
+sizes-fp `std::length_error`: 4, is 8
+sizes-fp `std::logic_error`: 4, is 8
+sizes-fp `std::messages<char>`: 12, is 16
+sizes-fp `std::messages<wchar_t>`: 12, is 16
+sizes-fp `std::messages_byname<char>`: 12, is 16
+sizes-fp `std::messages_byname<wchar_t>`: 12, is 16
+sizes-fp `std::out_of_range`: 4, is 8
+sizes-fp `std::overflow_error`: 4, is 8
+sizes-fp `std::range_error`: 4, is 8
+sizes-fp `std::runtime_error`: 4, is 8
+sizes-fp `std::type_info`: 4, is 8
+sizes-fp `std::underflow_error`: 4, is 8
+structors-fn 4464c8 of `std::istream`
+structors-fn 448d1c of `std::ostream`
+structors-fn 44bc98 of `std::string`
+structors-fn 44bccc of `std::string`
+structors-fn 44be5c of `std::string`
+structors-fn 44bfc0 of `std::string`
+structors-fn 44c03c of `std::string`
+structors-fn 44c0c0 of `std::string`
+structors-fn 44c0f0 of `std::string`
+structors-fn 44c120 of `std::string`
+structors-fn 44c150 of `std::string`
+structors-fn 44c1a4 of `std::string`
+structors-fn 44c1d8 of `std::string`
+structors-fn 44c208 of `std::string`
+structors-fn 44c368 of `std::string`
+structors-fn 44c4cc of `std::string`
+structors-fn 44c548 of `std::string`
+structors-fn 44c580 of `std::string`
+structors-fn 44c5cc of `std::string`
+structors-fn 44c5fc of `std::string`
+structors-fn 44c62c of `std::string`
+structors-fn 44c760 of `std::string`
+structors-fn 4515e4 of `std::__basic_file<char>`
+structors-fn 451614 of `std::__basic_file<char>`
+structors-fn 456fa8 of `std::fstream`
+structors-fn 457118 of `std::fstream`
+structors-fn 4575e0 of `std::fstream`
+structors-fn 457bb8 of `std::wfstream`
+structors-fn 457d28 of `std::wfstream`
+structors-fn 4581f0 of `std::wfstream`
+structors-fn 45c36c of `std::wistream`
+structors-fn 45ebf4 of `std::wostream`
+structors-fn 45faec of `std::ifstream`
+structors-fn 45fc48 of `std::ifstream`
+structors-fn 4600e8 of `std::ifstream`
+structors-fn 4606a0 of `std::wifstream`
+structors-fn 4607fc of `std::wifstream`
+structors-fn 460c9c of `std::wifstream`
+structors-fn 461d08 of `std::ofstream`
+structors-fn 461e64 of `std::ofstream`
+structors-fn 462304 of `std::ofstream`
+structors-fn 4628bc of `std::wofstream`
+structors-fn 462a18 of `std::wofstream`
+structors-fn 462eb8 of `std::wofstream`
+structors-fn 472238 of `std::locale`
+structors-fn 472348 of `std::locale`
+structors-fn 472358 of `std::locale`
+structors-fn 47237c of `std::locale`
+structors-fn 472474 of `std::locale`
