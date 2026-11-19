@@ -59,7 +59,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         MSVC_RTTI("from MSVC RTTI", true),
 
         /** Recorded off the debug info of the runtime it comes from, beside its archive ([ghicpp.stl.StlApplier]). */
-        ARCHIVE("from the runtime's debug info", SourceType.IMPORTED),
+        ARCHIVE("from the runtime's debug info", true),
 
         /** Recorded off its Itanium typeinfo by the class pass ([ItaniumRttiParser]), on a binary with no stabs. */
         ITANIUM_RTTI("from Itanium RTTI", true),
