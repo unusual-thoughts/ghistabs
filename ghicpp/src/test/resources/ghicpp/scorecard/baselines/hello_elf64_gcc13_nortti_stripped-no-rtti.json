@@ -24,9 +24,10 @@
     "structors-fp": 0,
     "structors-tp": 39,
     "vftables-fn": 0,
-    "vftables-fp": 1,
+    "vftables-fp": 0,
     "vftables-tp": 11,
+    "vfunctions-unattached": 0,
     "virtual-methods-fn": 0,
-    "virtual-methods-fp": 1,
-    "virtual-methods-tp": 30
+    "virtual-methods-fp": 0,
+    "virtual-methods-tp": 31
 }
