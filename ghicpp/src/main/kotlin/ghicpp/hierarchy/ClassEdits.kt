@@ -95,8 +95,25 @@ internal fun ClassHierarchy.derivesFrom(cls: ClassView, ancestor: ClassView): Bo
 }
 
 /** What a class's bases come from when that is worth a warning before changing them: null if nothing solid. */
-internal fun ClassView.solidSource(): String? =
-    origin.desc.removePrefix("from ").takeIf { origin.baseSource == SourceType.IMPORTED }
+internal fun ClassView.solidSource(): String? = origin.desc.removePrefix("from ").takeIf {
+    // With no bases, whether its origin says it has none; a hand edit's own say is the user's.
+    if (bases.isEmpty()) {
+        origin.basesKnown && origin != Origin.EDITED
+    } else {
+        bases.any {
+            it.source == SourceType.IMPORTED
+        }
+    }
+}
+
+/**
+ * Whether its bases are stated rather than guessed or unknown: each by the stabs, RTTI or a hand edit, or, with
+ * none, by an origin that says it has none.
+ */
+val ClassView.basesStated: Boolean
+    get() = if (bases.isEmpty()) origin.basesKnown else bases.all { it.source in STATED_BASES }
+
+private val STATED_BASES = setOf(SourceType.IMPORTED, SourceType.USER_DEFINED)
 
 /** What ties [member] to its class when that is worth a warning before moving it: null if nothing does. */
 fun Program.memberSource(member: Member): String? = when {
@@ -110,7 +127,8 @@ fun Program.memberSource(member: Member): String? = when {
 
 /**
  * Sets [owner]'s bases to [bases], by hand ([ClassHierarchyRecords.EDITS]): the class then shows these
- * whatever its stabs or typeinfo say.
+ * whatever its stabs or typeinfo say. A base it already had keeps who stated it; one added or changed here is the
+ * user's.
  */
 fun Program.setBases(owner: ClassView, bases: List<BaseRef>) {
     val entries = bases.map {
@@ -120,6 +138,7 @@ fun Program.setBases(owner: ClassView, bases: List<BaseRef>) {
             it.isVirtual,
             it.access ?: Access.PUBLIC,
             it.offset,
+            it.source ?: SourceType.USER_DEFINED,
         )
     }
     writeClassEdit(owner.id, ClassHierarchyRecords.Entry(owner.structId, entries))
