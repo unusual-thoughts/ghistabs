@@ -11,9 +11,11 @@ import ghicpp.abi.generic.PlainClass
 import ghicpp.abi.generic.PlainVtables
 import ghicpp.dissect.*
 import ghicpp.recover.MemberObjectPass.Companion.MAX_DEPTH
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
+import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
@@ -100,9 +102,11 @@ class MemberObjectPass(
     fun run(found: FoundStructors, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
         val heap = if (allocations) allocated(found, monitor) else emptyList()
         val held = collect(found, heap, monitor)
-        val root = merge((held.values + heap).distinct())
-        val members = (held.values + heap).map(root::getValue).distinct()
+        val empty = emptyBases(found, monitor)
+        val root = merge((held.values + heap + empty.values.flatten()).distinct())
+        val members = (held.values + heap + empty.values.flatten()).map(root::getValue).distinct()
         for (m in members) m.cls = classFor(m)
+        val derived = addEmptyBases(empty.mapValues { (_, bs) -> bs.map(root::getValue) })
         val classes = members.filter { it.cls != null }
         val sizes = sizes(classes, held.mapValues { (_, m) -> root.getValue(m) }, root)
         monitor.initialize(classes.size.toLong(), "Naming member object classes' constructors and destructors")
@@ -138,9 +142,73 @@ class MemberObjectPass(
             // A runtime's layout ([knownLayout]) holds its members already.
             containerOf(sub)?.takeUnless { it.isKnownLayout() }?.let { placeMember(it, sub.offset.toInt(), member) }
         }
-        writeRecords(classes.mapNotNull { it.cls })
+        writeRecords(classes.mapNotNull { it.cls } + derived)
         return classes.size
     }
+
+    /**
+     * The empty bases of the polymorphic classes [found] has constructors of. Such a class keeps its vptr at
+     * `this` + 0, so a class with no vtable can only sit there too if it takes no bytes: an empty base. Its
+     * constructor does nothing, so its body is a bare return ([hasEmptyBody]). The decompiler then sees no
+     * parameter, and so no `this` passed at its calls. Each such function is given one first, and the class's
+     * constructors read again: those calling it on `this` + 0 have an empty base it builds, one class for each.
+     */
+    private fun emptyBases(found: FoundStructors, monitor: TaskMonitor): Map<ClassDecl, List<NonPolymorphicClass>> {
+        val ctors = found.roles.filterValues { (cls, role) -> role == CONSTRUCTOR && cls.vftables.isNotEmpty() }.keys
+        val empty = ctors.flatMap { it.getCalledFunctions(monitor) }.distinct()
+            .filter { it !in found.roles && it !in found.folded && !it.isExternal && it.hasEmptyBody() }
+        if (empty.isEmpty()) return emptyMap()
+        for (f in empty.filter { it.parameterCount == 0 }) runCatching { f.giveThis() }
+        val callers = ctors.filter { f -> f.getCalledFunctions(monitor).any { it in empty } }
+        val uses = ThisFunctionDissector(program, emptyList(), this, DissectionCache(fillArrays))
+            .readCalls(callers, monitor, "Decompiling constructors that call empty functions")
+        val byFunction = empty.associateWith { f -> NonPolymorphicClass().also { it.ctors += f } }
+        return callers.groupBy({ found.roles.getValue(it).first }) { f ->
+            uses.subobjectCalls[f].orEmpty()[0L].orEmpty().mapNotNull(byFunction::get)
+        }.mapValues { (_, bases) -> bases.flatten().distinct() }.filterValues { it.isNotEmpty() }
+    }
+
+    /**
+     * Gives [this], a function with no parameter, a `this`: as a method's where its convention can be made one
+     * ([fixMethodConvention]), else as a first pointer parameter, where a `__cdecl` method such as gcc's takes it.
+     */
+    private fun Function.giveThis() {
+        if (fixMethodConvention(takesThis = true) && parameterCount > 0) return
+        updateFunction(
+            callingConventionName,
+            null,
+            listOf(ParameterImpl(Function.THIS_PARAM_NAME, PointerDataType(dtm), program, SourceType.ANALYSIS)),
+            Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+            true,
+            SourceType.ANALYSIS,
+        )
+    }
+
+    /**
+     * Whether [this] only returns: its body sets up and tears down a frame at most. Such are the constructors
+     * of an empty class, as gcc emits them out of line.
+     */
+    private fun Function.hasEmptyBody(): Boolean {
+        val instructions = program.listing.getInstructions(
+            body,
+            true,
+        ).iterator().asSequence().take(MAX_EMPTY_BODY + 1).toList()
+        return instructions.size <= MAX_EMPTY_BODY && instructions.lastOrNull()?.flowType?.isTerminal == true &&
+            instructions.all { it.toString().replace(" ", "") in EMPTY_BODY }
+    }
+
+    /** Adds each of [empty]'s classes as a base at offset 0 of its class, and returns the classes given one. */
+    private fun addEmptyBases(empty: Map<ClassDecl, List<NonPolymorphicClass>>): List<ClassDecl> =
+        empty.mapNotNull { (cls, bases) ->
+            val own = (cls as? PlainClass)?.bases ?: return@mapNotNull null
+            val added = bases.mapNotNull { it.cls }.distinct()
+                .filter { b -> b != cls && own.none { it.cls == b } }
+                .onEach { b ->
+                    own += ClassBase(b, isVirtual = false, access = null, 0L)
+                    debug("base-inferred-empty", "${cls.name} : ${b.name}, off the constructor it calls on `this`")
+                }
+            cls.takeIf { added.isNotEmpty() }
+        }
 
     /**
      * The members [found]'s structors build and destroy, by where they are, then those members' own, decompiled,
@@ -365,5 +433,14 @@ class MemberObjectPass(
 
         /** The prefix of a non-polymorphic class this pass names after its first constructor's address. */
         const val NON_POLYMORPHIC_PREFIX = "NPKlass_"
+
+        /** How many instructions an empty body ([hasEmptyBody]) runs to at most. */
+        private const val MAX_EMPTY_BODY = 6
+
+        /** The instructions an empty body is made of, spaces left out: a frame set up and torn down, and a return. */
+        private val EMPTY_BODY = setOf(
+            "PUSHEBP", "MOVEBP,ESP", "POPEBP", "PUSHRBP", "MOVRBP,RSP", "POPRBP", "LEAVE", "RET", "NOP", "ENDBR32",
+            "ENDBR64",
+        )
     }
 }

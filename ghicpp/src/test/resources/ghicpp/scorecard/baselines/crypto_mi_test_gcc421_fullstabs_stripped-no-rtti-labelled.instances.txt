@@ -1,3 +1,5 @@
+base-access-fn `BlockPaddingSchemeDef` of `CryptoPP::AuthenticatedDecryptionFilter`: none, is public
+base-access-fn `BlockPaddingSchemeDef` of `CryptoPP::StreamTransformationFilter`: none, is public
 base-access-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>` of `CryptoPP::DL_GroupParameters_IntegerBased`: none, is public
 base-access-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>` of `CryptoPP::PKCS8PrivateKey`: none, is public
 base-access-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>` of `CryptoPP::X509PublicKey`: none, is public
@@ -444,10 +446,24 @@ base-access-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509
 base-access-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`: none, is public
 base-access-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`: none, is public
 base-access-fn `CryptoPP::X509PublicKey` of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`: none, is public
+base-access-fn `Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`: none, is public
+base-access-fn `Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`: none, is public
+base-access-fn `Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`: none, is public
+base-access-fn `Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`: none, is public
+base-access-fn `NotCopyable` of `CryptoPP::AutoSeededX917RNG<CryptoPP::Rijndael>`: none, is public
+base-access-fn `NotCopyable` of `CryptoPP::Filter`: none, is public
+base-access-fn `NotCopyable` of `CryptoPP::RandomPool`: none, is public
+base-access-fn `NotCopyable` of `CryptoPP::X917RNG`: none, is public
 base-access-fn `__cxxabiv1::__class_type_info` of `__cxxabiv1::__si_class_type_info`: none, is public
 base-access-fn `__cxxabiv1::__class_type_info` of `__cxxabiv1::__vmi_class_type_info`: none, is public
 base-access-fn `__cxxabiv1::__pbase_type_info` of `__cxxabiv1::__pointer_to_member_type_info`: none, is public
 base-access-fn `__cxxabiv1::__pbase_type_info` of `__cxxabiv1::__pointer_type_info`: none, is public
+base-access-fn `codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`: none, is public
+base-access-fn `codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`: none, is public
+base-access-fn `ctype_base` of `std::__ctype_abstract_base<wchar_t>`: none, is public
+base-access-fn `ctype_base` of `std::ctype<char>`: none, is public
+base-access-fn `messages_base` of `std::messages<char>`: none, is public
+base-access-fn `messages_base` of `std::messages<wchar_t>`: none, is public
 base-access-fn `std::__codecvt_abstract_base<char,char,int>` of `std::codecvt<char,char,int>`: none, is public
 base-access-fn `std::__codecvt_abstract_base<wchar_t,char,int>` of `std::codecvt<wchar_t,char,int>`: none, is public
 base-access-fn `std::__ctype_abstract_base<wchar_t>` of `std::ctype<wchar_t>`: none, is public
@@ -519,6 +535,10 @@ base-access-fn `std::logic_error` of `std::length_error`: none, is public
 base-access-fn `std::logic_error` of `std::out_of_range`: none, is public
 base-access-fn `std::messages<char>` of `std::messages_byname<char>`: none, is public
 base-access-fn `std::messages<wchar_t>` of `std::messages_byname<wchar_t>`: none, is public
+base-access-fn `std::money_base` of `std::moneypunct<char,false>`: none, is public
+base-access-fn `std::money_base` of `std::moneypunct<char,true>`: none, is public
+base-access-fn `std::money_base` of `std::moneypunct<wchar_t,false>`: none, is public
+base-access-fn `std::money_base` of `std::moneypunct<wchar_t,true>`: none, is public
 base-access-fn `std::moneypunct<char,false>` of `std::moneypunct_byname<char,false>`: none, is public
 base-access-fn `std::moneypunct<char,true>` of `std::moneypunct_byname<char,true>`: none, is public
 base-access-fn `std::moneypunct<wchar_t,false>` of `std::moneypunct_byname<wchar_t,false>`: none, is public
@@ -552,8 +572,8 @@ base-access-fn `std::wostream` of `std::wiostream`: none, is public
 base-access-fn `std::wostream` of `std::wofstream`: none, is public
 base-access-fn `std::wstreambuf` of `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>`: none, is public
 base-access-fn `std::wstreambuf` of `std::wfilebuf`: none, is public
-bases-fn `CryptoPP::BlockPaddingSchemeDef` of `CryptoPP::AuthenticatedDecryptionFilter`
-bases-fn `CryptoPP::BlockPaddingSchemeDef` of `CryptoPP::StreamTransformationFilter`
+base-access-fn `time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
 bases-fn `CryptoPP::DES_Info` of `CryptoPP::TwoBases<CryptoPP::BlockCipher,CryptoPP::DES_Info>`
 bases-fn `CryptoPP::DL_GroupParameters<CryptoPP::Integer>` of `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`
 bases-fn `CryptoPP::DL_PrivateKey<CryptoPP::EC2NPoint>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`
@@ -561,20 +581,12 @@ bases-fn `CryptoPP::DL_PrivateKey<CryptoPP::ECPPoint>` of `CryptoPP::DL_PrivateK
 bases-fn `CryptoPP::DL_PrivateKey<CryptoPP::Integer>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`
 bases-fn `CryptoPP::DL_PrivateKey<CryptoPP::Integer>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`
 bases-fn `CryptoPP::DL_PrivateKey<CryptoPP::Integer>` of `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
-bases-fn `CryptoPP::Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`
-bases-fn `CryptoPP::Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`
-bases-fn `CryptoPP::Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`
-bases-fn `CryptoPP::Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`
 bases-fn `CryptoPP::FilterPutSpaceHelper` of `CryptoPP::HashFilter`
 bases-fn `CryptoPP::FilterPutSpaceHelper` of `CryptoPP::StreamTransformationFilter`
 bases-fn `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,16u,CryptoPP::NullAllocator<unsigned_int>,false>>` of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,16u,false>`
 bases-fn `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,16u,CryptoPP::NullAllocator<unsigned_int>,true>>` of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,16u,true>`
 bases-fn `CryptoPP::FixedSizeSecBlock<unsigned_int,60u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,60u,CryptoPP::NullAllocator<unsigned_int>,true>>` of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,60u,true>`
 bases-fn `CryptoPP::InitializeInteger` of `CryptoPP::Integer`
-bases-fn `CryptoPP::NotCopyable` of `CryptoPP::AutoSeededX917RNG<CryptoPP::Rijndael>`
-bases-fn `CryptoPP::NotCopyable` of `CryptoPP::Filter`
-bases-fn `CryptoPP::NotCopyable` of `CryptoPP::RandomPool`
-bases-fn `CryptoPP::NotCopyable` of `CryptoPP::X917RNG`
 bases-fn `CryptoPP::ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`
 bases-fn `CryptoPP::ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`
 bases-fn `CryptoPP::ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`
@@ -602,19 +614,8 @@ bases-fn `std::_Deque_base<unsigned_int,std::allocator<unsigned_int>>` of `std::
 bases-fn `std::_Deque_base<unsigned_long_long,std::allocator<unsigned_long_long>>` of `std::deque<unsigned_long_long,std::allocator<unsigned_long_long>>`
 bases-fn `std::_Vector_base<CryptoPP::Integer,std::allocator<CryptoPP::Integer>>` of `std::vector<CryptoPP::Integer,std::allocator<CryptoPP::Integer>>`
 bases-fn `std::_Vector_base<unsigned_short,std::allocator<unsigned_short>>` of `std::vector<unsigned_short,std::allocator<unsigned_short>>`
-bases-fn `std::codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
-bases-fn `std::codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`
 bases-fn `std::ctype_base` of `std::__ctype_abstract_base<char>`
-bases-fn `std::ctype_base` of `std::__ctype_abstract_base<wchar_t>`
-bases-fn `std::ctype_base` of `std::ctype<char>`
-bases-fn `std::messages_base` of `std::messages<char>`
-bases-fn `std::messages_base` of `std::messages<wchar_t>`
-bases-fn `std::money_base` of `std::moneypunct<char,false>`
-bases-fn `std::money_base` of `std::moneypunct<char,true>`
-bases-fn `std::money_base` of `std::moneypunct<wchar_t,false>`
-bases-fn `std::money_base` of `std::moneypunct<wchar_t,true>`
-bases-fn `std::time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
-bases-fn `std::time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+bases-fp `?NPKlass_004b9b44` of `CryptoPP::HMAC_Base`
 bases-fp `CryptoPP::CryptoMaterial` of `CryptoPP::CryptoParameters`
 bases-fp `CryptoPP::CryptoMaterial` of `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`
 bases-fp `CryptoPP::CryptoMaterial` of `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`
@@ -797,7 +798,6 @@ classes-fn `std::less<char_const*>` (stabs)
 classes-fn `std::less<wchar_t_const*>` (stabs)
 classes-fn `std::locale::_Impl` (stabs)
 classes-fn `std::locale::id` (stabs)
-classes-fn `std::money_base` (stabs)
 classes-fn `std::not_equal_to<unsigned_char>` (stabs)
 classes-fn `std::numeric_limits<float>` (stabs)
 classes-fn `std::numeric_limits<int>` (stabs)
@@ -842,6 +842,7 @@ classes-fn `std::wstring` (stabs)
 classes-fp invented `Klass_005bcc10` (inferred, vftable 005bcc10)
 classes-fp invented `Klass_005c50cc` (inferred, vftable 005c50cc)
 classes-fp invented `Klass_005c5600` (inferred, vftable 005c5600)
+classes-fp invented `NPKlass_004b9b44` (inferred)
 classes-fp invented `NPKlass_005a24dc` (inferred)
 classes-fp invented `NPKlass_005a25bc` (inferred)
 field-sizes-fp `CryptoPP::ArraySink`+24: 4, is 8
@@ -6300,6 +6301,7 @@ methods-fn `std::messages<wchar_t>::close` 53c3c0
 methods-fn `std::messages<wchar_t>::get` 53c344
 methods-fn `std::messages<wchar_t>::open` 53c378
 methods-fn `std::messages<wchar_t>::open` 53c39c
+methods-fn `std::money_base::_S_construct_pattern` 554fb4
 methods-fn `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 541848
 methods-fn `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 54188c
 methods-fn `std::money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 5432a0
@@ -6904,6 +6906,7 @@ methods-fp 4b8a90 of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,16u,true>`
 methods-fp 4b8af8 of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,60u,true>`: is `CryptoPP::FixedSizeSecBlock<unsigned_int,60u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,60u,CryptoPP::NullAllocator<unsigned_int>,true>>`'s
 methods-fp 4b8b14 of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,60u,true>`: is `CryptoPP::FixedSizeSecBlock<unsigned_int,60u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,60u,CryptoPP::NullAllocator<unsigned_int>,true>>`'s
 methods-fp 4b8b30 of `CryptoPP::FixedSizeAlignedSecBlock<unsigned_int,60u,true>`: is `CryptoPP::FixedSizeSecBlock<unsigned_int,60u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,60u,CryptoPP::NullAllocator<unsigned_int>,true>>`'s
+methods-fp 4b9b44 of unmatched `NPKlass_004b9b44`
 methods-fp 4bb76c of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`: is `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`'s
 methods-fp 4bba3c of `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`: is `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`'s
 methods-fp 4ce5a4 of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`: is `CryptoPP::SimpleKeyingInterface`'s
@@ -7014,6 +7017,7 @@ sizes-fn `CryptoPP::value_ptr<CryptoPP::MontgomeryRepresentation>`: none, is 4
 sizes-fn `std::deque<CryptoPP::MeterFilter::MessageRange,std::allocator<CryptoPP::MeterFilter::MessageRange>>`: none, is 40
 sizes-fn `std::deque<unsigned_int,std::allocator<unsigned_int>>`: none, is 40
 sizes-fn `std::deque<unsigned_long_long,std::allocator<unsigned_long_long>>`: none, is 40
+sizes-fn `std::money_base`: none, is 1
 sizes-fn `std::string`: none, is 4
 sizes-fp `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>`: 28, is 40
 sizes-fp `CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>`: 28, is 44

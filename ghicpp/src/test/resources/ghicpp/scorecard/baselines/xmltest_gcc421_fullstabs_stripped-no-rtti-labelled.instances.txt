@@ -9,6 +9,12 @@ base-access-fn `TiXmlNode` of `TiXmlUnknown`: none, is public
 base-access-fn `TiXmlVisitor` of `TiXmlPrinter`: none, is public
 base-access-fn `__cxxabiv1::__class_type_info` of `__cxxabiv1::__si_class_type_info`: none, is public
 base-access-fn `__cxxabiv1::__class_type_info` of `__cxxabiv1::__vmi_class_type_info`: none, is public
+base-access-fn `codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`: none, is public
+base-access-fn `codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`: none, is public
+base-access-fn `ctype_base` of `std::__ctype_abstract_base<wchar_t>`: none, is public
+base-access-fn `ctype_base` of `std::ctype<char>`: none, is public
+base-access-fn `messages_base` of `std::messages<char>`: none, is public
+base-access-fn `messages_base` of `std::messages<wchar_t>`: none, is public
 base-access-fn `std::__codecvt_abstract_base<char,char,int>` of `std::codecvt<char,char,int>`: none, is public
 base-access-fn `std::__codecvt_abstract_base<wchar_t,char,int>` of `std::codecvt<wchar_t,char,int>`: none, is public
 base-access-fn `std::__ctype_abstract_base<wchar_t>` of `std::ctype<wchar_t>`: none, is public
@@ -79,6 +85,10 @@ base-access-fn `std::logic_error` of `std::length_error`: none, is public
 base-access-fn `std::logic_error` of `std::out_of_range`: none, is public
 base-access-fn `std::messages<char>` of `std::messages_byname<char>`: none, is public
 base-access-fn `std::messages<wchar_t>` of `std::messages_byname<wchar_t>`: none, is public
+base-access-fn `std::money_base` of `std::moneypunct<char,false>`: none, is public
+base-access-fn `std::money_base` of `std::moneypunct<char,true>`: none, is public
+base-access-fn `std::money_base` of `std::moneypunct<wchar_t,false>`: none, is public
+base-access-fn `std::money_base` of `std::moneypunct<wchar_t,true>`: none, is public
 base-access-fn `std::moneypunct<char,false>` of `std::moneypunct_byname<char,false>`: none, is public
 base-access-fn `std::moneypunct<char,true>` of `std::moneypunct_byname<char,true>`: none, is public
 base-access-fn `std::moneypunct<wchar_t,false>` of `std::moneypunct_byname<wchar_t,false>`: none, is public
@@ -107,19 +117,9 @@ base-access-fn `std::wostream` of `std::wiostream`: none, is public
 base-access-fn `std::wostream` of `std::wofstream`: none, is public
 base-access-fn `std::wstreambuf` of `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>`: none, is public
 base-access-fn `std::wstreambuf` of `std::wfilebuf`: none, is public
-bases-fn `std::codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
-bases-fn `std::codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`
+base-access-fn `time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
 bases-fn `std::ctype_base` of `std::__ctype_abstract_base<char>`
-bases-fn `std::ctype_base` of `std::__ctype_abstract_base<wchar_t>`
-bases-fn `std::ctype_base` of `std::ctype<char>`
-bases-fn `std::messages_base` of `std::messages<char>`
-bases-fn `std::messages_base` of `std::messages<wchar_t>`
-bases-fn `std::money_base` of `std::moneypunct<char,false>`
-bases-fn `std::money_base` of `std::moneypunct<char,true>`
-bases-fn `std::money_base` of `std::moneypunct<wchar_t,false>`
-bases-fn `std::money_base` of `std::moneypunct<wchar_t,true>`
-bases-fn `std::time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
-bases-fn `std::time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
 bases-fp `std::ios` (virtual) of `std::ifstream`
 bases-fp `std::ios` (virtual) of `std::ofstream`
 bases-fp `std::wios` (virtual) of `std::wifstream`
@@ -168,7 +168,6 @@ classes-fn `std::less<char_const*>` (stabs)
 classes-fn `std::less<wchar_t_const*>` (stabs)
 classes-fn `std::locale::_Impl` (stabs)
 classes-fn `std::locale::id` (stabs)
-classes-fn `std::money_base` (stabs)
 classes-fn `std::numeric_limits<float>` (stabs)
 classes-fn `std::numeric_limits<int>` (stabs)
 classes-fn `std::numeric_limits<long>` (stabs)
@@ -645,6 +644,7 @@ methods-fn `std::messages<wchar_t>::close` 4348d0
 methods-fn `std::messages<wchar_t>::get` 434854
 methods-fn `std::messages<wchar_t>::open` 434888
 methods-fn `std::messages<wchar_t>::open` 4348ac
+methods-fn `std::money_base::_S_construct_pattern` 44cb2c
 methods-fn `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 439d38
 methods-fn `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 439d7c
 methods-fn `std::money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43b790
@@ -1117,6 +1117,7 @@ methods-fp 47f880 of unmatched `NPKlass_0047f880`
 methods-fp 47f960 of unmatched `NPKlass_0047f960`
 methods-fp 480c74 of unmatched `NPKlass_0047f880`
 methods-fp 480cc8 of unmatched `NPKlass_0047f960`
+sizes-fn `std::money_base`: none, is 1
 sizes-fn `std::string`: none, is 4
 sizes-fp `TiXmlPrinter`: 12, is 24
 sizes-fp `__cxxabiv1::__class_type_info`: 4, is 8
