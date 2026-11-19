@@ -44,41 +44,49 @@ import kotlinx.serialization.UseSerializers
  */
 @Serializable
 data class ClassHierarchy(val classes: List<ClassView>) {
-    enum class Origin(val desc: String, val baseSource: SourceType) {
+    /**
+     * Where a class comes from. [basesKnown] where that says what its bases are, so that a class it gives none
+     * has none; each base says itself who stated it ([BaseRef.source]).
+     */
+    enum class Origin(val desc: String, val basesKnown: Boolean) {
         /** Its bases set by hand, in this window: over whatever else describes it. */
-        EDITED("edited by hand", SourceType.USER_DEFINED),
+        EDITED("edited by hand", true),
 
         /** Described by the stabs: the import recorded its bases. */
-        STABS("from stabs", SourceType.IMPORTED),
+        STABS("from stabs", true),
 
         /** Laid by Ghidra's RTTI analyzer, bases off its MSVC Class Hierarchy Descriptor ([MsvcRttiParser]). */
-        MSVC_RTTI("from MSVC RTTI", SourceType.IMPORTED),
+        MSVC_RTTI("from MSVC RTTI", true),
+
+        /** Recorded off the debug info of the runtime it comes from, beside its archive ([ghicpp.stl.StlApplier]). */
+        ARCHIVE("from the runtime's debug info", true),
 
         /** Recorded off its Itanium typeinfo by the class pass ([ItaniumRttiParser]), on a binary with no stabs. */
-        ITANIUM_RTTI("from Itanium RTTI", SourceType.IMPORTED),
+        ITANIUM_RTTI("from Itanium RTTI", true),
 
         /**
          * Recorded by the class pass with no stabs nor RTTI to go by: its bases are guesses, off what its
          * constructors call and the slots its vftables share with others'.
          */
-        INFERRED("with inferred bases", SourceType.ANALYSIS),
+        INFERRED("with inferred bases", false),
 
         /** Laid by the vtable sweep, bases read off its `_ZTI` typeinfo. */
-        SWEPT_RTTI("from typeinfo", SourceType.IMPORTED),
+        SWEPT_RTTI("from typeinfo", true),
 
         /** Laid by the vtable sweep with no typeinfo to read: bases unknown. */
-        SWEPT("from vtables", SourceType.DEFAULT),
+        SWEPT("from vtables", false),
 
         /** A class namespace and nothing else (the demangler's, DWARF's): bases unknown. */
-        NAMESPACE("from namespaces alone", SourceType.DEFAULT),
+        NAMESPACE("from namespaces alone", false),
 
         /** Only a library's: its namespace under an external library, which holds what the program imports. */
-        LIBRARY("only imported", SourceType.DEFAULT),
+        LIBRARY("only imported", false),
     }
 
     /**
      * A direct base: the class it names ([targetId]), if the program has one for it, else only its [name],
-     * and where it sits in the class ([offset]), for a non-virtual one whose place is known.
+     * where it sits in the class ([offset]), for a non-virtual one whose place is known, and who stated it
+     * ([source], [ghicpp.BaseDecl.source]); null for one not stated yet, as one being set by hand.
      */
     @Serializable
     data class BaseRef(
@@ -87,6 +95,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val isVirtual: Boolean,
         val access: Access?,
         val offset: Long? = null,
+        val source: SourceType? = null,
     )
 
     /**
@@ -317,6 +326,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                     origin = when {
                         ns.id in edits -> Origin.EDITED
                         typeDescriptor != null && ns.id in record -> Origin.MSVC_RTTI
+                        record[ns.id]?.archive != null -> Origin.ARCHIVE
                         typeinfo != null && ns.id in record && !hasStabs -> Origin.ITANIUM_RTTI
                         ns.id in record && hasStabs -> Origin.STABS
                         ns.id in record -> Origin.INFERRED
@@ -346,10 +356,12 @@ data class ClassHierarchy(val classes: List<ClassView>) {
                 val target = base.namespaceId?.let(classIds::get)
                 val name = base.namespaceId?.let { (symtab.getSymbol(it)?.`object` as? Namespace)?.getName(true) }
                     ?: base.name ?: "?"
-                BaseRef(name, target, base.isVirtual, base.access, base.offset.takeUnless { base.isVirtual })
+                val offset = base.offset.takeUnless { base.isVirtual }
+                BaseRef(name, target, base.isVirtual, base.access, offset, base.source)
             } ?: typeinfo?.let(rtti::basesOf).orEmpty().map { base ->
                 val offset = base.offset.takeUnless { base.isVirtual }
-                BaseRef(base.className, idOf(base.className.nameSegments), base.isVirtual, base.access, offset)
+                val id = idOf(base.className.nameSegments)
+                BaseRef(base.className, id, base.isVirtual, base.access, offset, SourceType.IMPORTED)
             }
 
         fun classNamespaces(): Sequence<GhidraClass> = symtab.classNamespaces.asSequence()
@@ -375,7 +387,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         /** [ns]'s members, and its [imports]: the same class's namespaces under the libraries it's imported from. */
         fun membersOf(ns: Namespace, imports: List<Namespace> = emptyList()): List<Member> {
             val slots by lazy { program.slotsOf(ns) }
-            val virtuals by lazy { slots.keys }
+            val virtuals by lazy { slots.keys + program.constructionSlotTargets(ns) }
             val (symbols, aliases) = (listOf(ns) + imports).flatMap { symtab.getSymbols(it) }
                 .withoutRepeats { it.labelKind() == MemberKind.LABEL }
             val members = symbols.mapNotNull { sym ->
@@ -457,16 +469,26 @@ data class ClassHierarchy(val classes: List<ClassView>) {
 
         /**
          * What the program shows of a member function the stabs don't describe: its cv-qualifiers off its
-         * mangled name (Itanium `_ZNK…`/`_ZNV…`, gcc 2.x `__C…`), virtual when one of its class's vtables
-         * holds it ([virtuals]). Neither says its access, nor static from plain.
+         * mangled name (Itanium `_ZNK…`/`_ZNV…`, gcc 2.x `__C…`, MSVC `?…`), virtual when one of its class's
+         * vtables holds it ([virtuals]). An MSVC name also says its access, and virtual or static: an
+         * imported one's is the name it was imported by.
          */
         fun Function.derivedAttrs(virtuals: Set<Address>): MemberAttrs {
-            val demangled = symtab.getSymbols(entryPoint)
-                .firstNotNullOfOrNull { Demangler.of(it.name) as? DemangledFunction }
+            val names = symtab.getSymbols(entryPoint).map { it.name } +
+                listOfNotNull(externalLocation?.originalImportedName)
+            val msvc = names.firstNotNullOfOrNull { Demangler.ofMsvc(it) as? DemangledFunction }
+            val demangled = msvc ?: names.firstNotNullOfOrNull { Demangler.of(it) as? DemangledFunction }
             // Ghidra's GNU parser flags a trailing const but not volatile, so read both off the text.
             val qualifiers = demangled?.originalDemangled?.substringAfterLast(')').orEmpty().split(' ')
+            val virt = when {
+                entryPoint in virtuals || msvc?.isVirtual == true -> VirtKind.VIRTUAL
+                msvc?.isStatic == true -> VirtKind.STATIC
+                msvc != null -> VirtKind.NORMAL
+                else -> null
+            }
             return MemberAttrs(
-                virt = VirtKind.VIRTUAL.takeIf { entryPoint in virtuals },
+                access = msvc?.visibility?.let { v -> Access.entries.firstOrNull { it.name.equals(v, true) } },
+                virt = virt,
                 isConst = "const" in qualifiers,
                 isVolatile = "volatile" in qualifiers,
             )

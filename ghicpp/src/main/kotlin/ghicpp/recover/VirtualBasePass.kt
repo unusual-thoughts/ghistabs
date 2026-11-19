@@ -64,7 +64,7 @@ class VirtualBasePass(private val program: Program, private val abi: CxxAbi, sin
             offset,
             dt,
             isVirtual = true,
-            "${vbase.access.name.lowercase()} virtual $name at +0x${vbaseAt.toString(
+            "${vbase.access?.name?.lowercase()?.plus(" ").orEmpty()}virtual $name at +0x${vbaseAt.toString(
                 16,
             )}, by ${vbase.offsetSourceName()}$part",
             ClassNaming.baseFieldName(true, dt.name, count),

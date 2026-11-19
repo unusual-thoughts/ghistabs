@@ -68,12 +68,26 @@ data class Truth(
     }
 }
 
-/** One recovery scored against its [Truth]: a [Tally] per attribute, and what each false one was. */
-data class Scorecard(val tallies: Map<String, Tally>, val findings: List<String>) {
+/**
+ * One recovery scored against its [Truth]. [tallies] holds a [Tally] per attribute, [instances] lists each false
+ * positive and false negative under its counter (`<attribute>-fp` or `-fn`), and [notes] says what was left
+ * unscored.
+ */
+data class Scorecard(
+    val tallies: Map<String, Tally>,
+    val instances: Map<String, List<String>> = emptyMap(),
+    val notes: List<String> = emptyList(),
+) {
     /** The tallies as baseline counters: `<attribute>-tp`, `-fp`, `-fn`. */
     fun counters(): Map<String, Long> = tallies.flatMap { (name, t) ->
         listOf("$name-tp" to t.tp.toLong(), "$name-fp" to t.fp.toLong(), "$name-fn" to t.fn.toLong())
     }.toMap()
+
+    /**
+     * Every instance as one line, `<counter> <instance>`, sorted: the committed baseline of what each counter
+     * counts, which diffs a line per instance that came or went.
+     */
+    fun instanceLines(): List<String> = instances.flatMap { (counter, list) -> list.map { "$counter $it" } }.sorted()
 
     fun markdown(title: String): String = buildString {
         appendLine("# $title")
@@ -83,11 +97,25 @@ data class Scorecard(val tallies: Map<String, Tally>, val findings: List<String>
         for ((name, t) in tallies) {
             appendLine("| $name | ${t.tp} | ${t.fp} | ${t.fn} | ${t.precision.pct()} | ${t.recall.pct()} |")
         }
-        if (findings.isNotEmpty()) {
+        for (name in tallies.keys) {
+            val fp = instances["$name-fp"].orEmpty()
+            val fn = instances["$name-fn"].orEmpty()
+            if (fp.isEmpty() && fn.isEmpty()) continue
             appendLine()
-            appendLine("## False positives and negatives")
+            appendLine("## $name")
+            for ((label, list) in listOf("False positives" to fp, "False negatives" to fn)) {
+                if (list.isEmpty()) continue
+                appendLine()
+                appendLine("$label (${list.size}):")
+                appendLine()
+                list.sorted().forEach { appendLine("- $it") }
+            }
+        }
+        if (notes.isNotEmpty()) {
             appendLine()
-            findings.forEach { appendLine("- $it") }
+            appendLine("## Not scored")
+            appendLine()
+            notes.sorted().forEach { appendLine("- $it") }
         }
     }
 
@@ -96,7 +124,8 @@ data class Scorecard(val tallies: Map<String, Tally>, val findings: List<String>
     companion object {
         /** The order attributes are reported in, and the ones a truth may not be able to score. */
         val ATTRIBUTES = listOf(
-            "classes", "polymorphic-classes", "bases", "base-access", "base-offsets", "vftables", "abstract",
+            "classes", "polymorphic-classes", "class-splits", "bases", "base-access", "base-offsets", "vftables",
+            "abstract",
             "methods", "virtual-methods", "structors", "sizes", "fields", "field-sizes",
         )
     }
@@ -120,23 +149,46 @@ private val NAMED = setOf(Origin.MSVC_RTTI, Origin.ITANIUM_RTTI, Origin.SWEPT_RT
 /**
  * Scores [subject], what a recovery from a bare binary made of its classes, against [truth].
  *
- * Each subject class is matched to a truth class by its qualified name, else by the vtable it labels,
- * else by the truth class most of its functions belong to. A subject class with no match is a false
- * class; one matched to a class the truth already has a better match for, a duplicate, is false too;
- * one matched to a truth class out of [Truth.scope] (a library's, its vtable known but not described) is
- * left unscored. Every other attribute is scored over the matched pairs in scope, the truth class's bases,
- * vtable, members and layout against the subject's: by address where [Truth.sameBinary], by offset where
- * [Truth.sameLayout], and not at all where the truth cannot tell.
+ * Each subject class is matched to a truth class by its qualified name, else by the vtable it labels, else by
+ * the truth class that most of its functions belong to. When two truth classes tie on functions, the subject
+ * class's own structors decide.
+ *
+ * A subject class with no match is a false class. When a truth class already has a better match, another
+ * subject class matched to it is a split: a piece of that class that the recovery set apart. Splits count under
+ * `class-splits` instead of `classes`, and their functions count for the class they were split from. A subject
+ * class matched to a truth class outside [Truth.scope] (a library class whose vtable is known but not
+ * described) is not scored.
+ *
+ * Every other attribute is scored over the matched pairs in scope, comparing the truth class's bases, vtable,
+ * members and layout with the subject's. They are compared by address where [Truth.sameBinary], by offset where
+ * [Truth.sameLayout], and not at all where the truth can't tell.
  */
-class Scorer(private val truth: Truth, private val subject: Snapshot) {
+class Scorer(
+    private val truth: Truth,
+    private val subject: Snapshot,
+    /** The addresses that the truth's vtable words hold, read from the binary. Null when the binary isn't at hand. */
+    private val vtableSlots: Set<Long>? = null,
+) {
     private val t = truth.hierarchy
     private val s = subject.hierarchy
-    private val findings = mutableListOf<String>()
+    private val instances = linkedMapOf<String, MutableList<String>>()
+    private val notes = mutableListOf<String>()
+
+    /** Records [what] as a false positive of [attribute]. */
+    private fun fp(attribute: String, what: String) {
+        instances.getOrPut("$attribute-fp") { mutableListOf() } += what
+    }
+
+    /** Records [what] as a false negative of [attribute]. */
+    private fun fn(attribute: String, what: String) {
+        instances.getOrPut("$attribute-fn") { mutableListOf() } += what
+    }
 
     private val truthByName = t.classes.groupBy { it.qualifiedName }
     private val truthFunctionOwner: Map<Long, Long> = t.classes
         .flatMap { c -> c.functions().map { it.at to c.id } }.toMap()
     private val truthVtables = truth.snapshot.vtables.sortedBy { it.start }
+    private val truthVtableClasses = truthVtables.mapTo(HashSet()) { it.classId }
 
     /** This-adjusting thunks: what the truth lists apart from its functions, and a recovery may well call one. */
     private val truthThunks: Set<Long> = t.classes
@@ -145,16 +197,29 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     private fun vtableOwner(at: Long): Long? =
         truthVtables.lastOrNull { it.start <= at }?.takeIf { at < it.end }?.classId
 
-    /** The truth class [cls] stands for, and how strongly: 3 by name, 2 by its vtable, 1 by most of its functions. */
+    /**
+     * The truth class that [cls] stands for, and how strong the match is: 3 by name, 2 by vtable, 1 by most of its
+     * functions, and 0 by name alone for a class with neither a vtable nor any functions. A name alone is the
+     * weakest match because exception records (MSVC's `catch` type descriptors) name classes even without RTTI,
+     * so another subject class may be a better match for the same truth class.
+     */
     private fun matchOf(cls: ClassView): Pair<Long, Int>? {
         truthByName[cls.qualifiedName]?.let { named ->
-            return (named.firstOrNull { it.id in truth.scope } ?: named.first()).id to 3
+            val strength = if (cls.vftable == null && cls.functions().isEmpty()) 0 else 3
+            return (named.firstOrNull { it.id in truth.scope } ?: named.first()).id to strength
         }
         if (!truth.sameBinary) return null
         cls.vftable?.let { vtableOwner(it.offset) }?.let { return it to 2 }
-        val owners = cls.functions().mapNotNull { truthFunctionOwner[it.at] }
-        return owners.groupingBy { it }.eachCount().maxByOrNull { it.value }
-            ?.takeIf { it.value * 2 > cls.functions().size }?.let { it.key to 1 }
+        val functions = cls.functions()
+        val votes = functions.mapNotNull { truthFunctionOwner[it.at] }.groupingBy { it }.eachCount()
+        val most = votes.values.maxOrNull() ?: return null
+        val leaders = votes.filterValues { it == most }.keys
+        // A class that holds a stray function of another class, such as its base, is still the class its structors
+        // belong to.
+        val owner = leaders.singleOrNull()
+            ?: functions.filter { cls.isStructorName(it.name) }.mapNotNull { truthFunctionOwner[it.at] }
+                .distinct().filter { it in leaders }.singleOrNull()
+        return owner?.let { it to 1 }
     }
 
     /** The subject's classes worth scoring: anything the recovery found or named, not an import's namespace. */
@@ -175,6 +240,11 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
 
     private val scoredPairs = pairs.filterKeys { it in truth.scope }.map { (tid, sc) -> t[tid]!! to sc }
 
+    /** The splits of each truth class (by id): the other subject classes matched to it. */
+    private val splits: Map<Long, List<ClassView>> = candidates
+        .filter { it.id in matches && it.id !in truthOf }
+        .groupBy { matches.getValue(it.id).first }
+
     private fun ClassView.describe() = "`$qualifiedName` (${origin.name.lowercase()}${vftable?.let {
         ", vftable $it"
     }.orEmpty()})"
@@ -183,24 +253,26 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         val tallies = linkedMapOf<String, Tally>()
         tallies["classes"] = classes(polymorphic = false)
         tallies["polymorphic-classes"] = classes(polymorphic = true)
+        tallies["class-splits"] = classSplits()
         bases(tallies)
         // Across ABIs a class's vftables differ (MSVC gives a class whose only virtuals are its virtual base's none).
         if (truth.sameBinary) tallies["vftables"] = vftables()
         tallies["abstract"] = abstract()
         if (truth.membersKnown) {
-            tallies["methods"] = methods("method", { _, _ -> true }) { true }
+            tallies["methods"] = methods("methods", { _, _ -> true }) { true }
             tallies["virtual-methods"] =
-                methods("virtual method", ::isTrulyVirtual) { it.attrs?.virt == VirtKind.VIRTUAL }
+                methods("virtual-methods", ::isTrulyVirtual) { it.attrs?.virt == VirtKind.VIRTUAL }
             tallies["structors"] = structors()
         }
         if (truth.sameLayout) {
             tallies["sizes"] = sizes()
             fields(tallies)
         }
-        return Scorecard(tallies, findings)
+        return Scorecard(tallies, instances.mapValues { it.value.sorted() }, notes)
     }
 
     private fun classes(polymorphic: Boolean): Tally {
+        val attribute = if (polymorphic) "polymorphic-classes" else "classes"
         val inScope = truth.scope.mapNotNull { t[it] }.filter { !polymorphic || it.vftable != null }
         val tp = inScope.count { it.id in pairs }
         val fp = candidates.filter { !polymorphic || it.vftable != null }.count { c ->
@@ -208,24 +280,26 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
             when {
                 // A class its RTTI names is real; a build of the same source elsewhere just does not have it.
                 match == null && !truth.sameBinary && c.origin in NAMED -> false.also {
-                    if (!polymorphic) findings += "unscored class ${c.describe()}: not in the source"
+                    if (!polymorphic) notes += "class ${c.describe()}: not in the source"
                 }
 
-                match == null -> true.also { if (!polymorphic) findings += "invented class ${c.describe()}" }
-
-                truthOf[c.id] == null -> true.also {
-                    if (!polymorphic) {
-                        findings +=
-                            "duplicate class ${c.describe()} of `${t[match.first]?.qualifiedName}`"
-                    }
-                }
+                match == null -> true.also { fp(attribute, "invented ${c.describe()}") }
 
                 else -> false
             }
         }
         val missed = inScope.filter { it.id !in pairs }
-        if (!polymorphic) missed.forEach { findings += "missed class ${it.describe()}" }
+        missed.forEach { fn(attribute, it.describe()) }
         return Tally(tp, fp, missed.size)
+    }
+
+    /** Counts the truth classes in scope that were found as one class, and the pieces split off the others. */
+    private fun classSplits(): Tally {
+        val found = pairs.keys.filter { it in truth.scope }
+        val pieces = found.flatMap { tid ->
+            splits[tid].orEmpty().onEach { fp("class-splits", "${it.describe()} of `${t[tid]?.qualifiedName}`") }
+        }
+        return Tally(tp = found.count { splits[it].isNullOrEmpty() }, fp = pieces.size)
     }
 
     /** The truth class a subject base names: through its own class's match, else by name. */
@@ -233,8 +307,37 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         ?: truthByName[name]?.firstOrNull()?.let { "#${it.id}" }
         ?: "?$name"
 
-    private fun BaseRef.ownKey(): String = targetId?.let { "#$it" } ?: truthByName[name]?.firstOrNull()
-        ?.let { "#${it.id}" } ?: "?$name"
+    /**
+     * The truth class a truth base names. The stabs sometimes name a base without its namespace and leave its id
+     * out, as `Empty` for `CryptoPP::Empty`. Such a name goes to the one truth class it ends the name of.
+     */
+    private fun BaseRef.ownKey(): String = targetId?.let { "#$it" }
+        ?: (truthByName[name] ?: truthByLeaf[name]?.takeIf { it.size == 1 })?.firstOrNull()?.let { "#${it.id}" }
+        ?: "?$name"
+
+    private val truthByLeaf by lazy {
+        t.classes.flatMap { c -> leafNames(c.qualifiedName).map { it to c } }.groupBy({ it.first }, { it.second })
+    }
+
+    /** Each name [qualified] ends with after a `::` outside template arguments: `C`, then `B::C`, of `A::B::C`. */
+    private fun leafNames(qualified: String): List<String> {
+        var depth = 0
+        return qualified.indices.mapNotNull { i ->
+            when (qualified[i]) {
+                '<' -> depth++
+                '>' -> depth--
+            }
+            val atSeparator = depth == 0 && qualified.startsWith("::", i)
+            if (atSeparator) qualified.substring(i + 2) else null
+        }
+    }
+
+    /**
+     * Whether the truth class with this key has no vtable and no functions, leaving a recovery nothing to find.
+     * So has a base the truth holds no class for, since nothing names its class's functions or vtable either.
+     */
+    private fun String.isUnreachable() = startsWith("?") || removePrefix("#").toLongOrNull()?.let { t[it] }
+        ?.let { it.vftable == null && it.functions().isEmpty() } == true
 
     private fun keyName(key: String) = key.removePrefix("#").toLongOrNull()?.let { t[it]?.qualifiedName } ?: key
 
@@ -243,28 +346,30 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         var access = Tally()
         var offsets = Tally()
         for ((tc, sc) in scoredPairs) {
-            val actual = tc.bases.associateBy { it.ownKey() to it.isVirtual }
             val claimed = sc.bases.associateBy { it.truthKey() to it.isVirtual }
-            edges += Tally.of(claimed.keys, actual.keys)
-            (claimed.keys - actual.keys).forEach {
-                findings +=
-                    "false base `${keyName(it.first)}`${if (it.second) " (virtual)" else ""} of `${tc.qualifiedName}`"
+            // A base with no vtable and no functions of its own gives a recovery nothing to find it by. Finding it
+            // still counts, but missing it is not counted as a miss.
+            val actualMap = tc.bases.associateBy { it.ownKey() to it.isVirtual }
+                .filterKeys { it in claimed || !it.first.isUnreachable() }
+            for (key in tc.bases.map { it.ownKey() to it.isVirtual } - actualMap.keys) {
+                notes += "base `${keyName(key.first)}` of `${tc.qualifiedName}`: no vtable nor function to find it by"
             }
-            (actual.keys - claimed.keys).forEach {
-                findings +=
-                    "missed base `${keyName(it.first)}`${if (it.second) " (virtual)" else ""} of `${tc.qualifiedName}`"
-            }
-            for (key in claimed.keys intersect actual.keys) {
-                val a = actual.getValue(key)
+            edges += Tally.of(claimed.keys, actualMap.keys)
+            fun edge(key: Pair<String, Boolean>) =
+                "`${keyName(key.first)}`${if (key.second) " (virtual)" else ""} of `${tc.qualifiedName}`"
+            (claimed.keys - actualMap.keys).forEach { fp("bases", edge(it)) }
+            (actualMap.keys - claimed.keys).forEach { fn("bases", edge(it)) }
+            for (key in claimed.keys intersect actualMap.keys) {
+                val a = actualMap.getValue(key)
                 val c = claimed.getValue(key)
                 // Neither ABI's RTTI tells a protected base from a private one: only whether it is public.
                 if (a.access != null) {
-                    access += attribute(c.access?.publicness(), a.access.publicness()) {
-                        "access of base `${a.name}` of `${tc.qualifiedName}`"
+                    access += attribute("base-access", c.access?.publicness(), a.access.publicness()) {
+                        "`${a.name}` of `${tc.qualifiedName}`"
                     }
                 }
                 if (truth.sameLayout && !a.isVirtual && a.offset != null) {
-                    offsets += attribute(c.offset, a.offset) { "offset of base `${a.name}` of `${tc.qualifiedName}`" }
+                    offsets += attribute("base-offsets", c.offset, a.offset) { "`${a.name}` of `${tc.qualifiedName}`" }
                 }
             }
         }
@@ -273,27 +378,29 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         if (truth.sameLayout) tallies["base-offsets"] = offsets
     }
 
-    /** One attribute's [claimed] value against its [actual] one: right, wrong, or not claimed. */
-    private fun <T> attribute(claimed: T?, actual: T, what: () -> String): Tally = when (claimed) {
+    /** Compares the [claimed] value of [name] with its [actual] one: right, wrong, or not claimed. */
+    private fun <T> attribute(name: String, claimed: T?, actual: T, what: () -> String): Tally = when (claimed) {
         actual -> Tally(tp = 1)
-        null -> Tally(fn = 1).also { findings += "no ${what()}: is $actual" }
-        else -> Tally(fp = 1).also { findings += "wrong ${what()}: $claimed, is $actual" }
+        null -> Tally(fn = 1).also { fn(name, "${what()}: none, is $actual") }
+        else -> Tally(fp = 1).also { fp(name, "${what()}: $claimed, is $actual") }
     }
 
     private fun vftables(): Tally = scoredPairs.fold(Tally()) { acc, (tc, sc) ->
         acc + when {
             tc.vftable == null && sc.vftable == null -> Tally()
 
-            tc.vftable == null -> Tally(fp = 1).also {
-                findings += "false vftable ${sc.vftable} of `${tc.qualifiedName}`"
-            }
+            // A polymorphic class the binary has no vtable of, as gcc leaves out a class that is only ever built
+            // as a base: the table its base-object structors use inside a derived class is the best a recovery has.
+            tc.vftable == null && tc.id !in truthVtableClasses && tc.functions().any { isTrulyVirtual(tc, it) } ->
+                Tally()
 
-            sc.vftable == null -> Tally(fn = 1).also {
-                findings += "missed vftable ${tc.vftable} of `${tc.qualifiedName}`"
-            }
+            tc.vftable == null -> Tally(fp = 1).also { fp("vftables", "${sc.vftable} of `${tc.qualifiedName}`") }
+
+            sc.vftable == null -> Tally(fn = 1).also { fn("vftables", "${tc.vftable} of `${tc.qualifiedName}`") }
 
             truth.sameBinary && sc.vftable.offset != tc.vftable.offset -> Tally(fp = 1, fn = 1).also {
-                findings += "wrong vftable ${sc.vftable} of `${tc.qualifiedName}`: is ${tc.vftable}"
+                fp("vftables", "${sc.vftable} of `${tc.qualifiedName}`: is ${tc.vftable}")
+                fn("vftables", "${tc.vftable} of `${tc.qualifiedName}`: claimed ${sc.vftable}")
             }
 
             else -> Tally(tp = 1)
@@ -303,45 +410,61 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
     private fun abstract(): Tally = scoredPairs.fold(Tally()) { acc, (tc, sc) ->
         acc + when {
             tc.isAbstract && sc.isAbstract -> Tally(tp = 1)
-            sc.isAbstract -> Tally(fp = 1).also { findings += "`${tc.qualifiedName}` called abstract" }
-            tc.isAbstract -> Tally(fn = 1).also { findings += "`${tc.qualifiedName}` not called abstract" }
+            sc.isAbstract -> Tally(fp = 1).also { fp("abstract", "`${tc.qualifiedName}`") }
+            tc.isAbstract -> Tally(fn = 1).also { fn("abstract", "`${tc.qualifiedName}`") }
             else -> Tally()
         }
     }
 
     /**
-     * The functions each class claims that [pick] keeps, by address, against the truth's. A function an
-     * unmatched or duplicate class claims is false too: it belongs to no class the recovery found.
+     * Compares, by address, the functions that each class and its splits claim with the truth's, keeping only
+     * those [pick] selects. A function claimed by an unmatched class is a false positive too, since it belongs
+     * to no class that the recovery found.
      */
-    private fun methods(label: String, actualPick: (ClassView, Member) -> Boolean, pick: (Member) -> Boolean): Tally {
+    private fun methods(name: String, actualPick: (ClassView, Member) -> Boolean, pick: (Member) -> Boolean): Tally {
         var total = Tally()
         for ((tc, sc) in scoredPairs) {
-            val claimed = sc.functions().filter(pick).map { it.at }.filter { it !in truthThunks }
+            val claimed = (listOf(sc) + splits[tc.id].orEmpty()).flatMap { it.functions() }
+                .filter(pick).map { it.at }.filter { it !in truthThunks }
             val actual = tc.functions().filter { actualPick(tc, it) }.associateBy { it.at }
             total += Tally.of(claimed, actual.keys)
             for (at in claimed.toSet() - actual.keys) {
                 val owner = truthFunctionOwner[at]?.let { t[it]?.qualifiedName }
-                findings += "false $label ${"%x".format(at)} of `${tc.qualifiedName}`" +
-                    (owner?.let { ": is `$it`'s" } ?: ": no method")
+                val whose = owner?.let { ": is `$it`'s" } ?: ": no method"
+                fp(name, "${"%x".format(at)} of `${tc.qualifiedName}`$whose")
             }
             (actual.keys - claimed.toSet()).forEach {
-                findings += "missed $label `${tc.qualifiedName}::${actual.getValue(it).name}`"
+                fn(name, "`${tc.qualifiedName}::${actual.getValue(it).name}` ${"%x".format(it)}")
             }
         }
         // An unscored library class's functions are neither: only a class matched to nothing claims falsely.
-        val strays = candidates.filter { it.id !in truthOf }
-            .sumOf { c -> c.functions().filter(pick).count { it.at !in truthThunks } }
-        return total + Tally(fp = strays)
+        val strays = candidates.filter { it.id !in matches }.flatMap { c ->
+            c.functions().filter(pick).filter { it.at !in truthThunks }.map { c to it }
+        }
+        for ((c, m) in strays) {
+            val owner = truthFunctionOwner[m.at]?.let { t[it]?.qualifiedName }
+            fp(name, "${"%x".format(m.at)} of unmatched `${c.qualifiedName}`" + (owner?.let { ": is `$it`'s" } ?: ""))
+        }
+        return total + Tally(fp = strays.size)
     }
 
     /**
-     * A truth member that is virtual. Some stabs mark only the deleting variant of a virtual destructor so; the
-     * complete one, which an Itanium vtable holds too, comes out plain. The base-object one no vtable holds.
+     * Whether a truth member is virtual. Some stabs mark only the deleting variant of a virtual destructor as
+     * virtual, and leave the complete-object variant plain even though an Itanium vtable holds it too.
+     *
+     * No vtable holds the base-object destructor. From gcc 5 on, an abstract class's own vtable doesn't hold its
+     * destructors either, because it leaves those slots null. A recovery can't tell that a destructor is virtual
+     * when no vtable holds it, so such a destructor doesn't count as a virtual method.
      */
-    private fun isTrulyVirtual(cls: ClassView, m: Member) = m.attrs?.virt == VirtKind.VIRTUAL || (
-        m.name.startsWith("~") && m.variants.any { it != ItaniumStructor.BASE_DTOR } &&
-            cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL }
-        )
+    private fun isTrulyVirtual(cls: ClassView, m: Member): Boolean {
+        val marked = m.attrs?.virt == VirtKind.VIRTUAL || (
+            m.name.startsWith("~") && m.variants.any { it != ItaniumStructor.BASE_DTOR } &&
+                cls.functions().any { it.name == m.name && it.attrs?.virt == VirtKind.VIRTUAL }
+            )
+        val unslotted = vtableSlots != null && m.variants.isNotEmpty() && m.name.startsWith("~") &&
+            cls.id in truthVtableClasses && m.at !in vtableSlots
+        return marked && !unslotted
+    }
 
     /** A constructor's or destructor's name: the class's own, less a template's arguments, which g++ leaves off. */
     private fun ClassView.isStructorName(member: String) = member.removePrefix("~").substringBefore('<') ==
@@ -354,15 +477,14 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
         val claimed = sc.functions().filter { sc.isStructor(it) }.map { it.at }.filter {
             it !in truthThunks
         }
-        val actual = tc.functions().filter { it.name == tc.name || it.name == "~${tc.name}" }.map { it.at }
-        (claimed.toSet() - actual.toSet()).forEach {
-            findings += "false structor ${"%x".format(it)} of `${tc.qualifiedName}`"
-        }
+        val actual = tc.functions().filter { tc.isStructorName(it.name) }.map { it.at }
+        (claimed.toSet() - actual.toSet()).forEach { fp("structors", "${"%x".format(it)} of `${tc.qualifiedName}`") }
+        (actual.toSet() - claimed.toSet()).forEach { fn("structors", "${"%x".format(it)} of `${tc.qualifiedName}`") }
         acc + Tally.of(claimed, actual)
     }
 
     private fun sizes(): Tally = scoredPairs.fold(Tally()) { acc, (tc, sc) ->
-        acc + (tc.size?.let { attribute(sc.size, it) { "size of `${tc.qualifiedName}`" } } ?: Tally())
+        acc + (tc.size?.let { attribute("sizes", sc.size, it) { "`${tc.qualifiedName}`" } } ?: Tally())
     }
 
     /** Each struct's leaf fields by offset; then, of the offsets both have, whether the sizes agree. */
@@ -374,16 +496,13 @@ class Scorer(private val truth: Truth, private val subject: Snapshot) {
             val claimed = subject.fields[sc.id].orEmpty()
             val tally = Tally.of(claimed.keys, actual.keys)
             val sized = (claimed.keys intersect actual.keys).partition { claimed[it] == actual[it] }
-            if (tally.fp + tally.fn + sized.second.size > 0) {
-                findings += "fields of `${tc.qualifiedName}`: ${tally.fp} false, ${tally.fn} missed, " +
-                    "${sized.second.size} mis-sized (offset:size; claimed ${claimed.render()}; is ${actual.render()})"
-            }
+            (claimed.keys - actual.keys).forEach { fp("fields", "`${tc.qualifiedName}`+$it:${claimed[it]}") }
+            (actual.keys - claimed.keys).forEach { fn("fields", "`${tc.qualifiedName}`+$it:${actual[it]}") }
+            sized.second.forEach { fp("field-sizes", "`${tc.qualifiedName}`+$it: ${claimed[it]}, is ${actual[it]}") }
             offsets += tally
             sizes += Tally(tp = sized.first.size, fp = sized.second.size)
         }
         tallies["fields"] = offsets
         tallies["field-sizes"] = sizes
     }
-
-    private fun Map<Long, Int>.render() = entries.joinToString(" ") { "${it.key}:${it.value}" }
 }

@@ -12,6 +12,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.NoisyStructureBuilder
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.Undefined
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -41,13 +42,23 @@ internal fun Stores.withFills(fills: Stores): Stores {
 
 /**
  * The [classes] whose vtables a function stores into `this` where they belong, and what it calls on `this` or a
- * subobject of it [before] the first of those stores and [after] the last.
+ * subobject of it [before] the first of those stores and [after] the last. [elsewhere] maps each other offset
+ * into `this` to the classes whose primary table it stores there, in store order. [vbases] holds the offsets it
+ * stores at through a vbtable, which are its virtual bases' offsets.
  */
 data class VptrStores(
     val classes: Set<ClassDecl> = emptySet(),
     val before: Set<Function> = emptySet(),
     val after: Set<Function> = emptySet(),
+    val elsewhere: Map<Long, List<ClassDecl>> = emptyMap(),
+    val vbases: Set<Long> = emptySet(),
 )
+
+/**
+ * A call of [callee] on `this` + [offset] that passes the address [vtt] after `this`. An Itanium structor calls
+ * the base-object structor of a base that has virtual bases this way, with [vtt] pointing at the base's sub-VTT.
+ */
+data class VttCall(val offset: Long, val callee: Function, val vtt: Address)
 
 /**
  * One class's share of an [InlinedConstruction]: what the code from its vptr store up to the next class's calls on
@@ -89,6 +100,11 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
      */
     val objectsBuilt: Map<Function, Map<ClassDecl, Map<Long, Address>>> =
         from.filterValues { it.objectsBuilt.isNotEmpty() }.mapValues { (_, r) -> r.objectsBuilt }
+
+    /** The calls each function makes on `this` that pass a constant address after `this` ([VttCall]). */
+    val vttCalls: Map<Function, List<VttCall>> = objectCalls.mapValues { (_, calls) ->
+        calls.mapNotNull { c -> c.next?.takeIf { c.obj == CalledObject.This }?.let { VttCall(c.offset, c.callee, it) } }
+    }.filterValues { it.isNotEmpty() }
 
     /** The functions each calls on `this` itself. */
     private val thisCalls = subobjectCalls.mapValues { (_, calls) -> calls[0L].orEmpty() }
@@ -235,12 +251,15 @@ class FoundStructors(
     }
 }
 
+/** A field [fillData] typed: where in the class struct, its name, and its type before (null: none) and after. */
+data class FieldRetype(val offset: Int, val name: String, val was: String?, val type: String)
+
 /**
  * Fills each of this class struct's own `<Class>_data` structs ([ownData]) with the fields of [store] it holds,
  * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
- * specific type, and the field keeps its name
+ * specific type, and the field keeps its name. The fields it typed.
  */
-internal fun Structure.fillData(store: Stores) {
+internal fun Structure.fillData(store: Stores): List<FieldRetype> = buildList {
     for ((offset, data) in ownData()) {
         val inside = store.filter { (at, dt) -> offset.withLength(data.length).includes(at.withLength(dt.length)) }
         val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
@@ -250,6 +269,8 @@ internal fun Structure.fillData(store: Stores) {
             if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
             val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
             data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
+            val was = old?.dataType?.takeUnless(Undefined::isUndefined)?.name
+            add(FieldRetype(offset + at.toInt(), name, was, dt.name))
         }
     }
 }
@@ -257,10 +278,11 @@ internal fun Structure.fillData(store: Stores) {
 /**
  * Retypes [ns]'s own fields off what [methods] load and store through `this`, decompiled again, as the class pass
  * fills them: the `<Class>_data` structs its struct holds take the more specific type, and keep names and comments.
+ * The fields it typed: none without a class struct.
  */
-fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor) {
-    val struct = classStruct(ns) ?: return
-    struct.fillData(
+fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor): List<FieldRetype> {
+    val struct = classStruct(ns) ?: return emptyList()
+    return struct.fillData(
         ThisFunctionDissector(this, emptyList(), DummySink).thisFields(methods, monitor).values.mergedStores(),
     )
 }
