@@ -1,0 +1,298 @@
+name: MSVC STL archives
+
+# Builds Ghidra data type archives of the MSVC standard library layouts. msvcp140 comes from a probe
+# compiled here against the runner's own Visual Studio, for x86 and x64 and the release and debug
+# CRTs, and is checked against the layouts in Microsoft's public msvcp140 PDB. msvcp90 has no
+# toolchain on the runners, so it comes from the typed public PDB of its last security rebuild.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - ghicpp/src/main/kotlin/ghicpp/stl/**
+      - ghicpp/src/main/kotlin/ghicpp/BaseSplitter.kt
+      - ghicpp/data/typeinfo/msvc/**
+      - tools/stl-archives/**
+      - .github/workflows/stl-archives.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ x86, x64 ]
+        crt: [ release, debug ]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch == 'x86' && 'x86' || 'amd64' }}
+
+      # The debug CRT is what sets _ITERATOR_DEBUG_LEVEL=2, the layout msvcp140d.dll programs use.
+      - name: Build the probe
+        working-directory: tools/stl-archives
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /Zi /Od ${{ matrix.crt == 'debug' && '/MDd' || '/MD' }} stl_probe.cpp /Fe:stl_probe.exe /link /DEBUG:FULL
+
+      # The runtime this toolset ships, whose public PDB is the reference the archives are checked against.
+      - name: Keep the matching msvcp140.dll
+        if: matrix.crt == 'release'
+        shell: bash
+        run: cp "$(cygpath -u "$VCToolsRedistDir")"/${{ matrix.arch }}/Microsoft.VC*.CRT/msvcp140.dll tools/stl-archives/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-${{ matrix.arch }}-${{ matrix.crt }}
+          path: |
+            tools/stl-archives/stl_probe.exe
+            tools/stl-archives/stl_probe.pdb
+            tools/stl-archives/msvcp140.dll
+          if-no-files-found: error
+
+  archives:
+    needs: probe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: '12.3'
+          repo: unusual-thoughts/ghidra
+
+      - uses: actions/download-artifact@v7
+        with:
+          path: probes
+
+      - name: Fetch Microsoft's runtime PDBs
+        run: |
+          pip install --quiet pefile
+          mkdir -p refs
+          for arch in x86 x64; do
+            curl -fsSL -o refs/msvcp140_$arch.pdb "$(python3 tools/stl-archives/pdb_url.py probes/probe-$arch-release/msvcp140.dll)"
+          done
+          # msvcp90 9.0.30729.9619, the last security rebuild; earlier builds' public PDBs are stripped.
+          curl -fsSL -o refs/msvcp90_x86.pdb https://msdl.microsoft.com/download/symbols/msvcp90.i386.pdb/D026F453A2FD4DF99FD5EF360ECF33FE1/msvcp90.i386.pdb
+          curl -fsSL -o refs/msvcp90_x64.pdb https://msdl.microsoft.com/download/symbols/msvcp90.amd64.pdb/0AFF865471F54307A698437C27803A3A1/msvcp90.amd64.pdb
+          # msvcp120 as the Visual Studio 2013 redistributable installs it.
+          curl -fsSL -o refs/msvcp120_x86.pdb https://msdl.microsoft.com/download/symbols/msvcp120.i386.pdb/0B631FCA474F4F6FBBE54C497C5821361/msvcp120.i386.pdb
+          curl -fsSL -o refs/msvcp120_x64.pdb https://msdl.microsoft.com/download/symbols/msvcp120.amd64.pdb/A59C901D336743BCA6091D3F9D81C3201/msvcp120.amd64.pdb
+          # msvcp80 8.0.50727.6195, the last security rebuild, x86 only: the x64 PDB stops Ghidra's applicator.
+          # msvcp70, Visual Studio .NET 2002's: the symbol server keeps the DLL too, which the script needs
+          # as its program to read the virtual base tables at their addresses.
+          curl -fsSL -o refs/msvcp70_x86.pdb https://msdl.microsoft.com/download/symbols/msvcp70.pdb/37E0F6E8279044B68CF0B4621E333A642/msvcp70.pdb
+          curl -fsSL -o refs/msvcp70.dll https://msdl.microsoft.com/download/symbols/msvcp70.dll/3C36E62177000/msvcp70.dll
+          curl -fsSL -o refs/msvcp80_x86.pdb https://msdl.microsoft.com/download/symbols/msvcp80.i386.pdb/E8A9423E890A4ADDB38F8F756268437C1/msvcp80.i386.pdb
+
+      # Visual C++ 6.0's msvcp60 has no public PDB: its own disc carries MSVCP60D.PDB, beside the DLL it
+      # describes, which the script needs as its program to read the virtual base tables at their addresses.
+      - uses: actions/cache@v6
+        id: vc6
+        with:
+          path: refs/vc6
+          key: vc6-VCP600ENU1-msvcp60d
+
+      - name: Fetch Visual C++ 6.0's msvcp60d
+        if: steps.vc6.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p refs/vc6 vc6
+          curl -fsSL -o vc6/disc.7z https://archive.org/download/X04-58170/1999-02_X04-58170_X04-58170_VCP600ENU1.7z
+          7z x -y -ovc6 vc6/disc.7z '*/image/VCP600ENU1.mdf' > /dev/null
+          rm vc6/disc.7z
+          # The image keeps each 2048-byte sector inside 2448 bytes of raw sector and subchannel data.
+          python3 -I -c '
+          import sys
+          with open(sys.argv[1], "rb") as raw, open(sys.argv[2], "wb") as iso:
+              while len(sector := raw.read(2448)) == 2448:
+                  iso.write(sector[16:16 + 2048])
+          ' vc6/*/image/VCP600ENU1.mdf vc6/disc.iso
+          7z e -y -orefs/vc6 vc6/disc.iso VC98/DEBUG/MSVCP60D.PDB VC98/DEBUG/MSVCP60D.DLL > /dev/null
+          rm -rf vc6
+          ls -l refs/vc6
+
+      # Visual C++ 5.0's msvcp50 likewise: Visual Studio 97's third disc carries MSVCP50D.PDB and its DLL.
+      - uses: actions/cache@v6
+        id: vc5
+        with:
+          path: refs/vc5
+          key: vc5-VS97PRO-disc3-msvcp50d
+
+      - name: Fetch Visual C++ 5.0's msvcp50d
+        if: steps.vc5.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p refs/vc5 vc5
+          curl -fsSL -o vc5/disc.iso "https://archive.org/download/microsoft-visual-studio-97-professional-edition-disc-3/Microsoft%20Visual%20Studio%2097%20Professional%20Edition%20-%20Disc%203.iso"
+          7z e -y -orefs/vc5 vc5/disc.iso DEVSTUDIO/VC/DEBUG/MSVCP50D.PDB DEVSTUDIO/VC/DEBUG/MSVCP50D.DLL > /dev/null
+          rm -rf vc5
+          # Ghidra reads its module records as Visual C++ 6.0's; give it them in that layout.
+          python3 -I tools/stl-archives/modi50to60.py refs/vc5/MSVCP50D.PDB refs/vc5/msvcp50d.v6.pdb
+          ls -l refs/vc5
+
+      # MsvcStlArchiveScript writes the classes' bases with ghicpp's own model of them.
+      - name: Install ghicpp
+        run: |
+          ./gradlew --build-cache :ghicpp:buildExtension
+          props=/opt/ghidra/Ghidra/application.properties
+          version=$(sed -n 's/^application.version=//p' $props)
+          release=$(sed -n 's/^application.release.name=//p' $props)
+          extensions=~/.config/ghidra/ghidra_${version}_${release}/Extensions
+          mkdir -p "$extensions"
+          unzip -q ghicpp/dist/*.zip -d "$extensions"
+
+      - name: Build the archives
+        run: |
+          run=tools/stl-archives/run.sh
+          for arch in x86 x64; do
+            $run archive archives/msvcp140_$arch.gdt probes/probe-$arch-release/stl_probe.exe probes/probe-$arch-release/stl_probe.pdb
+            $run archive archives/msvcp140d_$arch.gdt probes/probe-$arch-debug/stl_probe.exe probes/probe-$arch-debug/stl_probe.pdb
+            $run archive archives/msvcp90_$arch.gdt probes/probe-$arch-release/stl_probe.exe refs/msvcp90_$arch.pdb
+            $run archive archives/msvcp120_$arch.gdt probes/probe-$arch-release/stl_probe.exe refs/msvcp120_$arch.pdb
+            $run archive refs/msvcp140_$arch.gdt probes/probe-$arch-release/stl_probe.exe refs/msvcp140_$arch.pdb
+          done
+          $run archive archives/msvcp80_x86.gdt probes/probe-x86-release/stl_probe.exe refs/msvcp80_x86.pdb
+          $run archive archives/msvcp70_x86.gdt refs/msvcp70.dll refs/msvcp70_x86.pdb
+          # VC6's headers lay nothing out differently under _DEBUG, so the debug PDB serves msvcp60 too.
+          $run archive archives/msvcp50_x86.gdt refs/vc5/MSVCP50D.DLL refs/vc5/msvcp50d.v6.pdb
+          $run archive archives/msvcp60_x86.gdt refs/vc6/MSVCP60D.DLL refs/vc6/MSVCP60D.PDB
+
+      - name: Check against Microsoft's msvcp140 layouts
+        run: |
+          for arch in x86 x64; do
+            tools/stl-archives/run.sh compare probes/probe-$arch-release/stl_probe.exe archives/msvcp140_$arch.gdt refs/msvcp140_$arch.gdt
+          done
+
+      # A .gdt written here opens only on this Ghidra or a newer one, so the archives are carried to
+      # the portable job as text. ghicpp's bundled copies (built there earlier) should read the same.
+      - name: Export the layouts
+        run: |
+          mkdir -p layouts bundled
+          program=ghicpp/src/test/resources/binaries/features/hello_msvc.exe
+          for gdt in archives/*.gdt; do
+            name=$(basename "$gdt" .gdt)
+            tools/stl-archives/run.sh layouts $program "$gdt" layouts/$name.txt
+            [ -f ghicpp/data/typeinfo/msvc/$name.gdt ] ||
+              { echo "::warning::ghicpp bundles no $name.gdt yet; add it from this run's artifacts"; continue; }
+            tools/stl-archives/run.sh layouts $program ghicpp/data/typeinfo/msvc/$name.gdt bundled/$name.txt
+            cmp -s layouts/$name.txt bundled/$name.txt ||
+              echo "::warning::$name.gdt built here differs from ghicpp's bundled copy; refresh it from this run's artifacts"
+            cmp -s archives/$name.classes.xml.gz ghicpp/data/typeinfo/msvc/$name.classes.xml.gz ||
+              echo "::warning::$name.classes.xml.gz built here differs from ghicpp's bundled copy; refresh it from the classes artifact"
+          done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: layouts
+          path: layouts/*.txt
+          if-no-files-found: error
+
+      # The classes' bases and vftable slots, which no data type holds: ghicpp ships them beside the archives.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: classes
+          path: archives/*.classes.xml.gz
+          if-no-files-found: error
+
+  # A .gdt opens on the Ghidra that wrote it and newer ones, so the published archives are rebuilt from
+  # the layouts on the oldest release ghicpp supports, and must read back to the same text.
+  portable:
+    needs: archives
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: '10.4'
+          java-version: '17'
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: layouts
+          path: layouts
+
+      - name: Build the archives on Ghidra 10.4
+        run: |
+          mkdir -p archives readback
+          program=ghicpp/src/test/resources/binaries/features/hello_msvc.exe
+          for txt in layouts/*.txt; do
+            name=$(basename "$txt" .txt)
+            tools/stl-archives/run.sh gdt $program "$txt" archives/$name.gdt
+            tools/stl-archives/run.sh layouts $program archives/$name.gdt readback/$name.txt
+            diff -u "$txt" readback/$name.txt | head -40
+            cmp -s "$txt" readback/$name.txt
+          done
+
+      # Zipped, for the compat and publish jobs: download-artifact cannot fetch unzipped ones.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: portable-archives
+          path: archives/*.gdt
+          if-no-files-found: error
+
+  # One unzipped artifact per archive, so each downloads as its .gdt file: upload-artifact takes a
+  # single file when it does not zip.
+  publish:
+    needs: portable
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp120_x86, msvcp120_x64, msvcp90_x86, msvcp90_x64, msvcp80_x86, msvcp70_x86, msvcp60_x86, msvcp50_x86]
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: portable-archives
+          path: archives
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: archives/${{ matrix.name }}.gdt
+          archive: false
+          if-no-files-found: error
+
+  # Every newer Ghidra opens the 10.4 archives and reads the same layouts out of them.
+  compat:
+    needs: portable
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ghidra: '11.4.3'
+          - ghidra: '12.0.4'
+          - ghidra: '12.1.3'
+          - ghidra: '12.3'
+            repo: unusual-thoughts/ghidra
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: ${{ matrix.ghidra }}
+          repo: ${{ matrix.repo }}
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: layouts
+          path: layouts
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: portable-archives
+          path: archives
+
+      - name: Read the archives
+        run: |
+          mkdir -p readback
+          status=0
+          for txt in layouts/*.txt; do
+            name=$(basename "$txt" .txt)
+            tools/stl-archives/run.sh layouts ghicpp/src/test/resources/binaries/features/hello_msvc.exe archives/$name.gdt readback/$name.txt
+            cmp -s "$txt" readback/$name.txt || { echo "::error::$name reads differently"; diff -u "$txt" readback/$name.txt | head -40; status=1; }
+          done
+          exit $status

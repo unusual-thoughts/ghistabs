@@ -77,9 +77,28 @@ fun DiagnosticSink.placeBase(
         }
 }
 
-/** The class's struct where `RecoverClassesFromRTTIScript` files it. */
+/**
+ * The class's struct: its [knownLayout] where an archive gives one, else where `RecoverClassesFromRTTIScript`
+ * files it.
+ */
 fun Program.classStruct(ns: GhidraClass) =
-    dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
+    knownLayout(ns) ?: dataTypeManager.getDataType(ClassNaming.vftableCategory(ns), ns.name) as? Structure
+
+/**
+ * The layout an archive gives the class, at its namespace path (`/std/basic_streambuf<…>` for
+ * `std::basic_streambuf<…>`), as the bundled MSVC runtime archives do ([ghicpp.stl.StlApplier]): what the
+ * class passes take as it is, rather than size and fill a struct of their own.
+ */
+fun Program.knownLayout(ns: GhidraClass): Structure? {
+    val scopes = ns.getPathList(true).dropLast(1)
+    val category = if (scopes.isEmpty()) CategoryPath.ROOT else CategoryPath(CategoryPath.ROOT, scopes)
+    val struct = dataTypeManager.getDataType(category, ns.name)
+    return (struct as? Structure)?.takeIf { it.isKnownLayout() }
+}
+
+/** Whether this struct is a defined one linked to an archive ([knownLayout]), which no class pass changes. */
+fun Structure.isKnownLayout() = !isNotYetDefined &&
+    sourceArchive?.archiveType.let { it == ArchiveType.FILE || it == ArchiveType.PROJECT }
 
 /**
  * Gives [ns] an empty [classStruct] where it has none. Done before any function moves into [ns]: a `__thiscall`
@@ -115,6 +134,8 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
             StructureDataType(ClassNaming.vftableCategory(ns), ns.name, size),
             DataTypeConflictHandler.KEEP_HANDLER,
         )
+
+        else if struct.isKnownLayout() -> Unit
 
         else if struct.isZeroLength -> struct.growStructure(size)
 

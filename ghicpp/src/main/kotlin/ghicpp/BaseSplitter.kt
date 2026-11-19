@@ -9,7 +9,12 @@ import ghidrakt.diagnose.DiagnosticSink
  * Splits a polymorphic base subobject around the vptr a deriving class takes over, whatever laid the
  * class: the stabs import's vfptr placement, or a class pass off the RTTI and the constructors.
  */
-class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : DiagnosticSink by sink {
+class BaseSplitter(
+    private val registry: DtmRegistry,
+    sink: DiagnosticSink,
+    /** A vptr's size: the data organization's, unless that has none of its own (an archive with no architecture). */
+    private val pointerSize: Int = registry.dtm.dataOrganization.pointerSize,
+) : DiagnosticSink by sink {
     private val dtm = registry.dtm
 
     /** {vfptr} points at the function-pointer array at the vtable's address point, not at the record. */
@@ -37,7 +42,7 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
     ): Boolean {
         val className = classPath.last()
         val baseDt = baseComp?.dataType as? Structure ?: return false
-        val ptr = dtm.dataOrganization.pointerSize
+        val ptr = pointerSize
         val vptrInBase = vptrInBase(baseDt, vptrOffset - baseComp.offset)
         val split = splitAround(baseDt.length, vptrInBase, ptr) ?: return false
         val baseOff = baseComp.offset
@@ -50,7 +55,8 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
             .forEachIndexed { i, own ->
                 val name = ClassNaming.FIELDS + "_tail".takeIf { i > 0 }.orEmpty()
                 val run = own.baseFieldsRun(baseDt) ?: return@forEachIndexed
-                layouts.forEach { embed(it, own, run, name) }
+                // A runtime's layout stays as the archive has it: its deriving classes hold a copy.
+                layouts.filterNot { it.isKnownLayout() }.forEach { embed(it, own, run, name) }
             }
 
         val head = split.head?.baseFieldsRun(baseDt)
@@ -134,9 +140,19 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
             StructureDataType(baseDt.categoryPath, name, length, dtm).apply {
                 description = "${baseDt.name} as a base subobject (+$first..${last + 1}): its fields " +
                     "without the vptr the deriving class now owns"
-                for (it in baseDt.definedComponents.filter(::holds)) {
-                    runCatching {
-                        replaceAtOffset(it.offset - first, it.dataType, it.length, it.fieldName, it.comment)
+                for (it in baseDt.definedComponents.filter(this@baseFieldsRun::overlaps)) {
+                    val inner = it.dataType as? Structure
+                    // A base of the base that the vptr word cuts, as a runtime's layout holds it whole
+                    // (`exception` in `runtime_error`): its own fields in the run, cut the same way.
+                    val part = if (holds(it) || inner == null) {
+                        it.takeIf(::holds)?.dataType
+                    } else {
+                        (maxOf(first, it.offset) - it.offset..minOf(last, it.endOffset) - it.offset)
+                            .baseFieldsRun(inner)
+                    }
+                    val at = maxOf(first, it.offset)
+                    if (part != null) {
+                        runCatching { replaceAtOffset(at - first, part, part.length, it.fieldName, it.comment) }
                     }
                 }
             }
