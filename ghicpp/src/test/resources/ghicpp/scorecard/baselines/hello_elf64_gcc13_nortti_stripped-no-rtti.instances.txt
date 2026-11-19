@@ -22,3 +22,5 @@ classes-fn `outer::inner::Deep` (namespace)
 methods-fn `Shape::~Shape` 102e00
 methods-fp 102f38 of `Diamond`: is `Left`'s
 structors-fn 102e00 of `Shape`
+vftables-fp 00106a88 of `Up`
+virtual-methods-fp 10326e of `Up`: is `Up`'s

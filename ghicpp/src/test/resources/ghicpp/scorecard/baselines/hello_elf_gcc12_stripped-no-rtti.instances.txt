@@ -28,6 +28,7 @@ field-sizes-fp `Rect`+12: 4, is 2
 field-sizes-fp `Rect`+8: 4, is 2
 field-sizes-fp `Shape`+12: 4, is 2
 field-sizes-fp `Shape`+8: 4, is 2
+fields-fn `Both`+4:4
 fields-fn `Circle`+10:2
 fields-fn `Diamond`+12:4
 fields-fn `Diamond`+32:4
@@ -46,6 +47,7 @@ methods-fn `Shape::~Shape` 11bb2
 methods-fp 11559 of `Circle`: no method
 methods-fp 11cea of `Diamond`: is `Left`'s
 sizes-fp `Right`: 4, is 12
-sizes-fp `Up`: 8, is 16
+sizes-fp `Up`: 24, is 16
 structors-fn 11bb2 of `Shape`
+vftables-fp 00015c3c of `Up`
 virtual-methods-fn `Shape::~Shape` 11bb2
