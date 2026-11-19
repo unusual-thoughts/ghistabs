@@ -52,9 +52,7 @@ class FillerByteAnalyzer :
 
         var marked = 0
         monitor.initialize(target.numAddresses, "Collapsing filler bytes")
-        for (range in listing.getUndefinedRanges(target, false, monitor)) {
-            monitor.checkCancelled()
-            monitor.progress = target.addressesBefore(range.minAddress)
+        for (range in listing.undefinedRangesIn(target, monitor)) {
             for ((at, len) in program.fillSpans(code, range)) {
                 if (runCatching { program.forceCreateData(at, AlignmentDataType(), len.toInt()) }.isSuccess) {
                     bookmarks.setBookmark(at, BookmarkType.ANALYSIS, NAME, "collapsed $len filler bytes")
