@@ -9,6 +9,7 @@ plugins {
     id("ghidra-extension")
     id("fixture-test-generator")
     id("integration-tests")
+    id("ghidra-javadoc")
 }
 
 dependencies {
@@ -24,6 +25,7 @@ dependencies {
     // AbstractGhidraHeadlessIntegrationTest and its harness, from the standard install paths.
     testImplementation(fileTree(ghidraInstallDir.resolve("Ghidra/Features/Base/lib")) { include("Base.jar") })
     testImplementation(fileTree(ghidraInstallDir.resolve("Ghidra/Test")) { include("**/lib/*.jar") })
+    ghidraJavadocClasspath(libs.junit4)
 }
 
 // Don't copy `binaries/` into build/resources/test/.
