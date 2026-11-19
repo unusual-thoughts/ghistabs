@@ -7,8 +7,9 @@ import ghidra.program.model.data.DataTypeManager
  * An archive's classes by a [key] that leaves out how a name is spelled, for the classes a demangler
  * names otherwise than the archive's DWARF did: Ghidra's GNU demangler writes `pair<int_const,int>` and
  * `vector<std::string>` where the DWARF importer filed `pair<int_const,_int>` and
- * `vector<std::basic_string<char,_std::char_traits<char>,_std::allocator<char>_>_>`. A key two of the
- * archive's classes share finds neither.
+ * `vector<std::basic_string<char,_std::char_traits<char>,_std::allocator<char>_>_>`, and the Microsoft
+ * one `basic_string<wchar_t,struct_std::char_traits<wchar_t>,…>` where the PDB left the keyword out. A key
+ * two of the archive's classes share finds neither.
  */
 class StlIndex(archive: DataTypeManager) {
     private val byKey: Map<String, Composite?> = buildMap {
@@ -36,13 +37,16 @@ class StlIndex(archive: DataTypeManager) {
         private val SUFFIX = Regex("(?<![A-Za-z0-9])(\\d+)(?:ull|ul|ll|u|l)(?![A-Za-z0-9])", RegexOption.IGNORE_CASE)
 
         /**
-         * [path] as one C++ name with each alias of [StlApplier.gnuAliases] written out, each leading
-         * cv-qualifier moved after its type, and its spaces, underscores and integer suffixes dropped: the
-         * importer writes `const T` where the demangler writes `T const`, and `0` where it writes `0ul`.
+         * [path] as one C++ name, [StlApplier.untagged], with each alias of [StlApplier.gnuAliases]
+         * written out, each leading cv-qualifier moved after its type, and its spaces, underscores and
+         * integer suffixes dropped: the importer writes `const T` where the demangler writes `T const`, and
+         * `0` where it writes `0ul`.
          */
         @JvmStatic
         fun key(path: List<String>): String {
-            val cxx = ALIAS.replace(path.joinToString("::")) { it.groupValues[1] + ALIASES.getValue(it.groupValues[2]) }
+            val cxx = ALIAS.replace(StlApplier.untagged(path.joinToString("::"))) {
+                it.groupValues[1] + ALIASES.getValue(it.groupValues[2])
+            }
             return SUFFIX.replace(trailingCv(cxx).replace('_', ' '), "$1").replace(" ", "")
         }
 

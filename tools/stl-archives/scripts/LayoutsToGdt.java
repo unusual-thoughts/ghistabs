@@ -215,6 +215,10 @@ public class LayoutsToGdt extends GhidraScript {
 					else if (length > 0) {
 						s.replaceAtOffset(offset, type, length, name, null);
 					}
+					else {
+						// A trailing `T x[0]`, which takes no room.
+						s.insertAtOffset(offset, type, 0, name, null);
+					}
 				}
 				catch (InvalidDataTypeException e) {
 					throw new IllegalStateException(path + " +" + offset, e);

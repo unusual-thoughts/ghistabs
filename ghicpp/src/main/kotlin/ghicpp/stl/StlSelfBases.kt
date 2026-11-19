@@ -32,6 +32,39 @@ object StlSelfBases {
         return laid
     }
 
+    /**
+     * Lays each non-virtual base the importer dropped because an empty base sits at its offset, as the
+     * empty base optimization puts one: `_Deque_impl` derives from the empty `allocator<int>` and from
+     * `_Deque_impl_data` at offset 0, and the importer, which gives the empty base a byte, keeps only it.
+     * The empty base goes, as it has no bytes; the classes file still lists it. Returns how many it laid.
+     */
+    @JvmStatic
+    fun layDropped(dtm: DataTypeManager, classes: List<StdClass>): Int {
+        var laid = 0
+        for (cls in StlShape.baseFirst(classes)) {
+            val struct = dtm.getDataType(cls.path) as? Structure ?: continue
+            val direct = cls.bases.filterNot { it.isVirtual }
+            laid += direct.count { layDropped(dtm, struct, it, direct.size) }
+        }
+        return laid
+    }
+
+    private fun layDropped(dtm: DataTypeManager, struct: Structure, base: StdBase, bases: Int): Boolean {
+        val at = base.offset?.toInt() ?: return false
+        val type = dtm.getDataType(base.path) as? Structure ?: return false
+        if (isEmpty(type) || at + type.length > struct.length) return false
+        if (struct.definedComponents.any { it.offset == at && isOf(it.dataType.pathName, base.path) }) return false
+        val overlapping = struct.definedComponents.filter { it.offset < at + type.length && it.offset + it.length > at }
+        if (overlapping.any { c -> (c.dataType as? Structure)?.let(::isEmpty) != true }) return false
+        overlapping.reversed().forEach { struct.clearAtOffset(it.offset) }
+        val name = ClassNaming.baseFieldName(false, CategoryPath(base.path).name, bases)
+        return runCatching { struct.replaceAtOffset(at, type, type.length, name, null) }.isSuccess
+    }
+
+    /** An empty class, which the importer lays as one byte: undefined, or its own empty bases'. */
+    private fun isEmpty(struct: Structure): Boolean = struct.length <= 1 &&
+        struct.definedComponents.all { (it.dataType as? Structure)?.let(::isEmpty) == true }
+
     /** Whether [type] is the class at [path] or its self-base. */
     private fun isOf(type: String, path: String) = type == path || type.startsWith("$path/")
 

@@ -40,7 +40,35 @@ class StlApplier(
     fun apply(): Result {
         val (replaced, filled) = replacePlaceholders()
         val laid = layClasses()
+        if (roots == GNU_ROOTS) nameAliasedClasses()
         return Result(replaced, filled, record(), laid)
+    }
+
+    /**
+     * Files each class the GNU demangler names by an alias ([gnuAliases]) under that alias, in place of the
+     * empty struct Ghidra made for its methods' `this`: a method of `std::__cxx11::string` takes a
+     * `string *`, and Ghidra finds a class's struct by the class's own name, so the class must be the
+     * struct `/std/__cxx11/string`. A function taking `std::string const&` then passes the same type its
+     * methods take, where it took a `basic_string<char,…> *` the decompiler cast at every call. The
+     * archive's typedef of the alias, if it came in, is folded into the class. Returns how many it named.
+     */
+    private fun nameAliasedClasses(): Int {
+        var named = 0
+        for (category in listOf(CategoryPath("/std"), CategoryPath("/std/__cxx11"))) {
+            val structs = dtm.getCategory(category)?.dataTypes.orEmpty().filterIsInstance<Structure>()
+                .filterNot { it.isNotYetDefined }
+                .groupBy { StlIndex.key(category.pathElements.toList() + it.name) }
+            for ((alias, target) in gnuAliases()) {
+                val real = structs[StlIndex.key(category.pathElements.toList() + target)]?.singleOrNull() ?: continue
+                val existing = dtm.getDataType(category, alias)
+                val foldable = existing == null || (existing is Structure && existing.isNotYetDefined) ||
+                    (existing is TypeDef && existing.baseDataType == real)
+                if (!foldable) continue
+                if (existing != null) dtm.replaceDataType(existing, real, false)
+                if (runCatching { real.name = alias }.isSuccess) named++
+            }
+        }
+        return named
     }
 
     private fun replacePlaceholders(): Pair<Int, Int> {
@@ -115,6 +143,16 @@ class StlApplier(
     companion object {
         /** MSVC's standard library namespaces. */
         val MSVC_ROOTS = setOf("std", "stdext")
+
+        private val TAG = Regex("(?<=[<,(])(?:struct|class)_")
+
+        /**
+         * [name] without the keyword the Microsoft demangler puts before a template argument that is a
+         * class: it writes `basic_string<wchar_t,struct_std::char_traits<wchar_t>,class_std::allocator<wchar_t>_>`
+         * where the PDB, and so the archive, mostly writes `basic_string<wchar_t,std::char_traits<wchar_t>,…>`.
+         */
+        @JvmStatic
+        fun untagged(name: String): String = TAG.replace(name, "")
 
         /** libstdc++'s: `__gnu_cxx` holds its extensions and the iterators of its containers. */
         @JvmField

@@ -92,8 +92,31 @@ jobs:
           path: gcc_probe
           if-no-files-found: error
 
+  # gcc 3.3, for libstdc++.so.5, from Debian etch's packages: see gcc3_probe.sh.
+  gcc3-probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: x86, arch: i386 }
+          - { name: x64, arch: amd64 }
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the probe
+        run: |
+          sudo apt-get update -q && sudo apt-get install -yq debootstrap
+          sudo tools/stl-archives/gcc3_probe.sh gcc_probe ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gcc3-probe-${{ matrix.name }}
+          path: gcc_probe
+          if-no-files-found: error
+
   archives:
-    needs: [ probe, gcc-probe ]
+    needs: [ probe, gcc-probe, gcc3-probe ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -205,6 +228,9 @@ jobs:
           for name in x86 x64 mingw_x86 mingw_x64; do
             tools/stl-archives/run.sh gcc archives/libstdcxx_$name.gdt probes/gcc-probe-$name/gcc_probe
           done
+          for name in x86 x64; do
+            tools/stl-archives/run.sh gcc archives/libstdcxx5_$name.gdt probes/gcc3-probe-$name/gcc_probe
+          done
 
       - name: Check against Microsoft's msvcp140 layouts
         run: |
@@ -221,7 +247,7 @@ jobs:
           for gdt in archives/*.gdt; do
             tools/stl-archives/run.sh layouts $program "$gdt" layouts/$(basename "$gdt" .gdt).txt
           done
-          cp archives/libstdcxx_*.txt layouts/
+          cp archives/libstdcxx*.txt layouts/
           for txt in layouts/*.txt; do
             name=$(basename "$txt" .txt)
             case $name in libstdcxx*) dir=libstdcxx ;; *) dir=msvc ;; esac
@@ -292,7 +318,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp120_x86, msvcp120_x64, msvcp90_x86, msvcp90_x64, msvcp80_x86, msvcp70_x86, msvcp60_x86, msvcp50_x86, libstdcxx_x86, libstdcxx_x64, libstdcxx_mingw_x86, libstdcxx_mingw_x64]
+        name: [msvcp140_x86, msvcp140_x64, msvcp140d_x86, msvcp140d_x64, msvcp120_x86, msvcp120_x64, msvcp90_x86, msvcp90_x64, msvcp80_x86, msvcp70_x86, msvcp60_x86, msvcp50_x86, libstdcxx_x86, libstdcxx_x64, libstdcxx_mingw_x86, libstdcxx_mingw_x64, libstdcxx5_x86, libstdcxx5_x64]
     steps:
       - uses: actions/download-artifact@v7
         with:
@@ -336,6 +362,10 @@ jobs:
           name: portable-archives
           path: archives
 
+      # Ghidra 11 and on cannot restore the architecture of an archive 10.4 wrote, as x86's language
+      # version has moved since, so they read it with the default data organization: no A record, and
+      # B records (the built-ins' sizes) that follow it. A program that takes the archive's types lays
+      # out the built-ins its own way, so only the other records must read back the same there.
       - name: Read the archives
         run: |
           mkdir -p readback
@@ -343,7 +373,14 @@ jobs:
           for txt in layouts/*.txt; do
             name=$(basename "$txt" .txt)
             tools/stl-archives/run.sh layouts ghicpp/src/test/resources/binaries/features/hello_msvc.exe archives/$name.gdt readback/$name.txt
-            cmp -s "$txt" readback/$name.txt || { echo "::error::$name reads differently"; diff -u "$txt" readback/$name.txt | head -40; status=1; }
+            expected=$txt
+            if grep -q '^A' "$txt" && ! grep -q '^A' readback/$name.txt; then
+              echo "::notice::$name: this Ghidra does not restore the archive's architecture"
+              expected=readback/$name.expected
+              grep -v '^[AB]'$'\t' "$txt" > $expected
+              grep -v '^B'$'\t' readback/$name.txt > readback/$name.tmp && mv readback/$name.tmp readback/$name.txt
+            fi
+            cmp -s "$expected" readback/$name.txt || { echo "::error::$name reads differently"; diff -u "$expected" readback/$name.txt | head -40; status=1; }
           done
           exit $status
 
