@@ -5,6 +5,7 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassEdit
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.slotDefinition
+import ghicpp.dissect.FieldRetype
 import ghicpp.dissect.updateFieldTypes
 import ghicpp.hierarchy.ClassHierarchy.*
 import ghidra.program.model.data.*
@@ -252,11 +253,15 @@ internal fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == Me
 
 /**
  * Retypes [cls]'s own fields off what [methods] load and store through `this`, or off all of [methodsOf] its
- * namespace's when null.
+ * namespace's when null. The fields it typed.
  */
-internal fun Program.updateFieldTypes(cls: ClassView, methods: List<Function>?, monitor: TaskMonitor) {
-    val ns = resolve(cls) ?: return
-    updateFieldTypes(ns, methods ?: methodsOf(ns), monitor)
+internal fun Program.updateFieldTypes(
+    cls: ClassView,
+    methods: List<Function>?,
+    monitor: TaskMonitor,
+): List<FieldRetype> {
+    val ns = resolve(cls) ?: return emptyList()
+    return updateFieldTypes(ns, methods ?: methodsOf(ns), monitor)
 }
 
 /**
