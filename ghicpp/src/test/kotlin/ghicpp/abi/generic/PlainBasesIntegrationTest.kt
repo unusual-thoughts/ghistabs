@@ -79,6 +79,12 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun `an inferred base says it is the analysis's`() {
+        bases(mapOf("dCtor" to setOf("D"), "bCtor" to setOf("B")), mapOf("dCtor" to mapOf(0L to setOf("bCtor"))))
+        classes.getValue("D").bases.map { it.source } mustBe listOf(SourceType.ANALYSIS)
+    }
+
+    @Test
     fun `a structor calling another class's on this makes that class its base, and on a member nothing`() {
         bases(
             mapOf("dCtor" to setOf("D"), "bCtor" to setOf("B"), "cCtor" to setOf("C")),
