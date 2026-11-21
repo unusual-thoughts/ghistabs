@@ -26,6 +26,12 @@ dependencies {
     testImplementation(fileTree(ghidraInstallDir.resolve("Ghidra/Test")) { include("**/lib/*.jar") })
 }
 
+// ghicpp's STL archives, where Ghidra lists them with its own, so a program's types stay linked to them.
+tasks.named<Zip>("buildExtension") {
+    include("msvc/**")
+    from(project(":ghicpp").layout.projectDirectory.dir("data/typeinfo")) { into("${project.name}/data/typeinfo") }
+}
+
 // Don't copy `binaries/` into build/resources/test/.
 tasks.processTestResources {
     exclude("binaries/**")
