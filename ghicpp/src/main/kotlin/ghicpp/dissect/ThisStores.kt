@@ -41,13 +41,23 @@ internal fun Stores.withFills(fills: Stores): Stores {
 
 /**
  * The [classes] whose vtables a function stores into `this` where they belong, and what it calls on `this` or a
- * subobject of it [before] the first of those stores and [after] the last.
+ * subobject of it [before] the first of those stores and [after] the last. [elsewhere] maps each other offset
+ * into `this` to the classes whose primary table it stores there, in store order. [vbases] holds the offsets it
+ * stores at through a vbtable, which are its virtual bases' offsets.
  */
 data class VptrStores(
     val classes: Set<ClassDecl> = emptySet(),
     val before: Set<Function> = emptySet(),
     val after: Set<Function> = emptySet(),
+    val elsewhere: Map<Long, List<ClassDecl>> = emptyMap(),
+    val vbases: Set<Long> = emptySet(),
 )
+
+/**
+ * A call of [callee] on `this` + [offset] that passes the address [vtt] after `this`. An Itanium structor calls
+ * the base-object structor of a base that has virtual bases this way, with [vtt] pointing at the base's sub-VTT.
+ */
+data class VttCall(val offset: Long, val callee: Function, val vtt: Address)
 
 /**
  * One class's share of an [InlinedConstruction]: what the code from its vptr store up to the next class's calls on
@@ -89,6 +99,11 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
      */
     val objectsBuilt: Map<Function, Map<ClassDecl, Map<Long, Address>>> =
         from.filterValues { it.objectsBuilt.isNotEmpty() }.mapValues { (_, r) -> r.objectsBuilt }
+
+    /** The calls each function makes on `this` that pass a constant address after `this` ([VttCall]). */
+    val vttCalls: Map<Function, List<VttCall>> = objectCalls.mapValues { (_, calls) ->
+        calls.mapNotNull { c -> c.next?.takeIf { c.obj == CalledObject.This }?.let { VttCall(c.offset, c.callee, it) } }
+    }.filterValues { it.isNotEmpty() }
 
     /** The functions each calls on `this` itself. */
     private val thisCalls = subobjectCalls.mapValues { (_, calls) -> calls[0L].orEmpty() }

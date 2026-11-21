@@ -1,6 +1,7 @@
 package ghicpp.abi.generic
 
 import ghicpp.*
+import ghicpp.abi.functionSlots
 import ghicpp.abi.holdsPureVirtualStub
 import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.ofVtableSymbol
@@ -10,6 +11,7 @@ import ghicpp.dissect.DissectingParser
 import ghicpp.dissect.DissectionCache
 import ghicpp.dissect.Dissections
 import ghicpp.dissect.ThisFunctionDissector
+import ghicpp.recover.GenericVftableFinder
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -268,12 +270,12 @@ internal class BaseCandidates(
                 )
                 continue
             }
-            cls.bases += ClassBase(base, isVirtual = false, Access.PUBLIC, 0L)
+            cls.bases += ClassBase(base, isVirtual = false, access = null, 0L)
             debug("base-inferred", "${cls.name} : ${base.name}, as ${evidenceOf(cls, base)}", cls.at)
         }
         for ((cls, offsets) in subobjects) {
             val found = offsets.mapNotNull { (offset, isVirtual) ->
-                subobjectBase(cls, offset, uses)?.let { ClassBase(it, isVirtual, Access.PUBLIC, offset) }
+                subobjectBase(cls, offset, uses)?.let { ClassBase(it, isVirtual, access = null, offset) }
             }
             // A virtual base may be one of another base's, which the complete-object constructor builds as well:
             // not while a non-virtual subobject's class is unknown, as it may be the one deriving from it.
@@ -368,22 +370,23 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
 
     override fun parse(monitor: TaskMonitor): ClassPassInput {
         monitor.message = "Reading vftable labels"
-        // The primary first, then its secondaries ([ClassNaming.plainSecondaryLabel]) by their subobjects' offsets.
-        val classes = symbols.getSymbols(ClassNaming.VFTABLE).iterator().asSequence()
-            .filter { it.isPlain() }
-            .groupBy { it.parentNamespace.id }
-            .values.map { labels ->
-                val ns = labels.first().parentNamespace
-                val secondaries = symbols.getSymbols(ns).iterator().asSequence()
-                    .mapNotNull { sym -> ClassNaming.plainSubobjectOffset(sym.name)?.let { it to sym } }
-                    .sortedBy { it.first }.map { it.second }
-                PlainClass(ns, (labels + secondaries).map { PlainVtables.recordAt(program, it.address) })
-            }
+        var classes = readClasses()
         // Look up the slots' functions before reading the storers. Looking one up can create it, which changes
         // the program, and the class pass would then have to decompile the storers again.
-        val targets = classes.associateWith { c ->
-            c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty()
+        var targets = targetsOf(classes)
+        var uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
+        val finder = GenericVftableFinder(program, sink = sink)
+        if (finder.regroup(secondaries(classes, uses)) > 0) {
+            classes = readClasses()
+            targets = targetsOf(classes)
+            uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
         }
+        if (vttStructors(classes, uses, finder) == null) {
+            classes = readClasses()
+            targets = targetsOf(classes)
+            uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
+        }
+        val vtt = vttStructors(classes, uses, null).orEmpty()
         val own = targets.mapValues { (_, ats) ->
             ats.map { at -> at.takeIf { it.offset != 0L }?.let { program.slotFunction(it, PlainVtables) } }
         }
@@ -393,24 +396,167 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         // the class pass reads the same functions next, through the same cache.
         val held = slots.values.flatMapTo(mutableSetOf()) { it.filterNotNull() }
         val holders = holders(classes)
-        val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor, held)
+        uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor, held)
         monitor.message = "Inferring bases from constructors"
         BaseCandidates(
             slots,
             pureSlots(targets, own),
             sink,
-        ).inferBases(classes, uses, classes.associateWith(::subobjects))
-        return ClassPassInput(classes, classes, holders)
+        ).inferBases(classes, uses, classes.associateWith { subobjects(it, uses) })
+        for (v in vtt) {
+            if (v.built == v.base || v.built.bases.any { it.cls == v.base } || v.base.derivesFrom(v.built)) continue
+            val isVirtual = v.offset in v.built.headerVbaseOffsets
+            v.built.bases += ClassBase(v.base, isVirtual, access = null, v.offset)
+        }
+        return ClassPassInput(classes, classes, holders, vtt.associate { it.structor to it.base })
+    }
+
+    /** The slots of each class's primary table, with its null ones, its functions looked up and so created. */
+    private fun targetsOf(classes: List<PlainClass>): Map<PlainClass, List<Address>> = classes.associateWith { c ->
+        c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty()
+            .onEach { at -> at.takeIf { it.offset != 0L }?.let { program.slotFunction(it, PlainVtables) } }
+    }
+
+    /** The classes of the plain `vftable` labels: the primary first, then its secondaries by their offsets. */
+    private fun readClasses(): List<PlainClass> = symbols.getSymbols(ClassNaming.VFTABLE).iterator().asSequence()
+        .filter { it.isPlain() }
+        .groupBy { it.parentNamespace.id }
+        .values.map { labels ->
+            val ns = labels.first().parentNamespace
+            val secondaries = symbols.getSymbols(ns).iterator().asSequence()
+                .mapNotNull { sym -> ClassNaming.plainSubobjectOffset(sym.name)?.let { it to sym } }
+                .sortedBy { it.first }.map { it.second }
+            PlainClass(ns, (labels + secondaries).map { PlainVtables.recordAt(program, it.address) })
+        }
+
+    /**
+     * The classes of [classes] whose table is really another class's secondary table, each mapped to that class
+     * and to the offset of its base subobject.
+     *
+     * An MSVC constructor first calls each base's constructor, which stores the base's own table in the base
+     * subobject. It then overwrites that with its own class's table for that subobject. Unlike an Itanium vtable
+     * group, nothing in front of the table (no `offset_to_top`) says which class it belongs to. So a table counts
+     * as a secondary when it is only ever stored past `this` + 0, it is the last table stored at that offset, every
+     * function storing it also stores one class's primary table at `this` + 0, and that class has no table at the
+     * offset yet.
+     */
+    private fun secondaries(classes: List<PlainClass>, uses: Dissections): Map<Address, Pair<GhidraClass, Long>> {
+        val ownStored = uses.stores.values.flatMapTo(mutableSetOf()) { it.classes }
+        val placements = mutableMapOf<PlainClass, MutableSet<Pair<PlainClass, Long>>>()
+        val notLast = mutableSetOf<ClassDecl>()
+        for (stores in uses.stores.values) {
+            for ((offset, stored) in stores.elsewhere) {
+                notLast += stored.dropLast(1)
+                val table = stored.last() as? PlainClass ?: continue
+                // Several primaries can be stored at `this` + 0 when a base's constructor is inlined first. The
+                // owner is the one with the longest table, since a class's table holds all of its bases' slots.
+                val longest = stores.classes.groupBy { c -> c.vftables.firstOrNull()?.slots(program)?.size ?: 0 }
+                    .maxByOrNull { it.key }?.value
+                val owner = longest?.singleOrNull() as? PlainClass
+                val placement = owner?.takeIf { o -> o.vftables.none { it.vfptrOffset(program) == offset } }
+                placements.getOrPut(table) { mutableSetOf() } += (placement ?: table) to offset
+            }
+        }
+        return classes.filter { it.vftables.size == 1 && it !in ownStored && it !in notLast }.mapNotNull { cls ->
+            val (owner, offset) = placements[cls]?.singleOrNull()?.takeIf { it.first != cls } ?: return@mapNotNull null
+            val ns = owner.ns as? GhidraClass ?: return@mapNotNull null
+            cls.vftables.single().addressPoint to (ns to offset)
+        }.toMap()
+    }
+
+    /** A base-object [structor] of [base], which a structor of [built] calls on its subobject at [offset]. */
+    private class VttStructor(val structor: Function, val base: PlainClass, val built: PlainClass, val offset: Long)
+
+    /**
+     * The base-object structors that load their vptrs from a VTT, each with its class.
+     *
+     * In Itanium, a base with virtual bases is built by a base-object constructor. The deriving class's
+     * constructor passes it a pointer into the deriving class's VTT, where the base's sub-VTT starts. The
+     * base-object constructor then stores the vptrs that the sub-VTT points at, which are construction vtables.
+     * Code never takes those vtables' addresses directly, so neither the finder's seeds nor the stores that
+     * [ThisFunctionDissector] reads say which class they belong to.
+     *
+     * The VTT pointer is a constant in the caller, and the construction vtable it leads to holds the base's
+     * slots. So the base is the class whose primary table holds the same slots. If no class does, [finder] seeds
+     * a new one from the construction vtable. Returns null when it seeded any class, so that the classes are read
+     * again. It seeds nothing when there is no [finder].
+     */
+    private fun vttStructors(
+        classes: List<PlainClass>,
+        uses: Dissections,
+        finder: GenericVftableFinder?,
+    ): List<VttStructor>? {
+        val byTable = classes.associateBy { it.vftables.first().addressPoint }
+        val primaries = classes.associateWith { functionSlots(it.vftables.first().addressPoint) }
+        val found = mutableListOf<VttStructor>()
+        var seeded = false
+        for ((f, calls) in uses.vttCalls) {
+            val built = uses.stores[f]?.classes?.let(::longest) ?: continue
+            for (call in calls) {
+                if (uses.stores[call.callee]?.classes.orEmpty().isNotEmpty()) continue
+                val table = program.pointerAt(call.vtt)?.takeIf(::isConstructionTable) ?: continue
+                val base = byTable[table] ?: holding(functionSlots(table), primaries)
+                if (base == null) {
+                    if (finder?.seedConstruction(table) == true) seeded = true
+                    continue
+                }
+                found += VttStructor(call.callee, base, built, call.offset)
+            }
+        }
+        return found.takeUnless { seeded }
+    }
+
+    /**
+     * The class whose primary table holds the functions of [slots], each in the same slot. A null slot matches
+     * anything, because a construction vtable may leave a destructor's slot null. When several classes match, it
+     * picks the one with the shortest table, since classes deriving from it hold the same slots too. It returns
+     * null when two matches are equally short.
+     */
+    private fun holding(slots: List<Address>, primaries: Map<PlainClass, List<Address>>): PlainClass? {
+        if (slots.none { it.offset != 0L }) return null
+        val holders = primaries.filter { (_, own) ->
+            own.size >= slots.size && slots.withIndex().all { (i, at) -> at.offset == 0L || own[i] == at }
+        }
+        val shortest = holders.values.minOfOrNull { it.size } ?: return null
+        return holders.filterValues { it.size == shortest }.keys.singleOrNull()
+    }
+
+    /**
+     * The class in [stored] with the longest primary table, or null on a tie. A class's table holds all of its
+     * bases' slots, so the longest one belongs to the most derived class.
+     */
+    private fun longest(stored: Set<ClassDecl>): PlainClass? =
+        stored.filterIsInstance<PlainClass>().groupBy { functionSlots(it.vftables.first().addressPoint).size }
+            .maxByOrNull { it.key }?.value?.singleOrNull()
+
+    private fun functionSlots(at: Address) = program.functionSlots(at, PlainVtables).toList()
+
+    /**
+     * Whether the [table] that a VTT word points at is a vtable's address point. It must be in data, come after an
+     * `offset_to_top` of 0 or less and an RTTI word that is null or points at data, and have at least one function
+     * in its slots. Not every slot needs one, because a construction vtable may leave its destructor slots null.
+     */
+    private fun isConstructionTable(table: Address): Boolean {
+        val block = program.memory.getBlock(table) ?: return false
+        if (block.isExecute || !block.isInitialized) return false
+        val top = table.signedWordBefore(program, 2) ?: return false
+        val rtti = table.signedWordBefore(program, 1) ?: return false
+        val rttiIsData = rtti == 0L || program.addressFactory.defaultAddressSpace.runCatching { getAddress(rtti) }
+            .getOrNull()?.let { program.memory.getBlock(it)?.let { b -> b.isInitialized && !b.isExecute } } == true
+        return top <= 0 && -top < PlainVtables.MAX_SUBOBJECT_OFFSET && rttiIsData &&
+            functionSlots(table).any { it.offset != 0L }
     }
 
     /**
      * The offsets of [cls]'s base subobjects that have secondary tables, each with whether the base is virtual:
-     * in an Itanium group, a virtual base's offset is one of the vbase offsets in front of the primary's
-     * `offset_to_top`.
+     * In an Itanium vtable group, a virtual base's offset is one of the vbase offsets in front of the primary's
+     * `offset_to_top`. An MSVC class's structors store its virtual bases' tables through a vbtable.
      */
-    private fun subobjects(cls: PlainClass): Map<Long, Boolean> {
+    private fun subobjects(cls: PlainClass, uses: Dissections): Map<Long, Boolean> {
         val primary = cls.vftables.firstOrNull()?.addressPoint ?: return emptyMap()
-        val vbaseOffsets = if (primary.signedWordBefore(program, 2) == 0L) {
+        // A construction vtable's vbase offsets place the virtual bases in the class it is built inside, not in
+        // this one. Only a VTT points at a construction vtable: no code takes its address.
+        val vbaseOffsets = if (primary.signedWordBefore(program, 2) == 0L && primary.isTakenByCode()) {
             (3..2 + MAX_VBASE_WORDS).asSequence().map { primary.signedWordBefore(program, it) }
                 .takeWhile { it != null && it in ptr until PlainVtables.MAX_SUBOBJECT_OFFSET }
                 .filterNotNull().toSet()
@@ -418,9 +564,13 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             emptySet()
         }
         cls.headerVbaseOffsets = vbaseOffsets
+        val throughVbtable = uses.stores.values.filter { cls in it.classes }.flatMapTo(mutableSetOf()) { it.vbases }
         return cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } }
-            .associateWith { it in vbaseOffsets }
+            .associateWith { it in vbaseOffsets || it in throughVbtable }
     }
+
+    private fun Address.isTakenByCode() =
+        program.referenceManager.getReferencesTo(this).any { program.listing.getInstructionAt(it.fromAddress) != null }
 
     /**
      * The indices of each class's primary table's pure virtual slots, off what its slots point at ([targets]) and

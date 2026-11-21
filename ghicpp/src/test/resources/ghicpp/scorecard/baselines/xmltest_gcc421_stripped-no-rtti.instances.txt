@@ -1,0 +1,663 @@
+abstract-fn `TiXmlBase`
+abstract-fn `TiXmlNode`
+abstract-fn `std::__codecvt_abstract_base<char,char,int>`
+abstract-fn `std::__codecvt_abstract_base<wchar_t,char,int>`
+abstract-fn `std::__ctype_abstract_base<wchar_t>`
+base-access-fn `TiXmlBase` of `TiXmlAttribute`: none, is public
+base-access-fn `TiXmlBase` of `TiXmlNode`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlComment`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlDeclaration`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlDocument`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlElement`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlText`: none, is public
+base-access-fn `TiXmlNode` of `TiXmlUnknown`: none, is public
+base-access-fn `TiXmlVisitor` of `TiXmlPrinter`: none, is public
+base-access-fn `std::ctype<char>` of `std::ctype_byname<char>`: none, is public
+base-access-fn `std::exception` of `std::bad_alloc`: none, is public
+base-access-fn `std::exception` of `std::bad_cast`: none, is public
+base-access-fn `std::exception` of `std::bad_exception`: none, is public
+base-access-fn `std::exception` of `std::bad_typeid`: none, is public
+base-access-fn `std::exception` of `std::ios_base::failure`: none, is public
+base-access-fn `std::locale::facet` of `std::__codecvt_abstract_base<char,char,int>`: none, is public
+base-access-fn `std::locale::facet` of `std::__codecvt_abstract_base<wchar_t,char,int>`: none, is public
+base-access-fn `std::locale::facet` of `std::__ctype_abstract_base<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::__timepunct<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::__timepunct<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::__timepunct_cache<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::__timepunct_cache<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::collate<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::collate<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::ctype<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::messages<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::messages<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::moneypunct<char,false>`: none, is public
+base-access-fn `std::locale::facet` of `std::moneypunct<char,true>`: none, is public
+base-access-fn `std::locale::facet` of `std::moneypunct<wchar_t,false>`: none, is public
+base-access-fn `std::locale::facet` of `std::moneypunct<wchar_t,true>`: none, is public
+base-access-fn `std::locale::facet` of `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::numpunct<char>`: none, is public
+base-access-fn `std::locale::facet` of `std::numpunct<wchar_t>`: none, is public
+base-access-fn `std::locale::facet` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: none, is public
+base-access-fn `std::locale::facet` of `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
+base-access-fn `std::messages<char>` of `std::messages_byname<char>`: none, is public
+base-access-fn `std::messages<wchar_t>` of `std::messages_byname<wchar_t>`: none, is public
+base-access-fn `std::moneypunct<char,false>` of `std::moneypunct_byname<char,false>`: none, is public
+base-access-fn `std::moneypunct<char,true>` of `std::moneypunct_byname<char,true>`: none, is public
+base-access-fn `std::moneypunct<wchar_t,false>` of `std::moneypunct_byname<wchar_t,false>`: none, is public
+base-access-fn `std::moneypunct<wchar_t,true>` of `std::moneypunct_byname<wchar_t,true>`: none, is public
+base-access-fn `std::numpunct<char>` of `std::numpunct_byname<char>`: none, is public
+base-access-fn `std::numpunct<wchar_t>` of `std::numpunct_byname<wchar_t>`: none, is public
+bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
+bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`
+bases-fn `?ctype_base` of `std::__ctype_abstract_base<wchar_t>`
+bases-fn `?ctype_base` of `std::ctype<char>`
+bases-fn `?messages_base` of `std::messages<char>`
+bases-fn `?messages_base` of `std::messages<wchar_t>`
+bases-fn `?money_base` of `std::moneypunct<char,false>`
+bases-fn `?money_base` of `std::moneypunct<char,true>`
+bases-fn `?money_base` of `std::moneypunct<wchar_t,false>`
+bases-fn `?money_base` of `std::moneypunct<wchar_t,true>`
+bases-fn `?time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
+bases-fn `?time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+bases-fn `std::__codecvt_abstract_base<char,char,int>` of `std::codecvt<char,char,int>`
+bases-fn `std::__codecvt_abstract_base<wchar_t,char,int>` of `std::codecvt<wchar_t,char,int>`
+bases-fn `std::__ctype_abstract_base<wchar_t>` of `std::ctype<wchar_t>`
+bases-fn `std::codecvt<char,char,int>` of `std::codecvt_byname<char,char,int>`
+bases-fn `std::codecvt<wchar_t,char,int>` of `std::codecvt_byname<wchar_t,char,int>`
+bases-fn `std::collate<char>` of `std::collate_byname<char>`
+bases-fn `std::collate<wchar_t>` of `std::collate_byname<wchar_t>`
+bases-fn `std::ctype<wchar_t>` of `std::ctype_byname<wchar_t>`
+bases-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>` of `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
+bases-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>` of `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+bases-fn `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>` of `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`
+bases-fn `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>` of `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+bases-fp `std::locale::facet` of `std::codecvt<char,char,int>`
+bases-fp `std::locale::facet` of `std::codecvt<wchar_t,char,int>`
+bases-fp `std::locale::facet` of `std::ctype<wchar_t>`
+classes-fp invented `Klass_0049640c` (inferred, vftable 0049640c)
+classes-fp invented `Klass_0049648c` (inferred, vftable 0049648c)
+classes-fp invented `Klass_004964cc` (inferred, vftable 004964cc)
+classes-fp invented `Klass_0049650c` (inferred, vftable 0049650c)
+classes-fp invented `Klass_0049654c` (inferred, vftable 0049654c)
+classes-fp invented `Klass_0049658c` (inferred, vftable 0049658c)
+classes-fp invented `Klass_004965cc` (inferred, vftable 004965cc)
+classes-fp invented `Klass_0049660c` (inferred, vftable 0049660c)
+classes-fp invented `Klass_0049668c` (inferred, vftable 0049668c)
+classes-fp invented `Klass_004966cc` (inferred, vftable 004966cc)
+classes-fp invented `Klass_0049670c` (inferred, vftable 0049670c)
+field-sizes-fp `std::ios_base`+36: 4, is 64
+fields-fn `TiXmlAttribute`+4:4
+fields-fn `TiXmlAttribute`+8:4
+fields-fn `TiXmlBase`+4:4
+fields-fn `TiXmlBase`+8:4
+fields-fn `TiXmlComment`+4:4
+fields-fn `TiXmlComment`+8:4
+fields-fn `TiXmlDeclaration`+4:4
+fields-fn `TiXmlDeclaration`+8:4
+fields-fn `TiXmlDocument`+44:1
+fields-fn `TiXmlDocument`+48:4
+fields-fn `TiXmlDocument`+4:4
+fields-fn `TiXmlDocument`+60:4
+fields-fn `TiXmlDocument`+64:4
+fields-fn `TiXmlDocument`+8:4
+fields-fn `TiXmlElement`+44:4
+fields-fn `TiXmlElement`+48:4
+fields-fn `TiXmlElement`+4:4
+fields-fn `TiXmlElement`+52:4
+fields-fn `TiXmlElement`+56:4
+fields-fn `TiXmlElement`+60:4
+fields-fn `TiXmlElement`+64:4
+fields-fn `TiXmlElement`+68:4
+fields-fn `TiXmlElement`+8:4
+fields-fn `TiXmlNode`+4:4
+fields-fn `TiXmlNode`+8:4
+fields-fn `TiXmlText`+4:4
+fields-fn `TiXmlText`+8:4
+fields-fn `TiXmlUnknown`+4:4
+fields-fn `TiXmlUnknown`+8:4
+fields-fn `std::__codecvt_abstract_base<char,char,int>`+4:4
+fields-fn `std::__codecvt_abstract_base<wchar_t,char,int>`+4:4
+fields-fn `std::__ctype_abstract_base<wchar_t>`+4:4
+fields-fn `std::__timepunct<char>`+12:4
+fields-fn `std::__timepunct<wchar_t>`+12:4
+fields-fn `std::codecvt_byname<char,char,int>`+4:4
+fields-fn `std::codecvt_byname<char,char,int>`+8:4
+fields-fn `std::codecvt_byname<wchar_t,char,int>`+4:4
+fields-fn `std::codecvt_byname<wchar_t,char,int>`+8:4
+fields-fn `std::collate_byname<char>`+4:4
+fields-fn `std::collate_byname<char>`+8:4
+fields-fn `std::collate_byname<wchar_t>`+4:4
+fields-fn `std::collate_byname<wchar_t>`+8:4
+fields-fn `std::ctype<char>`+8:4
+fields-fn `std::ctype<wchar_t>`+13:128
+fields-fn `std::ctype<wchar_t>`+142:512
+fields-fn `std::ctype<wchar_t>`+654:32
+fields-fn `std::ctype<wchar_t>`+686:32
+fields-fn `std::ctype_byname<char>`+8:4
+fields-fn `std::ctype_byname<wchar_t>`+12:1
+fields-fn `std::ctype_byname<wchar_t>`+13:128
+fields-fn `std::ctype_byname<wchar_t>`+142:512
+fields-fn `std::ctype_byname<wchar_t>`+4:4
+fields-fn `std::ctype_byname<wchar_t>`+654:32
+fields-fn `std::ctype_byname<wchar_t>`+686:32
+fields-fn `std::ctype_byname<wchar_t>`+8:4
+fields-fn `std::locale::facet`+4:4
+fields-fn `std::messages<char>`+12:4
+fields-fn `std::messages<wchar_t>`+12:4
+fields-fn `std::messages_byname<char>`+12:4
+fields-fn `std::messages_byname<wchar_t>`+12:4
+fields-fn `std::type_info`+4:4
+fields-fp `std::ios_base`+40:4
+methods-fn `TiXmlAttribute::DoubleValue` 405b06
+methods-fn `TiXmlAttribute::IntValue` 405b3e
+methods-fn `TiXmlAttribute::NameTStr` 41da80
+methods-fn `TiXmlAttribute::Name` 41da2c
+methods-fn `TiXmlAttribute::Next` 401c02
+methods-fn `TiXmlAttribute::Previous` 401b9c
+methods-fn `TiXmlAttribute::QueryDoubleValue` 40631c
+methods-fn `TiXmlAttribute::QueryIntValue` 4064a2
+methods-fn `TiXmlAttribute::SetDoubleValue` 405b64
+methods-fn `TiXmlAttribute::SetIntValue` 405c4a
+methods-fn `TiXmlAttribute::SetName` 41a094
+methods-fn `TiXmlAttribute::SetName` 41a0b4
+methods-fn `TiXmlAttribute::SetValue` 41a0d4
+methods-fn `TiXmlAttribute::SetValue` 41a0f4
+methods-fn `TiXmlAttribute::ValueStr` 41da8c
+methods-fn `TiXmlBase::ConvertUTF32ToUTF8` 407f48
+methods-fn `TiXmlBase::EncodeString` 405cea
+methods-fn `TiXmlBase::GetChar` 41ab00
+methods-fn `TiXmlBase::GetEntity` 408ece
+methods-fn `TiXmlBase::IsAlphaNum` 409704
+methods-fn `TiXmlBase::IsAlpha` 40973c
+methods-fn `TiXmlBase::IsWhiteSpaceCondensed` 41aaf0
+methods-fn `TiXmlBase::IsWhiteSpace` 41aa70
+methods-fn `TiXmlBase::IsWhiteSpace` 41aab4
+methods-fn `TiXmlBase::ReadName` 40aa52
+methods-fn `TiXmlBase::ReadText` 409220
+methods-fn `TiXmlBase::SkipWhiteSpace` 40822a
+methods-fn `TiXmlBase::StreamTo` 40833c
+methods-fn `TiXmlBase::StreamWhiteSpace` 4083c4
+methods-fn `TiXmlBase::StringEqual` 408c26
+methods-fn `TiXmlBase::ToLower` 41ac0c
+methods-fn `TiXmlComment::operator=` 401a98
+methods-fn `TiXmlDeclaration::Encoding` 41dac4
+methods-fn `TiXmlDeclaration::operator=` 401b2a
+methods-fn `TiXmlDocument::Error` 41da10
+methods-fn `TiXmlDocument::LoadFile` 4078f8
+methods-fn `TiXmlDocument::LoadFile` 407d4e
+methods-fn `TiXmlDocument::LoadFile` 407f18
+methods-fn `TiXmlDocument::SaveFile` 406ac8
+methods-fn `TiXmlDocument::SaveFile` 407cc4
+methods-fn `TiXmlDocument::SaveFile` 407d22
+methods-fn `TiXmlDocument::operator=` 4071b0
+methods-fn `TiXmlElement::Attribute` 401e60
+methods-fn `TiXmlElement::Attribute` 404042
+methods-fn `TiXmlElement::Attribute` 4063f4
+methods-fn `TiXmlElement::Attribute` 40644a
+methods-fn `TiXmlElement::Attribute` 4065d8
+methods-fn `TiXmlElement::Attribute` 40662e
+methods-fn `TiXmlElement::GetText` 401996
+methods-fn `TiXmlElement::QueryBoolAttribute` 407b4e
+methods-fn `TiXmlElement::QueryDoubleAttribute` 406368
+methods-fn `TiXmlElement::QueryDoubleAttribute` 4063ae
+methods-fn `TiXmlElement::QueryIntAttribute` 4064ee
+methods-fn `TiXmlElement::QueryIntAttribute` 406592
+methods-fn `TiXmlElement::QueryUnsignedAttribute` 406534
+methods-fn `TiXmlElement::RemoveAttribute` 404576
+methods-fn `TiXmlElement::SetAttribute` 404970
+methods-fn `TiXmlElement::SetAttribute` 404ab2
+methods-fn `TiXmlElement::SetAttribute` 405c7a
+methods-fn `TiXmlElement::SetDoubleAttribute` 405bbe
+methods-fn `TiXmlElement::SetDoubleAttribute` 405c04
+methods-fn `TiXmlElement::operator=` 4075e6
+methods-fn `TiXmlNode::Clear` 4013a0
+methods-fn `TiXmlNode::CopyTo` 4019f0
+methods-fn `TiXmlNode::FirstChildElement` 4013fe
+methods-fn `TiXmlNode::FirstChildElement` 40433a
+methods-fn `TiXmlNode::FirstChildElement` 41ad7c
+methods-fn `TiXmlNode::FirstChildElement` 41ad98
+methods-fn `TiXmlNode::FirstChild` 40420e
+methods-fn `TiXmlNode::FirstChild` 41acfc
+methods-fn `TiXmlNode::FirstChild` 41ad18
+methods-fn `TiXmlNode::FirstChild` 41db14
+methods-fn `TiXmlNode::GetDocument` 4014da
+methods-fn `TiXmlNode::GetDocument` 41ad30
+methods-fn `TiXmlNode::Identify` 409774
+methods-fn `TiXmlNode::InsertAfterChild` 406c88
+methods-fn `TiXmlNode::InsertBeforeChild` 406da0
+methods-fn `TiXmlNode::InsertEndChild` 40785c
+methods-fn `TiXmlNode::IterateChildren` 405400
+methods-fn `TiXmlNode::IterateChildren` 40545e
+methods-fn `TiXmlNode::LastChild` 4041b4
+methods-fn `TiXmlNode::LastChild` 41db78
+methods-fn `TiXmlNode::LinkEndChild` 406eb8
+methods-fn `TiXmlNode::NextSiblingElement` 40146c
+methods-fn `TiXmlNode::NextSiblingElement` 40413a
+methods-fn `TiXmlNode::NextSiblingElement` 41adb0
+methods-fn `TiXmlNode::NextSiblingElement` 41adcc
+methods-fn `TiXmlNode::NextSibling` 4040e0
+methods-fn `TiXmlNode::NextSibling` 41ad48
+methods-fn `TiXmlNode::NextSibling` 41ad64
+methods-fn `TiXmlNode::NextSibling` 41db2c
+methods-fn `TiXmlNode::PreviousSibling` 404086
+methods-fn `TiXmlNode::RemoveChild` 4054b0
+methods-fn `TiXmlNode::ReplaceChild` 406b4e
+methods-fn `TiXmlNode::SetValue` 41adf0
+methods-fn `TiXmlNode::Type` 41db44
+methods-fn `TiXmlNode::ValueTStr` 41dba8
+methods-fn `TiXmlNode::Value` 41db50
+methods-fn `TiXmlText::Blank` 4081ba
+methods-fn `TiXmlText::CDATA` 41dbb4
+methods-fn `std::__timepunct<char>::_M_am_pm_format` 420460
+methods-fn `std::__timepunct<char>::_M_am_pm` 420640
+methods-fn `std::__timepunct<char>::_M_date_formats` 420470
+methods-fn `std::__timepunct<char>::_M_date_time_formats` 4204f0
+methods-fn `std::__timepunct<char>::_M_days_abbreviated` 4204b0
+methods-fn `std::__timepunct<char>::_M_days` 420600
+methods-fn `std::__timepunct<char>::_M_months_abbreviated` 420510
+methods-fn `std::__timepunct<char>::_M_months` 420660
+methods-fn `std::__timepunct<char>::_M_put` 420590
+methods-fn `std::__timepunct<char>::_M_time_formats` 420490
+methods-fn `std::__timepunct<wchar_t>::_M_am_pm_format` 4206d0
+methods-fn `std::__timepunct<wchar_t>::_M_am_pm` 4208b0
+methods-fn `std::__timepunct<wchar_t>::_M_date_formats` 4206e0
+methods-fn `std::__timepunct<wchar_t>::_M_date_time_formats` 420760
+methods-fn `std::__timepunct<wchar_t>::_M_days_abbreviated` 420720
+methods-fn `std::__timepunct<wchar_t>::_M_days` 420870
+methods-fn `std::__timepunct<wchar_t>::_M_months_abbreviated` 420780
+methods-fn `std::__timepunct<wchar_t>::_M_months` 4208d0
+methods-fn `std::__timepunct<wchar_t>::_M_put` 420800
+methods-fn `std::__timepunct<wchar_t>::_M_time_formats` 420700
+methods-fn `std::codecvt<char,char,int>::do_always_noconv` 421dc0
+methods-fn `std::codecvt<char,char,int>::do_encoding` 421da0
+methods-fn `std::codecvt<char,char,int>::do_in` 421dd0
+methods-fn `std::codecvt<char,char,int>::do_length` 421e10
+methods-fn `std::codecvt<char,char,int>::do_max_length` 421db0
+methods-fn `std::codecvt<char,char,int>::do_out` 421df0
+methods-fn `std::codecvt<char,char,int>::do_unshift` 421d80
+methods-fn `std::codecvt<char,char,int>::~codecvt` 47c070
+methods-fn `std::codecvt<wchar_t,char,int>::do_always_noconv` 421e80
+methods-fn `std::codecvt<wchar_t,char,int>::do_encoding` 421e50
+methods-fn `std::codecvt<wchar_t,char,int>::do_in` 421e90
+methods-fn `std::codecvt<wchar_t,char,int>::do_length` 422030
+methods-fn `std::codecvt<wchar_t,char,int>::do_max_length` 421e70
+methods-fn `std::codecvt<wchar_t,char,int>::do_out` 421f30
+methods-fn `std::codecvt<wchar_t,char,int>::do_unshift` 421e30
+methods-fn `std::codecvt<wchar_t,char,int>::~codecvt` 47c550
+methods-fn `std::collate<char>::_M_compare` 4220d0
+methods-fn `std::collate<char>::_M_transform` 422410
+methods-fn `std::collate<char>::compare` 4227e0
+methods-fn `std::collate<char>::do_compare` 422100
+methods-fn `std::collate<char>::do_hash` 4227f0
+methods-fn `std::collate<char>::do_transform` 422430
+methods-fn `std::collate<char>::hash` 4227d0
+methods-fn `std::collate<char>::transform` 422820
+methods-fn `std::collate<wchar_t>::_M_compare` 422850
+methods-fn `std::collate<wchar_t>::_M_transform` 422b90
+methods-fn `std::collate<wchar_t>::compare` 422f70
+methods-fn `std::collate<wchar_t>::do_compare` 422880
+methods-fn `std::collate<wchar_t>::do_hash` 422f80
+methods-fn `std::collate<wchar_t>::do_transform` 422bb0
+methods-fn `std::collate<wchar_t>::hash` 422f60
+methods-fn `std::collate<wchar_t>::transform` 422fb0
+methods-fn `std::collate_byname<char>::collate_byname` 46d8a0
+methods-fn `std::collate_byname<char>::collate_byname` 46da00
+methods-fn `std::collate_byname<char>::~collate_byname` 46db60
+methods-fn `std::collate_byname<char>::~collate_byname` 46dc20
+methods-fn `std::collate_byname<char>::~collate_byname` 46dcd0
+methods-fn `std::collate_byname<wchar_t>::collate_byname` 46dd80
+methods-fn `std::collate_byname<wchar_t>::collate_byname` 46dee0
+methods-fn `std::collate_byname<wchar_t>::~collate_byname` 46e040
+methods-fn `std::collate_byname<wchar_t>::~collate_byname` 46e100
+methods-fn `std::collate_byname<wchar_t>::~collate_byname` 46e1b0
+methods-fn `std::ctype<char>::classic_table` 4771d0
+methods-fn `std::ctype<wchar_t>::_M_convert_to_wmask` 4212c0
+methods-fn `std::ctype<wchar_t>::_M_initialize_ctype` 4776e0
+methods-fn `std::ctype<wchar_t>::do_is` 421440
+methods-fn `std::ctype<wchar_t>::do_is` 4214b0
+methods-fn `std::ctype<wchar_t>::do_narrow` 421580
+methods-fn `std::ctype<wchar_t>::do_narrow` 421630
+methods-fn `std::ctype<wchar_t>::do_scan_is` 421160
+methods-fn `std::ctype<wchar_t>::do_scan_not` 421270
+methods-fn `std::ctype<wchar_t>::do_tolower` 4211b0
+methods-fn `std::ctype<wchar_t>::do_tolower` 4211f0
+methods-fn `std::ctype<wchar_t>::do_toupper` 421210
+methods-fn `std::ctype<wchar_t>::do_toupper` 421250
+methods-fn `std::ctype<wchar_t>::do_widen` 421520
+methods-fn `std::ctype<wchar_t>::do_widen` 421560
+methods-fn `std::ctype<wchar_t>::~ctype` 477c30
+methods-fn `std::ios_base::_M_grow_words` 47d2d0
+methods-fn `std::ios_base::_M_init` 47ef60
+methods-fn `std::ios_base::imbue` 47ee60
+methods-fn `std::ios_base::register_callback` 47d890
+methods-fn `std::ios_base::sync_with_stdio` 47d4f0
+methods-fn `std::ios_base::xalloc` 47eea0
+methods-fn `std::locale::facet::_S_clone_c_locale` 47b120
+methods-fn `std::locale::facet::_S_create_c_locale` 47b130
+methods-fn `std::locale::facet::_S_destroy_c_locale` 47b190
+methods-fn `std::locale::facet::_S_get_c_locale` 47b0f0
+methods-fn `std::locale::facet::_S_get_c_name` 47b0e0
+methods-fn `std::locale::facet::_S_initialize_once` 47b170
+methods-fn `std::messages<char>::_M_convert_from_char` 43c310
+methods-fn `std::messages<char>::_M_convert_to_char` 43c300
+methods-fn `std::messages<char>::close` 43c370
+methods-fn `std::messages<char>::get` 43c320
+methods-fn `std::messages<char>::open` 43c350
+methods-fn `std::messages<char>::open` 43c360
+methods-fn `std::messages<wchar_t>::_M_convert_from_char` 43c3d0
+methods-fn `std::messages<wchar_t>::_M_convert_to_char` 43c3c0
+methods-fn `std::messages<wchar_t>::close` 43c430
+methods-fn `std::messages<wchar_t>::get` 43c3e0
+methods-fn `std::messages<wchar_t>::open` 43c410
+methods-fn `std::messages<wchar_t>::open` 43c420
+methods-fn `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 4467a0
+methods-fn `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 4467e0
+methods-fn `std::money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 44abf0
+methods-fn `std::money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 44ac30
+methods-fn `std::money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 44b0f0
+methods-fn `std::money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 44b130
+methods-fn `std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 44cdd0
+methods-fn `std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 44ce10
+methods-fn `std::moneypunct<char,false>::curr_symbol` 41f460
+methods-fn `std::moneypunct<char,false>::decimal_point` 41f520
+methods-fn `std::moneypunct<char,false>::frac_digits` 41f510
+methods-fn `std::moneypunct<char,false>::grouping` 41f800
+methods-fn `std::moneypunct<char,false>::neg_format` 41f420
+methods-fn `std::moneypunct<char,false>::negative_sign` 41f5c0
+methods-fn `std::moneypunct<char,false>::pos_format` 41f440
+methods-fn `std::moneypunct<char,false>::positive_sign` 41f5e0
+methods-fn `std::moneypunct<char,false>::thousands_sep` 41f600
+methods-fn `std::moneypunct<char,true>::curr_symbol` 41f860
+methods-fn `std::moneypunct<char,true>::decimal_point` 41f920
+methods-fn `std::moneypunct<char,true>::frac_digits` 41f910
+methods-fn `std::moneypunct<char,true>::grouping` 41fc00
+methods-fn `std::moneypunct<char,true>::neg_format` 41f820
+methods-fn `std::moneypunct<char,true>::negative_sign` 41f9c0
+methods-fn `std::moneypunct<char,true>::pos_format` 41f840
+methods-fn `std::moneypunct<char,true>::positive_sign` 41f9e0
+methods-fn `std::moneypunct<char,true>::thousands_sep` 41fa00
+methods-fn `std::moneypunct<wchar_t,false>::curr_symbol` 41fc60
+methods-fn `std::moneypunct<wchar_t,false>::decimal_point` 41fd20
+methods-fn `std::moneypunct<wchar_t,false>::frac_digits` 41fd10
+methods-fn `std::moneypunct<wchar_t,false>::grouping` 420020
+methods-fn `std::moneypunct<wchar_t,false>::neg_format` 41fc20
+methods-fn `std::moneypunct<wchar_t,false>::negative_sign` 41fdc0
+methods-fn `std::moneypunct<wchar_t,false>::pos_format` 41fc40
+methods-fn `std::moneypunct<wchar_t,false>::positive_sign` 41fde0
+methods-fn `std::moneypunct<wchar_t,false>::thousands_sep` 41fe00
+methods-fn `std::moneypunct<wchar_t,true>::curr_symbol` 420080
+methods-fn `std::moneypunct<wchar_t,true>::decimal_point` 420140
+methods-fn `std::moneypunct<wchar_t,true>::frac_digits` 420130
+methods-fn `std::moneypunct<wchar_t,true>::grouping` 420440
+methods-fn `std::moneypunct<wchar_t,true>::neg_format` 420040
+methods-fn `std::moneypunct<wchar_t,true>::negative_sign` 4201e0
+methods-fn `std::moneypunct<wchar_t,true>::pos_format` 420060
+methods-fn `std::moneypunct<wchar_t,true>::positive_sign` 420200
+methods-fn `std::moneypunct<wchar_t,true>::thousands_sep` 420220
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c500
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c530
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c560
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c590
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c5c0
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c5f0
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c620
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c650
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c680
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c6b0
+methods-fn `std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 42c6e0
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436b00
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436b30
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436b60
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436b90
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436bc0
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436bf0
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436c20
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436c50
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436c80
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436cb0
+methods-fn `std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 436ce0
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::_M_group_float` 438b00
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::_M_group_int` 437a20
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 4398f0
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 439920
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 439960
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 439990
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 4399c0
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 4399f0
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 439a20
+methods-fn `std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 439a50
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::_M_group_float` 43b0d0
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::_M_group_int` 439f60
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43bc50
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43bc80
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43bcc0
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43bcf0
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43bd30
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43bd60
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43bd90
+methods-fn `std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 43bdc0
+methods-fn `std::numpunct<char>::decimal_point` 43c630
+methods-fn `std::numpunct<char>::falsename` 43c6d0
+methods-fn `std::numpunct<char>::grouping` 43c690
+methods-fn `std::numpunct<char>::thousands_sep` 43c650
+methods-fn `std::numpunct<char>::truename` 43c6b0
+methods-fn `std::numpunct<wchar_t>::decimal_point` 43c8a0
+methods-fn `std::numpunct<wchar_t>::falsename` 43c960
+methods-fn `std::numpunct<wchar_t>::grouping` 43c920
+methods-fn `std::numpunct<wchar_t>::thousands_sep` 43c8c0
+methods-fn `std::numpunct<wchar_t>::truename` 43c940
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::_M_extract_name` 43d7f0
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::_M_extract_num` 43cfe0
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::_M_extract_via_format` 43e400
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::date_order` 43c980
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_date_order` 43cfa0
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_get_date` 43c990
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_get_monthname` 43de30
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_get_time` 43cae0
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_get_weekday` 43d2b0
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_get_year` 43cc30
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_date` 43f750
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_monthname` 43cfb0
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_time` 43f780
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_weekday` 43cf70
+methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_year` 43f7b0
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::_M_extract_name` 4405c0
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::_M_extract_num` 43fdf0
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::_M_extract_via_format` 441200
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::date_order` 43f7e0
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_date_order` 43fdb0
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_get_date` 43f7f0
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_get_monthname` 440c50
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_get_time` 43f930
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_get_weekday` 440080
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_get_year` 43fa70
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get_date` 442260
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get_monthname` 43fdc0
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get_time` 442290
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get_weekday` 43fd80
+methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get_year` 4422c0
+methods-fn `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>::~time_get_byname` 46fdd0
+methods-fn `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>::~time_get_byname` 46fe00
+methods-fn `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>::~time_get_byname` 46fe20
+methods-fn `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::~time_get_byname` 46fe80
+methods-fn `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::~time_get_byname` 46feb0
+methods-fn `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::~time_get_byname` 46fed0
+methods-fn `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::do_put` 4424f0
+methods-fn `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 4422f0
+methods-fn `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::put` 4424b0
+methods-fn `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_put` 442890
+methods-fn `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 4426f0
+methods-fn `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::put` 442850
+methods-fn `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::~time_put_byname` 46ff30
+methods-fn `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::~time_put_byname` 46ff60
+methods-fn `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::~time_put_byname` 46ff80
+methods-fn `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::~time_put_byname` 46ffe0
+methods-fn `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::~time_put_byname` 470010
+methods-fn `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::~time_put_byname` 470030
+methods-fp 406eb8 of `TiXmlDocument`: is `TiXmlNode`'s
+methods-fp 41adf0 of `TiXmlText`: is `TiXmlNode`'s
+methods-fp 41db50 of `TiXmlElement`: is `TiXmlNode`'s
+methods-fp 450a10 of `std::messages<wchar_t>`: is `std::wstring`'s
+methods-fp 46db60 of `std::collate<char>`: is `std::collate_byname<char>`'s
+methods-fp 46dc20 of `std::collate<char>`: is `std::collate_byname<char>`'s
+methods-fp 46dcd0 of `std::collate<char>`: is `std::collate_byname<char>`'s
+methods-fp 46e040 of `std::collate<wchar_t>`: is `std::collate_byname<wchar_t>`'s
+methods-fp 46e100 of `std::collate<wchar_t>`: is `std::collate_byname<wchar_t>`'s
+methods-fp 46e1b0 of `std::collate<wchar_t>`: is `std::collate_byname<wchar_t>`'s
+methods-fp 46fdd0 of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: is `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>`'s
+methods-fp 46fe00 of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: is `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>`'s
+methods-fp 46fe20 of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: is `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>`'s
+methods-fp 46fe80 of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: is `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`'s
+methods-fp 46feb0 of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: is `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`'s
+methods-fp 46fed0 of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: is `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`'s
+methods-fp 46ff30 of `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: is `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`'s
+methods-fp 46ff60 of `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: is `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`'s
+methods-fp 46ff80 of `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: is `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`'s
+methods-fp 46ffe0 of `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: is `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`'s
+methods-fp 470010 of `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: is `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`'s
+methods-fp 470030 of `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: is `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`'s
+methods-fp 477c30 of `std::ctype_byname<wchar_t>`: is `std::ctype<wchar_t>`'s
+methods-fp 47c070 of `std::codecvt_byname<char,char,int>`: is `std::codecvt<char,char,int>`'s
+methods-fp 47c550 of `std::codecvt_byname<wchar_t,char,int>`: is `std::codecvt<wchar_t,char,int>`'s
+polymorphic-classes-fp invented `Klass_0049640c` (inferred, vftable 0049640c)
+polymorphic-classes-fp invented `Klass_0049648c` (inferred, vftable 0049648c)
+polymorphic-classes-fp invented `Klass_004964cc` (inferred, vftable 004964cc)
+polymorphic-classes-fp invented `Klass_0049650c` (inferred, vftable 0049650c)
+polymorphic-classes-fp invented `Klass_0049654c` (inferred, vftable 0049654c)
+polymorphic-classes-fp invented `Klass_0049658c` (inferred, vftable 0049658c)
+polymorphic-classes-fp invented `Klass_004965cc` (inferred, vftable 004965cc)
+polymorphic-classes-fp invented `Klass_0049660c` (inferred, vftable 0049660c)
+polymorphic-classes-fp invented `Klass_0049668c` (inferred, vftable 0049668c)
+polymorphic-classes-fp invented `Klass_004966cc` (inferred, vftable 004966cc)
+polymorphic-classes-fp invented `Klass_0049670c` (inferred, vftable 0049670c)
+sizes-fp `std::__codecvt_abstract_base<char,char,int>`: 4, is 8
+sizes-fp `std::__codecvt_abstract_base<wchar_t,char,int>`: 4, is 8
+sizes-fp `std::__ctype_abstract_base<wchar_t>`: 4, is 8
+sizes-fp `std::codecvt_byname<char,char,int>`: 4, is 12
+sizes-fp `std::codecvt_byname<wchar_t,char,int>`: 4, is 12
+sizes-fp `std::collate_byname<char>`: 4, is 12
+sizes-fp `std::collate_byname<wchar_t>`: 4, is 12
+sizes-fp `std::ctype<wchar_t>`: 16, is 720
+sizes-fp `std::ctype_byname<wchar_t>`: 4, is 720
+sizes-fp `std::locale::facet`: 4, is 8
+sizes-fp `std::messages<char>`: 12, is 16
+sizes-fp `std::messages<wchar_t>`: 12, is 16
+sizes-fp `std::messages_byname<char>`: 12, is 16
+sizes-fp `std::messages_byname<wchar_t>`: 12, is 16
+sizes-fp `std::type_info`: 4, is 8
+structors-fn 46d8a0 of `std::collate_byname<char>`
+structors-fn 46da00 of `std::collate_byname<char>`
+structors-fn 46db60 of `std::collate_byname<char>`
+structors-fn 46dc20 of `std::collate_byname<char>`
+structors-fn 46dcd0 of `std::collate_byname<char>`
+structors-fn 46dd80 of `std::collate_byname<wchar_t>`
+structors-fn 46dee0 of `std::collate_byname<wchar_t>`
+structors-fn 46e040 of `std::collate_byname<wchar_t>`
+structors-fn 46e100 of `std::collate_byname<wchar_t>`
+structors-fn 46e1b0 of `std::collate_byname<wchar_t>`
+structors-fn 46fdd0 of `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
+structors-fn 46fe00 of `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
+structors-fn 46fe20 of `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
+structors-fn 46fe80 of `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fn 46feb0 of `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fn 46fed0 of `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fn 46ff30 of `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`
+structors-fn 46ff60 of `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`
+structors-fn 46ff80 of `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`
+structors-fn 46ffe0 of `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fn 470010 of `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fn 470030 of `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fn 477ac0 of `std::ctype<wchar_t>`
+structors-fn 477b80 of `std::ctype<wchar_t>`
+structors-fn 477c30 of `std::ctype<wchar_t>`
+structors-fn 47bf00 of `std::codecvt<char,char,int>`
+structors-fn 47bfc0 of `std::codecvt<char,char,int>`
+structors-fn 47c070 of `std::codecvt<char,char,int>`
+structors-fn 47c3e0 of `std::codecvt<wchar_t,char,int>`
+structors-fn 47c4a0 of `std::codecvt<wchar_t,char,int>`
+structors-fn 47c550 of `std::codecvt<wchar_t,char,int>`
+structors-fp 46db60 of `std::collate<char>`
+structors-fp 46dc20 of `std::collate<char>`
+structors-fp 46dcd0 of `std::collate<char>`
+structors-fp 46e040 of `std::collate<wchar_t>`
+structors-fp 46e100 of `std::collate<wchar_t>`
+structors-fp 46e1b0 of `std::collate<wchar_t>`
+structors-fp 46fdd0 of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
+structors-fp 46fe00 of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
+structors-fp 46fe20 of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
+structors-fp 46fe80 of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fp 46feb0 of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fp 46fed0 of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fp 46ff30 of `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`
+structors-fp 46ff60 of `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`
+structors-fp 46ff80 of `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`
+structors-fp 46ffe0 of `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fp 470010 of `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+structors-fp 470030 of `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+virtual-methods-fn `std::codecvt<char,char,int>::do_always_noconv` 421dc0
+virtual-methods-fn `std::codecvt<char,char,int>::do_encoding` 421da0
+virtual-methods-fn `std::codecvt<char,char,int>::do_in` 421dd0
+virtual-methods-fn `std::codecvt<char,char,int>::do_length` 421e10
+virtual-methods-fn `std::codecvt<char,char,int>::do_max_length` 421db0
+virtual-methods-fn `std::codecvt<char,char,int>::do_out` 421df0
+virtual-methods-fn `std::codecvt<char,char,int>::do_unshift` 421d80
+virtual-methods-fn `std::codecvt<wchar_t,char,int>::do_always_noconv` 421e80
+virtual-methods-fn `std::codecvt<wchar_t,char,int>::do_encoding` 421e50
+virtual-methods-fn `std::codecvt<wchar_t,char,int>::do_in` 421e90
+virtual-methods-fn `std::codecvt<wchar_t,char,int>::do_length` 422030
+virtual-methods-fn `std::codecvt<wchar_t,char,int>::do_max_length` 421e70
+virtual-methods-fn `std::codecvt<wchar_t,char,int>::do_out` 421f30
+virtual-methods-fn `std::codecvt<wchar_t,char,int>::do_unshift` 421e30
+virtual-methods-fn `std::collate<char>::do_compare` 422100
+virtual-methods-fn `std::collate<char>::do_hash` 4227f0
+virtual-methods-fn `std::collate<char>::do_transform` 422430
+virtual-methods-fn `std::collate<wchar_t>::do_compare` 422880
+virtual-methods-fn `std::collate<wchar_t>::do_hash` 422f80
+virtual-methods-fn `std::collate<wchar_t>::do_transform` 422bb0
+virtual-methods-fn `std::collate_byname<char>::~collate_byname` 46db60
+virtual-methods-fn `std::collate_byname<char>::~collate_byname` 46dc20
+virtual-methods-fn `std::collate_byname<wchar_t>::~collate_byname` 46e040
+virtual-methods-fn `std::collate_byname<wchar_t>::~collate_byname` 46e100
+virtual-methods-fn `std::ctype<wchar_t>::do_is` 421440
+virtual-methods-fn `std::ctype<wchar_t>::do_is` 4214b0
+virtual-methods-fn `std::ctype<wchar_t>::do_narrow` 421580
+virtual-methods-fn `std::ctype<wchar_t>::do_narrow` 421630
+virtual-methods-fn `std::ctype<wchar_t>::do_scan_is` 421160
+virtual-methods-fn `std::ctype<wchar_t>::do_scan_not` 421270
+virtual-methods-fn `std::ctype<wchar_t>::do_tolower` 4211b0
+virtual-methods-fn `std::ctype<wchar_t>::do_tolower` 4211f0
+virtual-methods-fn `std::ctype<wchar_t>::do_toupper` 421210
+virtual-methods-fn `std::ctype<wchar_t>::do_toupper` 421250
+virtual-methods-fn `std::ctype<wchar_t>::do_widen` 421520
+virtual-methods-fn `std::ctype<wchar_t>::do_widen` 421560
+virtual-methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_date_order` 43cfa0
+virtual-methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_get_date` 43c990
+virtual-methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_get_monthname` 43de30
+virtual-methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_get_time` 43cae0
+virtual-methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_get_weekday` 43d2b0
+virtual-methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::do_get_year` 43cc30
+virtual-methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_date_order` 43fdb0
+virtual-methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_get_date` 43f7f0
+virtual-methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_get_monthname` 440c50
+virtual-methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_get_time` 43f930
+virtual-methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_get_weekday` 440080
+virtual-methods-fn `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_get_year` 43fa70
+virtual-methods-fn `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>::~time_get_byname` 46fdd0
+virtual-methods-fn `std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>::~time_get_byname` 46fe00
+virtual-methods-fn `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::~time_get_byname` 46fe80
+virtual-methods-fn `std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::~time_get_byname` 46feb0
+virtual-methods-fn `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::do_put` 4424f0
+virtual-methods-fn `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::do_put` 442890
+virtual-methods-fn `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::~time_put_byname` 46ff30
+virtual-methods-fn `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>::~time_put_byname` 46ff60
+virtual-methods-fn `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::~time_put_byname` 46ffe0
+virtual-methods-fn `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::~time_put_byname` 470010

@@ -67,6 +67,9 @@ class GenericVftableFinder(
      * first word code takes the address of ([codeReferences]). A run ends before the next such word, which begins
      * another, at a symbol, at data laid other than one word ([isFree]), or past [DESTRUCTOR_SLOTS] nulls;
      * the nulls that end it are no slots. A table whose constructor isn't disassembled yet waits for a later run.
+     * A run whose first slot is null also needs a vtable header in front of it ([hasVtableHeader]). An abstract
+     * Itanium class leaves its destructor slots null, but MSVC fills a pure virtual's slot with `_purecall`.
+     * Without the header, a null followed by code pointers is some other table, such as a CRT exception scope table.
      */
     val potentialVtables: List<PotentialVtable> by lazy {
         program.findPointers()
@@ -76,6 +79,7 @@ class GenericVftableFinder(
             .chunkWith { a, b -> b.src == a.src + ptr && !b.begins() && !isNamed(b.src) }
             .flatMap { it.splitAtNulls() }
             .filter { run -> run.first().begins() && !isClaimed(run.first().src) && run.any { it.dst.offset != 0L } }
+            .filter { run -> run.first().dst.offset != 0L || hasVtableHeader(run.first().src) }
             .map { PotentialVtable(it) }
     }
 
@@ -116,6 +120,16 @@ class GenericVftableFinder(
     }
 
     private fun Address.wordBefore(words: Int) = signedWordBefore(program, words)
+
+    /**
+     * Whether an Itanium vtable header comes before [table]: an `offset_to_top` that a subobject could have, then
+     * an RTTI word.
+     */
+    private fun hasVtableHeader(table: Address): Boolean {
+        val top = table.wordBefore(2) ?: return false
+        val rtti = table.wordBefore(1) ?: return false
+        return top <= 0 && -top < MAX_SUBOBJECT_OFFSET && isRttiWord(rtti)
+    }
 
     /** An rtti word: 0, with no RTTI, or a pointer to data, a typeinfo. */
     private fun isRttiWord(word: Long) = word == 0L || runCatching {
@@ -196,6 +210,53 @@ class GenericVftableFinder(
             seeded++
         }
         return seeded
+    }
+
+    /**
+     * Moves each seeded table in [secondaries] to the class it maps to, as that class's secondary table for the
+     * base subobject at the mapped offset. The table is labelled and laid out in that class, and the class it was
+     * seeded with is merged into it. Returns how many tables it moved.
+     */
+    fun regroup(secondaries: Map<Address, Pair<GhidraClass, Long>>): Int {
+        var moved = 0
+        for ((at, target) in secondaries) {
+            val (ns, offset) = target
+            val label = symtab.getSymbols(at).firstOrNull { it.name == ClassNaming.VFTABLE && isSeededLabel(it) }
+                ?: continue
+            val seeded = label.parentNamespace as? GhidraClass ?: continue
+            if (seeded == ns) continue
+            val slots = listing.getDataAt(at)?.takeIf(::isSeeded)
+                ?.let { d -> (0 until d.numComponents).mapNotNull { d.getComponent(it).value as? Address } }
+                ?: continue
+            label.delete()
+            for (sym in symtab.getSymbols(seeded).iterator().asSequence().toList()) {
+                runCatching { sym.setNamespace(ns) }
+                    .onFailure { warn("vftable-regroup-member", "${sym.name} into ${ns.name}: $it", sym.address) }
+            }
+            if (!symtab.getSymbols(seeded).hasNext()) seeded.symbol.delete()
+            val secondary = ClassNaming.plainSecondaryLabel(offset)
+            symtab.createLabel(at, secondary, ns, SEEDED)
+            listing.clearCodeUnits(at, at, false)
+            lay(PotentialVtable(at, slots, emptyList()), ns, "${ns.name}_$secondary")
+            debug("vftable-regrouped", "${seeded.name} as ${ns.name}'s, at +$offset", at)
+            moved++
+        }
+        return moved
+    }
+
+    /**
+     * Seeds the construction vtable at [table] as the `vftable` of a new class. Code never takes its address, but
+     * a VTT points at it. The new class stands for the base the table is built for, whose slots it holds. Returns
+     * whether it seeded a class. It doesn't when a table is already laid out or labelled at [table].
+     */
+    fun seedConstruction(table: Address): Boolean {
+        if (symtab.getSymbols(table).any { it.source != SourceType.DEFAULT } || !isFree(table)) return false
+        val slots = program.functionSlots(table, PlainVtables).toList().takeIf { it.isNotEmpty() } ?: return false
+        val ns = symtab.buildClassNamespaces(listOf("$SEEDED_CLASS_PREFIX$table"), SEEDED)
+        symtab.createLabel(table, ClassNaming.VFTABLE, ns, SEEDED)
+        lay(PotentialVtable(table, slots, emptyList()), ns)
+        debug("vftable-seeded-construction", "${slots.size} slot(s), a VTT's", table)
+        return true
     }
 
     /** Lays a `<Class>_vftable` at [table], typed off its slots, unless one was typed already. */
