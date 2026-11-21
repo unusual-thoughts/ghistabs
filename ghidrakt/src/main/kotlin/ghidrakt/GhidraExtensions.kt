@@ -88,7 +88,7 @@ fun Data.flag(name: String) = getScalar(name)?.unsignedValue == 1L
 fun Iterable<AddressRange>.gapsIn(range: AddressRange, action: (AddressRange) -> Unit = { }) = sequence {
     var start = range.minAddress
     for (r in this@gapsIn) {
-        action(r)
+        action(start..r.maxAddress)
         (start..<r.minAddress).takeIf { it.length > 0 }?.let { yield((it)) }
         if (r.maxAddress >= range.maxAddress) return@sequence
         start = r.maxAddress.next()
@@ -96,27 +96,9 @@ fun Iterable<AddressRange>.gapsIn(range: AddressRange, action: (AddressRange) ->
     (start..range.maxAddress).takeIf { it.length > 0 }?.let { yield((it)) }
 }
 
-/**
- * Undefined runs in [set] - the gaps between instructions and defined data, as `getUndefinedRanges` walks
- * them - one range of [set] at a time, so no run spans a hole in [set] or crosses an address space.
- * [monitor] is checked for cancellation and stepped by how far through [set] the walk is, out of
- * `set.numAddresses`.
- */
-fun Listing.undefinedRangesIn(set: AddressSetView, monitor: TaskMonitor? = null) = sequence {
-    var before = 0L
-    for (range in set.addressRanges) {
-        val defined = getCodeUnits(AddressSet(range), true).iterator().asSequence()
-            .filter { (it as? Data)?.isDefined != false } // instructions + defined data
-            .map { it.range }
-            .asIterable()
-        yieldAll(
-            defined.gapsIn(range) {
-                monitor?.checkCancelled()
-                monitor?.progress = before + (it.minAddress - range.minAddress).coerceAtLeast(0)
-            },
-        )
-        before += range.length
-    }
+fun Iterable<AddressRange>.monitoredGapsIn(range: AddressRange, monitor: TaskMonitor? = null) = gapsIn(range) {
+    monitor?.checkCancelled()
+    monitor?.progress += it.length
 }
 
 /**
@@ -124,6 +106,22 @@ fun Listing.undefinedRangesIn(set: AddressSetView, monitor: TaskMonitor? = null)
  * progress of: `DisassembleCommand` and `CreateFunctionCmd` set a monitor's maximum, progress and message.
  */
 val TaskMonitor.cancelOnly: TaskMonitor get() = CancelOnlyWrappingTaskMonitor(this)
+
+/**
+ * Undefined runs in [set] - the gaps between instructions and defined data, as `getUndefinedRanges` walks
+ * them - one range of [set] at a time, so no run spans a hole in [set] or crosses an address space.
+ * [monitor] is checked for cancellation and stepped by how far through [set] the walk is, out of
+ * `set.numAddresses`.
+ */
+fun Listing.undefinedRangesIn(set: AddressSetView, monitor: TaskMonitor? = null) =
+    monitor?.apply { maximum = set.numAddresses }.let {
+        set.addressRanges.iterator().asSequence().flatMap { range ->
+            getCodeUnits(AddressSet(range), true).asIterable()
+                .filter { (it as? Data)?.isDefined != false } // instructions + defined data
+                .map { it.range }
+                .monitoredGapsIn(range, monitor)
+        }
+    }
 
 /** The two [ghidra.program.model.listing.AutoParameterType] display names. */
 private val INJECTED_PARAM_NAMES = setOf(Function.THIS_PARAM_NAME, Function.RETURN_PTR_PARAM_NAME)
