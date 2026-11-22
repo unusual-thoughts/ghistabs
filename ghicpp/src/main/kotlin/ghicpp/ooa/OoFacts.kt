@@ -8,7 +8,11 @@ import ghicpp.dissect.CalledObject
 import ghicpp.dissect.DECOMPILE_TIMEOUT_SECONDS
 import ghicpp.dissect.PointerInto
 import ghicpp.dissect.decompileEach
+import ghicpp.dissect.objectCalls
 import ghicpp.dissect.pointerInto
+import ghicpp.argumentAt
+import ghicpp.thisAt
+import ghicpp.thisStorage
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
@@ -131,16 +135,22 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
             }
         }
 
+        val thisStorage = program.thisStorage()
         program.decompileEach(all, monitor, "Exporting OOAnalyzer facts") { f, high ->
-            val thisAt = f.argumentAt(0)
-            val objectCalls = high.objectCalls(thisAt)
-            val stores = objectCalls.filter { it.obj == CalledObject.This && !it.slot }
-            val FunctionFacts(f, high).run {
-                read()
-                if (thisVar != null && !returnsValue) returnsSelfOnceTyped(f, high)
-                vftables += stored
-                calls += thisCalls
-                if (thisVar != null) methods += f.entryPoint
+            val factsForFunction = FunctionFacts(f, high)
+            factsForFunction.read()
+            if (factsForFunction.thisVar != null && !factsForFunction.returnsValue) {
+                returnsSelfOnceTyped(f, high)
+            }
+            vftables += factsForFunction.stored
+            calls += factsForFunction.thisCalls
+            if (factsForFunction.thisVar != null) methods += f.entryPoint
+
+            val objectCalls = high.objectCalls(f.thisAt(thisStorage))
+            for (call in objectCalls) {
+                if (call.obj == CalledObject.This && !call.slot) {
+                    factsForFunction.recordObjectCall(call.at, call.callee)
+                }
             }
         }
         orderFacts(methods, calls)
@@ -197,6 +207,20 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
 
         var returnsValue = false
 
+        fun recordObjectCall(at: Address, callee: Function) {
+            val thisPointer = high.objectCalls(f.thisAt(program.thisStorage()))
+                .firstOrNull { it.at == at }?.let { c ->
+                    c.offset.takeIf { it >= 0 }?.let { offset ->
+                        c.obj as? CalledObject.This
+                            ?: return@let null
+                        "sv_${f.entryPoint.offset.toString(16)}_${offset.toString(16)}"
+                    }
+                }
+            if (thisPointer != null) {
+                thisCalls += ThisCall(at, f.entryPoint, callee.entryPoint, thisPointer, ThisCall.Kind.METHOD)
+            }
+        }
+
         private fun params() {
             val inputs = high.pcodeOps.asSequence().flatMap { it.inputs.asSequence() }
                 .filter { it.isInput && it.high != null }.distinctBy { it.address to it.size }.toList()
@@ -245,12 +269,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                     add("insnCallsNew", at, f.entryPoint, Term(out ?: "invalid"))
                     val size = args.firstOrNull()?.takeIf { it.isConstant }?.offset
                     if (out != null && size != null) add(
-                        "thisPtrAllocation",
-                        at,
-                        f.entryPoint,
-                        Term(out),
-                        Term("type_Heap"),
-                        size,
+                        "thisPtrAllocation", at, f.entryPoint, Term(out), Term("type_Heap"), size,
                     )
                     thisCalls += ThisCall(at, f.entryPoint, callee.entryPoint, out, ThisCall.Kind.NEW)
                 }
@@ -283,7 +302,14 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
             } ?: return
             val slotOffset = slotPointer.offset
             if (slotOffset < 0 || objPointer.offset < 0) return
-            add("possibleVirtualFunctionCall", op.seqnum.target, f.entryPoint, Term(sv(objPointer)), objPointer.offset, slotOffset)
+            add(
+                "possibleVirtualFunctionCall",
+                op.seqnum.target,
+                f.entryPoint,
+                Term(sv(objPointer)),
+                objPointer.offset,
+                slotOffset,
+            )
         }
 
         private fun store(op: PcodeOp) {
@@ -338,7 +364,8 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         else -> null
     }
 
-    private fun stackIndex(offset: Long): Long? = (offset - ptrSize).takeIf { it >= 0 && it % ptrSize == 0L }?.div(ptrSize)
+    private fun stackIndex(offset: Long): Long? =
+        (offset - ptrSize).takeIf { it >= 0 && it % ptrSize == 0L }?.div(ptrSize)
 
     private fun namesOf(f: Function): Set<String> = buildSet {
         add(f.name)
@@ -371,8 +398,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         val at = address(start) ?: return
         val slots = program.functionSlots(at, Itanium) { f -> Itanium.isPureVirtualStub(f.name) }
         for (target in slots.take(MAX_SLOTS)) {
-            val pfn = at
-            facts += OoFact.of("initialMemory", pfn, target)
+            facts += OoFact.of("initialMemory", at, target)
         }
     }
 
@@ -381,7 +407,9 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         val block = memory.getBlock(at) ?: return false
         if (!block.isInitialized || (block.isExecute && !block.isRead)) return false
         if (block.isExecute && functions.getFunctionContaining(at) != null) return false
-        return program.functionSlots(at, Itanium) { f -> Itanium.isPureVirtualStub(f.name) }.take(1).any()
+        return program.functionSlots(at, Itanium) { f ->
+            Itanium.isPureVirtualStub(f.name)
+        }.take(1).any()
     }
 
     private fun isPureVirtual(f: Function) = PlainVtables.isPureVirtualStub(f.name) ||
@@ -469,7 +497,9 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
 
     private fun readPointer(at: Address): Long? = program.pointerAt(at)?.offset
 
-    private fun readInt(at: Address): Long? = runCatching { memory.getInt(at).toLong() and 0xffffffffL }.getOrNull()
+    private fun readInt(at: Address): Long? = runCatching {
+        memory.getInt(at).toLong() and 0xffffffffL
+    }.getOrNull()
 
     private companion object {
         const val MAX_SLOTS = 1024
