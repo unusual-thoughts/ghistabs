@@ -7,7 +7,9 @@ import ghicpp.abi.msvc.Msvc
 import ghicpp.dissect.DECOMPILE_TIMEOUT_SECONDS
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.DataType
 import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.VoidDataType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
@@ -18,6 +20,8 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
+import ghidrakt.plus
+import ghidrakt.runTransaction
 import ghidrakt.useWith
 import java.io.Writer
 
@@ -42,12 +46,10 @@ data class OoFact(val predicate: String, val args: List<String>) {
             else -> error("no Prolog term for $value")
         }
 
-        private fun hex(v: Long) = if (v < 0) {
-            "-0x" + (-v).toString(16)
-        } else if (v == 0L) {
-            "0"
-        } else {
-            "0x" + v.toString(16)
+        private fun hex(v: Long) = when {
+            v < 0 -> "-0x" + (-v).toString(16)
+            v == 0L -> "0"
+            else -> "0x" + v.toString(16)
         }
     }
 }
@@ -114,6 +116,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
     private val memory = program.memory
     private val functions = program.functionManager
     private val facts = linkedSetOf<OoFact>()
+    private val dtm = program.dataTypeManager
 
     private fun add(predicate: String, vararg args: Any) {
         facts += OoFact.of(predicate, *args)
@@ -134,9 +137,8 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         for (f in all) {
             if (f.entryPoint.offset in purecalls) add("purecall", f.entryPoint)
             if (f.isThunk) {
-                f.getThunkedFunction(false)?.takeIf {
-                    !it.isExternal
-                }?.let { add("thunk", f.entryPoint, it.entryPoint) }
+                f.getThunkedFunction(false)?.takeIf { !it.isExternal }
+                    ?.let { add("thunk", f.entryPoint, it.entryPoint) }
             }
         }
         monitor.initialize(all.size.toLong(), "Exporting OOAnalyzer facts")
@@ -208,8 +210,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                     PcodeOp.LOAD -> access(op, op.getInput(1), op.output?.size)
 
                     PcodeOp.RETURN -> if (op.numInputs > 1) {
-                        returns +=
-                            thisVar != null &&
+                        returns += thisVar != null &&
                             op.getInput(1).pointer()?.let { it.root == thisVar && it.offset == 0L } == true
                     }
                 }
@@ -273,9 +274,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                     val out = op.output?.high?.let { sv(it) }
                     add("insnCallsNew", at, f.entryPoint, Term(out ?: "invalid"))
                     val size = args.firstOrNull()?.takeIf { it.isConstant }?.offset
-                    if (out != null &&
-                        size != null
-                    ) {
+                    if (out != null && size != null) {
                         add("thisPtrAllocation", at, f.entryPoint, Term(out), Term("type_Heap"), size)
                     }
                     thisCalls += ThisCall(at, f.entryPoint, real?.entryPoint, out, ThisCall.Kind.NEW)
@@ -287,25 +286,32 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                     thisCalls += ThisCall(at, f.entryPoint, real?.entryPoint, freed, ThisCall.Kind.DELETE)
                 }
 
-                thisArg != null ->
-                    thisCalls +=
-                        ThisCall(at, f.entryPoint, real?.entryPoint, thisArg, ThisCall.Kind.METHOD)
+                thisArg != null -> thisCalls += ThisCall(
+                    at,
+                    f.entryPoint,
+                    real?.entryPoint,
+                    thisArg,
+                    ThisCall.Kind.METHOD,
+                )
             }
         }
 
         /** Where [callee] takes its [index]th argument: its own parameter's storage, else its convention's. */
-        private fun argPosition(callee: Function, index: Int): Any? {
-            val own = callee.parameters.getOrNull(index)?.takeIf { !it.variableStorage.isUnassignedStorage }
-            val at = own?.variableStorage?.firstVarnode
-                ?: (callee.callingConvention ?: program.compilerSpec.defaultCallingConvention)
-                    .getArgLocation(index, null, PointerDataType(program.dataTypeManager), program).firstVarnode
-                ?: return null
-            return when {
-                at.isRegister -> program.getRegister(at)?.baseRegister?.name?.lowercase()?.let(::Term)
-                at.address.isStackAddress -> stackIndex(at.address.offset)
-                else -> null
+        private fun argPosition(callee: Function, index: Int): Any? = callee.parameters.getOrNull(index)?.takeIf {
+            !it.variableStorage.isUnassignedStorage
+        }?.variableStorage?.firstVarnode ?: (callee.callingConvention ?: program.compilerSpec.defaultCallingConvention)
+            .getStorageLocations(
+                program,
+                arrayOf<DataType>(VoidDataType.dataType) + Array(index + 1) { PointerDataType(dtm) },
+                false,
+                false,
+            ).getOrNull(index + 1)?.firstVarnode?.let { at ->
+                when {
+                    at.isRegister -> program.getRegister(at)?.baseRegister?.name?.lowercase()?.let(::Term)
+                    at.address.isStackAddress -> stackIndex(at.address.offset)
+                    else -> null
+                }
             }
-        }
 
         /** A call through a vtable slot: the slot read from a pointer read from an object, both at constant offsets. */
         private fun virtualCall(op: PcodeOp) {
@@ -337,6 +343,13 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         }
     }
 
+    fun HighFunction.thisVar() = pcodeOps.asSequence().flatMap { it.inputs.asSequence() }
+        .firstOrNull { it.isInput && it.high != null && positionOf(it) == abi.thisParam }?.high
+
+    fun HighFunction.returnVars() = pcodeOps.asSequence().filter { it.opcode == PcodeOp.RETURN && it.numInputs > 1 }
+        .map { r -> r.getInput(1) }
+        .toList()
+
     /**
      * `returnsSelf/1` for a method the decompiler gave no return value: Pharos tests what the return register
      * holds whatever the signature says, and an Itanium constructor, `void`, often leaves `this` there. So the
@@ -344,8 +357,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
      */
     private fun returnsSelfOnceTyped(decomp: DecompInterface, f: Function, first: HighFunction) {
         if (f.hasCustomVariableStorage()) return
-        val tx = program.startTransaction("Decompile as returning a pointer")
-        try {
+        program.runTransaction("Decompile as returning a pointer") {
             // A default signature is not a locked one, so the decompiler would ignore the return type: lock the
             // parameters it found first, so `this` stays where it was.
             if (f.signatureSource == SourceType.DEFAULT) {
@@ -356,15 +368,16 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                     SourceType.ANALYSIS,
                 )
             }
-            f.setReturnType(PointerDataType(program.dataTypeManager), f.signatureSource)
-            val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: return
-            val thisVar = high.pcodeOps.asSequence().flatMap { it.inputs.asSequence() }
-                .firstOrNull { it.isInput && it.high != null && positionOf(it) == abi.thisParam }?.high ?: return
-            val returns = high.pcodeOps.asSequence().filter { it.opcode == PcodeOp.RETURN && it.numInputs > 1 }
-                .map { r -> r.getInput(1).pointer()?.let { it.root == thisVar && it.offset == 0L } == true }.toList()
-            if (returns.isNotEmpty() && returns.all { it }) add("returnsSelf", f.entryPoint)
-        } finally {
-            program.endTransaction(tx, false)
+            f.setReturnType(PointerDataType(dtm), f.signatureSource)
+            decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction?.apply {
+                thisVar()?.let { thisVar ->
+                    returnVars().apply {
+                        if (isNotEmpty() && all { it.pointer() == Pointer(thisVar, 0L) }) {
+                            add("returnsSelf", f.entryPoint)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -429,7 +442,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                 if (!isCode(value)) return
                 if (!facts.add(OoFact.of("initialMemory", at, value))) return
             }
-            at = at.add(ptrSize.toLong())
+            at += ptrSize.toLong()
         }
     }
 
@@ -437,10 +450,16 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
     private fun isPointerTable(start: Long): Boolean {
         val at = address(start) ?: return false
         val block = memory.getBlock(at) ?: return false
-        if (!block.isInitialized || (block.isExecute && !block.isRead)) return false
-        if (block.isExecute && functions.getFunctionContaining(at) != null) return false
-        val first = (0 until MAX_NULL_SLOTS + 1).map { readPointer(at.add(it * ptrSize.toLong())) ?: return false }
-        return first.firstOrNull { it != 0L }?.let(::isCode) == true
+        return when {
+            !block.isInitialized -> false
+
+            block.isExecute && !block.isRead -> false
+
+            block.isExecute && functions.getFunctionContaining(at) != null -> false
+
+            else -> (0 until MAX_NULL_SLOTS + 1).map { readPointer(at.add(it * ptrSize.toLong())) ?: return false }
+                .firstOrNull { it != 0L }?.let(::isCode) == true
+        }
     }
 
     /**
@@ -477,21 +496,19 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
     }
 
     /** Each pointer to a Complete Object Locator, to the locator. */
-    private fun locators(vftables: Set<Long>): Map<Long, Long> {
-        val located = mutableMapOf<Long, Long>()
+    private fun locators(vftables: Set<Long>) = buildMap {
         for (vft in vftables) {
             val ptr = address(vft - ptrSize) ?: continue
-            readPointer(ptr)?.let { located[ptr.offset] = it }
+            readPointer(ptr)?.let { this[ptr.offset] = it }
         }
         for (data in program.listing.getDefinedData(true) as Iterable<Data>) {
             if (data.dataType.name != "RTTICompleteObjectLocator") continue
             for (ref in program.referenceManager.getReferencesTo(data.address)) {
                 if (program.listing.getDataContaining(ref.fromAddress)?.isPointer == true) {
-                    located[ref.fromAddress.offset] = data.address.offset
+                    this[ref.fromAddress.offset] = data.address.offset
                 }
             }
         }
-        return located
     }
 
     /** The locator at [col], which [ptr] points at, and what it describes; whether it is one. */
@@ -512,11 +529,12 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
     private fun address(offset: Long): Address? =
         runCatching { program.addressFactory.defaultAddressSpace.getAddress(offset) }.getOrNull()
 
-    private fun rva(at: Address): Long? = if (ptrSize == 8) {
-        readInt(at)?.let { program.imageBase.offset + it }
-    } else {
-        readInt(at)
-    }
+    private fun rva(at: Address): Long? = readInt(at)?.plus(
+        when (ptrSize) {
+            8 -> program.imageBase.offset
+            else -> 0
+        },
+    )
 
     private fun typeName(td: Long): String? = runCatching {
         val at = address(td + 2L * ptrSize) ?: return null
