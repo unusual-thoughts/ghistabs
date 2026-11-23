@@ -137,9 +137,17 @@ class MemberObjectPass(
             val member = cls?.let(::structOf)?.takeUnless { it.isZeroLength } ?: continue
             containerOf(sub)?.let { placeMember(it, sub.offset.toInt(), member) }
         }
+        growDerived()
         writeRecords(classes.mapNotNull { it.cls })
         return classes.size
     }
+
+    /** The members grew the classes they went past the end of, and with them those deriving from them. */
+    private fun growDerived() = dtm.growToHoldBases(
+        dtm.allStructures.asSequence().filter {
+            it.categoryPath.isAncestorOrSelf(ClassNaming.classDataTypesRoot) && it.name == it.categoryPath.name
+        }.toList(),
+    )
 
     /**
      * The members [found]'s structors build and destroy, by where they are, then those members' own, decompiled,

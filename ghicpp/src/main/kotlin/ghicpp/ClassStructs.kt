@@ -270,3 +270,29 @@ fun Structure.copyNonVirtualPart(cls: Structure, onFailure: (DataTypeComponent, 
 
 /** Whether this is a virtual base's field. */
 fun DataTypeComponent.isVirtualBaseField() = fieldName.orEmpty().startsWith(ClassNaming.VBASE_PREFIX)
+
+/** A base's `_fields` run ([BaseSplitter]): `<Base>_fields_<from>_<to>`, filed beside the base. */
+private val BASE_RUN = Regex("(.+)${ClassNaming.FIELDS}_(\\d+)_(\\d+)")
+
+/**
+ * Grows each of [structs], class structs, to hold its bases whole, a base before the classes deriving from it. A
+ * member laid past a base's end ([placeMember]) grows the base, and a class holding the base whole grows with it,
+ * but one holding it split around its own vptr ([BaseSplitter]) holds a run of the base as long as it was then, so
+ * would stay shorter than its own base: a base of nothing but its vptr leaves the class only that.
+ */
+fun DataTypeManager.growToHoldBases(structs: Collection<Structure>) {
+    val done = mutableSetOf<Structure>()
+    fun grow(struct: Structure) {
+        if (!done.add(struct)) return
+        val end = struct.definedComponents.filter { it.isBaseField() }.mapNotNull { part ->
+            val run = part.dataType as? Structure ?: return@mapNotNull null
+            val match = BASE_RUN.matchEntire(run.name)?.takeIf { it.groupValues[1] == run.categoryPath.name }
+                ?: return@mapNotNull null
+            val base = getDataType(run.categoryPath, match.groupValues[1]) as? Structure ?: return@mapNotNull null
+            grow(base)
+            part.offset - match.groupValues[2].toInt() + base.length
+        }.maxOrNull() ?: return
+        if (end > struct.length && !struct.isPackingEnabled) struct.growStructure(end - struct.length)
+    }
+    structs.forEach(::grow)
+}
