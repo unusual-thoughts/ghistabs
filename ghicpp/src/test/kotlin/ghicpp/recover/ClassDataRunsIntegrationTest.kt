@@ -20,8 +20,9 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
- * An x86 program with no RTTI: a constructor storing its class's table at `this`, a second table at `this` + 8,
- * and a word on each side of that second vptr, at +4 and +0xc, so the class's own fields fall in two gaps.
+ * An x86 program with no RTTI: a constructor storing its class's table at `this` and, at `this` + 8, the secondary
+ * table its group has after it (`offset_to_top` -8), and a word on each side of that second vptr, at +4 and +0xc,
+ * so the class's own fields fall in two gaps.
  */
 @Tag("integration")
 class ClassDataRunsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -41,15 +42,15 @@ class ClassDataRunsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             CTOR,
             "56 8b f1" + // push esi; mov esi, ecx
                 " c7 06 10 20 40 00" + // mov dword ptr [esi], TABLE
-                " c7 46 08 20 20 40 00" + // mov dword ptr [esi+8], SECOND_TABLE
+                " c7 46 08 1c 20 40 00" + // mov dword ptr [esi+8], SECOND_TABLE
                 " c7 46 04 01 00 00 00" + // mov dword ptr [esi+4], 1
                 " c7 46 0c 02 00 00 00" + // mov dword ptr [esi+0xc], 2
                 " 8b c6 5e c3", // mov eax, esi; pop esi; ret
         )
         builder.setBytes(VF1, "c3")
         builder.setBytes(VF2, "c3")
-        builder.setBytes(TABLE, "00 11 40 00")
-        builder.setBytes(SECOND_TABLE, "10 11 40 00")
+        // offset_to_top 0, no rtti, VF1; then offset_to_top -8, no rtti, VF2
+        builder.setBytes(GROUP, "00 00 00 00 00 00 00 00 00 11 40 00 f8 ff ff ff 00 00 00 00 10 11 40 00")
         builder.disassemble(CTOR, CTOR_LENGTH)
         builder.createMemoryReference(TABLE_STORE, TABLE, RefType.DATA, SourceType.ANALYSIS, 0)
         builder.createMemoryReference(SECOND_TABLE_STORE, SECOND_TABLE, RefType.DATA, SourceType.ANALYSIS, 0)
@@ -90,7 +91,8 @@ class ClassDataRunsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         const val SECOND_TABLE_STORE = "0x401009"
         const val VF1 = "0x401100"
         const val VF2 = "0x401110"
+        const val GROUP = "0x402008"
         const val TABLE = "0x402010"
-        const val SECOND_TABLE = "0x402020"
+        const val SECOND_TABLE = "0x40201c"
     }
 }
