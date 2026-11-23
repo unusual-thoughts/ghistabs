@@ -62,6 +62,9 @@ for (set in listOf("main", "test")) {
 tasks.withType<Test>().configureEach {
     systemProperty("binariesDir", rootProject.file("src/test/resources/binaries").path)
     systemProperty("hellosDir", rootProject.file("ghicpp/src/test/resources/binaries/features").path)
+    // A Ghidra temp directory per fork (ghidrakt.test.ForkTempDir): parallel forks sharing one race on
+    // its permissions and fail with `Permission denied`.
+    systemProperty("ghidrakt.forkTempRoot", layout.buildDirectory.dir("tmp/$name-forks").get().asFile.path)
     // CI runs with --build-cache, to reuse a main run's compiled classes; a test it restored from there
     // instead of running would pass without having run.
     outputs.doNotCacheIf("tests always run") { true }
