@@ -5,6 +5,7 @@ import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.StructorRole
 import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.classStruct
+import ghicpp.isFlatOwn
 import ghicpp.dissect.ThisFunctionDissector
 import ghicpp.stubClassStruct
 import ghidra.program.database.ProgramBuilder
@@ -25,6 +26,7 @@ import ghidrakt.*
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.diagnose.DummySink
 import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeTrue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -113,6 +115,10 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         program.functionManager.getFunctionAt(addr(MEMBER_CTOR)).getName(true) mustBe "$member::$member"
         structOf(member).length mustBe 8
         structOf(member).description mustBe "No vtable: named after its first constructor, at 00401080"
+        // Nothing else in it, its own fields go in it as they are, no `_data` struct around them.
+        structOf(member).definedComponents.map { "+${it.offset} ${it.fieldName} (${it.comment})" } mustBe
+            listOf("+0 field_0x0 (own field)", "+4 field_0x4 (own field)")
+        structOf(member).isFlatOwn().mustBeTrue()
         program.memberAttrs(addr(MEMBER_CTOR)) mustBe
             MemberAttrs(source = SourceType.ANALYSIS, structor = StructorRole.CONSTRUCTOR)
 

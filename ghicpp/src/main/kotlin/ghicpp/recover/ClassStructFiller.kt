@@ -8,6 +8,7 @@ import ghicpp.abi.VftableBuilder
 import ghicpp.abi.slots
 import ghicpp.dissect.Stores
 import ghicpp.dissect.fillData
+import ghicpp.dissect.fillRun
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Function
@@ -136,9 +137,11 @@ class ClassStructFiller(
     /**
      * The fields [store] puts where no field is yet, the class's own, gathered in a `<Class>_data` struct
      * per gap between what is, as `RecoverClassesFromRTTIScript` gathers them: the fields a gap holds are those
-     * the same existing field, or none, comes after. Where there are several, each is named for its offset.
+     * the same existing field, or none, comes after. Where there are several, each is named for its offset. Where
+     * nothing else is laid, they go in the class struct itself, each marked as its own ([isFlatOwn]).
      */
     private fun Structure.placeData(store: Stores, ns: GhidraClass) {
+        if (numDefinedComponents == 0) return fillRun(0, store.filterKeys { it >= 0 }, flat = true)
         val own = store.filter { (at, dt) -> at >= 0 && componentsOverlapping(at, dt.length).isEmpty() }
         val runs = own.toSortedMap().entries.groupBy { (at, _) -> getDefinedComponentAtOrAfterOffset(at)?.offset }
             .values
