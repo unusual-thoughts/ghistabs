@@ -31,6 +31,9 @@ object ClassNaming {
     // RTTIGccClassRecoverer#createVtableSymbol/createVfunctionSymbol, after INTERNAL_PREFIX.
     const val CONSTRUCTION_PREFIX = "construction-"
 
+    /** How the demangler spells a construction vtable's owner: `Left-in-Diamond`. */
+    const val CONSTRUCTION_INFIX = "-in-"
+
     // RTTIGccClassRecoverer#updateMultiVftableLabels and RecoveredClassHelper#createEmptyVfTableStructs.
     const val FOR_INFIX = "_for_"
     const val VFTABLE_FOR = "$VFTABLE$FOR_INFIX"

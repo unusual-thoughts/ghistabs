@@ -1,6 +1,7 @@
 package ghicpp.recover
 
 import ghicpp.*
+import ghicpp.ClassNaming.CONSTRUCTION_INFIX
 import ghicpp.abi.VftableBuilder
 import ghicpp.abi.definedVtableRecord
 import ghicpp.abi.isVtableClaimed
@@ -41,9 +42,6 @@ class VtableSweepPass(
     companion object {
         /** A swept table's label source, below the import's, so a class can still claim it ([isVtableClaimed]). */
         private val SWEPT = SourceType.ANALYSIS
-
-        /** How the demangler spells a construction vtable's owner: `Left-in-Diamond`. */
-        private const val CONSTRUCTION_INFIX = "-in-"
 
         val VTABLES_SWEPT = BoolOption("Vtables Swept", "Vtables no class claimed already laid.", false)
 
