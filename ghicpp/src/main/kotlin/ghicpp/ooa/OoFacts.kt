@@ -5,6 +5,11 @@ import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.msvc.Msvc
 import ghicpp.dissect.DECOMPILE_TIMEOUT_SECONDS
+import ghicpp.dissect.PointerInto
+import ghicpp.dissect.constantAddress
+import ghicpp.dissect.decompileEach
+import ghicpp.dissect.offsetFrom
+import ghicpp.dissect.pointerInto
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
@@ -141,20 +146,14 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                     ?.let { add("thunk", f.entryPoint, it.entryPoint) }
             }
         }
-        monitor.initialize(all.size.toLong(), "Exporting OOAnalyzer facts")
-        DecompInterface().useWith(program) { decomp ->
-            for (f in all) {
-                if (monitor.isCancelled) break
-                monitor.incrementProgress()
-                if (f.isThunk) continue
-                val high = decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction ?: continue
-                FunctionFacts(f, high).run {
-                    read()
-                    if (thisVar != null && !returnsValue) returnsSelfOnceTyped(decomp, f, high)
-                    vftables += stored
-                    calls += thisCalls
-                    if (thisVar != null) methods += f.entryPoint
-                }
+        val decomp = DecompInterface()
+        decomp.decompileEach(program, all.filter { !it.isThunk }, monitor, "Exporting OOAnalyzer facts") { f, high ->
+            FunctionFacts(f, high).run {
+                read()
+                if (thisVar != null && !returnsValue) f.returnsSelfOnceTyped(high, decomp)
+                vftables += stored
+                calls += thisCalls
+                if (thisVar != null) methods += f.entryPoint
             }
         }
         orderFacts(methods, calls)
@@ -193,7 +192,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
             return derived
         }
 
-        private fun sv(p: Pointer) = sv(p.root, p.offset)
+        private fun sv(p: PointerInto) = sv(p.root, p.offset)
 
         fun read() {
             params()
@@ -211,7 +210,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
 
                     PcodeOp.RETURN -> if (op.numInputs > 1) {
                         returns += thisVar != null &&
-                            op.getInput(1).pointer()?.let { it.root == thisVar && it.offset == 0L } == true
+                            op.getInput(1).pointerInto()?.let { it.root == thisVar && it.offset == 0L } == true
                     }
                 }
             }
@@ -263,7 +262,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
             var thisArg: String? = null
             args.forEachIndexed { i, arg ->
                 val pos = callee?.let { argPosition(it, i) } ?: return@forEachIndexed
-                val p = arg.pointer() ?: return@forEachIndexed
+                val p = arg.pointerInto() ?: return@forEachIndexed
                 val term = sv(p)
                 add("callParameter", at, f.entryPoint, pos, Term(term))
                 if (pos == abi.thisParam) thisArg = term
@@ -281,7 +280,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                 }
 
                 names.any { it in OPERATOR_DELETE } -> {
-                    val freed = args.firstOrNull()?.pointer()?.let(::sv)
+                    val freed = args.firstOrNull()?.pointerInto()?.let(::sv)
                     add("insnCallsDelete", at, f.entryPoint, Term(freed ?: "invalid"))
                     thisCalls += ThisCall(at, f.entryPoint, real?.entryPoint, freed, ThisCall.Kind.DELETE)
                 }
@@ -315,11 +314,11 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
 
         /** A call through a vtable slot: the slot read from a pointer read from an object, both at constant offsets. */
         private fun virtualCall(op: PcodeOp) {
-            val slot = op.getInput(0).offsetFrom()
-            val slotLoad = slot.first.def?.takeIf { it.opcode == PcodeOp.LOAD } ?: return
+            val (slot, _) = op.getInput(0).offsetFrom()
+            val slotLoad = slot.def?.takeIf { it.opcode == PcodeOp.LOAD } ?: return
             val (vptr, slotOffset) = slotLoad.getInput(1).offsetFrom()
             val vptrLoad = vptr.def?.takeIf { it.opcode == PcodeOp.LOAD } ?: return
-            val obj = vptrLoad.getInput(1).pointer() ?: return
+            val obj = vptrLoad.getInput(1).pointerInto() ?: return
             if (slotOffset < 0 || obj.offset < 0) return
             add("possibleVirtualFunctionCall", op.seqnum.target, f.entryPoint, Term(sv(obj)), obj.offset, slotOffset)
         }
@@ -329,7 +328,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
             val value = op.getInput(2)
             access(op, dest, value.size)
             val table = value.constantAddress()?.takeIf { value.size == ptrSize && isPointerTable(it) } ?: return
-            val p = dest.pointer()?.takeIf { it.offset >= 0 } ?: return
+            val p = dest.pointerInto()?.takeIf { it.offset >= 0 } ?: return
             stored += table
             add("possibleVFTableWrite", op.seqnum.target, f.entryPoint, Term(sv(p.root)), p.offset, Term(sv(p)), table)
         }
@@ -337,7 +336,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         /** `methodMemberAccess/4`: a load or store of [size] bytes at a constant offset into `this`. */
         private fun access(op: PcodeOp, pointer: Varnode, size: Int?) {
             val thisRoot = thisVar ?: return
-            val p = pointer.pointer() ?: return
+            val p = pointer.pointerInto() ?: return
             if (p.root != thisRoot || p.offset < 0 || size == null) return
             add("methodMemberAccess", op.seqnum.target, f.entryPoint, p.offset, size)
         }
@@ -355,12 +354,12 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
      * holds whatever the signature says, and an Itanium constructor, `void`, often leaves `this` there. So the
      * method is decompiled again as returning a pointer, in a transaction rolled back after.
      */
-    private fun returnsSelfOnceTyped(decomp: DecompInterface, f: Function, first: HighFunction) {
-        if (f.hasCustomVariableStorage()) return
+    private fun Function.returnsSelfOnceTyped(first: HighFunction, decomp: DecompInterface) {
+        if (hasCustomVariableStorage()) return
         program.runTransaction("Decompile as returning a pointer") {
             // A default signature is not a locked one, so the decompiler would ignore the return type: lock the
             // parameters it found first, so `this` stays where it was.
-            if (f.signatureSource == SourceType.DEFAULT) {
+            if (signatureSource == SourceType.DEFAULT) {
                 HighFunctionDBUtil.commitParamsToDatabase(
                     first,
                     true,
@@ -368,16 +367,17 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                     SourceType.ANALYSIS,
                 )
             }
-            f.setReturnType(PointerDataType(dtm), f.signatureSource)
-            decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction?.apply {
+            setReturnType(PointerDataType(dtm), signatureSource)
+            decomp.decompileFunction(this, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction?.apply {
                 thisVar()?.let { thisVar ->
                     returnVars().apply {
-                        if (isNotEmpty() && all { it.pointer() == Pointer(thisVar, 0L) }) {
-                            add("returnsSelf", f.entryPoint)
+                        if (isNotEmpty() && all { it.pointerInto() == PointerInto(thisVar, 0L) }) {
+                            add("returnsSelf", entryPoint)
                         }
                     }
                 }
             }
+            throw RuntimeException("rollback")
         }
     }
 
@@ -588,47 +588,3 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         val OPERATOR_DELETE = ABIS.flatMap { it.operatorDeleteNames }.toSet()
     }
 }
-
-/** A pointer as the variable it points into and how far past it. */
-private data class Pointer(val root: HighVariable, val offset: Long)
-
-/** [this] traced back through copies, casts and constant adds: the varnode it is offset from, and by how much. */
-private fun Varnode.offsetFrom(offset: Long = 0, depth: Int = 0): Pair<Varnode, Long> {
-    val d = def ?: return this to offset
-    if (depth >= MAX_TRACE) return this to offset
-    return when (d.opcode) {
-        PcodeOp.COPY, PcodeOp.CAST -> d.getInput(0).offsetFrom(offset, depth + 1)
-
-        PcodeOp.INT_ADD, PcodeOp.PTRSUB -> d.getInput(1).takeIf { it.isConstant }
-            ?.let { d.getInput(0).offsetFrom(offset + it.offset, depth + 1) } ?: (this to offset)
-
-        PcodeOp.INT_SUB -> d.getInput(1).takeIf { it.isConstant }
-            ?.let { d.getInput(0).offsetFrom(offset - it.offset, depth + 1) } ?: (this to offset)
-
-        PcodeOp.PTRADD -> {
-            val (index, size) = d.getInput(1) to d.getInput(2)
-            if (index.isConstant && size.isConstant) {
-                d.getInput(0).offsetFrom(offset + index.offset * size.offset, depth + 1)
-            } else {
-                this to offset
-            }
-        }
-
-        else -> this to offset
-    }
-}
-
-/** The variable [this] points into, and where; null for a constant, which points into no object. */
-private fun Varnode.pointer(): Pointer? {
-    val (base, offset) = offsetFrom()
-    if (base.isConstant) return null
-    return base.high?.let { Pointer(it, offset) }
-}
-
-/** The address [this] is, a constant or a global's address (`PTRSUB(0, addr)`), through copies and casts. */
-private fun Varnode.constantAddress(): Long? {
-    val (base, offset) = offsetFrom()
-    return if (base.isConstant) base.offset + offset else null
-}
-
-private const val MAX_TRACE = 16
