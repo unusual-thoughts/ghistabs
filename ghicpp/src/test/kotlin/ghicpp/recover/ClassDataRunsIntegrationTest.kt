@@ -78,7 +78,8 @@ class ClassDataRunsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
         val cls = "${GenericVftableFinder.SEEDED_CLASS_PREFIX}00402010"
         val struct = structOf(cls)
-        struct.ownData().map { (at, dt) -> at to dt.name } mustBe listOf(4 to "${cls}_data_0x4", 12 to "${cls}_data_0xc")
+        struct.ownData().map { (at, dt) -> at to dt.name } mustBe
+            listOf(4 to "${cls}_data_0x4", 12 to "${cls}_data_0xc")
         listOf(4, 12).map { struct.getComponentAt(it).fieldName } mustBe listOf("_data_0x4", "_data_0xc")
     }
 

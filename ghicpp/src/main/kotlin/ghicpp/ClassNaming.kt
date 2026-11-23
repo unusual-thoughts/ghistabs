@@ -113,7 +113,7 @@ object ClassNaming {
     /** The name of a field a class pass lays at [offset] into the class: `field_0x<offset>`, as Ghidra names one. */
     fun fieldName(offset: Int) = "field_0x${offset.toString(16)}"
 
-    /** The field holding a class's own fields' `<Class>_data` struct: `_data`, or `_data_0x18` named for its [offset]. */
+    /** The field holding a class's own fields' `<Class>_data` struct: `_data`, or `_data_0x18` for its [offset]. */
     fun dataFieldName(offset: Int?) = DATA + offset?.let { "_0x${it.toString(16)}" }.orEmpty()
 
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
