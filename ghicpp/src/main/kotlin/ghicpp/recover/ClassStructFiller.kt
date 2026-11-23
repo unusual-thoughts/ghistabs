@@ -136,26 +136,31 @@ class ClassStructFiller(
     /**
      * The fields [store] puts where no field is yet, the class's own, gathered in a `<Class>_data` struct
      * per gap between what is, as `RecoverClassesFromRTTIScript` gathers them: the fields a gap holds are those
-     * the same existing field, or none, comes after.
+     * the same existing field, or none, comes after. Where there are several, each is named for its offset.
      */
     private fun Structure.placeData(store: Stores, ns: GhidraClass) {
         val own = store.filter { (at, dt) -> at >= 0 && componentsOverlapping(at, dt.length).isEmpty() }
-        own.toSortedMap().entries.groupBy { (at, _) -> getDefinedComponentAtOrAfterOffset(at)?.offset }
-            .values.forEachIndexed { i, run -> placeDataRun(run.associate { it.toPair() }, ns, i) }
+        val runs = own.toSortedMap().entries.groupBy { (at, _) -> getDefinedComponentAtOrAfterOffset(at)?.offset }
+            .values
+        for (run in runs) placeDataRun(run.associate { it.toPair() }, ns, several = runs.size > 1)
     }
 
-    /** A `<Class>_data` struct, the [index]th of [ns]'s, of the [fields] in one gap, by offset into the class. */
-    private fun Structure.placeDataRun(fields: Stores, ns: GhidraClass, index: Int) {
+    /**
+     * A `<Class>_data` struct of [ns]'s [fields] in one gap, by offset into the class, held in a `_data` field:
+     * `<Class>_data_0x18` and `_data_0x18` where the class has [several].
+     */
+    private fun Structure.placeDataRun(fields: Stores, ns: GhidraClass, several: Boolean) {
         val start = fields.keys.first()
         val end = fields.maxOf { (at, dt) -> at + dt.length }
         if (end > length) return
-        val name = "${ns.name}${ClassNaming.DATA}" + "_$index".takeIf { index > 0 }.orEmpty()
+        val field = ClassNaming.dataFieldName(start.takeIf { several })
+        val name = ns.name + field
         val data = registry.getOrRegister<Structure>(ClassNaming.vftableCategory(ns).at(name)) {
             StructureDataType(ClassNaming.vftableCategory(ns), name, end - start, dtm).apply {
                 description = "${ns.name}'s own fields, where its constructors store them"
             }
         }
-        runCatching { replaceAtOffset(start, data, data.length, name, "own fields") }
+        runCatching { replaceAtOffset(start, data, data.length, field, "own fields") }
             .onFailure { degradation("class-data-unlaid", "${ns.getName(true)}::$name", it.message) }
     }
 

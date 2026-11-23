@@ -70,7 +70,7 @@ class ClassStructLayoutIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
     private fun owner(own: Structure, start: Int) = add(
         StructureDataType(category, "Owner", 0x20).apply {
             replaceAtOffset(0, PointerDataType.dataType, 4, "{vfptr}", null)
-            replaceAtOffset(start, own, own.length, own.name, "own fields")
+            replaceAtOffset(start, own, own.length, ClassNaming.DATA, "own fields")
         },
     )
 
@@ -79,7 +79,7 @@ class ClassStructLayoutIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         add(
             StructureDataType(category, "Owner_fields_4_32", 0x1c).apply {
                 val own = data(4, *fields)
-                replaceAtOffset(0, own, own.length, own.name, "own fields")
+                replaceAtOffset(0, own, own.length, ClassNaming.DATA, "own fields")
             },
         ),
         4,

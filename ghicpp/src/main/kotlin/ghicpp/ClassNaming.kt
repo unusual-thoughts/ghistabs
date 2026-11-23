@@ -42,7 +42,8 @@ object ClassNaming {
     // A split base's own fields, embedded in it as the `<Base>_fields_<from>_<until>` its deriving classes hold.
     const val FIELDS = "_fields"
 
-    // RecoveredClassHelper.CLASS_DATA_STRUCT_NAME: the struct gathering a class's own fields, `<Class>_data`.
+    // RecoveredClassHelper.CLASS_DATA_STRUCT_NAME: the struct gathering a class's own fields, `<Class>_data`,
+    // held in a `_data` field ([dataFieldName]).
     const val DATA = "_data"
 
     fun vtableLabel(internal: Boolean, construction: Boolean = false) = prefix(internal, construction) + VTABLE
@@ -111,6 +112,9 @@ object ClassNaming {
 
     /** The name of a field a class pass lays at [offset] into the class: `field_0x<offset>`, as Ghidra names one. */
     fun fieldName(offset: Int) = "field_0x${offset.toString(16)}"
+
+    /** The field holding a class's own fields' `<Class>_data` struct: `_data`, or `_data_0x18` named for its [offset]. */
+    fun dataFieldName(offset: Int?) = DATA + offset?.let { "_0x${it.toString(16)}" }.orEmpty()
 
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
         (if (isVirtual) VBASE_PREFIX else BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()

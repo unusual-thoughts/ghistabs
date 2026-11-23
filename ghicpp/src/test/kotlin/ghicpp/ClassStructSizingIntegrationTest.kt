@@ -47,7 +47,7 @@ class ClassStructSizingIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
 
     @Test
     fun trailingDataGrowsWithTheClass() {
-        foo(8) { it.replaceAtOffset(4, data(4), 4, "Foo_data", "own fields") }
+        foo(8) { it.replaceAtOffset(4, data(4), 4, ClassNaming.DATA, "own fields") }
         program.runTransaction { program.sizeClassStruct(ns, 16) }
         val struct = program.classStruct(ns)!!
         struct.length mustBe 16
@@ -60,7 +60,7 @@ class ClassStructSizingIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
     @Test
     fun dataBeforeAnotherFieldKeepsItsSize() {
         foo(12) {
-            it.replaceAtOffset(0, data(4), 4, "Foo_data", "own fields")
+            it.replaceAtOffset(0, data(4), 4, ClassNaming.DATA, "own fields")
             it.replaceAtOffset(8, DWordDataType.dataType, 4, "tail", null)
         }
         program.runTransaction { program.sizeClassStruct(ns, 16) }
