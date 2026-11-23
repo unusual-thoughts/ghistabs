@@ -8,6 +8,8 @@ import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.generic.PlainVtables.MAX_SUBOBJECT_OFFSET
 import ghicpp.abi.ofVtableSymbol
 import ghicpp.describeVxTable
+import ghicpp.fixup.isTailJumpTarget
+import ghicpp.fixup.splitOffTailJumpTarget
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRangeImpl
 import ghidra.program.model.data.Array
