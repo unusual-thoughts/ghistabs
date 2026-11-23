@@ -171,9 +171,16 @@ public class LayoutsToGdt extends GhidraScript {
 				made = e;
 				break;
 			}
-			case 'T':
-				made = new TypedefDataType(at.getParent(), at.getName(), ref(record.fields[1]));
+			case 'T': {
+				TypedefDataType t = new TypedefDataType(at.getParent(), at.getName(), ref(record.fields[1]));
+				// A shifted pointer's offset.
+				if (record.fields.length > 2) {
+					ComponentOffsetSettingsDefinition.DEF.setValue(t.getDefaultSettings(),
+						Long.parseLong(record.fields[2]));
+				}
+				made = t;
 				break;
+			}
 			case 'F': {
 				FunctionDefinitionDataType f = new FunctionDefinitionDataType(at.getParent(), at.getName());
 				built.put(path, f);
