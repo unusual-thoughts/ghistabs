@@ -5,8 +5,8 @@ import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.StructorRole
 import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.classStruct
-import ghicpp.isFlatOwn
 import ghicpp.dissect.ThisFunctionDissector
+import ghicpp.isFlatOwn
 import ghicpp.stubClassStruct
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
