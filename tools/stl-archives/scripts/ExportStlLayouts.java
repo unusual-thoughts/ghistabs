@@ -89,7 +89,10 @@ public class ExportStlLayouts extends GhidraScript {
 			}
 		}
 		else if (dt instanceof TypeDef t) {
-			out.println("T\t" + path + "\t" + ref(t.getDataType()));
+			// A shifted pointer (`char * __((offset(0xc)))`) carries its offset.
+			ComponentOffsetSettingsDefinition shift = ComponentOffsetSettingsDefinition.DEF;
+			long offset = shift.hasValue(t.getDefaultSettings()) ? shift.getValue(t.getDefaultSettings()) : 0;
+			out.println("T\t" + path + "\t" + ref(t.getDataType()) + (offset != 0 ? "\t" + offset : ""));
 		}
 		else if (dt instanceof FunctionDefinition f) {
 			out.println("F\t" + path + "\t" + ref(f.getReturnType()) + "\t" + (f.hasVarArgs() ? 1 : 0));
