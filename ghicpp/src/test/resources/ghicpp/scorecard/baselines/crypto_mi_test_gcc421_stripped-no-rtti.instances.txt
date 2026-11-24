@@ -4725,8 +4725,6 @@ fields-fn `CryptoPP::MeterFilter`+88:4
 fields-fn `CryptoPP::MeterFilter`+92:4
 fields-fn `CryptoPP::MeterFilter`+96:4
 fields-fn `CryptoPP::ModExpPrecomputation`+4:4
-fields-fn `CryptoPP::ModularArithmetic`+32:4
-fields-fn `CryptoPP::ModularArithmetic`+48:4
 fields-fn `CryptoPP::ModularArithmetic`+4:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+12:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+20:4
