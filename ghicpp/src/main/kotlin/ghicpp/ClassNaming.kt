@@ -46,9 +46,9 @@ object ClassNaming {
     // held in a `_data` field ([dataFieldName]).
     const val DATA = "_data"
 
-    // The comment on each of a class's own fields laid in its struct itself, where nothing else is: no
-    // `<Class>_data` struct wraps them then ([ghicpp.isFlatOwn]).
-    const val OWN_FIELD = "own field"
+    // The comment on each field the class pass inferred from its constructors' stores and laid in the class
+    // struct itself, where nothing else is: no `<Class>_data` struct wraps them then ([ghicpp.isFlatInferred]).
+    const val INFERRED = "inferred"
 
     fun vtableLabel(internal: Boolean, construction: Boolean = false) = prefix(internal, construction) + VTABLE
 

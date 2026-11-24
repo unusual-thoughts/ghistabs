@@ -154,7 +154,7 @@ internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Struc
     )
     var (into, offset) = owner.landing(at, member.length)
     // A struct holding its own fields alone takes the member over them, as its `<Class>_data` struct would.
-    var ownData = owner.isFlatOwn()
+    var ownData = owner.isFlatInferred()
     while (!ownData) {
         val range = offset.withLength(member.length)
         val inWay = into.componentsOverlapping(range).filterNot { it.isAt(offset, member) || it.isOwnVfptr(into) }
@@ -250,13 +250,13 @@ fun Structure.isOwnFields(part: DataTypeComponent) = (part.dataType as? Structur
 } == true
 
 /**
- * Whether this class struct holds its own fields alone, laid in it with no `<Class>_data` struct around them
+ * Whether this class struct holds the fields the class pass inferred alone, laid in it with no `<Class>_data` struct around them
  * since nothing else is there: no base, vptr, nor own data or fields run, and a field marked
- * [ClassNaming.OWN_FIELD]. A struct another importer filled has no such mark, and stays theirs.
+ * [ClassNaming.INFERRED]. A struct another importer or the reverser filled has no such mark, and stays theirs.
  */
-fun Structure.isFlatOwn(): Boolean {
+fun Structure.isFlatInferred(): Boolean {
     val parts = definedComponents
-    return parts.any { it.comment == ClassNaming.OWN_FIELD } && parts.none {
+    return parts.any { it.comment == ClassNaming.INFERRED } && parts.none {
         it.isBaseField() || it.fieldName == ClassUtils.VFPTR || it.fieldName == ClassNaming.VBPTR ||
             isOwnData(it) || isOwnFields(it)
     }
@@ -265,10 +265,10 @@ fun Structure.isFlatOwn(): Boolean {
 /**
  * This class struct's own `<Class>_data` structs, by their offset into it: those it holds and, its fields split
  * around a deriving class's vptr ([VfptrModel.SPLIT_BASE]), those inside its own `_fields` runs. A struct holding
- * its own fields alone ([isFlatOwn]) is its own, whole, at 0.
+ * its own fields alone ([isFlatInferred]) is its own, whole, at 0.
  */
 fun Structure.ownData(): List<Pair<Int, Structure>> {
-    if (isFlatOwn()) return listOf(0 to this)
+    if (isFlatInferred()) return listOf(0 to this)
     return definedComponents.flatMap { part ->
         when {
             isOwnData(part) -> listOf(part.offset to part.dataType as Structure)

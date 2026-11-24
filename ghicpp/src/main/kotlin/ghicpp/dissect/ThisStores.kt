@@ -246,13 +246,13 @@ internal fun Structure.fillData(store: Stores) {
 
 /**
  * Fills this, the struct of a class's own fields at [offset] into it, with the fields of [store] it holds, as
- * [fillData]. Where it is the class struct itself ([ghicpp.isFlatOwn]), a new field is marked as one of its own.
+ * [fillData]. Where it is the class struct itself ([ghicpp.isFlatInferred]), a new field is marked as inferred.
  */
 internal fun Structure.fillRun(offset: Int, store: Stores, flat: Boolean) {
     val inside = store.filter { (at, dt) -> offset.withLength(length).includes(at.withLength(dt.length)) }
     val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(this) }
     for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
-    val mark = ClassNaming.OWN_FIELD.takeIf { flat }
+    val mark = ClassNaming.INFERRED.takeIf { flat }
     for ((at, dt) in merged.iterator()) {
         val old = getComponentAt(at.toInt())
         if (at + dt.length > length || old?.dataType?.isEquivalent(dt) == true) continue

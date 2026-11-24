@@ -135,7 +135,7 @@ class ClassStructFiller(
      * The fields [store] puts where no field is yet, the class's own, gathered in a `<Class>_data` struct
      * per gap between what is, as `RecoverClassesFromRTTIScript` gathers them: the fields a gap holds are those
      * the same existing field, or none, comes after. Where there are several, each is named for its offset. Where
-     * nothing else is laid, they go in the class struct itself, each marked as its own ([isFlatOwn]).
+     * nothing else is laid, they go in the class struct itself, each marked as inferred ([isFlatInferred]).
      */
     private fun Structure.placeData(store: Stores, ns: GhidraClass) {
         if (numDefinedComponents == 0) return fillRun(0, store.filterKeys { it >= 0 }, flat = true)
