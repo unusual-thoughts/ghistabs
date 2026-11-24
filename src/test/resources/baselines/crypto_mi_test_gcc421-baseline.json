@@ -1462,5 +1462,5 @@
             "max": 47
         }
     },
-    "source": "crypto_mi_test_gcc421.exe - shifted from committed"
+    "source": "crypto_mi_test_gcc421.exe - generated from snapshotCounters()"
 }

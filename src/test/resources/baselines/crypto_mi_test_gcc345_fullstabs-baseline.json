@@ -1406,5 +1406,5 @@
             "max": 67
         }
     },
-    "source": "crypto_mi_test_gcc345_fullstabs.exe - shifted from committed"
+    "source": "crypto_mi_test_gcc345_fullstabs.exe - generated from snapshotCounters()"
 }

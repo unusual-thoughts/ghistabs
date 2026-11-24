@@ -542,5 +542,5 @@
             "max": 19
         }
     },
-    "source": "locale_test_customlibstdcxx_stripped.exe - shifted from committed"
+    "source": "locale_test_customlibstdcxx_stripped.exe - generated from snapshotCounters()"
 }

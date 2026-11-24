@@ -477,5 +477,5 @@
             "max": 15
         }
     },
-    "source": "xmltest_gcc421_stripped.exe - shifted from committed"
+    "source": "xmltest_gcc421_stripped.exe - generated from snapshotCounters()"
 }

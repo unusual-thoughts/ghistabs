@@ -175,6 +175,9 @@ class MemberObjectPass(
         /** What is at each subobject, a level each: the first in [found]'s classes and the allocated objects. */
         private val levels = mutableListOf<MutableMap<Subobject, ContainingClass>>()
 
+        /** Where a constructor is inlined after `operator new`, whose object is no allocated one's. */
+        private val inlined = found.inlined.mapTo(mutableSetOf()) { it.at }
+
         /** Each subobject and what is there, the deepest first, so that a class embeds its members whole. */
         val subobjects: List<Pair<Subobject, ContainingClass>>
 
@@ -273,8 +276,6 @@ class MemberObjectPass(
             return null
         }
 
-        private val inlined by lazy { found.inlined.mapTo(mutableSetOf()) { it.at } }
-
         /**
          * The classes of the objects `operator new` allocates with a constant size whose constructor, the first
          * function called on what it returns ([ThisFunctionDissector.allocations]), [found] doesn't know: one class
@@ -283,7 +284,7 @@ class MemberObjectPass(
          * object it returns ([returnsInSlot]), or is the first called after allocations of different sizes, which no
          * one class's constructor is.
          */
-        private val allocated: List<NonPolymorphicClass>get() = dissector.allocations(monitor)
+        private val allocated: List<NonPolymorphicClass> get() = dissector.allocations(monitor)
             .filter { it.at !in inlined }
             .groupBy { it.firstCalled }
             .mapNotNull { (ctor, allocs) ->

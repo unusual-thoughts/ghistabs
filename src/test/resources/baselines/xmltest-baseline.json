@@ -525,5 +525,5 @@
             "max": 5
         }
     },
-    "source": "xmltest - shifted from committed"
+    "source": "xmltest - generated from snapshotCounters()"
 }

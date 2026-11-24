@@ -521,5 +521,5 @@
             "max": 15
         }
     },
-    "source": "xmltest_gcc421.exe - shifted from committed"
+    "source": "xmltest_gcc421.exe - generated from snapshotCounters()"
 }
