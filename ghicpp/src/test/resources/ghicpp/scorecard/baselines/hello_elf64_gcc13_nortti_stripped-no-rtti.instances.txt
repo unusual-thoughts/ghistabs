@@ -7,8 +7,6 @@ base-access-fn `Rect` of `Label`: none, is public
 base-access-fn `Shape` of `Circle`: none, is public
 base-access-fn `Shape` of `Rect`: none, is public
 base-access-fn `Up` of `Both`: none, is public
-bases-fn `?Base` (virtual) of `Right`
-bases-fn `?Point` of `Secret`
 bases-fn `Core` (virtual) of `Up`
 bases-fn `Left` of `Diamond`
 bases-fn `Right` of `Diamond`
