@@ -334,31 +334,27 @@ fun Structure.settleHolders(seen: MutableSet<Structure> = mutableSetOf()) {
  */
 fun Structure.settle(): Boolean {
     if (isPackingEnabled) return false
+    fun DataTypeComponent.move() = componentsOverlapping(offset.withLength(dataType.length)).none {
+        it.ordinal != ordinal
+    } && runCatching {
+        val after = definedComponents.filter { c ->
+            c.ordinal > ordinal && c.offset == offset + length && c.length == 0 &&
+                (c.dataType as? Structure)?.isZeroLength == true
+        }
+        for (it in (after + this).sortedByDescending { it.ordinal }) {
+            clearComponent(it.ordinal)
+        }
+        lay(offset, dataType, fieldName, comment)
+        for (it in after) {
+            insertAtOffset(offset + dataType.length, it.dataType, 0, it.fieldName, it.comment)
+        }
+    }.isSuccess
+
     val stuck = mutableSetOf<Int>()
     var moved = false
     while (true) {
-        val part = definedComponents.firstOrNull { c ->
+        definedComponents.firstOrNull { c ->
             c.ordinal !in stuck && (c.dataType as? Structure)?.let { !it.isZeroLength && c.length < it.length } == true
-        } ?: return moved
-        val dt = part.dataType as Structure
-        val end = part.offset + part.length
-        val after = definedComponents.filter { c ->
-            c.ordinal > part.ordinal && c.offset == end && c.length == 0 &&
-                (c.dataType as? Structure)?.isZeroLength == true
-        }
-        val inWay = componentsOverlapping(part.offset.withLength(dt.length)).filter { it.ordinal != part.ordinal }
-        if (inWay.isNotEmpty()) {
-            stuck += part.ordinal
-            continue
-        }
-        val (offset, name, comment) = Triple(part.offset, part.fieldName, part.comment)
-        val moving = after.map { Triple(it.dataType, it.fieldName, it.comment) }
-        runCatching {
-            (after + part).sortedByDescending { it.ordinal }.forEach { clearComponent(it.ordinal) }
-            lay(offset, dt, name, comment)
-            moving.forEach { (run, runName, runComment) ->
-                insertAtOffset(offset + dt.length, run, 0, runName, runComment)
-            }
-        }.onSuccess { moved = true }.onFailure { stuck += part.ordinal }
+        }?.run { if (move()) moved = true else stuck += ordinal } ?: return moved
     }
 }
