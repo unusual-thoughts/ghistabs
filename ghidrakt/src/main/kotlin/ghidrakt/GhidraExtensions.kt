@@ -24,6 +24,7 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.ascii.AsciiCharSetRecognizer
 import ghidra.util.ascii.CharSetRecognizer
@@ -147,6 +148,8 @@ val Function.thunked get(): Function? = getThunkedFunction(true)
 /** The function a call of this one runs: the one it ends at if a thunk ([thunked]), else itself. */
 val Function.orThunked get() = thunked ?: this
 
+val Symbol.qualifiedName: String get() = getName(true)
+val Namespace.qualifiedName: String get() = getName(true)
 fun Namespace.toClass(): GhidraClass? = this as? GhidraClass
     ?: runCatching { NamespaceUtils.convertNamespaceToClass(this) }.getOrNull()
 
@@ -245,7 +248,8 @@ fun Structure.componentsOverlapping(offset: Int, length: Int) = componentsOverla
 fun Structure.lay(at: Int, dt: DataType, name: String?, comment: String?): DataTypeComponent {
     val range = at.withLength(dt.length)
     if (range.last >= length) growStructure(range.last + 1 - length)
-    componentsOverlapping(range).sortedByDescending { it.offset }.forEach { clearAtOffset(it.offset) }
+    // By ordinal: clearing by offset would take a zero-length component there too.
+    componentsOverlapping(range).sortedByDescending { it.ordinal }.forEach { clearComponent(it.ordinal) }
     return replaceAtOffset(at, dt, dt.length, name, comment)
 }
 
@@ -257,11 +261,16 @@ fun Structure.stretch(part: DataTypeComponent, range: IntRange): Structure {
     val inner = part.dataType as Structure
     if (part.range.includes(range)) return inner
     val (offset, name, comment) = Triple(part.offset, part.fieldName, part.comment)
+    // An empty struct is packed to be held zero-length, and reports a length of 1 all the same.
+    if (inner.isZeroLength) inner.isPackingEnabled = false
+    val length = if (inner.isZeroLength) 0 else inner.length
     val start = minOf(offset, range.first)
-    val end = maxOf(offset + inner.length, range.last + 1)
-    clearAtOffset(offset)
+    val end = maxOf(offset + length, range.last + 1)
+    // This part alone: other zero-length ones at its offset, an empty base's, stay.
+    clearComponent(part.ordinal)
     repeat(offset - start) { inner.insertAtOffset(0, DataType.DEFAULT, 1) }
-    if (end - start > inner.length) inner.growStructure(end - start - inner.length)
+    val grown = if (inner.isZeroLength) 0 else inner.length
+    if (end - start > grown) inner.growStructure(end - start - grown)
     lay(start, inner, name, comment)
     return inner
 }

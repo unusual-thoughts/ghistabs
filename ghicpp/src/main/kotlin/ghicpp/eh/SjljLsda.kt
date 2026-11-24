@@ -91,9 +91,9 @@ class SjljLsda private constructor(
         val at = typeAt(n, program.defaultPointerSize) ?: return null
         val typeinfo = program.pointerAt(at)?.takeIf { it.offset != 0L } ?: return null
         val symbol = program.symbolTable.getPrimarySymbol(typeinfo) ?: return "$typeinfo"
-        if (symbol.name == TYPEINFO) return symbol.parentNamespace.getName(true)
+        if (symbol.name == TYPEINFO) return symbol.parentNamespace.qualifiedName
         return Demangler.of(symbol.name)?.takeIf { it.name == TYPEINFO }?.namespace?.namespaceString
-            ?: symbol.getName(true)
+            ?: symbol.qualifiedName
     }
 
     /** Bytes from the LSDA's start to the end of its last field. */

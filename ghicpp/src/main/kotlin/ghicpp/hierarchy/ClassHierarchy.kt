@@ -5,19 +5,13 @@ package ghicpp.hierarchy
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassEdits
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
-import ghicpp.CxxAbi
 import ghicpp.MemberAttrs.Companion.memberAttrs
+import ghicpp.abi.*
 import ghicpp.abi.gcc2.Gcc2
-import ghicpp.abi.holdsPureVirtualStub
-import ghicpp.abi.isPrimaryVftable
 import ghicpp.abi.itanium.*
-import ghicpp.abi.looksLikeThunk
-import ghicpp.abi.mangledBy
 import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.msvc.MsvcRttiParser
 import ghicpp.abi.msvc.MsvcStructor
-import ghicpp.abi.ofVftable
-import ghicpp.abi.vftableStructAt
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Structure
@@ -344,7 +338,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         fun basesOf(ns: GhidraClass, typeinfo: Address?, classIds: Map<Long, Long>, idOf: (List<String>) -> Long?) =
             (edits[ns.id] ?: record[ns.id])?.bases?.map { base ->
                 val target = base.namespaceId?.let(classIds::get)
-                val name = base.namespaceId?.let { (symtab.getSymbol(it)?.`object` as? Namespace)?.getName(true) }
+                val name = base.namespaceId?.let { (symtab.getSymbol(it)?.`object` as? Namespace)?.qualifiedName }
                     ?: base.name ?: "?"
                 BaseRef(name, target, base.isVirtual, base.access, base.offset.takeUnless { base.isVirtual })
             } ?: typeinfo?.let(rtti::basesOf).orEmpty().map { base ->

@@ -119,9 +119,10 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
         else if struct.isZeroLength -> struct.growStructure(size)
 
         else if struct.length < size -> {
-            val last = struct.definedComponents.lastOrNull()?.takeIf { it.endOffset == struct.length - 1 }
+            val last = struct.definedComponents.lastOrNull()?.takeIf { it.endsAtEndOf(struct) }
             struct.growStructure(size - struct.length)
             if (last != null) struct.stretchOwnTail(struct, last, size)
+            struct.settleHolders()
         }
     }
 }
@@ -151,8 +152,7 @@ internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Struc
         "${member.name} overlaps ${why.joinToString { it.describe() }}" +
             " in ${into.name}".takeIf { into != owner }.orEmpty(),
     )
-    var into = owner
-    var offset = at
+    var (into, offset) = owner.landing(at, member.length)
     // A struct holding its own fields alone takes the member over them, as its `<Class>_data` struct would.
     var ownData = owner.isFlatOwn()
     while (!ownData) {
@@ -184,6 +184,8 @@ internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Struc
     runCatching { into.lay(offset, member, field, "member or base") }
         .onSuccess { laid ->
             debug("member-placed", "${member.name} at +$at in ${owner.name}")
+            into.settleHolders()
+            owner.settleHolders()
             if (vfptr != null && into == owner && member.holdsVfptrAt(0)) {
                 BaseSplitter(DtmRegistry(owner.dataTypeManager), this)
                     .splitBase(owner, listOf(owner.name), at, laid, vfptr)
@@ -215,6 +217,22 @@ private fun Structure.stretchOwnTail(owner: Structure, last: DataTypeComponent, 
     val offset = last.offset
     val inner = stretch(last, offset..<end)
     if (tail != null) inner.stretchOwnTail(owner, tail, end - offset)
+}
+
+/** Whether this ends where [struct] does: a zero-length one, an empty base's run, by starting there. */
+private fun DataTypeComponent.endsAtEndOf(struct: Structure) =
+    offset + length == if (struct.isZeroLength) 0 else struct.length
+
+/**
+ * Where [length] bytes at [at] in this class struct go first, and at what offset into it: past its end, into the run
+ * of its own fields it ends in ([isOwnFields]), stretched to hold them, which each class deriving from it holds too;
+ * else into this.
+ */
+private fun Structure.landing(at: Int, length: Int): Pair<Structure, Int> {
+    settle()
+    val tail = definedComponents.lastOrNull()?.takeIf { isOwnFields(it) && it.endsAtEndOf(this) }
+    if (tail == null || at < tail.offset || at + length <= this.length) return this to at
+    return stretch(tail, at.withLength(length)) to at - tail.offset
 }
 
 /** Whether [part] holds one of this class struct's own `<Class>_data` structs, filed beside it. */
@@ -288,3 +306,73 @@ fun Structure.copyNonVirtualPart(cls: Structure, onFailure: (DataTypeComponent, 
 
 /** Whether this is a virtual base's field. */
 fun DataTypeComponent.isVirtualBaseField() = fieldName.orEmpty().startsWith(ClassNaming.VBASE_PREFIX)
+
+/** A base's `_fields` run ([BaseSplitter]): `<Base>_fields_<from>_<to>`, filed beside the base. */
+private val BASE_RUN = Regex("(.+)${ClassNaming.FIELDS}_(\\d+)_(\\d+)")
+
+/**
+ * Grows each of [structs], class structs, to hold its bases whole, a base before the classes deriving from it. A
+ * member laid past a base's end goes into the base's own tail run ([placeMember]), which each deriving class holds
+ * and grows with. But where that run is zero-length, an empty base's, in a class that also ends in its own empty
+ * run at the same offset, Ghidra cannot grow it there, and the class would stay as short as it was.
+ */
+fun DataTypeManager.growToHoldBases(structs: Collection<Structure>) {
+    val done = mutableSetOf<Structure>()
+    fun grow(struct: Structure) {
+        if (!done.add(struct)) return
+        val end = struct.definedComponents.filter { it.isBaseField() }.mapNotNull { part ->
+            val run = part.dataType as? Structure ?: return@mapNotNull null
+            val match = BASE_RUN.matchEntire(run.name)?.takeIf { it.groupValues[1] == run.categoryPath.name }
+                ?: return@mapNotNull null
+            val base = getDataType(run.categoryPath, match.groupValues[1]) as? Structure ?: return@mapNotNull null
+            grow(base)
+            part.offset - match.groupValues[2].toInt() + base.length
+        }.maxOrNull() ?: return
+        if (end > struct.length && !struct.isPackingEnabled) struct.growStructure(end - struct.length)
+    }
+    structs.forEach(::grow)
+}
+
+/**
+ * Settles each struct holding this one ([settle]), and on up through those that grew, or are packed and so grew
+ * with it. Ghidra grows a field whose type grew only over the undefined bytes after it, and a zero-length one, an
+ * empty base's run, not at all.
+ */
+fun Structure.settleHolders(seen: MutableSet<Structure> = mutableSetOf()) {
+    if (!seen.add(this)) return
+    for (holder in parents.filterIsInstance<Structure>()) {
+        if (holder.isPackingEnabled || holder.settle()) holder.settleHolders(seen)
+    }
+}
+
+/**
+ * Lays each field of this unpacked struct that is shorter than its type, a run that grew after it was laid, at its
+ * type's length again, the empty runs that start where it ends moved on to its new end: the runs of a class's own
+ * fields after its bases'. Where something else is in the way the field stays as it is. Whether anything moved.
+ */
+fun Structure.settle(): Boolean {
+    if (isPackingEnabled) return false
+    fun DataTypeComponent.move() = componentsOverlapping(offset.withLength(dataType.length)).none {
+        it.ordinal != ordinal
+    } && runCatching {
+        val after = definedComponents.filter { c ->
+            c.ordinal > ordinal && c.offset == offset + length && c.length == 0 &&
+                (c.dataType as? Structure)?.isZeroLength == true
+        }
+        for (it in (after + this).sortedByDescending { it.ordinal }) {
+            clearComponent(it.ordinal)
+        }
+        lay(offset, dataType, fieldName, comment)
+        for (it in after) {
+            insertAtOffset(offset + dataType.length, it.dataType, 0, it.fieldName, it.comment)
+        }
+    }.isSuccess
+
+    val stuck = mutableSetOf<Int>()
+    var moved = false
+    while (true) {
+        definedComponents.firstOrNull { c ->
+            c.ordinal !in stuck && (c.dataType as? Structure)?.let { !it.isZeroLength && c.length < it.length } == true
+        }?.run { if (move()) moved = true else stuck += ordinal } ?: return moved
+    }
+}

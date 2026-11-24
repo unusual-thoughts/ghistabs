@@ -462,10 +462,6 @@
             "min": 1,
             "max": 2
         },
-        "text-undisassembled-code": {
-            "min": 0,
-            "max": 2
-        },
         "textrange-entries": {
             "min": 597,
             "max": 597
@@ -494,17 +490,13 @@
             "min": 9,
             "max": 9
         },
-        "vfptr-inherited-from-base": {
-            "min": 9,
-            "max": 9
-        },
         "vfptr-normalized": {
             "min": 7,
             "max": 7
         },
         "vfptr-split-from-base": {
-            "min": 50,
-            "max": 50
+            "min": 59,
+            "max": 59
         },
         "vftable-pure-slot-typed": {
             "min": 0,

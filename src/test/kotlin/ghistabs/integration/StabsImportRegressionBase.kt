@@ -1135,7 +1135,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             isEmpty()
         }
 
+        // A base that is nothing but its vptr leaves the class an empty run of it, laid zero-length where the
+        // vptr ends: at the end of its span, an empty range inside it.
         val misplaced = placed.filter { (_, span, comp) -> comp.offset !in span }
+            .filterNot { (_, span, comp) -> comp.length == 0 && comp.offset == span.last + 1 }
             .map { (dt, span, comp) -> "${dt.pathName} puts '${comp.fieldName}' at +${comp.offset}, not in +$span" }
         val collapsed = multiple.flatMap { (_, dt, _) ->
             dt.definedComponents
@@ -1226,7 +1229,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 }
                 .mapNotNull { base ->
                     dt.definedComponents
-                        .firstOrNull { it.offset.toLong() == base.offsetBits / 8 && it.isBaseField() }
+                        // Not a zero-length one there: what a base of nothing but its vptr leaves the class.
+                        .firstOrNull { it.offset.toLong() == base.offsetBits / 8 && it.isBaseField() && it.length > 0 }
                         ?.let { dt to it }
                 }
         }
