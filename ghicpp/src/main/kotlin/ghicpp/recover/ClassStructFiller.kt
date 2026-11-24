@@ -1,8 +1,6 @@
 package ghicpp.recover
 
 import ghicpp.*
-import ghicpp.CxxAbi
-import ghicpp.VtableRecord
 import ghicpp.abi.SlotDefinitions
 import ghicpp.abi.VftableBuilder
 import ghicpp.abi.slots
@@ -10,7 +8,6 @@ import ghicpp.dissect.Stores
 import ghicpp.dissect.fillData
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
-import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidrakt.*
@@ -84,7 +81,7 @@ class ClassStructFiller(
     private fun Structure.placeBase(base: ClassBase, all: List<ClassBase>, ns: GhidraClass) {
         val count = all.size
         val at = base.offset?.toInt() ?: return
-        val qualified = ns.getName(true)
+        val qualified = ns.qualifiedName
         val whole = base.cls.ns?.toClass()?.let(program::classStruct)?.takeUnless { it.isZeroLength }
         if (whole == null) return degradation("base-undefined", qualified.member(base.cls.name), "no struct for it")
         val dt = (base.cls.nonVirtualSize?.toInt() ?: roomForNonVirtualPart(base.cls, at, whole, all))
@@ -158,14 +155,14 @@ class ClassStructFiller(
             }
         }
         runCatching { replaceAtOffset(start, data, data.length, name, "own fields") }
-            .onFailure { degradation("class-data-unlaid", "${ns.getName(true)}::$name", it.message) }
+            .onFailure { degradation("class-data-unlaid", "${ns.qualifiedName}::$name", it.message) }
     }
 
     /** A `{vbptr}` at [at], where no base subobject holds it already. */
     private fun Structure.placeVbptr(at: Int, ns: GhidraClass) {
         val vbptr = PointerDataType(IntegerDataType.dataType, dtm)
         if (at < 0 || getComponentContaining(at)?.isBaseField() == true) return
-        layoutProblem(at, vbptr)?.let { return degradation("vbptr-collision", ns.getName(true), it) }
+        layoutProblem(at, vbptr)?.let { return degradation("vbptr-collision", ns.qualifiedName, it) }
         replaceAtOffset(at, vbptr, vbptr.length, ClassNaming.VBPTR, "vbtable pointer: its virtual bases' offsets")
     }
 
@@ -175,11 +172,11 @@ class ClassStructFiller(
         if (holder != null) {
             val split = vfptrModel == VfptrModel.SPLIT_BASE && vfptrs.splitBase(this, ns.path, at, holder, vfptr)
             if (!split) {
-                debug("vfptr-inherited-from-base", ns.getName(true))
+                debug("vfptr-inherited-from-base", ns.qualifiedName)
             }
             return
         }
-        layoutProblem(at, vfptr)?.let { return degradation("vfptr-collision", ns.getName(true), it) }
+        layoutProblem(at, vfptr)?.let { return degradation("vfptr-collision", ns.qualifiedName, it) }
         replaceAtOffset(at, vfptr, vfptr.length, ClassUtils.VFPTR, "vtable pointer")
     }
 
@@ -214,7 +211,7 @@ class ClassStructFiller(
         vftable.describeVxTable(ns.name, label?.name ?: ClassNaming.VFTABLE, record.vfptrOffset(program))
         runCatching { program.forceCreateData(record.addressPoint, vftable) }
             .onSuccess(defined::addLaid)
-            .onFailure { degradation("vftable-unlaid", "${ns.getName(true)}::$name", it.message, record.addressPoint) }
+            .onFailure { degradation("vftable-unlaid", "${ns.qualifiedName}::$name", it.message, record.addressPoint) }
         return vftable
     }
 }

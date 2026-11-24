@@ -24,6 +24,7 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.ascii.AsciiCharSetRecognizer
 import ghidra.util.ascii.CharSetRecognizer
@@ -147,6 +148,8 @@ val Function.thunked get(): Function? = getThunkedFunction(true)
 /** The function a call of this one runs: the one it ends at if a thunk ([thunked]), else itself. */
 val Function.orThunked get() = thunked ?: this
 
+val Symbol.qualifiedName: String get() = getName(true)
+val Namespace.qualifiedName: String get() = getName(true)
 fun Namespace.toClass(): GhidraClass? = this as? GhidraClass
     ?: runCatching { NamespaceUtils.convertNamespaceToClass(this) }.getOrNull()
 

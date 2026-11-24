@@ -127,11 +127,11 @@ class MemberObjectPass(
             val ns = m.cls?.ns?.toClass() ?: continue
             // Its struct first, so its structors' `this` is typed with it, not a placeholder of Ghidra's.
             runCatching { program.stubClassStruct(ns) }.onFailure {
-                warn("member-struct-unstubbed", "${ns.getName(true)}: $it")
+                warn("member-struct-unstubbed", "${ns.qualifiedName}: $it")
             }
             val size = sizes[m] ?: 0
             runCatching { program.sizeClassStruct(ns, size) }.onFailure {
-                warn("member-struct-unsized", "${ns.getName(true)} -> $size: $it")
+                warn("member-struct-unsized", "${ns.qualifiedName} -> $size: $it")
             }
             m.ctors.forEach { it.name(ns, CONSTRUCTOR) }
             m.dtors.forEach { it.name(ns, DESTRUCTOR) }
@@ -355,7 +355,7 @@ class MemberObjectPass(
             setName(if (role == CONSTRUCTOR) ns.name else "~${ns.name}", SourceType.ANALYSIS)
             program.recordPlaced(this, role, virtual = false)
             fixMethodConvention(takesThis = true)
-        }.onFailure { warn("member-structor-unnamed", "$name -> ${ns.getName(true)}: $it", entryPoint) }
+        }.onFailure { warn("member-structor-unnamed", "$name -> ${ns.qualifiedName}: $it", entryPoint) }
     }
 
     /**

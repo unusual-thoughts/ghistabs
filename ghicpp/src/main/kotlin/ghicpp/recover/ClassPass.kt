@@ -4,8 +4,6 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.recordPlaced
-import ghicpp.RttiParser
-import ghicpp.StructorRole
 import ghicpp.abi.slots
 import ghicpp.dissect.*
 import ghicpp.hierarchy.typePureSlots
@@ -134,11 +132,11 @@ class ClassPass(
         val entry = func.entryPoint
         val ns = cls.ns?.toClass() ?: return false
         val moved = runCatching { claim(func, ns, name).first }
-            .onFailure { warn("class-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
+            .onFailure { warn("class-vfunction-unmoved", "${func.name} -> ${ns.qualifiedName}: $it", entry) }
             .getOrDefault(false)
         if (func.parentNamespace.id == ns.id) {
             runCatching { func.fixMethodConvention(takesThis = true) }
-                .onFailure { warn("class-vfunction-convention", "${func.name} -> ${ns.getName(true)}: $it", entry) }
+                .onFailure { warn("class-vfunction-convention", "${func.name} -> ${ns.qualifiedName}: $it", entry) }
         }
         return moved
     }
@@ -196,7 +194,7 @@ class ClassPass(
     private fun stubStructs(classes: Collection<ClassDecl>) {
         for (ns in classes.mapNotNull { it.ns?.toClass() }) {
             runCatching { program.stubClassStruct(ns) }
-                .onFailure { warn("class-struct-unstubbed", "${ns.getName(true)}: $it") }
+                .onFailure { warn("class-struct-unstubbed", "${ns.qualifiedName}: $it") }
         }
     }
 
@@ -219,7 +217,7 @@ class ClassPass(
             val length = size.first.toInt()
             runCatching {
                 program.sizeClassStruct(ns, length)
-            }.onFailure { warn("class-struct-unsized", "${ns.getName(true)} -> $length: $it") }
+            }.onFailure { warn("class-struct-unsized", "${ns.qualifiedName} -> $length: $it") }
         }
         return sized
     }
@@ -233,7 +231,7 @@ class ClassPass(
             val retyped = func.parentNamespace.id == cls.id && func.fixMethodConvention(takesThis = true)
             moves || renames || retyped
         }.onFailure {
-            warn("class-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)
+            warn("class-structor-unnamed", "${func.name} -> ${cls.qualifiedName}::$name: $it", func.entryPoint)
         }.getOrDefault(false)
     }
 

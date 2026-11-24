@@ -137,7 +137,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         for (f in (slots.mapNotNull(::target) + func).distinct()) {
             if (f.name == newName) continue
             runCatching { f.setName(newName, SourceType.USER_DEFINED) }
-                .onSuccess { functions++ }.onFailure { skipped += "${f.getName(true)}: ${it.message}" }
+                .onSuccess { functions++ }.onFailure { skipped += "${f.qualifiedName}: ${it.message}" }
         }
         return SlotRenames(functions, slots.count { nameSlot(it, newName, skipped) }, skipped)
     }
@@ -220,7 +220,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         val name = generateSequence(0) { it + 1 }.map { if (it == 0) leaf else "${leaf}_$it" }
             .first { it !in used && dtm.getDataType(category, it).let { dt -> dt == null || (again && dt == old) } }
         val def = FunctionDefinitionDataType(category, name, typed[chosen], dtm)
-        val comment = TYPED_OFF + from.getName(true)
+        val comment = TYPED_OFF + from.qualifiedName
         if (again) {
             if (old.name != name) old.name = name
             old.replaceWith(def)
@@ -241,8 +241,8 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
      */
     private fun holdsStub(slot: VirtualSlot): Boolean {
         val def = definition(slot) ?: return false
-        if (def.arguments.isNotEmpty() && field(slot)?.second?.let(::isTypedOff) != true) return false
-        return pointee(slot)?.let { program.holdsPureVirtualStub(it, ::isPureVirtualStub) } == true
+        return !(def.arguments.isNotEmpty() && field(slot)?.second?.let(::isTypedOff) != true) &&
+            pointee(slot)?.let { program.holdsPureVirtualStub(it, ::isPureVirtualStub) } == true
     }
 
     private fun isTypedOff(field: DataTypeComponent) = field.comment?.startsWith(TYPED_OFF) == true
@@ -335,7 +335,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
             val name = destructorName(cls, abi)
             if (f != null && f.name != name) {
                 runCatching { f.setName(name, SourceType.USER_DEFINED) }
-                    .onSuccess { functions++ }.onFailure { skipped += "${f.getName(true)}: ${it.message}" }
+                    .onSuccess { functions++ }.onFailure { skipped += "${f.qualifiedName}: ${it.message}" }
             }
             if (nameSlot(slot, name, skipped)) fields++
         }

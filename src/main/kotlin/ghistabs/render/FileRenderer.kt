@@ -397,7 +397,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             val fns = addrs
                 .mapNotNull { program.functionManager.getFunctionContaining(it) }
                 .filterNot { it.entryPoint in own }
-                .map { it.getName(true) }
+                .map { it.qualifiedName }
                 .distinct()
                 .ifEmpty { continue }
             canvas[line] += Fragment(line.indentAt(), "/* inlined into ${fns.joinToString(", ")} */")

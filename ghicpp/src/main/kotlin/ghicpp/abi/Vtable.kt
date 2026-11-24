@@ -102,7 +102,7 @@ fun VtableRecord.lay(
         }
     }
     fieldAddress(Itanium.RTTI)?.let {
-        program.listing.setComment(it, CommentType.EOL, rttiComment(program, ns.getName(true)))
+        program.listing.setComment(it, CommentType.EOL, rttiComment(program, ns.qualifiedName))
     }
     vftable?.let { program.forceCreateData(addressPoint, it) }
     program.labelVtable(addressPoint, vftableLabel, ns, source)

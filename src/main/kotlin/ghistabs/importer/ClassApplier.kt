@@ -3,9 +3,6 @@ package ghistabs.importer
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.abi.*
-import ghicpp.abi.ofVtableSymbol
-import ghicpp.abi.prevailingAbi
-import ghicpp.abi.vtableCandidates
 import ghicpp.recover.VtableSweepPass
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.demangler.DemangledFunction
@@ -729,7 +726,7 @@ internal fun Program.rehomeOntoShortenedClasses(shortener: TemplateNameShortener
         refileClassDataTypes(longPath, short)
         for (sym in symbolTable.getSymbols(long).filter { it.isPrimary }) {
             val category = if (moveOnto(sym, target)) "typedef-shorten-rehomed" else "typedef-shorten-rehome-skip"
-            sink.debug(category, "${sym.getName(true)} -> $short")
+            sink.debug(category, "${sym.qualifiedName} -> $short")
         }
         if (symbolTable.getSymbols(long).none()) long.symbol.delete()
     }
