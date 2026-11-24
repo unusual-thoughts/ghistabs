@@ -134,7 +134,7 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
         program.layout("Secret") mustBe listOf(
             0 to "vfptr: Secret_vftable *",
             4 to "_base_Logger: Logger_fields_4_4",
-            4 to "Secret_data: Secret_data",
+            4 to "_data: Secret_data",
         )
         // The run is `Logger`'s own fields too, so what it gains past its end every deriving class does.
         program.layout("Logger") mustBe listOf(0 to "vfptr: Logger_vftable *", 4 to "_fields: Logger_fields_4_4")
