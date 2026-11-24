@@ -76,6 +76,10 @@ class MemberObjectPass(
         var namedAfter: Pair<Function, StructorRole>? = null
         val functions get() = ctors + dtors
 
+        val namedClass get() = functions.firstNotNullOfOrNull { f ->
+            (f.parentNamespace as? GhidraClass)?.takeIf { f.symbol.source != SourceType.DEFAULT }
+        }
+
         private var into: NonPolymorphicClass? = null
 
         /** The class this one is, after the merges: itself, or the one it was absorbed into. */
@@ -114,7 +118,7 @@ class MemberObjectPass(
      */
     fun run(found: FoundStructors, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
         val objects = MemberObjects(found, monitor)
-        for (m in objects.drafts) m.cls = classFor(m)
+        for (m in objects.drafts) m.buildClass()
         val classes = objects.drafts.filter { it.cls != null }
         val sizes = objects.sizes(classes)
         monitor.initialize(classes.size.toLong(), "Naming member object classes' constructors and destructors")
@@ -122,22 +126,22 @@ class MemberObjectPass(
             monitor.increment()
             val ns = m.cls?.ns?.toClass() ?: continue
             // Its struct first, so its structors' `this` is typed with it, not a placeholder of Ghidra's.
-            runCatching { program.stubClassStruct(ns) }
-                .onFailure { warn("member-struct-unstubbed", "${ns.getName(true)}: $it") }
+            runCatching { program.stubClassStruct(ns) }.onFailure {
+                warn("member-struct-unstubbed", "${ns.getName(true)}: $it")
+            }
             val size = sizes[m] ?: 0
-            runCatching { program.sizeClassStruct(ns, size) }
-                .onFailure { warn("member-struct-unsized", "${ns.getName(true)} -> $size: $it") }
-            m.ctors.forEach { name(it, ns, CONSTRUCTOR) }
-            m.dtors.forEach { name(it, ns, DESTRUCTOR) }
+            runCatching { program.sizeClassStruct(ns, size) }.onFailure {
+                warn("member-struct-unsized", "${ns.getName(true)} -> $size: $it")
+            }
+            m.ctors.forEach { it.name(ns, CONSTRUCTOR) }
+            m.dtors.forEach { it.name(ns, DESTRUCTOR) }
             m.namedAfter?.let { (f, role) -> describe(ns, f, role) }
         }
         val plainClasses = classes.mapNotNull { it.cls }
         monitor.message = "Filling member object class structs"
         ClassStructFiller(program, PlainVtables, this).fillAll(
             plainClasses,
-            classes.associate {
-                it.cls!! to it.stores
-            },
+            classes.associate { it.cls!! to it.stores },
         )
         monitor.initialize(objects.subobjects.size.toLong(), "Laying member objects in their classes")
         for ((sub, what) in objects.subobjects) {
@@ -156,7 +160,7 @@ class MemberObjectPass(
      * off their structors, a level deeper each time, down to [MAX_DEPTH]: where each is and what ([subobjects]),
      * and the classes with no vtable drafted for them ([drafts]).
      */
-    private inner class MemberObjects(private val found: FoundStructors, monitor: TaskMonitor) {
+    private inner class MemberObjects(private val found: FoundStructors, private val monitor: TaskMonitor) {
         /** One for the pass, so that each function is decompiled once, the allocations' callers' and structors'. */
         private val dissector = ThisFunctionDissector(
             program,
@@ -166,7 +170,7 @@ class MemberObjectPass(
         )
 
         /** The class drafted for each structor read, as first drafted: [NonPolymorphicClass.merged] since, maybe. */
-        private val drafted = linkedMapOf<Function, NonPolymorphicClass>()
+        private val drafted = mutableMapOf<Function, NonPolymorphicClass>()
 
         /** What is at each subobject, a level each: the first in [found]'s classes and the allocated objects. */
         private val levels = mutableListOf<MutableMap<Subobject, ContainingClass>>()
@@ -178,7 +182,7 @@ class MemberObjectPass(
         val drafts: List<NonPolymorphicClass>
 
         init {
-            val heap = if (allocations) allocated(monitor) else emptyList()
+            val heap = if (allocations) allocated else emptyList()
             for (m in heap) m.ctors.forEach { drafted[it] = m }
             // A base's before its deriving classes', so that a class's own fields run follows its bases' grown
             // already. The constructors inlined after `operator new` are their classes' constructors too, with no
@@ -269,6 +273,8 @@ class MemberObjectPass(
             return null
         }
 
+        private val inlined by lazy { found.inlined.mapTo(mutableSetOf()) { it.at } }
+
         /**
          * The classes of the objects `operator new` allocates with a constant size whose constructor, the first
          * function called on what it returns ([ThisFunctionDissector.allocations]), [found] doesn't know: one class
@@ -277,10 +283,10 @@ class MemberObjectPass(
          * object it returns ([returnsInSlot]), or is the first called after allocations of different sizes, which no
          * one class's constructor is.
          */
-        private fun allocated(monitor: TaskMonitor): List<NonPolymorphicClass> {
-            val inlined = found.inlined.mapTo(mutableSetOf()) { it.at }
-            val byCtor = dissector.allocations(monitor).filter { it.at !in inlined }.groupBy { it.firstCalled }
-            return byCtor.mapNotNull { (ctor, allocs) ->
+        private val allocated: List<NonPolymorphicClass>get() = dissector.allocations(monitor)
+            .filter { it.at !in inlined }
+            .groupBy { it.firstCalled }
+            .mapNotNull { (ctor, allocs) ->
                 val sizes = allocs.mapTo(sortedSetOf()) { it.size }
                 when {
                     ctor in found.roles || ctor.isExternal -> null
@@ -305,7 +311,6 @@ class MemberObjectPass(
                     }
                 }
             }
-        }
     }
 
     /** The class structs the class passes made: each named as its class's category is, under the classes' root. */
@@ -314,20 +319,17 @@ class MemberObjectPass(
     }.toList()
 
     /**
-     * The class [m] builds: the one a structor of it is named in already, by a user or an analysis, else
+     * The class [this] builds: the one a structor of it is named in already, by a user or an analysis, else
      * `NPKlass_<address>` after its first constructor, or destructor: that function's address, as it has no vtable.
      */
-    private fun classFor(m: NonPolymorphicClass): PlainClass? {
-        val named = m.functions.firstNotNullOfOrNull { f ->
-            (f.parentNamespace as? GhidraClass)?.takeIf { f.symbol.source != SourceType.DEFAULT }
-        }
-        val first = m.ctors.minByOrNull { it.entryPoint } ?: m.dtors.minByOrNull { it.entryPoint } ?: return null
-        if (named == null) m.namedAfter = first to if (first in m.ctors) CONSTRUCTOR else DESTRUCTOR
-        val ns = named ?: program.symbolTable.buildClassNamespaces(
+    private fun NonPolymorphicClass.buildClass() {
+        val first = ctors.minByOrNull { it.entryPoint } ?: dtors.minByOrNull { it.entryPoint } ?: return
+        if (namedClass == null) namedAfter = first to if (first in ctors) CONSTRUCTOR else DESTRUCTOR
+        val ns = namedClass ?: program.symbolTable.buildClassNamespaces(
             listOf("$NON_POLYMORPHIC_PREFIX${first.entryPoint}"),
             GenericVftableFinder.SEEDED,
         )
-        return PlainClass(ns, emptyList())
+        cls = PlainClass(ns, emptyList())
     }
 
     /**
@@ -341,18 +343,18 @@ class MemberObjectPass(
     }
 
     /**
-     * Names [func] [ns]'s constructor or destructor and moves it there, where nothing named it, its convention
+     * Names [this] [ns]'s constructor or destructor and moves it there, where nothing named it, its convention
      * then a method's ([fixMethodConvention]: the `__fastcall` Ghidra takes a function reading only ECX for
      * becomes a `__thiscall`).
      */
-    private fun name(func: Function, ns: GhidraClass, role: StructorRole) {
-        if (func.symbol.source != SourceType.DEFAULT) return
+    private fun Function.name(ns: GhidraClass, role: StructorRole) {
+        if (symbol.source != SourceType.DEFAULT) return
         runCatching {
-            func.parentNamespace = ns
-            func.setName(if (role == CONSTRUCTOR) ns.name else "~${ns.name}", SourceType.ANALYSIS)
-            program.recordPlaced(func, role, virtual = false)
-            func.fixMethodConvention(takesThis = true)
-        }.onFailure { warn("member-structor-unnamed", "${func.name} -> ${ns.getName(true)}: $it", func.entryPoint) }
+            parentNamespace = ns
+            setName(if (role == CONSTRUCTOR) ns.name else "~${ns.name}", SourceType.ANALYSIS)
+            program.recordPlaced(this, role, virtual = false)
+            fixMethodConvention(takesThis = true)
+        }.onFailure { warn("member-structor-unnamed", "$name -> ${ns.getName(true)}: $it", entryPoint) }
     }
 
     /**
