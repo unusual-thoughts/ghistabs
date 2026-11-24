@@ -83,6 +83,16 @@ class GnuStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         16,
     )
 
+    @Test
+    fun `gcc 3's string, whose pointer is past its header`() = check(
+        ProgramBuilder._X86,
+        "libstdcxx5_x86",
+        "_ZNSs7reserveEj",
+        "/std/string",
+        4,
+        shift = 12,
+    )
+
     /**
      * [shift]: a copy-on-write string's `_M_p` points [shift] bytes into `_Rep_chars`, past the header, so
      * the decompiler reaches the header's fields through it.
