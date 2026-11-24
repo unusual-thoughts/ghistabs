@@ -4128,7 +4128,6 @@ fields-fn `CryptoPP::HMAC<CryptoPP::SHA1>`+32:4
 fields-fn `CryptoPP::HMAC<CryptoPP::SHA1>`+40:64
 fields-fn `CryptoPP::HMAC_Base`+12:4
 fields-fn `CryptoPP::HMAC_Base`+16:4
-fields-fn `CryptoPP::HMAC_Base`+4:4
 fields-fn `CryptoPP::HashFilter`+12:4
 fields-fn `CryptoPP::HashFilter`+16:4
 fields-fn `CryptoPP::HashFilter`+28:4
