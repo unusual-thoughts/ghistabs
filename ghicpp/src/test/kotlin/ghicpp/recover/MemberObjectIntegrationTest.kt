@@ -105,7 +105,7 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 program.functionManager.getFunctionAt(addr(e.at)).updateFunction(
                     "__fastcall",
                     null,
-                    listOf(ParameterImpl("param_1", PointerDataType(program.dataTypeManager), program)),
+                    (1..e.params).map { ParameterImpl("param_$it", PointerDataType(program.dataTypeManager), program) },
                     Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
                     true,
                     SourceType.ANALYSIS,
@@ -413,8 +413,36 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         structOf(base).length mustBe 4
     }
 
-    /** A function at [at] of [bytes], a `__fastcall` taking a pointer where [fastcall], else a `__thiscall`. */
-    private data class Extra(val at: String, val bytes: String, val fastcall: Boolean = true) {
+    @Test
+    fun `a function a member's destructor passes more than this to last is no base's destructor`() {
+        build(
+            memberCtor = DERIVED_MEMBER_CTOR,
+            extra = listOf(
+                // mov eax, ecx; mov dword ptr [eax], 0; ret: an allocator member's allocate
+                Extra(OTHER, "8b c1 c7 00 00 00 00 00 c3"),
+                // push esi; mov esi, ecx; mov dword ptr [esi], TABLE; lea ecx, [esi+8]; call MEMBER_DTOR; pop esi; ret
+                Extra(HOLDER_DTOR, "56 8b f1 c7 06 10 20 40 00 8d 4e 08 e8 4f 00 00 00 5e c3", fastcall = false),
+                // push esi; mov esi, ecx; mov edx, [esi+4]; mov ecx, esi; call BASE_DTOR; pop esi; ret
+                Extra(MEMBER_DTOR, "56 8b f1 8b 56 04 8b ce e8 13 00 00 00 5e c3", fastcall = false),
+                // mov dword ptr [ecx], 0; ret: its deallocate, given what to free after `this`
+                Extra(BASE_DTOR, "c7 01 00 00 00 00 c3", params = 2),
+            ),
+        )
+        builder.createMemoryReference(HOLDER_DTOR_STORE, TABLE, RefType.DATA, SourceType.ANALYSIS, 0)
+        builder.setBytes(TABLE, "60 11 40 00")
+        recover() mustBe 1
+        val derived = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
+        val ids = program.readClassRecord().orEmpty().mapValues { (_, e) -> e.bases.map { it.namespaceId } }
+        fun symbol(name: String) = program.symbolTable.getClassSymbol(name, program.globalNamespace)
+        ids[symbol(derived).id].orEmpty() mustBe emptyList()
+        symbol("${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401140") mustBe null
+    }
+
+    /**
+     * A function at [at] of [bytes], a `__fastcall` taking [params] pointers where [fastcall], else a
+     * `__thiscall`.
+     */
+    private data class Extra(val at: String, val bytes: String, val fastcall: Boolean = true, val params: Int = 1) {
         val length get() = bytes.split(" ").size
     }
 

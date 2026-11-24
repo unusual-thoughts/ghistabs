@@ -239,7 +239,8 @@ class MemberObjectPass(
          * The bases at `this` + 0 of [members] that no other structor builds: where a class's constructors call one
          * function first there and its destructors another last, neither a class's structor already, those are a
          * base's constructor and destructor. One function both call there is a method setting up its fields
-         * ([helperStores]). Their bases' own follow, down to [MAX_DEPTH].
+         * ([helperStores]). A destructor takes `this` alone, so one its destructors pass more is a method, such as
+         * an allocator member's `deallocate`, and makes no base. Their bases' own follow, down to [MAX_DEPTH].
          */
         private fun structorBases(members: List<NonPolymorphicClass>): List<NonPolymorphicClass> {
             val taken = members.flatMapTo(mutableSetOf()) { it.functions }
@@ -253,8 +254,12 @@ class MemberObjectPass(
                     }.toSet()
                     val ctors = atZero(m.ctors) { it.firstOrNull() }
                     if (ctors.isEmpty()) return@mapNotNull null
+                    val passing = dissector.readCalls(m.dtors, monitor).objectCalls.values.flatten()
+                        .filter { it.obj == CalledObject.This && it.offset == 0L && it.args > 0 }
+                        .mapTo(mutableSetOf()) { it.callee }
                     val dtors = atZero(m.dtors) { it.lastOrNull() }
-                    if (dtors.isEmpty() || (ctors intersect dtors).isNotEmpty()) return@mapNotNull null
+                    val disjoint = (ctors intersect dtors).isEmpty() && (dtors intersect passing).isEmpty()
+                    if (dtors.isEmpty() || !disjoint) return@mapNotNull null
                     taken += ctors + dtors
                     NonPolymorphicClass().also {
                         it.ctors += ctors

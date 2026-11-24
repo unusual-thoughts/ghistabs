@@ -35,7 +35,8 @@ sealed interface CalledObject {
  * A call at [at] of [callee], given as its `this` ([thisArgument]) a pointer [offset] bytes into [obj]. With
  * [slot], the pointer is instead the hidden pointer to what the call returns ([returnsInSlot]), which it builds.
  * [returns] is the object its result points into, if any. [next] is the constant address it passes right after
- * `this`, if any, such as the VTT pointer an Itanium base-object structor takes.
+ * `this`, if any, such as the VTT pointer an Itanium base-object structor takes. [args] is how many arguments
+ * it passes after `this`.
  */
 data class ObjectCall(
     val at: Address,
@@ -45,6 +46,7 @@ data class ObjectCall(
     val returns: CalledObject.Returned? = null,
     val slot: Boolean = false,
     val next: Address? = null,
+    val args: Int = 0,
 )
 
 /**
@@ -90,6 +92,7 @@ internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
                     returns,
                     inSlot,
                     next = next.takeUnless { inSlot },
+                    args = if (inSlot) 0 else (op.numInputs - callee.thisIndex() - 2).coerceAtLeast(0),
                 )
             }
     }.toList()
