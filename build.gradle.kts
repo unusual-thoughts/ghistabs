@@ -26,11 +26,9 @@ dependencies {
     testImplementation(fileTree(ghidraInstallDir.resolve("Ghidra/Test")) { include("**/lib/*.jar") })
 }
 
-// ghicpp's STL archives, where Ghidra lists them with its own, so a program's types stay linked to them.
-tasks.named<Zip>("buildExtension") {
-    include("msvc/**")
-    from(project(":ghicpp").layout.projectDirectory.dir("data/typeinfo")) { into("${project.name}/data/typeinfo") }
-}
+// ghicpp's STL archives stay out of data/: Ghidra lists every module's .gdt by file name and refuses
+// a name twice, so with the ghicpp extension installed too, a second copy here raised its "Duplicate
+// Archive Name Error" at startup. Alone, ghistabs reads them from the bundled ghicpp jar (StlArchives).
 
 // Don't copy `binaries/` into build/resources/test/.
 tasks.processTestResources {

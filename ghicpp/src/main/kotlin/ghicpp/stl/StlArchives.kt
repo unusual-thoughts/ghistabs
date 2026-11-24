@@ -8,8 +8,9 @@ import java.io.File
 /**
  * A family of standard library archives ghicpp ships, one per runtime build, in the extension's
  * `data/typeinfo/<[dir]>`, where Ghidra lists them with its own archives, so the types a program takes
- * from one stay linked to it; a build that only has ghicpp's jar (the ghistabs extension's tests, say)
- * uses the copies in the jar. Beside each `<name>.gdt` may be its classes ([StdClasses.SUFFIX]).
+ * from one stay linked to it; a build that only has ghicpp's jar (the ghistabs extension, which bundles
+ * it but can't ship a second `data/` copy of a name Ghidra lists once, and its tests) uses the copies in
+ * the jar. Beside each `<name>.gdt` may be its classes ([StdClasses.SUFFIX]).
  */
 class StlArchives(private val dir: String, val bundled: Set<String>) {
     /** Archive [name], open read-only; closing it lets go of the archive. */

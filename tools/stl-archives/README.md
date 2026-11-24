@@ -54,7 +54,8 @@ Which runtime builds have typed public PDBs is not obvious: for msvcp80 and msvc
 ### In ghicpp
 
 ghicpp ships the six 10.4 archives in `ghicpp/data/typeinfo/msvc/`, where Ghidra lists them with its own
-archives (the ghistabs extension carries them too). Its `MSVC standard library layouts` analyzer reads the
+archives. The ghistabs extension reads them from the ghicpp jar it bundles instead: Ghidra refuses
+two archives of one name, so a copy in its own `data/` collides with ghicpp's when both are installed. Its `MSVC standard library layouts` analyzer reads the
 `MSVCP<nn>[D].DLL` a PE program imports and its pointer size, opens the matching archive, and replaces each
 empty `std` struct the Microsoft demangler made (`/Demangler/std/...`) with the archive's type at the same
 path. Only those types are resolved, with what they depend on, and they stay linked to the archive. To
