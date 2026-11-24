@@ -33,6 +33,9 @@ import resources.Icons
 
 private val STRUCT_ICON = GIcon("icon.plugin.datatypes.structure")
 private val VTABLE_ICON = GIcon("icon.plugin.navigation.bytes")
+private val EDIT_ATTRIBUTES_ICON = GIcon("icon.version.tracking.action.edit.all.tags")
+private val PROCESS_ICON = GIcon("icon.debugger.process")
+private val PARENT_ICON = GIcon("icon.arrow.up.left")
 
 /**
  * The popup actions on the selection: a class's struct and vtable, renames, field types, a member's
@@ -48,58 +51,24 @@ internal fun ClassTree.addSelectionActions() {
 /** The popup actions on the selected class or namespace: its structs, its name, its field types. */
 private fun ClassTree.addClassActions() {
     addLocalAction(
-        object : DockingAction("Edit class struct", owner) {
+        object : DockingAction("Edit Class Struct", owner) {
             override fun actionPerformed(context: ActionContext?) {
                 val cls = selectedClass ?: return
                 (cls.structId ?: createStruct(cls))?.let { openStruct(it) }
             }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Edit class struct"), STRUCT_ICON)
-            popupWhen {
-                selectedClass?.let { it.structId != null || it.origin != Origin.LIBRARY } ==
-                    true
-            }
+            popupMenuData = MenuData(arrayOf("Edit Class Struct"), STRUCT_ICON, "0", -1, "0")
+            popupWhen { selectedClass?.let { it.structId != null || it.origin != Origin.LIBRARY } == true }
         },
     )
     addLocalAction(
-        object : DockingAction("Rename Class", owner) {
-            override fun actionPerformed(context: ActionContext?) {
-                selectedClass?.let(::renameSelected)
-            }
-        }.apply {
-            popupMenuData = MenuData(arrayOf("Rename Class"), "0")
-            popupWhen { selectedClass?.let { it.origin != Origin.LIBRARY } == true }
-        },
-    )
-    addLocalAction(
-        object : DockingAction("Rename Namespace", owner) {
-            override fun actionPerformed(context: ActionContext?) {
-                (selectedNode as? NamespaceNode)?.let(::renameNamespace)
-            }
-        }.apply {
-            popupMenuData = MenuData(arrayOf("Rename Namespace"), "0")
-            popupWhen { selectedNode is NamespaceNode }
-        },
-    )
-    addLocalAction(
-        object : DockingAction("Edit vtable struct", owner) {
+        object : DockingAction("Edit Vtable Struct", owner) {
             override fun actionPerformed(context: ActionContext?) {
                 selectedClass?.vftableStructId?.let { openStruct(it) }
             }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Edit vtable struct"), VTABLE_ICON)
+            popupMenuData = MenuData(arrayOf("Edit Vtable Struct"), VTABLE_ICON, "0", -1, "1")
             popupWhen { selectedClass?.vftableStructId != null }
-        },
-    )
-    addLocalAction(
-        object : DockingAction("Apply Class Slot Names to Vftables", owner) {
-            override fun actionPerformed(context: ActionContext?) {
-                val cls = selectedClass ?: return
-                applySlotNames { it.slotsOf(cls) }
-            }
-        }.apply {
-            popupMenuData = MenuData(arrayOf("Apply Slot Names to Vftables"), VTABLE_ICON)
-            popupWhen { selectedClass?.vftable != null }
         },
     )
     addLocalAction(
@@ -109,17 +78,50 @@ private fun ClassTree.addClassActions() {
                 program?.applyEdits(listOf(edit), tool, component)
             }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Edit Base Attributes..."), STRUCT_ICON)
+            popupMenuData = MenuData(arrayOf("Edit Base Attributes"), EDIT_ATTRIBUTES_ICON, "0", -1, "2")
             popupWhen { selectedClause != null }
         },
     )
+    addLocalAction(
+        object : DockingAction("Rename Class", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                selectedClass?.let(::renameSelected)
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Rename Class"), "1")
+            popupWhen { selectedClass?.let { it.origin != Origin.LIBRARY } == true }
+        },
+    )
+    addLocalAction(
+        object : DockingAction("Rename Namespace", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                (selectedNode as? NamespaceNode)?.let(::renameNamespace)
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Rename Namespace"), "1")
+            popupWhen { selectedNode is NamespaceNode }
+        },
+    )
+
+    addLocalAction(
+        object : DockingAction("Apply Class Slot Names to Vftables", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                val cls = selectedClass ?: return
+                applySlotNames { it.slotsOf(cls) }
+            }
+        }.apply {
+            popupMenuData = MenuData(arrayOf("Apply Slot Names to Vftables..."), PROCESS_ICON, "2")
+            popupWhen { selectedClass?.vftable != null }
+        },
+    )
+
     addLocalAction(
         object : DockingAction("Update Class Field Types", owner) {
             override fun actionPerformed(context: ActionContext?) {
                 selectedClass?.let { updateFieldTypes(listOf(it to null)) }
             }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Update Field Types"), STRUCT_ICON)
+            popupMenuData = MenuData(arrayOf("Update Field Types..."), PROCESS_ICON, "2")
             popupWhen { selectedClass?.let { it.structId != null && it.origin != Origin.LIBRARY } == true }
         },
     )
@@ -133,7 +135,7 @@ private fun ClassTree.addMemberActions() {
                 updateFieldTypes(selectedMethods().groupBy({ it.second }, { it.first }).toList())
             }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Update Field Types"), STRUCT_ICON)
+            popupMenuData = MenuData(arrayOf("Update Field Types..."), PROCESS_ICON)
             popupWhen {
                 selectedMethods().let { sel -> sel.isNotEmpty() && sel.all { (_, cls) -> cls.structId != null } }
             }
@@ -150,7 +152,7 @@ private fun ClassTree.addMemberActions() {
                 tool.statusInfo = "Applied ${funcs.size} signature(s) to $changed vftable slot definition(s)"
             }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Apply Signature to Vftables"), VTABLE_ICON)
+            popupMenuData = MenuData(arrayOf("Apply Signature to Vftables..."), PROCESS_ICON)
             popupWhen {
                 selectedMethods().let { sel ->
                     sel.isNotEmpty() && sel.all { (f, _) -> program?.slotDefinitionsOf(f)?.isNotEmpty() == true }
@@ -163,7 +165,7 @@ private fun ClassTree.addMemberActions() {
             override fun actionPerformed(context: ActionContext?) =
                 applySlotNames { slots -> selectedMethods().flatMap { (f, _) -> slots.slotsOf(f) } }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Apply Slot Names to Vftables"), VTABLE_ICON)
+            popupMenuData = MenuData(arrayOf("Apply Slot Names to Vftables..."), PROCESS_ICON)
             popupWhen { hasSlots(selectedMethods()) }
         },
     )
@@ -173,7 +175,7 @@ private fun ClassTree.addMemberActions() {
                 selectedMethods().singleOrNull()?.let { (f, _) -> renameSlot(f) }
             }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Rename Virtual Slot..."), "1")
+            popupMenuData = MenuData(arrayOf("Rename Virtual Slot"), "1")
             popupWhen { selectedMethods().let { it.size == 1 && hasSlots(it) } }
         },
     )
@@ -183,7 +185,7 @@ private fun ClassTree.addMemberActions() {
                 goTo(selectedOverridden?.address)
             }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Go to Overridden"), "0")
+            popupMenuData = MenuData(arrayOf("Go to Overridden"), PARENT_ICON, "0")
             popupWhen { selectedMember?.kind == MemberKind.FUNCTION }
             enabledWhen { selectedOverridden != null }
         },
@@ -194,18 +196,18 @@ private fun ClassTree.addMemberActions() {
                 selectedBaseMethod?.let(tree::setSelectedNode)
             }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Go to Base Method"), "0")
+            popupMenuData = MenuData(arrayOf("Go to Base Method"), PARENT_ICON, "0")
             popupWhen { selectedNode is InheritedSlotNode }
             enabledWhen { selectedBaseMethod != null }
         },
     )
     addLocalAction(
-        object : DockingAction("Set Member Attributes", owner) {
+        object : DockingAction("Edit Member Attributes", owner) {
             override fun actionPerformed(context: ActionContext?) {
                 program?.setMemberAttrs(selectedMembers, tool, component)
             }
         }.apply {
-            popupMenuData = MenuData(arrayOf("Set Member Attributes..."), "0")
+            popupMenuData = MenuData(arrayOf("Edit Member Attributes"), EDIT_ATTRIBUTES_ICON, "0")
             popupWhen { selectedMembers.let { it.isNotEmpty() && it.all { (m, _) -> m.takesAttrs } } }
         },
     )

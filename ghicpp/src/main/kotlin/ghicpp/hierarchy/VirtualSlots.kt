@@ -42,7 +42,7 @@ data class VirtualSlot(val table: Address, val label: String, val index: Int) : 
     val name get() = label.takeUnless { it == ClassNaming.VFTABLE }
 
     override fun compareTo(other: VirtualSlot) =
-        compareValuesBy(this, other, { it.name != null }, { it.name }, { it.index })
+        compareValuesBy(this, other, { it.name != null }, { it.name }, { it.table }, { it.index })
 
     override fun toString() = "slot $index" + name?.let { " of $it" }.orEmpty()
 }

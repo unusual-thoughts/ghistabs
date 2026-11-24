@@ -107,7 +107,7 @@ class InlinedConstructorIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         val derived = structOf(DERIVED)
         derived.length mustBe 0x20
         // The base's fields past the vptr the derived class takes over, then the derived class's own.
-        derived.getComponentAt(4).comment mustBe "public $BASE"
+        derived.getComponentAt(4).comment mustBe BASE
         derived.getComponentAt(0x18).dataType.length mustBe 4
 
         val base = structOf(BASE)

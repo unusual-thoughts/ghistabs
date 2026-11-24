@@ -95,7 +95,7 @@ class ClassStructFiller(
             at,
             dt,
             isVirtual = false,
-            "${base.access.name.lowercase()} ${base.cls.qualifiedName}",
+            listOfNotNull(base.access?.name?.lowercase(), base.cls.qualifiedName).joinToString(" "),
             ClassNaming.baseFieldName(false, dt.name, count),
             qualified,
         )
