@@ -25,11 +25,27 @@ class GnuRuntimeTest {
     }
 
     @Test
+    fun `gcc 3's libstdc++, before 3_4's ABI, shows in its soname or its allocator`() {
+        of(ElfLoader.ELF_NAME, listOf("libstdc++.so.5", "libc.so.6")) mustBe GnuRuntime(false, legacy = true)
+        of(
+            ElfLoader.ELF_NAME,
+            listOf("libc.so.6"),
+            "_ZNSt8ios_base4InitC1Ev",
+            "_ZNSt24__default_alloc_templateILb1ELi0EE8allocateEj",
+        ) mustBe GnuRuntime(false, legacy = true)
+        of(ElfLoader.ELF_NAME, listOf("libstdc++.so.6"), "_ZNSt24__default_alloc_templateILb1ELi0EE8allocateEj") mustBe
+            GnuRuntime(false)
+    }
+
+    @Test
     fun `the archive is the architecture's, MinGW's apart`() {
         GnuRuntime(false).archive(8) mustBe "libstdcxx_x64"
         GnuRuntime(false).archive(4) mustBe "libstdcxx_x86"
         GnuRuntime(false).archive(2) mustBe null
         GnuRuntime(true).archive(8) mustBe "libstdcxx_mingw_x64"
         GnuRuntime(true).archive(4) mustBe "libstdcxx_mingw_x86"
+        GnuRuntime(false, legacy = true).archive(4) mustBe "libstdcxx5_x86"
+        GnuRuntime(false, legacy = true).archive(8) mustBe "libstdcxx5_x64"
+        GnuRuntime(true, legacy = true).archive(4) mustBe null
     }
 }
