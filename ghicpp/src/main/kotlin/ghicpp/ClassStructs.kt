@@ -153,7 +153,8 @@ internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Struc
             " in ${into.name}".takeIf { into != owner }.orEmpty(),
     )
     var (into, offset) = owner.landing(at, member.length)
-    var ownData = false
+    // A struct holding its own fields alone takes the member over them, as its `<Class>_data` struct would.
+    var ownData = owner.isFlatInferred()
     while (!ownData) {
         val range = offset.withLength(member.length)
         val inWay = into.componentsOverlapping(range).filterNot { it.isAt(offset, member) || it.isOwnVfptr(into) }
@@ -249,17 +250,34 @@ fun Structure.isOwnFields(part: DataTypeComponent) = (part.dataType as? Structur
 } == true
 
 /**
- * This class struct's own `<Class>_data` structs, by their offset into it: those it holds and, its fields split
- * around a deriving class's vptr ([VfptrModel.SPLIT_BASE]), those inside its own `_fields` runs.
+ * Whether this class struct holds only fields the class pass inferred, laid in it with no `<Class>_data` struct
+ * around them since nothing else is there: no base, vptr, nor own data or fields run, and a field marked
+ * [ClassNaming.INFERRED]. A struct another importer or the reverser filled has no such mark, and stays theirs.
  */
-fun Structure.ownData(): List<Pair<Int, Structure>> = definedComponents.flatMap { part ->
-    when {
-        isOwnData(part) -> listOf(part.offset to part.dataType as Structure)
+fun Structure.isFlatInferred(): Boolean {
+    val parts = definedComponents
+    return parts.any { it.comment == ClassNaming.INFERRED } && parts.none {
+        it.isBaseField() || it.fieldName == ClassUtils.VFPTR || it.fieldName == ClassNaming.VBPTR ||
+            isOwnData(it) || isOwnFields(it)
+    }
+}
 
-        isOwnFields(part) -> (part.dataType as Structure).definedComponents.filter { isOwnData(it) }
-            .map { part.offset + it.offset to it.dataType as Structure }
+/**
+ * This class struct's own `<Class>_data` structs, by their offset into it: those it holds and, its fields split
+ * around a deriving class's vptr ([VfptrModel.SPLIT_BASE]), those inside its own `_fields` runs. A struct holding
+ * its own fields alone ([isFlatInferred]) is its own, whole, at 0.
+ */
+fun Structure.ownData(): List<Pair<Int, Structure>> {
+    if (isFlatInferred()) return listOf(0 to this)
+    return definedComponents.flatMap { part ->
+        when {
+            isOwnData(part) -> listOf(part.offset to part.dataType as Structure)
 
-        else -> emptyList()
+            isOwnFields(part) -> (part.dataType as Structure).definedComponents.filter { isOwnData(it) }
+                .map { part.offset + it.offset to it.dataType as Structure }
+
+            else -> emptyList()
+        }
     }
 }
 

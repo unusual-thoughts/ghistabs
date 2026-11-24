@@ -15,7 +15,6 @@ field-sizes-fp `Rect`+12: 4, is 2
 field-sizes-fp `Rect`+8: 4, is 2
 field-sizes-fp `Shape`+12: 4, is 2
 field-sizes-fp `Shape`+8: 4, is 2
-fields-fn `Both`+4:4
 fields-fn `Circle`+10:2
 fields-fn `Diamond`+12:4
 fields-fn `Diamond`+32:4

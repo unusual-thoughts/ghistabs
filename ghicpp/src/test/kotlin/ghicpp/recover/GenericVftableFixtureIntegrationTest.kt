@@ -138,7 +138,7 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         // Down : virtual Core, whose vptr Down's own table for it, at +16, takes over.
         val down = program.dataTypeManager.getDataType("/ClassDataTypes/Klass_00106b58/Klass_00106b58") as Structure
         down.definedComponents.map { "+${it.offset} ${it.fieldName}" } mustBe
-            listOf("+0 vfptr", "+8 Klass_00106b58_data", "+16 vfptr", "+24 _vbase_")
+            listOf("+0 vfptr", "+8 _data", "+16 vfptr", "+24 _vbase_")
         down.getComponentAt(24).comment mustBe "virtual Klass_00106bc8 at +0x10, by its vftables"
     }
 
