@@ -162,7 +162,6 @@ classes-fn `std::char_traits<wchar_t>` (stabs)
 classes-fn `std::forward_iterator_tag` (stabs)
 classes-fn `std::fpos<int>` (stabs)
 classes-fn `std::ios_base::Init` (stabs)
-classes-fn `std::ios_base::_Callback_list` (stabs)
 classes-fn `std::istream::sentry` (stabs)
 classes-fn `std::istreambuf_iterator<char,std::char_traits<char>>` (stabs)
 classes-fn `std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>` (stabs)
@@ -554,6 +553,8 @@ methods-fn `std::ios::setstate` 4790e0
 methods-fn `std::ios::tie` 4383d8
 methods-fn `std::ios::tie` 478c0c
 methods-fn `std::ios::widen` 438480
+methods-fn `std::ios_base::_Callback_list::_M_add_reference` 47431c
+methods-fn `std::ios_base::_Callback_list::_M_remove_reference` 474334
 methods-fn `std::ios_base::_M_getloc` 434704
 methods-fn `std::ios_base::_M_grow_words` 47405c
 methods-fn `std::ios_base::_M_init` 475e78
