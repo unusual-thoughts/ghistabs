@@ -250,8 +250,8 @@ fun Structure.isOwnFields(part: DataTypeComponent) = (part.dataType as? Structur
 } == true
 
 /**
- * Whether this class struct holds the fields the class pass inferred alone, laid in it with no `<Class>_data` struct around them
- * since nothing else is there: no base, vptr, nor own data or fields run, and a field marked
+ * Whether this class struct holds only fields the class pass inferred, laid in it with no `<Class>_data` struct
+ * around them since nothing else is there: no base, vptr, nor own data or fields run, and a field marked
  * [ClassNaming.INFERRED]. A struct another importer or the reverser filled has no such mark, and stays theirs.
  */
 fun Structure.isFlatInferred(): Boolean {
