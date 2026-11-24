@@ -140,7 +140,9 @@ class ClassStructFiller(
      */
     private fun Structure.placeData(store: Stores, ns: GhidraClass) {
         val own = store.filter { (at, dt) -> at >= 0 && componentsOverlapping(at, dt.length).isEmpty() }
-        own.toSortedMap().entries.groupBy { (at, _) -> getDefinedComponentAtOrAfterOffset(at)?.offset }
+        // A zero-length field, an empty base's, divides nothing.
+        own.toSortedMap().entries
+            .groupBy { (at, _) -> definedComponents.firstOrNull { it.offset >= at && it.length > 0 }?.offset }
             .values.forEachIndexed { i, run -> placeDataRun(run.associate { it.toPair() }, ns, i) }
     }
 

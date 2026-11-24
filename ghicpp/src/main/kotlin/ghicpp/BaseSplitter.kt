@@ -55,13 +55,18 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
 
         val head = split.head?.baseFieldsRun(baseDt)
         val tail = split.tail?.baseFieldsRun(baseDt)
-        return (head != null || tail != null) && runCatching {
+        val bare = if (split.head == null && split.tail == null) baseDt.bareTail(tailFrom, layouts) else null
+        // Read before the replacements: the component is live, and the vfptr's once replaced.
+        val (baseName, baseComment) = baseComp.fieldName to baseComp.comment
+        return (head != null || tail != null || bare != null) && runCatching {
             head?.let { structDt.replaceAtOffset(baseOff, it, it.length, baseComp.fieldName, baseComp.comment) }
             structDt.replaceAtOffset(baseOff + vptrInBase, vfptr, vfptr.length, ClassUtils.VFPTR, "vtable pointer")
             tail?.let {
                 val name = if (head == null) baseComp.fieldName else "${baseComp.fieldName}_tail"
                 structDt.replaceAtOffset(baseOff + tailFrom, it, it.length, name, baseComp.comment)
             }
+            // Zero-length, where a tail run starts, so it goes in without moving what follows.
+            bare?.let { structDt.insertAtOffset(baseOff + tailFrom, it, 0, baseName, baseComment) }
         }.onFailure {
             degradation("vfptr-split-failed", className, "${baseDt.name} at +$baseOff: ${it.message}")
         }.isSuccess
@@ -113,9 +118,54 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
             return
         }
         runCatching {
-            inside.forEach { layout.clearAtOffset(it.offset) }
+            // By ordinal, last first: clearing by offset would take a zero-length base there too.
+            inside.sortedByDescending { it.ordinal }.forEach { layout.clearComponent(it.ordinal) }
             layout.replaceAtOffset(span.first, run, run.length, name, "own fields, shared with deriving classes")
         }.onFailure { degradation("fields-run-unshared", layout.name, "${run.name}: ${it.message}") }
+    }
+
+    /**
+     * What is left of a base that is nothing but its vptr, past [from], once the deriving class owns that: its tail,
+     * laid zero-length after the vptr, so the `_base_` component still names the base the class derives from. It
+     * holds by reference what the base holds there, as a run copied off any base does ([baseFieldsRun]): the empty
+     * runs of the base's own bases, then the run of its own fields, which the base holds too ([embedBare]) and grows
+     * when it grows past its end ([ghicpp.sizeClassStruct], [placeMember]). Packed, so each of them follows the one
+     * before as it grows. With no base of its own there, the tail is that run itself. [layouts] hold the base.
+     */
+    private fun Structure.bareTail(from: Int, layouts: List<Structure>): Structure {
+        val there = definedComponents.filter { it.offset == from && it.length == 0 }
+        val inherited = there.filter { it.isBaseField() }
+        val tailName = "$name${ClassNaming.FIELDS}_${from}_$from"
+        val own = there.firstOrNull { isOwnFields(it) }?.dataType as? Structure
+            ?: emptyRun(if (inherited.isEmpty()) tailName else "$name${ClassNaming.FIELDS}_own_${from}_$from")
+        layouts.forEach { it.embedBare(from, own) }
+        if (inherited.isEmpty() || own.name == tailName) return own
+        return registry.getOrRegister<Structure>(categoryPath.at(tailName)) {
+            emptyStruct(categoryPath, tailName, "$name as a base subobject: its bases' and its own fields").apply {
+                inherited.forEach { add(it.dataType, it.fieldName, it.comment) }
+                add(own, ClassNaming.FIELDS, "own fields, shared with deriving classes")
+            }
+        }
+    }
+
+    /** An empty run of this base's own fields, named [name]. */
+    private fun Structure.emptyRun(name: String) = registry.getOrRegister<Structure>(categoryPath.at(name)) {
+        emptyStruct(categoryPath, name, "${this@emptyRun.name}'s own fields, none yet past the vptr")
+    }
+
+    // Unpacked, an empty struct is one not yet defined, which a component holds as a byte. Growing it unpacks it
+    // ([stretch]).
+    private fun emptyStruct(category: CategoryPath, name: String, description: String) =
+        StructureDataType(category, name, 0, dtm).apply {
+            this.description = description
+            isPackingEnabled = true
+        }
+
+    /** [run], a [bareRun], laid zero-length at [at] in this base as its own fields, unless it is there already. */
+    private fun Structure.embedBare(at: Int, run: Structure) {
+        if (isPackingEnabled || definedComponents.any { it.dataType == run }) return
+        runCatching { insertAtOffset(at, run, 0, ClassNaming.FIELDS, "own fields, shared with deriving classes") }
+            .onFailure { degradation("fields-run-unshared", name, "${run.name}: ${it.message}") }
     }
 
     /**
@@ -136,7 +186,11 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
                     "without the vptr the deriving class now owns"
                 for (it in baseDt.definedComponents.filter(::holds)) {
                     runCatching {
-                        replaceAtOffset(it.offset - first, it.dataType, it.length, it.fieldName, it.comment)
+                        if (it.length == 0) {
+                            insertAtOffset(it.offset - first, it.dataType, 0, it.fieldName, it.comment)
+                        } else {
+                            replaceAtOffset(it.offset - first, it.dataType, it.length, it.fieldName, it.comment)
+                        }
                     }
                 }
             }
@@ -168,7 +222,8 @@ data class BaseSplit(val head: IntRange?, val tail: IntRange?)
 
 /**
  * The runs a vptr at [vptrInBase] leaves of a [baseLength]-byte base. Null when the pointer does not
- * fit inside the base, or when it covers the base whole and there is nothing left to embed.
+ * fit inside the base. Both runs are null when it covers the base whole, an interface's: the deriving
+ * class still takes the vptr over, and keeps an empty `_base_` to name the base by.
  *
  * One run is empty whenever the vptr is at the start (Itanium) or the end (gcc 2.x at depth 1),
  * which keeps the subobject a single `_base_` component. Deeper in a gcc 2.x chain both are real:
@@ -178,7 +233,7 @@ fun splitAround(baseLength: Int, vptrInBase: Int, ptrSize: Int): BaseSplit? {
     if (vptrInBase < 0 || vptrInBase + ptrSize > baseLength) return null
     val head = (0..<vptrInBase).takeUnless { it.isEmpty() }
     val tail = (vptrInBase + ptrSize..<baseLength).takeUnless { it.isEmpty() }
-    return if (head == null && tail == null) null else BaseSplit(head, tail)
+    return BaseSplit(head, tail)
 }
 
 /**
