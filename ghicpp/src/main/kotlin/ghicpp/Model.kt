@@ -23,7 +23,12 @@ enum class Access { PRIVATE, PROTECTED, PUBLIC }
  */
 interface BaseDecl {
     val isVirtual: Boolean
-    val access: Access
+
+    /**
+     * Whether the class inherits the base as public, protected or private. Null when the binary doesn't say, as
+     * without RTTI.
+     */
+    val access: Access?
     val offset: Long?
 }
 
@@ -31,7 +36,7 @@ interface BaseDecl {
 data class ClassBase(
     val cls: ClassDecl,
     override val isVirtual: Boolean,
-    override val access: Access,
+    override val access: Access?,
     override val offset: Long?,
     /** Where a virtual base's [offset] is from: IMPORTED its ABI record, ANALYSIS its vtables, DEFAULT nowhere. */
     val offsetSource: SourceType = SourceType.IMPORTED,
@@ -117,7 +122,7 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         val namespaceId: Long?,
         val name: String?,
         override val isVirtual: Boolean,
-        override val access: Access,
+        override val access: Access?,
         override val offset: Long? = null,
     ) : BaseDecl
 
@@ -316,4 +321,4 @@ fun ClassDecl.servedBase(record: VtableRecord, program: Program): ClassDecl? {
 }
 
 /** A class's name with its enclosing namespaces: its namespace's where it has one. */
-val ClassDecl.qualifiedName: String get() = ns?.takeUnless { it.isGlobal }?.getName(true) ?: name
+val ClassDecl.qualifiedName: String get() = ns?.takeUnless { it.isGlobal }?.qualifiedName ?: name

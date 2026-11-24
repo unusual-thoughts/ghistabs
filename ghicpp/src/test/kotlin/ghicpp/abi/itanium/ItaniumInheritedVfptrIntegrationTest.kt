@@ -18,7 +18,7 @@ class ItaniumInheritedVfptrIntegrationTest :
         program.layout("Both") mustBe listOf(
             0 to "_base_Up: Up",
             8 to "_base_Down: Down",
-            16 to "Both_data: Both_data",
+            16 to "_data: Both_data",
             20 to "_vbase_Core: Core",
         )
     }

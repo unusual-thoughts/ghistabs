@@ -1,0 +1,18 @@
+base-access-fn `Logger` of `Secret`: none, is non-public
+base-access-fn `Named` of `Diamond`: none, is public
+base-access-fn `Rect` of `Label`: none, is public
+base-access-fn `Shape` of `Circle`: none, is public
+base-access-fn `Shape` of `Rect`: none, is public
+base-access-fn `Up` of `Both`: none, is public
+bases-fn `Core` (virtual) of `Down`
+bases-fn `Core` (virtual) of `Up`
+bases-fn `Down` of `Both`
+bases-fn `Left` of `Diamond`
+bases-fn `Named` of `Label`
+class-splits-fp `Klass_004044c8` (inferred, vftable 004044c8) of `Label`
+class-splits-fp `Klass_00404610` (inferred, vftable 00404610) of `Both`
+class-splits-fp `Klass_004047f8` (inferred, vftable 004047f8) of `Up`
+class-splits-fp `Shape` (namespace) of `Shape`
+classes-fn `Right` (msvc_rtti)
+classes-fp invented `NPKlass_004025f0` (inferred)
+vftables-fp 00404838 of `Down`

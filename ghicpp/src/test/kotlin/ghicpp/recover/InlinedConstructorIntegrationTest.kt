@@ -2,10 +2,12 @@ package ghicpp.recover
 
 import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.classStruct
+import ghicpp.isOwnFields
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
+import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.UnsignedIntegerDataType
@@ -91,6 +93,13 @@ class InlinedConstructorIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
 
     private fun addr(at: String): Address = builder.addr(at)
 
+    /** The field at [at] in this class struct, through the run of its own fields ([isOwnFields]) holding it. */
+    private fun Structure.ownFieldAt(at: Int): DataTypeComponent {
+        val part = getComponentContaining(at)
+        val run = part.dataType as? Structure ?: return part
+        return if (isOwnFields(part)) run.getComponentContaining(at - part.offset) else part
+    }
+
     private fun structOf(name: String): Structure {
         val ns = program.symbolTable.getClassSymbol(name, program.globalNamespace).`object` as GhidraClass
         return program.classStruct(ns)!!
@@ -107,15 +116,17 @@ class InlinedConstructorIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         val derived = structOf(DERIVED)
         derived.length mustBe 0x20
         // The base's fields past the vptr the derived class takes over, then the derived class's own.
-        derived.getComponentAt(4).comment mustBe "public $BASE"
+        derived.getComponentAt(4).comment mustBe BASE
         derived.getComponentAt(0x18).dataType.length mustBe 4
 
+        // The base's fields, its member past their end too, are in the one run of them the derived class holds.
         val base = structOf(BASE)
-        base.getComponentContaining(8).dataType.length mustBe 8
+        base.getComponentContaining(8).dataType mustBe derived.getComponentAt(4).dataType
+        base.ownFieldAt(8).dataType.length mustBe 4
 
         val member = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
         program.functionManager.getFunctionAt(addr(MEMBER_CTOR)).getName(true) mustBe "$member::$member"
-        base.getComponentContaining(0x10).dataType.name mustBe member
+        base.ownFieldAt(0x10).dataType.name mustBe member
 
         // What operator new returns is typed as the class it builds, in the factory that inlines its constructor.
         DecompInterface().useWith(program) { decomp ->

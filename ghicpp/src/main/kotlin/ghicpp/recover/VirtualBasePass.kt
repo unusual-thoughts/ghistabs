@@ -2,7 +2,6 @@ package ghicpp.recover
 
 import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
-import ghicpp.CxxAbi
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
@@ -27,7 +26,7 @@ class VirtualBasePass(private val program: Program, private val abi: CxxAbi, sin
 
     /** [record] by qualified class name, for a class whose labels sit outside its class's namespace. */
     private val recordByName by lazy {
-        record.mapNotNull { (id, entry) -> program.symbolTable.getSymbol(id)?.getName(true)?.let { it to entry } }
+        record.mapNotNull { (id, entry) -> program.symbolTable.getSymbol(id)?.run { qualifiedName to entry } }
             .toMap()
     }
 
@@ -64,7 +63,7 @@ class VirtualBasePass(private val program: Program, private val abi: CxxAbi, sin
             offset,
             dt,
             isVirtual = true,
-            "${vbase.access.name.lowercase()} virtual $name at +0x${vbaseAt.toString(
+            "${vbase.access?.name?.lowercase()?.plus(" ").orEmpty()}virtual $name at +0x${vbaseAt.toString(
                 16,
             )}, by ${vbase.offsetSourceName()}$part",
             ClassNaming.baseFieldName(true, dt.name, count),

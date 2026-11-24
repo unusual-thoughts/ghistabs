@@ -244,19 +244,26 @@ data class FieldRetype(val offset: Int, val name: String, val was: String?, val 
  * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
  * specific type, and the field keeps its name. The fields it typed.
  */
-internal fun Structure.fillData(store: Stores): List<FieldRetype> = buildList {
-    for ((offset, data) in ownData()) {
-        val inside = store.filter { (at, dt) -> offset.withLength(data.length).includes(at.withLength(dt.length)) }
-        val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
-        for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
-        for ((at, dt) in merged.iterator()) {
-            val old = data.getComponentAt(at.toInt())
-            if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
-            val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
-            data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
-            val was = old?.dataType?.takeUnless(Undefined::isUndefined)?.name
-            add(FieldRetype(offset + at.toInt(), name, was, dt.name))
-        }
+internal fun Structure.fillData(store: Stores): List<FieldRetype> =
+    ownData().flatMap { (offset, data) -> data.fillRun(offset, store, flat = data === this) }
+
+/**
+ * Fills this, the struct of a class's own fields at [offset] into it, with the fields of [store] it holds, as
+ * [fillData]. Where it is the class struct itself ([ghicpp.isFlatInferred]), a new field is marked as inferred.
+ * The fields it typed.
+ */
+internal fun Structure.fillRun(offset: Int, store: Stores, flat: Boolean): List<FieldRetype> = buildList {
+    val inside = store.filter { (at, dt) -> offset.withLength(length).includes(at.withLength(dt.length)) }
+    val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(this@fillRun) }
+    for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
+    val mark = ClassNaming.INFERRED.takeIf { flat }
+    for ((at, dt) in merged.iterator()) {
+        val old = getComponentAt(at.toInt())
+        if (at + dt.length > length || old?.dataType?.isEquivalent(dt) == true) continue
+        val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
+        replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment ?: mark)
+        val was = old?.dataType?.takeUnless(Undefined::isUndefined)?.name
+        add(FieldRetype(offset + at.toInt(), name, was, dt.name))
     }
 }
 

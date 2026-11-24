@@ -501,17 +501,13 @@
             "min": 18,
             "max": 18
         },
-        "vfptr-inherited-from-base": {
-            "min": 14,
-            "max": 14
-        },
         "vfptr-normalized": {
             "min": 12,
             "max": 12
         },
         "vfptr-split-from-base": {
-            "min": 96,
-            "max": 96
+            "min": 110,
+            "max": 110
         },
         "vtable-applied": {
             "min": 113,

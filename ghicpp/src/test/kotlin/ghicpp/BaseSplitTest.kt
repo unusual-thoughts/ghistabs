@@ -27,10 +27,10 @@ class BaseSplitTest {
         splitAround(baseLength = 16, vptrInBase = 8, ptrSize = 4) mustBe BaseSplit(0..<8, 12..<16)
     }
 
-    /** A base that is nothing but its vptr has no fields to re-embed, so there is no split to make. */
+    /** A base that is nothing but its vptr has no fields to re-embed, but the deriving class still takes it over. */
     @Test
-    fun `a base the size of the pointer splits into nothing`() {
-        splitAround(baseLength = 4, vptrInBase = 0, ptrSize = 4) mustBe null
+    fun `a base the size of the pointer splits into no runs`() {
+        splitAround(baseLength = 4, vptrInBase = 0, ptrSize = 4) mustBe BaseSplit(null, null)
     }
 
     /** The offset is derived by subtraction when the base carries no `{vfptr}` of its own, so it can

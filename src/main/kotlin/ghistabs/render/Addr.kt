@@ -5,10 +5,10 @@ import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
+import ghidrakt.*
 
 private fun Program.symbolNameAt(addr: Address) = symbolTable.getPrimarySymbol(addr)
-    ?.takeIf { it.source != SourceType.DEFAULT }
-    ?.getName(true)
+    ?.takeIf { it.source != SourceType.DEFAULT }?.qualifiedName
 
 /**
  * Ghidra-listing description for [addr]: the primary symbol if any
@@ -18,8 +18,7 @@ private fun Program.symbolNameAt(addr: Address) = symbolTable.getPrimarySymbol(a
  * nothing meaningful is at this address.
  */
 private fun Program.describeAddress(addr: Address): String? = when (val cu = listing.getCodeUnitAt(addr)) {
-    is Instruction -> functionManager.getFunctionContaining(addr)?.getName(true)
-        ?: symbolNameAt(addr)
+    is Instruction -> functionManager.getFunctionContaining(addr)?.qualifiedName ?: symbolNameAt(addr)
 
     is Data -> {
         val body = listOfNotNull(

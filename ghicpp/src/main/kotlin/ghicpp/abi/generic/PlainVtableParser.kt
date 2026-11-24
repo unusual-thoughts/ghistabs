@@ -268,12 +268,12 @@ internal class BaseCandidates(
                 )
                 continue
             }
-            cls.bases += ClassBase(base, isVirtual = false, Access.PUBLIC, 0L)
+            cls.bases += ClassBase(base, isVirtual = false, access = null, 0L)
             debug("base-inferred", "${cls.name} : ${base.name}, as ${evidenceOf(cls, base)}", cls.at)
         }
         for ((cls, offsets) in subobjects) {
             val found = offsets.mapNotNull { (offset, isVirtual) ->
-                subobjectBase(cls, offset, uses)?.let { ClassBase(it, isVirtual, Access.PUBLIC, offset) }
+                subobjectBase(cls, offset, uses)?.let { ClassBase(it, isVirtual, access = null, offset) }
             }
             // A virtual base may be one of another base's, which the complete-object constructor builds as well:
             // not while a non-virtual subobject's class is unknown, as it may be the one deriving from it.

@@ -67,6 +67,9 @@ class GenericVftableFinder(
      * first word code takes the address of ([codeReferences]). A run ends before the next such word, which begins
      * another, at a symbol, at data laid other than one word ([isFree]), or past [DESTRUCTOR_SLOTS] nulls;
      * the nulls that end it are no slots. A table whose constructor isn't disassembled yet waits for a later run.
+     * A run whose first slot is null also needs a vtable header in front of it ([hasVtableHeader]). An abstract
+     * Itanium class leaves its destructor slots null, but MSVC fills a pure virtual's slot with `_purecall`.
+     * Without the header, a null followed by code pointers is some other table, such as a CRT exception scope table.
      */
     val potentialVtables: List<PotentialVtable> by lazy {
         program.findPointers()
@@ -76,6 +79,7 @@ class GenericVftableFinder(
             .chunkWith { a, b -> b.src == a.src + ptr && !b.begins() && !isNamed(b.src) }
             .flatMap { it.splitAtNulls() }
             .filter { run -> run.first().begins() && !isClaimed(run.first().src) && run.any { it.dst.offset != 0L } }
+            .filter { run -> run.first().dst.offset != 0L || hasVtableHeader(run.first().src) }
             .map { PotentialVtable(it) }
     }
 
@@ -116,6 +120,16 @@ class GenericVftableFinder(
     }
 
     private fun Address.wordBefore(words: Int) = signedWordBefore(program, words)
+
+    /**
+     * Whether an Itanium vtable header comes before [table]: an `offset_to_top` that a subobject could have, then
+     * an RTTI word.
+     */
+    private fun hasVtableHeader(table: Address): Boolean {
+        val top = table.wordBefore(2) ?: return false
+        val rtti = table.wordBefore(1) ?: return false
+        return top <= 0 && -top < MAX_SUBOBJECT_OFFSET && isRttiWord(rtti)
+    }
 
     /** An rtti word: 0, with no RTTI, or a pointer to data, a typeinfo. */
     private fun isRttiWord(word: Long) = word == 0L || runCatching {
