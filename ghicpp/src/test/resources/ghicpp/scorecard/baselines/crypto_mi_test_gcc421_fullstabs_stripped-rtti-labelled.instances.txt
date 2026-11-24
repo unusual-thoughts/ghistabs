@@ -1,41 +1,19 @@
-bases-fn `?BlockPaddingSchemeDef` of `CryptoPP::AuthenticatedDecryptionFilter`
-bases-fn `?BlockPaddingSchemeDef` of `CryptoPP::StreamTransformationFilter`
-bases-fn `?Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`
-bases-fn `?Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`
-bases-fn `?Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`
-bases-fn `?Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`
-bases-fn `?EncryptionStandard` of `CryptoPP::OAEP<CryptoPP::SHA1,CryptoPP::P1363_MGF1>`
-bases-fn `?FilterPutSpaceHelper` of `CryptoPP::HashFilter`
-bases-fn `?FilterPutSpaceHelper` of `CryptoPP::StreamTransformationFilter`
-bases-fn `?FixedBlockSize<16u>` of `CryptoPP::Rijndael_Info`
-bases-fn `?FixedBlockSize<8u>` of `CryptoPP::DES_Info`
-bases-fn `?FixedKeyLength<8u,4u,0u>` of `CryptoPP::DES_Info`
-bases-fn `?InitializeInteger` of `CryptoPP::Integer`
-bases-fn `?NotCopyable` of `CryptoPP::AutoSeededX917RNG<CryptoPP::Rijndael>`
-bases-fn `?NotCopyable` of `CryptoPP::Filter`
-bases-fn `?NotCopyable` of `CryptoPP::RandomPool`
-bases-fn `?NotCopyable` of `CryptoPP::X917RNG`
-bases-fn `?ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`
-bases-fn `?ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`
-bases-fn `?ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`
-bases-fn `?ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`
-bases-fn `?ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`
-bases-fn `?ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`
-bases-fn `?ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`
-bases-fn `?ObjectHolder<CryptoPP::SHA1>` of `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`
-bases-fn `?ObjectHolder<CryptoPP::SHA256>` of `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`
-bases-fn `?RawDES` of `CryptoPP::DES::Base`
-bases-fn `?VariableKeyLength<16u,0u,2147483647u,1u,4u,0u>` of `CryptoPP::HMAC_Base`
-bases-fn `?VariableKeyLength<16u,16u,32u,8u,4u,0u>` of `CryptoPP::Rijndael_Info`
-bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
-bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`
-bases-fn `?ctype_base` of `std::__ctype_abstract_base<char>`
-bases-fn `?ctype_base` of `std::__ctype_abstract_base<wchar_t>`
-bases-fn `?ctype_base` of `std::ctype<char>`
-bases-fn `?messages_base` of `std::messages<char>`
-bases-fn `?messages_base` of `std::messages<wchar_t>`
-bases-fn `?time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
-bases-fn `?time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+base-access-fp `Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`: non-public, is public
+base-access-fp `Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`: non-public, is public
+base-access-fp `Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`: non-public, is public
+base-access-fp `Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`: non-public, is public
+base-access-fp `FilterPutSpaceHelper` of `CryptoPP::HashFilter`: non-public, is public
+base-access-fp `FilterPutSpaceHelper` of `CryptoPP::StreamTransformationFilter`: non-public, is public
+base-access-fp `InitializeInteger` of `CryptoPP::Integer`: non-public, is public
+base-access-fp `ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`: non-public, is public
+base-access-fp `ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`: non-public, is public
+base-access-fp `ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`: non-public, is public
+base-access-fp `ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`: non-public, is public
+base-access-fp `ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`: non-public, is public
+base-access-fp `ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`: non-public, is public
+base-access-fp `ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`: non-public, is public
+base-access-fp `ObjectHolder<CryptoPP::SHA1>` of `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`: non-public, is public
+base-access-fp `ObjectHolder<CryptoPP::SHA256>` of `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`: non-public, is public
 bases-fn `CryptoPP::CryptoMaterial` of `CryptoPP::GeneratableCryptoMaterial`
 bases-fn `CryptoPP::CryptoMaterial` of `CryptoPP::PublicKey`
 bases-fp `?CryptoPP::DES_EDE2_Info` of `CryptoPP::TwoBases<CryptoPP::BlockCipher,CryptoPP::DES_EDE2_Info>`
@@ -51,40 +29,8 @@ bases-fp `?CryptoPP::TF_Base<CryptoPP::TrapdoorFunction,CryptoPP::PK_SignatureMe
 bases-fp `?CryptoPP::TF_Base<CryptoPP::TrapdoorFunctionInverse,CryptoPP::PK_EncryptionMessageEncodingMethod>` of `CryptoPP::TF_CryptoSystemBase<CryptoPP::PK_Decryptor,CryptoPP::TF_Base<CryptoPP::TrapdoorFunctionInverse,CryptoPP::PK_EncryptionMessageEncodingMethod>>`
 bases-fp `?CryptoPP::VariableKeyLength<16u,0u,2147483647u,1u,4u,0u>` of `CryptoPP::HMAC_Base`
 bases-fp `?CryptoPP::VariableKeyLength<16u,16u,32u,8u,4u,0u>` of `CryptoPP::Rijndael_Info`
-bases-fp `CryptoPP::BlockPaddingSchemeDef` of `CryptoPP::AuthenticatedDecryptionFilter`
-bases-fp `CryptoPP::BlockPaddingSchemeDef` of `CryptoPP::StreamTransformationFilter`
 bases-fp `CryptoPP::CryptoMaterial` (virtual) of `CryptoPP::GeneratableCryptoMaterial`
 bases-fp `CryptoPP::CryptoMaterial` (virtual) of `CryptoPP::PublicKey`
-bases-fp `CryptoPP::Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`
-bases-fp `CryptoPP::Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`
-bases-fp `CryptoPP::Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`
-bases-fp `CryptoPP::Empty` of `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`
-bases-fp `CryptoPP::FilterPutSpaceHelper` of `CryptoPP::HashFilter`
-bases-fp `CryptoPP::FilterPutSpaceHelper` of `CryptoPP::StreamTransformationFilter`
-bases-fp `CryptoPP::InitializeInteger` of `CryptoPP::Integer`
-bases-fp `CryptoPP::NotCopyable` of `CryptoPP::AutoSeededX917RNG<CryptoPP::Rijndael>`
-bases-fp `CryptoPP::NotCopyable` of `CryptoPP::Filter`
-bases-fp `CryptoPP::NotCopyable` of `CryptoPP::RandomPool`
-bases-fp `CryptoPP::NotCopyable` of `CryptoPP::X917RNG`
-bases-fp `CryptoPP::ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`
-bases-fp `CryptoPP::ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`
-bases-fp `CryptoPP::ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`
-bases-fp `CryptoPP::ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`
-bases-fp `CryptoPP::ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`
-bases-fp `CryptoPP::ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`
-bases-fp `CryptoPP::ObjectHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>>` of `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`
-bases-fp `CryptoPP::ObjectHolder<CryptoPP::SHA1>` of `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`
-bases-fp `CryptoPP::ObjectHolder<CryptoPP::SHA256>` of `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`
-bases-fp `CryptoPP::RawDES` of `CryptoPP::DES::Base`
-bases-fp `std::codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
-bases-fp `std::codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`
-bases-fp `std::ctype_base` of `std::__ctype_abstract_base<char>`
-bases-fp `std::ctype_base` of `std::__ctype_abstract_base<wchar_t>`
-bases-fp `std::ctype_base` of `std::ctype<char>`
-bases-fp `std::messages_base` of `std::messages<char>`
-bases-fp `std::messages_base` of `std::messages<wchar_t>`
-bases-fp `std::time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
-bases-fp `std::time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
 classes-fn `CryptoPP::AllocatorWithCleanup<char,false>` (stabs)
 classes-fn `CryptoPP::AllocatorWithCleanup<unsigned_char,false>` (stabs)
 classes-fn `CryptoPP::AllocatorWithCleanup<unsigned_char,true>` (stabs)
