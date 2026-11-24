@@ -55,9 +55,7 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
 
         val head = split.head?.baseFieldsRun(baseDt)
         val tail = split.tail?.baseFieldsRun(baseDt)
-        val bare = if (split.head == null && split.tail == null) baseDt.bareRun(tailFrom) else null
-        // The base holds it too, as its own fields, so what it gains past its end later every deriving class does.
-        bare?.let { run -> layouts.forEach { it.embedBare(tailFrom, run) } }
+        val bare = if (split.head == null && split.tail == null) baseDt.bareTail(tailFrom, layouts) else null
         // Read before the replacements: the component is live, and the vfptr's once replaced.
         val (baseName, baseComment) = baseComp.fieldName to baseComp.comment
         return (head != null || tail != null || bare != null) && runCatching {
@@ -127,23 +125,41 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
     }
 
     /**
-     * What is left of a base that is nothing but its vptr, an interface's, once the deriving class owns that:
-     * an empty struct, laid zero-length after the vptr, so the `_base_` component still names the base the class
-     * derives from. It is the base's tail run, empty for now, shared as any run is: the base holds it as its own
-     * fields ([embedBare]), and grows it when it grows past its end ([ghicpp.sizeClassStruct], [placeMember]).
+     * What is left of a base that is nothing but its vptr, past [from], once the deriving class owns that: its tail,
+     * laid zero-length after the vptr, so the `_base_` component still names the base the class derives from. It
+     * holds by reference what the base holds there, as a run copied off any base does ([baseFieldsRun]): the empty
+     * runs of the base's own bases, then the run of its own fields, which the base holds too ([embedBare]) and grows
+     * when it grows past its end ([ghicpp.sizeClassStruct], [placeMember]). Packed, so each of them follows the one
+     * before as it grows. With no base of its own there, the tail is that run itself. [layouts] hold the base.
      */
-    private fun Structure.bareRun(from: Int): Structure {
-        val name = "$name${ClassNaming.FIELDS}_${from}_$from"
-        return registry.getOrRegister<Structure>(categoryPath.at(name)) {
-            StructureDataType(categoryPath, name, 0, dtm).apply {
-                description = "${this@bareRun.name} as a base subobject: nothing but the vptr the deriving " +
-                    "class now owns"
-                // Unpacked, an empty struct is one not yet defined, which a component holds as a byte. Growing it
-                // unpacks it ([stretch]).
-                isPackingEnabled = true
+    private fun Structure.bareTail(from: Int, layouts: List<Structure>): Structure {
+        val there = definedComponents.filter { it.offset == from && it.length == 0 }
+        val inherited = there.filter { it.isBaseField() }
+        val tailName = "$name${ClassNaming.FIELDS}_${from}_$from"
+        val own = there.firstOrNull { isOwnFields(it) }?.dataType as? Structure
+            ?: emptyRun(if (inherited.isEmpty()) tailName else "$name${ClassNaming.FIELDS}_own_${from}_$from")
+        layouts.forEach { it.embedBare(from, own) }
+        if (inherited.isEmpty() || own.name == tailName) return own
+        return registry.getOrRegister<Structure>(categoryPath.at(tailName)) {
+            emptyStruct(categoryPath, tailName, "$name as a base subobject: its bases' and its own fields").apply {
+                inherited.forEach { add(it.dataType, it.fieldName, it.comment) }
+                add(own, ClassNaming.FIELDS, "own fields, shared with deriving classes")
             }
         }
     }
+
+    /** An empty run of this base's own fields, named [name]. */
+    private fun Structure.emptyRun(name: String) = registry.getOrRegister<Structure>(categoryPath.at(name)) {
+        emptyStruct(categoryPath, name, "${this@emptyRun.name}'s own fields, none yet past the vptr")
+    }
+
+    // Unpacked, an empty struct is one not yet defined, which a component holds as a byte. Growing it unpacks it
+    // ([stretch]).
+    private fun emptyStruct(category: CategoryPath, name: String, description: String) =
+        StructureDataType(category, name, 0, dtm).apply {
+            this.description = description
+            isPackingEnabled = true
+        }
 
     /** [run], a [bareRun], laid zero-length at [at] in this base as its own fields, unless it is there already. */
     private fun Structure.embedBare(at: Int, run: Structure) {

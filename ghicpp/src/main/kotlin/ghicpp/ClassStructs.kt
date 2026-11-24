@@ -122,6 +122,7 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
             val last = struct.definedComponents.lastOrNull()?.takeIf { it.endsAtEndOf(struct) }
             struct.growStructure(size - struct.length)
             if (last != null) struct.stretchOwnTail(struct, last, size)
+            struct.settleHolders()
         }
     }
 }
@@ -182,6 +183,8 @@ internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Struc
     runCatching { into.lay(offset, member, field, "member or base") }
         .onSuccess { laid ->
             debug("member-placed", "${member.name} at +$at in ${owner.name}")
+            into.settleHolders()
+            owner.settleHolders()
             if (vfptr != null && into == owner && member.holdsVfptrAt(0)) {
                 BaseSplitter(DtmRegistry(owner.dataTypeManager), this)
                     .splitBase(owner, listOf(owner.name), at, laid, vfptr)
@@ -225,6 +228,7 @@ private fun DataTypeComponent.endsAtEndOf(struct: Structure) =
  * else into this.
  */
 private fun Structure.landing(at: Int, length: Int): Pair<Structure, Int> {
+    settle()
     val tail = definedComponents.lastOrNull()?.takeIf { isOwnFields(it) && it.endsAtEndOf(this) }
     if (tail == null || at < tail.offset || at + length <= this.length) return this to at
     return stretch(tail, at.withLength(length)) to at - tail.offset
@@ -309,4 +313,52 @@ fun DataTypeManager.growToHoldBases(structs: Collection<Structure>) {
         if (end > struct.length && !struct.isPackingEnabled) struct.growStructure(end - struct.length)
     }
     structs.forEach(::grow)
+}
+
+/**
+ * Settles each struct holding this one ([settle]), and on up through those that grew, or are packed and so grew
+ * with it. Ghidra grows a field whose type grew only over the undefined bytes after it, and a zero-length one, an
+ * empty base's run, not at all.
+ */
+fun Structure.settleHolders(seen: MutableSet<Structure> = mutableSetOf()) {
+    if (!seen.add(this)) return
+    for (holder in parents.filterIsInstance<Structure>()) {
+        if (holder.isPackingEnabled || holder.settle()) holder.settleHolders(seen)
+    }
+}
+
+/**
+ * Lays each field of this unpacked struct that is shorter than its type, a run that grew after it was laid, at its
+ * type's length again, the empty runs that start where it ends moved on to its new end: the runs of a class's own
+ * fields after its bases'. Where something else is in the way the field stays as it is. Whether anything moved.
+ */
+fun Structure.settle(): Boolean {
+    if (isPackingEnabled) return false
+    val stuck = mutableSetOf<Int>()
+    var moved = false
+    while (true) {
+        val part = definedComponents.firstOrNull { c ->
+            c.ordinal !in stuck && (c.dataType as? Structure)?.let { !it.isZeroLength && c.length < it.length } == true
+        } ?: return moved
+        val dt = part.dataType as Structure
+        val end = part.offset + part.length
+        val after = definedComponents.filter { c ->
+            c.ordinal > part.ordinal && c.offset == end && c.length == 0 &&
+                (c.dataType as? Structure)?.isZeroLength == true
+        }
+        val inWay = componentsOverlapping(part.offset.withLength(dt.length)).filter { it.ordinal != part.ordinal }
+        if (inWay.isNotEmpty()) {
+            stuck += part.ordinal
+            continue
+        }
+        val (offset, name, comment) = Triple(part.offset, part.fieldName, part.comment)
+        val moving = after.map { Triple(it.dataType, it.fieldName, it.comment) }
+        runCatching {
+            (after + part).sortedByDescending { it.ordinal }.forEach { clearComponent(it.ordinal) }
+            lay(offset, dt, name, comment)
+            moving.forEach { (run, runName, runComment) ->
+                insertAtOffset(offset + dt.length, run, 0, runName, runComment)
+            }
+        }.onSuccess { moved = true }.onFailure { stuck += part.ordinal }
+    }
 }

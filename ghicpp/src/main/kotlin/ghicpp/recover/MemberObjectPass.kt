@@ -130,7 +130,9 @@ class MemberObjectPass(
             is NonPolymorphicClass -> root[h]?.cls
             is ContainingClass.Existing -> h.cls
         }?.let(::structOf)
-        val laid = order.map { it to root.getValue(held.getValue(it)).cls } + known.toList()
+        // A base's before its deriving classes', so that a class's own fields run follows its bases' grown already.
+        val laid = (order.map { it to root.getValue(held.getValue(it)).cls } + known.toList())
+            .sortedBy { (sub, _) -> sub.depth() }
         monitor.initialize(laid.size.toLong(), "Laying member objects in their classes")
         for ((sub, cls) in laid) {
             monitor.increment()
@@ -141,6 +143,9 @@ class MemberObjectPass(
         writeRecords(classes.mapNotNull { it.cls })
         return classes.size
     }
+
+    /** How many classes this is laid in derives from: none for a member object class's, which goes first. */
+    private fun Subobject.depth() = (container as? ContainingClass.Existing)?.cls?.ancestors?.size ?: -1
 
     /** The members grew the classes they went past the end of, and with them those deriving from them. */
     private fun growDerived() = dtm.growToHoldBases(
