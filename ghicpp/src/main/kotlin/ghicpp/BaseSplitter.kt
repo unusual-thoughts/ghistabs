@@ -120,7 +120,8 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
             return
         }
         runCatching {
-            inside.forEach { layout.clearAtOffset(it.offset) }
+            // By ordinal, last first: clearing by offset would take a zero-length base there too.
+            inside.sortedByDescending { it.ordinal }.forEach { layout.clearComponent(it.ordinal) }
             layout.replaceAtOffset(span.first, run, run.length, name, "own fields, shared with deriving classes")
         }.onFailure { degradation("fields-run-unshared", layout.name, "${run.name}: ${it.message}") }
     }
@@ -169,7 +170,11 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
                     "without the vptr the deriving class now owns"
                 for (it in baseDt.definedComponents.filter(::holds)) {
                     runCatching {
-                        replaceAtOffset(it.offset - first, it.dataType, it.length, it.fieldName, it.comment)
+                        if (it.length == 0) {
+                            insertAtOffset(it.offset - first, it.dataType, 0, it.fieldName, it.comment)
+                        } else {
+                            replaceAtOffset(it.offset - first, it.dataType, it.length, it.fieldName, it.comment)
+                        }
                     }
                 }
             }

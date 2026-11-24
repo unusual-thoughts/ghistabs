@@ -245,7 +245,8 @@ fun Structure.componentsOverlapping(offset: Int, length: Int) = componentsOverla
 fun Structure.lay(at: Int, dt: DataType, name: String?, comment: String?): DataTypeComponent {
     val range = at.withLength(dt.length)
     if (range.last >= length) growStructure(range.last + 1 - length)
-    componentsOverlapping(range).sortedByDescending { it.offset }.forEach { clearAtOffset(it.offset) }
+    // By ordinal: clearing by offset would take a zero-length component there too.
+    componentsOverlapping(range).sortedByDescending { it.ordinal }.forEach { clearComponent(it.ordinal) }
     return replaceAtOffset(at, dt, dt.length, name, comment)
 }
 
