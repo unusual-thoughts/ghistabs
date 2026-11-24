@@ -824,17 +824,13 @@
             "min": 11,
             "max": 11
         },
-        "vfptr-inherited-from-base": {
-            "min": 192,
-            "max": 192
-        },
         "vfptr-normalized": {
             "min": 57,
             "max": 57
         },
         "vfptr-split-from-base": {
-            "min": 454,
-            "max": 454
+            "min": 646,
+            "max": 646
         },
         "vtable-construction": {
             "min": 241,
@@ -1434,5 +1430,5 @@
             "max": 47
         }
     },
-    "source": "crypto_mi_test_gcc421_stripped.exe - generated from snapshotCounters()"
+    "source": "crypto_mi_test_gcc421_stripped.exe - shifted from committed"
 }

@@ -363,17 +363,13 @@
             "min": 12,
             "max": 12
         },
-        "vfptr-inherited-from-base": {
-            "min": 8,
-            "max": 8
-        },
         "vfptr-normalized": {
             "min": 12,
             "max": 12
         },
         "vfptr-split-from-base": {
-            "min": 69,
-            "max": 69
+            "min": 77,
+            "max": 77
         },
         "vftable-pure-slot-typed": {
             "min": 6,
@@ -525,5 +521,5 @@
             "max": 15
         }
     },
-    "source": "xmltest_gcc421.exe - generated from snapshotCounters()"
+    "source": "xmltest_gcc421.exe - shifted from committed"
 }

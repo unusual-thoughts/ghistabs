@@ -314,17 +314,13 @@
             "min": 4,
             "max": 4
         },
-        "vfptr-inherited-from-base": {
-            "min": 1,
-            "max": 1
-        },
         "vfptr-normalized": {
             "min": 2,
             "max": 2
         },
         "vfptr-split-from-base": {
-            "min": 8,
-            "max": 8
+            "min": 9,
+            "max": 9
         },
         "vtable-applied": {
             "min": 9,
@@ -354,5 +350,5 @@
             "max": 4
         }
     },
-    "source": "tinyxml_aout_gcc295.o - generated from snapshotCounters()"
+    "source": "tinyxml_aout_gcc295.o - shifted from committed"
 }

@@ -925,17 +925,13 @@
             "min": 11,
             "max": 11
         },
-        "vfptr-inherited-from-base": {
-            "min": 96,
-            "max": 96
-        },
         "vfptr-normalized": {
             "min": 50,
             "max": 50
         },
         "vfptr-split-from-base": {
-            "min": 376,
-            "max": 376
+            "min": 472,
+            "max": 472
         },
         "vftable-pure-slot-typed": {
             "min": 407,
@@ -1410,5 +1406,5 @@
             "max": 67
         }
     },
-    "source": "crypto_mi_test_gcc345_fullstabs.exe - generated from snapshotCounters()"
+    "source": "crypto_mi_test_gcc345_fullstabs.exe - shifted from committed"
 }

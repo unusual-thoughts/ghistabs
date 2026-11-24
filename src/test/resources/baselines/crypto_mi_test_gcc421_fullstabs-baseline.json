@@ -958,10 +958,6 @@
             "min": 1,
             "max": 12
         },
-        "text-undisassembled-code": {
-            "min": 0,
-            "max": 10
-        },
         "textrange-entries": {
             "min": 4014,
             "max": 4014
@@ -1006,17 +1002,13 @@
             "min": 11,
             "max": 11
         },
-        "vfptr-inherited-from-base": {
-            "min": 199,
-            "max": 199
-        },
         "vfptr-normalized": {
             "min": 59,
             "max": 59
         },
         "vfptr-split-from-base": {
-            "min": 488,
-            "max": 488
+            "min": 687,
+            "max": 687
         },
         "vftable-pure-slot-typed": {
             "min": 397,
@@ -1525,5 +1517,5 @@
             "max": 47
         }
     },
-    "source": "crypto_mi_test_gcc421_fullstabs.exe - generated from snapshotCounters()"
+    "source": "crypto_mi_test_gcc421_fullstabs.exe - shifted from committed"
 }
