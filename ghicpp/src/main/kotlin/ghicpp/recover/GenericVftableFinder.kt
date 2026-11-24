@@ -8,6 +8,8 @@ import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.generic.PlainVtables.MAX_SUBOBJECT_OFFSET
 import ghicpp.abi.ofVtableSymbol
 import ghicpp.describeVxTable
+import ghicpp.fixup.isTailJumpTarget
+import ghicpp.fixup.splitOffTailJumpTarget
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRangeImpl
 import ghidra.program.model.data.Array
@@ -212,8 +214,14 @@ class GenericVftableFinder(
         return seeded
     }
 
-    /** Lays a `<Class>_vftable` at [table], typed off its slots, unless one was typed already. */
+    /**
+     * Lays a `<Class>_vftable` at [table], typed off its slots, unless one was typed already. A slot another
+     * function's body holds only because it jumps there is made a function of its own first.
+     */
     private fun lay(table: PotentialVtable, ns: GhidraClass, name: String? = null) {
+        for (slot in table.slots) {
+            program.splitOffTailJumpTarget(slot)?.let { debug("vftable-slot-split", "out of a tail jump", slot) }
+        }
         val path = name?.let { ClassNaming.vftableCategory(ns).at(it) } ?: ClassNaming.vftablePath(ns)
         val vftable = registry.getOrRegister<Structure>(path) {
             StructureDataType(path.categoryPath, path.dataTypeName, 0, program.dataTypeManager)
@@ -288,14 +296,16 @@ class GenericVftableFinder(
      * Whether the word at [pfn] can be a slot pointing at [target]: an imported function's thunk, or code
      * ([isSlotCode], so not back into a read-only block its table shares with the code) where a function begins
      * or could, at an instruction's start or undisassembled; not inside a function, where a switch's jump table
-     * points.
+     * points, unless the function only jumps there ([isTailJumpTarget]). MSVC ends a destructor with a jump to the
+     * virtual after it, and Ghidra takes that virtual into the destructor's body.
      */
     private fun isSlot(pfn: Address, target: Address): Boolean {
         if (program.importedFunction(pfn, target) != null) return true
         if (!program.isSlotCode(pfn, target) || !program.isInitialized(target)) return false
         if (listing.getDefinedDataContaining(target) != null) return false
         if (listing.getInstructionContaining(target)?.let { it.address != target } == true) return false
-        return program.functionManager.getFunctionContaining(target)?.let { it.entryPoint == target } ?: true
+        return program.functionManager.getFunctionContaining(target)
+            ?.let { it.entryPoint == target || program.isTailJumpTarget(target) } ?: true
     }
 
     companion object {

@@ -2,6 +2,7 @@ package ghicpp.recover
 
 import ghicpp.ClassNaming
 import ghicpp.abi.generic.PlainVtableParser
+import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
@@ -134,6 +135,29 @@ class GenericVftableFinderIntegrationTest : AbstractGhidraHeadlessIntegrationTes
         program.runTransaction("again") { GenericVftableFinder(program).seed() mustBe 0 }
     }
 
+    @Test
+    fun `a slot pointing at code another function only jumps to is a function of its own`() {
+        // mov dword ptr [ecx], 0x402080; jmp 0x4011b0; int3 padding; xor eax, eax; ret
+        builder.setBytes(TAIL_DTOR, "c7 01 80 20 40 00 e9 05 00 00 00 cc cc cc cc cc 33 c0 c3")
+        builder.setBytes(TAIL_TABLE, "00 11 40 00 b0 11 40 00")
+        builder.disassemble(TAIL_DTOR, 0x13)
+        builder.createMemoryReference(TAIL_DTOR, TAIL_TABLE, RefType.DATA, SourceType.ANALYSIS, 0)
+        builder.withTransaction { CreateFunctionCmd(addr(TAIL_DTOR)).applyTo(program) }
+        fun dtor() = program.functionManager.getFunctionAt(addr(TAIL_DTOR))
+        // Ghidra's function takes in the code it jumps to.
+        dtor().body.contains(addr(TAIL)) mustBe true
+
+        found()[addr(TAIL_TABLE)] mustBe listOf(addr(VF1), addr(TAIL))
+        program.runTransaction("seed") {
+            GenericVftableFinder(program).seed()
+            ClassPass(program, PlainVtableParser(program), DummySink).run(TaskMonitor.DUMMY)
+        }
+        val cls = "${GenericVftableFinder.SEEDED_CLASS_PREFIX}00402080"
+        program.listing.getDataAt(addr(TAIL_TABLE)).numComponents mustBe 2
+        program.functionManager.getFunctionAt(addr(TAIL))?.getName(true) mustBe "$cls::vfunction2"
+        dtor().body.contains(addr(TAIL)) mustBe false
+    }
+
     private companion object {
         const val CTOR = "0x401000"
         const val CTOR2 = "0x401010"
@@ -144,6 +168,9 @@ class GenericVftableFinderIntegrationTest : AbstractGhidraHeadlessIntegrationTes
         const val VF4 = "0x401130"
         const val UNDISASSEMBLED_CTOR = "0x401180"
         const val LATE_CTOR = "0x401190"
+        const val TAIL_DTOR = "0x4011a0"
+        const val TAIL = "0x4011b0"
+        const val TAIL_TABLE = "0x402080"
         const val UNDISASSEMBLED_TABLE = "0x402060"
         const val TABLE = "0x402010"
         const val TABLE2 = "0x402018"
