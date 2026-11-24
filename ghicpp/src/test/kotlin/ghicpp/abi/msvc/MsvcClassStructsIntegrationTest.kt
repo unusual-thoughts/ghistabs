@@ -132,10 +132,12 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
     fun `a base that is nothing but its vptr still gives the vptr up, and stays as an empty base`() {
         // `Logger` declares only virtual functions: the vptr is all of it.
         program.layout("Secret") mustBe listOf(
-            0 to "_base_Logger: Logger_fields_0_0",
             0 to "vfptr: Secret_vftable *",
+            4 to "_base_Logger: Logger_fields_4_4",
             4 to "Secret_data: Secret_data",
         )
+        // The run is `Logger`'s own fields too, so what it gains past its end every deriving class does.
+        program.layout("Logger") mustBe listOf(0 to "vfptr: Logger_vftable *", 4 to "_fields: Logger_fields_4_4")
     }
 
     @Test

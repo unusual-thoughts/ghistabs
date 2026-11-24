@@ -55,7 +55,9 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
 
         val head = split.head?.baseFieldsRun(baseDt)
         val tail = split.tail?.baseFieldsRun(baseDt)
-        val bare = if (split.head == null && split.tail == null) baseDt.bareRun() else null
+        val bare = if (split.head == null && split.tail == null) baseDt.bareRun(tailFrom) else null
+        // The base holds it too, as its own fields, so what it gains past its end later every deriving class does.
+        bare?.let { run -> layouts.forEach { it.embedBare(tailFrom, run) } }
         // Read before the replacements: the component is live, and the vfptr's once replaced.
         val (baseName, baseComment) = baseComp.fieldName to baseComp.comment
         return (head != null || tail != null || bare != null) && runCatching {
@@ -65,9 +67,8 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
                 val name = if (head == null) baseComp.fieldName else "${baseComp.fieldName}_tail"
                 structDt.replaceAtOffset(baseOff + tailFrom, it, it.length, name, baseComp.comment)
             }
-            // Zero-length, so it goes in ahead of the vfptr at the base's offset without moving it, and leaves the
-            // fields after it in one `<Class>_data` ([ClassStructFiller]).
-            bare?.let { structDt.insertAtOffset(baseOff, it, 0, baseName, baseComment) }
+            // Zero-length, where a tail run starts, so it goes in without moving what follows.
+            bare?.let { structDt.insertAtOffset(baseOff + tailFrom, it, 0, baseName, baseComment) }
         }.onFailure {
             degradation("vfptr-split-failed", className, "${baseDt.name} at +$baseOff: ${it.message}")
         }.isSuccess
@@ -126,19 +127,28 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
 
     /**
      * What is left of a base that is nothing but its vptr, an interface's, once the deriving class owns that:
-     * an empty struct, laid zero-length, so the `_base_` component still names the base the class derives from.
-     * Named as the empty run at the base's start, `_0_0`, which is where it is laid.
+     * an empty struct, laid zero-length after the vptr, so the `_base_` component still names the base the class
+     * derives from. It is the base's tail run, empty for now, shared as any run is: the base holds it as its own
+     * fields ([embedBare]), and grows it when it grows past its end ([ghicpp.sizeClassStruct], [placeMember]).
      */
-    private fun Structure.bareRun(): Structure {
-        val name = "$name${ClassNaming.FIELDS}_0_0"
+    private fun Structure.bareRun(from: Int): Structure {
+        val name = "$name${ClassNaming.FIELDS}_${from}_$from"
         return registry.getOrRegister<Structure>(categoryPath.at(name)) {
             StructureDataType(categoryPath, name, 0, dtm).apply {
                 description = "${this@bareRun.name} as a base subobject: nothing but the vptr the deriving " +
                     "class now owns"
-                // Unpacked, an empty struct is one not yet defined, which a component holds as a byte.
+                // Unpacked, an empty struct is one not yet defined, which a component holds as a byte. Growing it
+                // unpacks it ([stretch]).
                 isPackingEnabled = true
             }
         }
+    }
+
+    /** [run], a [bareRun], laid zero-length at [at] in this base as its own fields, unless it is there already. */
+    private fun Structure.embedBare(at: Int, run: Structure) {
+        if (isPackingEnabled || definedComponents.any { it.dataType == run }) return
+        runCatching { insertAtOffset(at, run, 0, ClassNaming.FIELDS, "own fields, shared with deriving classes") }
+            .onFailure { degradation("fields-run-unshared", name, "${run.name}: ${it.message}") }
     }
 
     /**

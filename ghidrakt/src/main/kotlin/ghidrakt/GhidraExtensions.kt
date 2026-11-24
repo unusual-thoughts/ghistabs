@@ -257,11 +257,16 @@ fun Structure.stretch(part: DataTypeComponent, range: IntRange): Structure {
     val inner = part.dataType as Structure
     if (part.range.includes(range)) return inner
     val (offset, name, comment) = Triple(part.offset, part.fieldName, part.comment)
+    // An empty struct is packed to be held zero-length, and reports a length of 1 all the same.
+    if (inner.isZeroLength) inner.isPackingEnabled = false
+    val length = if (inner.isZeroLength) 0 else inner.length
     val start = minOf(offset, range.first)
-    val end = maxOf(offset + inner.length, range.last + 1)
-    clearAtOffset(offset)
+    val end = maxOf(offset + length, range.last + 1)
+    // This part alone: other zero-length ones at its offset, an empty base's, stay.
+    clearComponent(part.ordinal)
     repeat(offset - start) { inner.insertAtOffset(0, DataType.DEFAULT, 1) }
-    if (end - start > inner.length) inner.growStructure(end - start - inner.length)
+    val grown = if (inner.isZeroLength) 0 else inner.length
+    if (end - start > grown) inner.growStructure(end - start - grown)
     lay(start, inner, name, comment)
     return inner
 }

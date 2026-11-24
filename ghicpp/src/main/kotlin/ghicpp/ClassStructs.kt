@@ -119,7 +119,7 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
         else if struct.isZeroLength -> struct.growStructure(size)
 
         else if struct.length < size -> {
-            val last = struct.definedComponents.lastOrNull()?.takeIf { it.endOffset == struct.length - 1 }
+            val last = struct.definedComponents.lastOrNull()?.takeIf { it.endsAtEndOf(struct) }
             struct.growStructure(size - struct.length)
             if (last != null) struct.stretchOwnTail(struct, last, size)
         }
@@ -151,8 +151,7 @@ internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Struc
         "${member.name} overlaps ${why.joinToString { it.describe() }}" +
             " in ${into.name}".takeIf { into != owner }.orEmpty(),
     )
-    var into = owner
-    var offset = at
+    var (into, offset) = owner.landing(at, member.length)
     var ownData = false
     while (!ownData) {
         val range = offset.withLength(member.length)
@@ -216,6 +215,21 @@ private fun Structure.stretchOwnTail(owner: Structure, last: DataTypeComponent, 
     if (tail != null) inner.stretchOwnTail(owner, tail, end - offset)
 }
 
+/** Whether this ends where [struct] does: a zero-length one, an empty base's run, by starting there. */
+private fun DataTypeComponent.endsAtEndOf(struct: Structure) =
+    offset + length == if (struct.isZeroLength) 0 else struct.length
+
+/**
+ * Where [length] bytes at [at] in this class struct go first, and at what offset into it: past its end, into the run
+ * of its own fields it ends in ([isOwnFields]), stretched to hold them, which each class deriving from it holds too;
+ * else into this.
+ */
+private fun Structure.landing(at: Int, length: Int): Pair<Structure, Int> {
+    val tail = definedComponents.lastOrNull()?.takeIf { isOwnFields(it) && it.endsAtEndOf(this) }
+    if (tail == null || at < tail.offset || at + length <= this.length) return this to at
+    return stretch(tail, at.withLength(length)) to at - tail.offset
+}
+
 /** Whether [part] holds one of this class struct's own `<Class>_data` structs, filed beside it. */
 fun Structure.isOwnData(part: DataTypeComponent) = (part.dataType as? Structure)?.let {
     it.categoryPath == categoryPath && it.name.startsWith(name + ClassNaming.DATA)
@@ -276,9 +290,9 @@ private val BASE_RUN = Regex("(.+)${ClassNaming.FIELDS}_(\\d+)_(\\d+)")
 
 /**
  * Grows each of [structs], class structs, to hold its bases whole, a base before the classes deriving from it. A
- * member laid past a base's end ([placeMember]) grows the base, and a class holding the base whole grows with it,
- * but one holding it split around its own vptr ([BaseSplitter]) holds a run of the base as long as it was then, so
- * would stay shorter than its own base: a base of nothing but its vptr leaves the class only that.
+ * member laid past a base's end goes into the base's own tail run ([placeMember]), which each deriving class holds
+ * and grows with. But where that run is zero-length, an empty base's, in a class that also ends in its own empty
+ * run at the same offset, Ghidra cannot grow it there, and the class would stay as short as it was.
  */
 fun DataTypeManager.growToHoldBases(structs: Collection<Structure>) {
     val done = mutableSetOf<Structure>()
