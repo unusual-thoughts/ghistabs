@@ -120,6 +120,7 @@ base-access-fn `std::wstreambuf` of `std::wfilebuf`: none, is public
 base-access-fn `time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`: none, is public
 base-access-fn `time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: none, is public
 bases-fn `std::ctype_base` of `std::__ctype_abstract_base<char>`
+bases-fp `?NPKlass_0044936c` of `std::string`
 bases-fp `std::ios` (virtual) of `std::ifstream`
 bases-fp `std::ios` (virtual) of `std::ofstream`
 bases-fp `std::wios` (virtual) of `std::wifstream`
@@ -191,53 +192,11 @@ classes-fn `std::wostream::sentry` (stabs)
 classes-fn `std::wstring::_Alloc_hider` (stabs)
 classes-fn `std::wstring::_Rep` (stabs)
 classes-fn `std::wstring` (stabs)
+classes-fp invented `NPKlass_0044936c` (inferred)
 classes-fp invented `NPKlass_0047f880` (inferred)
 classes-fp invented `NPKlass_0047f960` (inferred)
-fields-fn `TiXmlAttribute`+20:4
-fields-fn `TiXmlAttribute`+24:4
-fields-fn `TiXmlAttribute`+4:4
-fields-fn `TiXmlAttribute`+8:4
-fields-fn `TiXmlBase`+4:4
-fields-fn `TiXmlBase`+8:4
-fields-fn `TiXmlComment`+32:4
-fields-fn `TiXmlComment`+4:4
-fields-fn `TiXmlComment`+8:4
-fields-fn `TiXmlDeclaration`+32:4
-fields-fn `TiXmlDeclaration`+44:4
-fields-fn `TiXmlDeclaration`+48:4
-fields-fn `TiXmlDeclaration`+4:4
-fields-fn `TiXmlDeclaration`+52:4
-fields-fn `TiXmlDeclaration`+8:4
-fields-fn `TiXmlDocument`+32:4
 fields-fn `TiXmlDocument`+44:1
 fields-fn `TiXmlDocument`+48:4
-fields-fn `TiXmlDocument`+4:4
-fields-fn `TiXmlDocument`+52:4
-fields-fn `TiXmlDocument`+60:4
-fields-fn `TiXmlDocument`+64:4
-fields-fn `TiXmlDocument`+8:4
-fields-fn `TiXmlElement`+32:4
-fields-fn `TiXmlElement`+44:4
-fields-fn `TiXmlElement`+48:4
-fields-fn `TiXmlElement`+4:4
-fields-fn `TiXmlElement`+52:4
-fields-fn `TiXmlElement`+56:4
-fields-fn `TiXmlElement`+60:4
-fields-fn `TiXmlElement`+64:4
-fields-fn `TiXmlElement`+68:4
-fields-fn `TiXmlElement`+8:4
-fields-fn `TiXmlNode`+32:4
-fields-fn `TiXmlNode`+4:4
-fields-fn `TiXmlNode`+8:4
-fields-fn `TiXmlPrinter`+12:4
-fields-fn `TiXmlPrinter`+16:4
-fields-fn `TiXmlPrinter`+20:4
-fields-fn `TiXmlText`+32:4
-fields-fn `TiXmlText`+4:4
-fields-fn `TiXmlText`+8:4
-fields-fn `TiXmlUnknown`+32:4
-fields-fn `TiXmlUnknown`+4:4
-fields-fn `TiXmlUnknown`+8:4
 fields-fn `__cxxabiv1::__class_type_info`+4:4
 fields-fn `__cxxabiv1::__si_class_type_info`+4:4
 fields-fn `__cxxabiv1::__si_class_type_info`+8:4
@@ -273,30 +232,19 @@ fields-fn `std::ctype_byname<wchar_t>`+13:128
 fields-fn `std::ctype_byname<wchar_t>`+142:512
 fields-fn `std::ctype_byname<wchar_t>`+654:32
 fields-fn `std::ctype_byname<wchar_t>`+686:32
-fields-fn `std::domain_error`+4:4
 fields-fn `std::fstream`+156:64
 fields-fn `std::ifstream`+152:64
-fields-fn `std::invalid_argument`+4:4
-fields-fn `std::ios_base::failure`+4:4
 fields-fn `std::ios_base`+36:64
 fields-fn `std::ios`+36:64
 fields-fn `std::iostream`+48:64
 fields-fn `std::istream`+44:64
-fields-fn `std::length_error`+4:4
-fields-fn `std::logic_error`+4:4
 fields-fn `std::messages<char>`+12:4
 fields-fn `std::messages<wchar_t>`+12:4
 fields-fn `std::messages_byname<char>`+12:4
 fields-fn `std::messages_byname<wchar_t>`+12:4
 fields-fn `std::ofstream`+148:64
 fields-fn `std::ostream`+40:64
-fields-fn `std::out_of_range`+4:4
-fields-fn `std::overflow_error`+4:4
-fields-fn `std::range_error`+4:4
-fields-fn `std::runtime_error`+4:4
-fields-fn `std::string`+0:4
 fields-fn `std::type_info`+4:4
-fields-fn `std::underflow_error`+4:4
 fields-fn `std::wfstream`+160:64
 fields-fn `std::wifstream`+156:64
 fields-fn `std::wios`+36:64
@@ -782,6 +730,7 @@ methods-fn `std::string::_M_assign` 44b8fc
 methods-fn `std::string::_M_check_length` 422258
 methods-fn `std::string::_M_check` 422e14
 methods-fn `std::string::_M_copy` 44aff0
+methods-fn `std::string::_M_data` 422a58
 methods-fn `std::string::_M_disjunct` 421fa8
 methods-fn `std::string::_M_leak_hard` 4493cc
 methods-fn `std::string::_M_leak` 44b038
@@ -853,6 +802,7 @@ methods-fn `std::string::insert` 44acec
 methods-fn `std::string::insert` 44ae6c
 methods-fn `std::string::insert` 44ae98
 methods-fn `std::string::max_size` 422e98
+methods-fn `std::string::operator+=` 44c8f0
 methods-fn `std::string::operator+=` 44c928
 methods-fn `std::string::operator[]` 422ed0
 methods-fn `std::string::push_back` 44bb98
@@ -1073,9 +1023,11 @@ methods-fn `std::wstreambuf::sputbackc` 465150
 methods-fn `std::wstreambuf::sputc` 464a64
 methods-fn `std::wstreambuf::sputn` 464b08
 methods-fn `std::wstreambuf::sungetc` 464f30
+methods-fp 405cea of `std::string`: is `TiXmlBase`'s
 methods-fp 406eb8 of `TiXmlDocument`: is `TiXmlNode`'s
 methods-fp 41da74 of `TiXmlText`: is `TiXmlNode`'s
 methods-fp 420f34 of `TiXmlElement`: is `TiXmlNode`'s
+methods-fp 4229cc of unmatched `NPKlass_0044936c`: is `std::string`'s
 methods-fp 425750 of `std::filebuf`: is `std::streambuf`'s
 methods-fp 425774 of `std::filebuf`: is `std::streambuf`'s
 methods-fp 4257bc of `std::wfilebuf`: is `std::wstreambuf`'s
@@ -1084,36 +1036,24 @@ methods-fp 43f588 of `std::collate<wchar_t>`: is `std::wstring`'s
 methods-fp 440c9c of `std::collate<wchar_t>`: is `std::wstring`'s
 methods-fp 440e0c of `std::messages<wchar_t>`: is `std::wstring`'s
 methods-fp 441198 of `std::collate<wchar_t>`: is `std::wstring`'s
-methods-fp 44936c of `std::string`: is `std::string::_Alloc_hider`'s
+methods-fp 44936c of unmatched `NPKlass_0044936c`: is `std::string::_Alloc_hider`'s
 methods-fp 44bb98 of `std::collate<char>`: is `std::string`'s
 methods-fp 4525cc of `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`: is `std::filebuf`'s
 methods-fp 454be8 of `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`: is `std::wfilebuf`'s
 methods-fp 47f880 of unmatched `NPKlass_0047f880`
 methods-fp 47f960 of unmatched `NPKlass_0047f960`
 sizes-fn `std::money_base`: none, is 1
-sizes-fn `std::string`: none, is 4
-sizes-fp `TiXmlPrinter`: 12, is 24
 sizes-fp `__cxxabiv1::__class_type_info`: 4, is 8
 sizes-fp `__cxxabiv1::__si_class_type_info`: 4, is 12
 sizes-fp `__cxxabiv1::__vmi_class_type_info`: 4, is 24
 sizes-fp `std::__basic_file<char>`: 5, is 8
 sizes-fp `std::ctype<wchar_t>`: 16, is 720
 sizes-fp `std::ctype_byname<wchar_t>`: 16, is 720
-sizes-fp `std::domain_error`: 4, is 8
-sizes-fp `std::invalid_argument`: 4, is 8
-sizes-fp `std::ios_base::failure`: 4, is 8
-sizes-fp `std::length_error`: 4, is 8
-sizes-fp `std::logic_error`: 4, is 8
 sizes-fp `std::messages<char>`: 12, is 16
 sizes-fp `std::messages<wchar_t>`: 12, is 16
 sizes-fp `std::messages_byname<char>`: 12, is 16
 sizes-fp `std::messages_byname<wchar_t>`: 12, is 16
-sizes-fp `std::out_of_range`: 4, is 8
-sizes-fp `std::overflow_error`: 4, is 8
-sizes-fp `std::range_error`: 4, is 8
-sizes-fp `std::runtime_error`: 4, is 8
 sizes-fp `std::type_info`: 4, is 8
-sizes-fp `std::underflow_error`: 4, is 8
 structors-fn 4464c8 of `std::istream`
 structors-fn 448d1c of `std::ostream`
 structors-fn 44bc98 of `std::string`
