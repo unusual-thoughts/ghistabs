@@ -84,7 +84,6 @@ bases-fp `std::locale::facet` of `std::codecvt<char,char,int>`
 bases-fp `std::locale::facet` of `std::codecvt<wchar_t,char,int>`
 bases-fp `std::locale::facet` of `std::ctype<wchar_t>`
 classes-fp invented `Klass_0049640c` (inferred, vftable 0049640c)
-classes-fp invented `Klass_0049644c` (inferred, vftable 0049644c)
 classes-fp invented `Klass_0049648c` (inferred, vftable 0049648c)
 classes-fp invented `Klass_004964cc` (inferred, vftable 004964cc)
 classes-fp invented `Klass_0049650c` (inferred, vftable 0049650c)
@@ -530,7 +529,6 @@ methods-fp 477c30 of `std::ctype_byname<wchar_t>`: is `std::ctype<wchar_t>`'s
 methods-fp 47c070 of `std::codecvt_byname<char,char,int>`: is `std::codecvt<char,char,int>`'s
 methods-fp 47c550 of `std::codecvt_byname<wchar_t,char,int>`: is `std::codecvt<wchar_t,char,int>`'s
 polymorphic-classes-fp invented `Klass_0049640c` (inferred, vftable 0049640c)
-polymorphic-classes-fp invented `Klass_0049644c` (inferred, vftable 0049644c)
 polymorphic-classes-fp invented `Klass_0049648c` (inferred, vftable 0049648c)
 polymorphic-classes-fp invented `Klass_004964cc` (inferred, vftable 004964cc)
 polymorphic-classes-fp invented `Klass_0049650c` (inferred, vftable 0049650c)
