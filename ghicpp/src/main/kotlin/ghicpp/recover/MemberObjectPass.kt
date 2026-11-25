@@ -119,6 +119,7 @@ class MemberObjectPass(
     fun run(found: FoundStructors, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
         val objects = MemberObjects(found, monitor)
         for (m in objects.drafts) m.buildClass()
+        val derived = addEmptyBases(objects.emptyBases.mapValues { (_, bases) -> bases.map { it.merged } })
         val classes = objects.drafts.filter { it.cls != null }
         val sizes = objects.sizes(classes)
         monitor.initialize(classes.size.toLong(), "Naming member object classes' constructors and destructors")
@@ -151,7 +152,7 @@ class MemberObjectPass(
         }
         // The members grew the classes they went past the end of, and with them those deriving from them.
         dtm.growToHoldBases(classStructs())
-        writeRecords(plainClasses)
+        writeRecords(plainClasses + derived)
         return classes.size
     }
 
@@ -184,7 +185,13 @@ class MemberObjectPass(
         /** The classes with no vtable, each once. */
         val drafts: List<NonPolymorphicClass>
 
+        /** The empty bases of [found]'s polymorphic classes, each class's ([emptyBases]). */
+        val emptyBases: Map<ClassDecl, List<NonPolymorphicClass>>
+
         init {
+            // Before anything is decompiled: it gives the empty functions a `this`, which their callers' code shows.
+            emptyBases = emptyBases()
+            for (m in emptyBases.values.flatten()) m.ctors.forEach { drafted.putIfAbsent(it, m) }
             val heap = if (allocations) allocated else emptyList()
             for (m in heap) m.ctors.forEach { drafted[it] = m }
             // A base's before its deriving classes', so that a class's own fields run follows its bases' grown
@@ -230,6 +237,30 @@ class MemberObjectPass(
                 }
             }
             return size
+        }
+
+        /**
+         * The empty bases of the polymorphic classes [found] has constructors of. Such a class keeps its vptr at
+         * `this` + 0, so a class with no vtable can only sit there too if it takes no bytes: an empty base. Its
+         * constructor does nothing, so its body is a bare return ([hasEmptyBody]), and it is only ever called
+         * ([isAddressTaken]). The decompiler then sees no parameter, and so no `this` passed at its calls. Each
+         * such function is given one first, and the class's constructors read again: those calling it on
+         * `this` + 0 have an empty base it builds, one class for each.
+         */
+        private fun emptyBases(): Map<ClassDecl, List<NonPolymorphicClass>> {
+            val ctors = found.roles.filterValues { (cls, role) -> role == CONSTRUCTOR && cls.vftables.isNotEmpty() }
+                .keys
+            val empty = ctors.flatMap { it.getCalledFunctions(monitor) }.distinct()
+                .filter { it !in found.roles && it !in found.folded && !it.isExternal && it.hasEmptyBody() }
+                .filterNot { it.isAddressTaken() }
+            if (empty.isEmpty()) return emptyMap()
+            for (f in empty.filter { it.parameterCount == 0 }) runCatching { f.giveThis() }
+            val callers = ctors.filter { f -> f.getCalledFunctions(monitor).any { it in empty } }
+            val uses = dissector.readCalls(callers, monitor, "Decompiling constructors that call empty functions")
+            val byFunction = empty.associateWith { f -> NonPolymorphicClass().also { it.ctors += f } }
+            return callers.groupBy({ found.roles.getValue(it).first }) { f ->
+                uses.subobjectCalls[f].orEmpty()[0L].orEmpty().mapNotNull(byFunction::get)
+            }.mapValues { (_, bases) -> bases.flatten().distinct() }.filterValues { it.isNotEmpty() }
         }
 
         /** [structors] with what each calls on `this` + k, decompiled. */
@@ -313,6 +344,25 @@ class MemberObjectPass(
                 }
             }
     }
+
+    /**
+     * Whether code or data takes [this]'s address rather than calling it: a vtable slot, as a compiler shares one
+     * empty function among the no-op virtuals of many classes. A constructor is only ever called.
+     */
+    private fun Function.isAddressTaken() = program.addressTakers(entryPoint).any()
+
+    /** Adds each of [empty]'s classes as a base at offset 0 of its class, and returns the classes given one. */
+    private fun addEmptyBases(empty: Map<ClassDecl, List<NonPolymorphicClass>>): List<ClassDecl> =
+        empty.mapNotNull { (cls, bases) ->
+            val own = (cls as? PlainClass)?.bases ?: return@mapNotNull null
+            val added = bases.mapNotNull { it.cls }.distinct()
+                .filter { b -> b != cls && own.none { it.cls == b } }
+                .onEach { b ->
+                    own += ClassBase(b, isVirtual = false, access = null, 0L)
+                    debug("base-inferred-empty", "${cls.name} : ${b.name}, off the constructor it calls on `this`")
+                }
+            cls.takeIf { added.isNotEmpty() }
+        }
 
     /** The class structs the class passes made: each named as its class's category is, under the classes' root. */
     private fun classStructs() = dtm.allStructures.asSequence().filter {

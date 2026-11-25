@@ -243,13 +243,15 @@ fun Structure.componentsOverlapping(offset: Int, length: Int) = componentsOverla
 
 /**
  * Lays [dt] at [at] over whatever fields are there, growing this to hold it. The fields go first, as
- * [Structure.replaceAtOffset] takes only the one at [at] and the undefined bytes after it.
+ * [Structure.replaceAtOffset] takes only the one at [at] and the undefined bytes after it, and so do the zero-length
+ * ones inside it, which it can't hold: those at [at] and right past its end stay.
  */
 fun Structure.lay(at: Int, dt: DataType, name: String?, comment: String?): DataTypeComponent {
     val range = at.withLength(dt.length)
     if (range.last >= length) growStructure(range.last + 1 - length)
+    val inside = definedComponents.filter { it.length == 0 && it.offset > at && it.offset <= range.last }
     // By ordinal: clearing by offset would take a zero-length component there too.
-    componentsOverlapping(range).sortedByDescending { it.ordinal }.forEach { clearComponent(it.ordinal) }
+    (componentsOverlapping(range) + inside).sortedByDescending { it.ordinal }.forEach { clearComponent(it.ordinal) }
     return replaceAtOffset(at, dt, dt.length, name, comment)
 }
 
