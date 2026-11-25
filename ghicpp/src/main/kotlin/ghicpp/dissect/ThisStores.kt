@@ -43,7 +43,8 @@ internal fun Stores.withFills(fills: Stores): Stores {
  * The [classes] whose vtables a function stores into `this` where they belong, and what it calls on `this` or a
  * subobject of it [before] the first of those stores and [after] the last. [elsewhere] maps each other offset
  * into `this` to the classes whose primary table it stores there, in store order. [vbases] holds the offsets it
- * stores at through a vbtable, which are its virtual bases' offsets.
+ * stores at through a vbtable, which are its virtual bases' offsets. [afterOffsets] are the offsets into `this` of
+ * the calls it makes after the last store, in address order.
  */
 data class VptrStores(
     val classes: Set<ClassDecl> = emptySet(),
@@ -51,6 +52,7 @@ data class VptrStores(
     val after: Set<Function> = emptySet(),
     val elsewhere: Map<Long, List<ClassDecl>> = emptyMap(),
     val vbases: Set<Long> = emptySet(),
+    val afterOffsets: List<Long> = emptyList(),
 )
 
 /**
@@ -150,9 +152,31 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
      * storing its vptr, and a destructor destroys them after, so a storer calling a base's storer before
      * its stores builds, and one calling it only after destroys; that base's storer, and what a destructor
      * calls on `this`, take the same role. A storer calling known constructors and no destructor builds, and
-     * the reverse destroys. Every storer left builds.
+     * the reverse destroys. A storer none of that sorts destroys if it calls on its members from the last down
+     * ([destroysDownwards]), and that may sort more. Every storer left builds.
      */
     private fun MutableMap<Function, Pair<ClassDecl, StructorRole>>.sortByCalls(owners: Map<Function, ClassDecl>) {
+        do {
+            sortByBaseCalls(owners)
+            val downwards = owners.filter { (f, _) -> f !in this && stores.getValue(f).destroysDownwards() }
+            for ((f, cls) in downwards) this[f] = cls to DESTRUCTOR
+        } while (downwards.isNotEmpty())
+        for ((f, cls) in owners) putIfAbsent(f, cls to CONSTRUCTOR)
+    }
+
+    /**
+     * Whether the calls a storer makes on its members after its stores, each offset where it first calls on one,
+     * go from the highest offset down, two or more. A constructor builds its members in the order they are laid,
+     * and a destructor destroys them the other way. A landing pad destroying the members built again comes later.
+     * A call on `this` + 0 is a method of the class's own or a base's, which a constructor's body calls after
+     * building its members, so it says nothing of the order.
+     */
+    private fun VptrStores.destroysDownwards(): Boolean {
+        val firsts = afterOffsets.filter { it > 0 }.distinct()
+        return firsts.size >= 2 && firsts.zipWithNext().all { (a, b) -> a > b }
+    }
+
+    private fun MutableMap<Function, Pair<ClassDecl, StructorRole>>.sortByBaseCalls(owners: Map<Function, ClassDecl>) {
         fun basesOf(cls: ClassDecl, fs: Set<Function>?, not: StructorRole) = fs.orEmpty().filter { g ->
             owners[g]?.let { it != cls && cls.derivesFrom(it) } == true && this[g]?.second != not
         }
@@ -178,7 +202,6 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
                 for (g in bases) putIfAbsent(g, owners.getValue(g) to role)
             }
         } while (size != known)
-        for ((f, cls) in owners) putIfAbsent(f, cls to CONSTRUCTOR)
     }
 
     /** [CONSTRUCTOR] if [f] calls known constructors and no destructor, [DESTRUCTOR] for the reverse. */

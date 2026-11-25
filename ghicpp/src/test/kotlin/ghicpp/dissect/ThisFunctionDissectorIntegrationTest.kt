@@ -39,9 +39,21 @@ class ThisFunctionDissectorIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         builder.createEmptyFunction(name, at, 1, DataType.DEFAULT)
     }
 
-    /** A function storing [classes]' vptrs, calling the functions named [before] and [after] around the stores. */
-    private fun stores(vararg classes: ClassDecl, before: Set<String> = emptySet(), after: Set<String> = emptySet()) =
-        VptrStores(classes.toSet(), before.mapTo(mutableSetOf(), ::fn), after.mapTo(mutableSetOf(), ::fn))
+    /**
+     * A function storing [classes]' vptrs, calling the functions named [before] and [after] around the stores, and
+     * after them functions on `this` at [afterOffsets], in that order.
+     */
+    private fun stores(
+        vararg classes: ClassDecl,
+        before: Set<String> = emptySet(),
+        after: Set<String> = emptySet(),
+        afterOffsets: List<Long> = emptyList(),
+    ) = VptrStores(
+        classes.toSet(),
+        before.mapTo(mutableSetOf(), ::fn),
+        after.mapTo(mutableSetOf(), ::fn),
+        afterOffsets = afterOffsets,
+    )
 
     private fun structors(
         storers: Map<String, VptrStores>,
@@ -180,6 +192,47 @@ class ThisFunctionDissectorIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             "xDtor" to (x to DESTRUCTOR),
             "xCtor" to (x to CONSTRUCTOR),
         )
+    }
+
+    @Test
+    fun `a storer that calls on its members from the last down destroys, and one calling up builds`() {
+        // X's destructor isn't virtual, and its base and members leave no other trace: a constructor builds the
+        // members in the order they are laid, and a destructor destroys them the other way
+        val storers = mapOf(
+            "ctor" to stores(x, afterOffsets = listOf(4, 8)),
+            "dtor" to stores(x, afterOffsets = listOf(8, 4)),
+        )
+        structors(storers, emptyMap()) mustBe mapOf("ctor" to (x to CONSTRUCTOR), "dtor" to (x to DESTRUCTOR))
+    }
+
+    @Test
+    fun `a landing pad destroying a member again still leaves the order its first calls take`() {
+        // The constructor's pad destroys the member at 4 where the one at 8 throws; the destructor's where 8's does
+        val storers = mapOf(
+            "ctor" to stores(x, afterOffsets = listOf(4, 8, 4)),
+            "dtor" to stores(x, afterOffsets = listOf(8, 4, 4)),
+        )
+        structors(storers, emptyMap()) mustBe mapOf("ctor" to (x to CONSTRUCTOR), "dtor" to (x to DESTRUCTOR))
+    }
+
+    @Test
+    fun `a constructor's body calling a method on this after building its members still builds`() {
+        // The method, on `this` + 0, comes after the member at 0x28; the destructor destroys 8, then 4
+        val storers = mapOf(
+            "ctor" to stores(x, afterOffsets = listOf(0x28, 0x28, 0)),
+            "dtor" to stores(x, afterOffsets = listOf(0, 8, 4)),
+        )
+        structors(storers, emptyMap()) mustBe mapOf("ctor" to (x to CONSTRUCTOR), "dtor" to (x to DESTRUCTOR))
+    }
+
+    @Test
+    fun `the order of a storer's member calls decides only what nothing else does`() {
+        // B's constructor calls A's before its store, then on its members from the last down
+        val storers = mapOf(
+            "ctor" to stores(b, before = setOf("baseCtor"), afterOffsets = listOf(8, 4)),
+            "baseCtor" to stores(a),
+        )
+        structors(storers, emptyMap())["ctor"] mustBe (b to CONSTRUCTOR)
     }
 
     private companion object {
