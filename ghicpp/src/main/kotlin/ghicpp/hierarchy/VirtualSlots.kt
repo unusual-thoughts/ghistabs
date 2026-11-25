@@ -3,6 +3,7 @@
 package ghicpp.hierarchy
 
 import ghicpp.ClassNaming
+import ghicpp.ClassNaming.CONSTRUCTION_INFIX
 import ghicpp.ClassRecordSource
 import ghicpp.CxxAbi
 import ghicpp.abi.functionSlots
@@ -454,7 +455,7 @@ internal fun Program.slotPointers(vftable: Address): List<Address> {
  */
 internal fun Program.constructionSlotTargets(ns: Namespace): Set<Address> =
     symbolTable.getChildren(ns.parentNamespace.symbol).iterator().asSequence()
-        .filter { it.symbolType == SymbolType.NAMESPACE && it.name.startsWith("${ns.name}-in-") }
+        .filter { it.symbolType == SymbolType.NAMESPACE && it.name.startsWith("${ns.name}$CONSTRUCTION_INFIX") }
         .mapNotNull { it.`object` as? Namespace }
         .flatMap { symbolTable.getSymbols(it).iterator().asSequence() }
         .filter { ClassNaming.isVftableLabel(it.name) }

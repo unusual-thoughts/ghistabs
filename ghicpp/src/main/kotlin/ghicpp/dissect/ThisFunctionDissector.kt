@@ -167,7 +167,7 @@ class ThisFunctionDissector(
             val filled = fill.fillThis(high, thisAt)
             val virtual = writes[func]?.let { high.thisVariable(thisAt) }
                 ?.let { high.storesThroughVbtables(it) }.orEmpty()
-            val stores = writes[func]?.let { filled.vptrStores(it, calls, virtual) }
+            val stores = writes[func]?.let { filled.vptrStores(it, virtual) }
             val fills = if (fillArrays) high.fills(intoThis).associate { it.second } else emptyMap()
             cache.reads[key(func)] = DissectionCache.Dissection(
                 stores,
@@ -360,38 +360,18 @@ class ThisFunctionDissector(
         .firstOrNull { it.isInput && it.address == thisAt }?.high
 
     /**
-     * Which of the vptrs [at] holds the function filled stores through `this`, at the offset each belongs at,
-     * and which of its [calls] come before the first of those stores and after the last, by address. [virtual]
-     * maps the address of each store it makes through a vbtable to the store's offset. The structure fill can't
-     * follow those stores, so they are passed in separately.
+     * The stores of the vptrs [at] holds that the function filled makes through `this`, in address order.
+     * [virtual] maps the address of each store it makes through a vbtable to the store's offset. The structure
+     * fill can't follow those stores, so they are passed in separately.
      */
     private fun FillOutStructureHelper?.vptrStores(
         at: Map<Address, List<Pair<ClassDecl, Long>>>,
-        calls: List<ObjectCall>,
-        virtual: Map<Address, Long> = emptyMap(),
-    ): VptrStores {
+        virtual: Map<Address, Long>,
+    ): List<VptrStore> {
         val stores = this?.storePcodeOps.orEmpty().map { it.pcodeOp.seqnum.target to it.offset } + virtual.toList()
-        val hits = stores.mapNotNull { (where, offset) ->
-            val hit = at[where].orEmpty().filter { it.second == offset }.map { it.first }
-            hit.takeIf { it.isNotEmpty() }?.let { where to it }
+        return stores.sortedBy { it.first }.flatMap { (where, offset) ->
+            at[where].orEmpty().map { (cls, home) -> VptrStore(where, offset, cls, home, where in virtual) }
         }
-        // A primary table stored past `this` + 0 is in the wrong place for a primary. It is an MSVC class's own
-        // table for a base subobject, seeded as a separate class because no offset_to_top groups it with its primary.
-        val elsewhere = stores.filter { it.second > 0 }.sortedBy { it.first }.flatMap { (where, offset) ->
-            at[where].orEmpty().filter { it.second == 0L }.map { offset to it.first }
-        }.groupBy({ it.first }, { it.second })
-        val classes = hits.flatMapTo(mutableSetOf()) { it.second }
-        val vbases = virtual.values.toSet()
-        val first = hits.minOfOrNull { it.first } ?: return VptrStores(classes, elsewhere = elsewhere, vbases = vbases)
-        val last = hits.maxOf { it.first }
-        return VptrStores(
-            classes,
-            before = calls.filter { it.at < first }.mapTo(mutableSetOf()) { it.callee },
-            after = calls.filter { it.at > last }.mapTo(mutableSetOf()) { it.callee },
-            elsewhere = elsewhere,
-            vbases = vbases,
-            afterOffsets = calls.filter { it.at > last }.sortedBy { it.at }.map { it.offset },
-        )
     }
 
     /** How far past what [into] says, `this` say, [this] points; null if it points into something else. */
@@ -431,7 +411,7 @@ class DissectionCache(
 
     /** One function's share of [Dissections]. */
     internal class Dissection(
-        val stores: VptrStores? = null,
+        val stores: List<VptrStore>? = null,
         val subobjectCalls: Map<Long, Set<Function>> = emptyMap(),
         val thisStores: Stores = emptyMap(),
         val inlined: List<InlinedConstruction> = emptyList(),

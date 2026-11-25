@@ -57,15 +57,20 @@ private fun Varnode.isConstantPointer(): Boolean = isConstant ||
 
 /**
  * A value as [VbaseReader] reads it: [root] plus [offset], or just the constant [offset] when [root] is null.
- * [vbtable] means the value is the address of a vbtable that `self` holds. [throughVbtable] means a vbtable entry
- * was added into it.
+ * With [vbtable], the value is [offset] bytes into that vbtable, one that `self` holds. [throughVbtable] means a
+ * vbtable entry was added into it.
  */
-private data class Read(val root: HighVariable?, val offset: Long, val throughVbtable: Boolean, val vbtable: Boolean)
+private data class Read(
+    val root: HighVariable?,
+    val offset: Long,
+    val throughVbtable: Boolean = false,
+    val vbtable: Address? = null,
+)
 
 /**
  * Reads a pointer's value as the variable it points into plus a constant offset. [vbtables] holds the vbtables
- * the function stored into [self], by offset. Loading one back gives that vbtable's address, and loading an
- * entry from it gives the entry's value.
+ * the function stored into [self], by offset. Loading one back gives that vbtable, and loading an entry from it
+ * gives the entry's value.
  */
 private class VbaseReader(
     private val program: Program,
@@ -74,8 +79,8 @@ private class VbaseReader(
 ) {
     fun read(v: Varnode, depth: Int = 0): Read? {
         if (depth > MAX_DEPTH) return null
-        if (v.isConstant) return Read(null, v.offset, throughVbtable = false, vbtable = false)
-        if (v.high == self) return Read(self, 0, throughVbtable = false, vbtable = false)
+        if (v.isConstant) return Read(null, v.offset)
+        if (v.high == self) return Read(self, 0)
         val op = v.def ?: return null
         return when (op.opcode) {
             PcodeOp.CAST, PcodeOp.COPY -> read(op.getInput(0), depth + 1)
@@ -84,7 +89,8 @@ private class VbaseReader(
 
             PcodeOp.PTRADD -> {
                 val size = op.getInput(2).takeIf { it.isConstant }?.offset ?: return null
-                val index = read(op.getInput(1), depth + 1)?.takeIf { it.root == null && !it.vbtable } ?: return null
+                val index = read(op.getInput(1), depth + 1)?.takeIf { it.root == null && it.vbtable == null }
+                    ?: return null
                 sum(read(op.getInput(0), depth + 1), index.copy(offset = index.offset * size))
             }
 
@@ -97,39 +103,30 @@ private class VbaseReader(
     private fun sum(a: Read?, b: Read?): Read? {
         if (a == null || b == null) return null
         // The sum of two pointers, or of two vbtable addresses, doesn't point anywhere.
-        if ((a.root != null && b.root != null) || (a.vbtable && b.vbtable)) return null
-        return Read(a.root ?: b.root, a.offset + b.offset, a.throughVbtable || b.throughVbtable, a.vbtable || b.vbtable)
+        if ((a.root != null && b.root != null) || (a.vbtable != null && b.vbtable != null)) return null
+        return Read(a.root ?: b.root, a.offset + b.offset, a.throughVbtable || b.throughVbtable, a.vbtable ?: b.vbtable)
     }
 
     /** What [from] loads: the vbtable stored at `self` + pdisp, or one of that vbtable's entries after the first. */
     private fun load(from: Read): Read? = when {
-        from.root == self && !from.throughVbtable -> vbtables[from.offset]?.let {
-            Read(null, it.offset, throughVbtable = false, vbtable = true)
-        }
+        from.root == self && !from.throughVbtable && from.vbtable == null ->
+            vbtables[from.offset]?.let { Read(null, 0, vbtable = it) }
 
-        from.root == null && from.vbtable -> vbtableEntry(from.offset)?.let {
-            Read(null, it, throughVbtable = true, vbtable = false)
-        }
+        from.root == null && from.vbtable != null ->
+            vbtableEntry(from.vbtable, from.offset)?.let { Read(null, it, throughVbtable = true) }
 
         else -> null
     }
 
     /**
-     * The vbase offset stored at [at], an entry after the first in one of [vbtables]. A real entry is positive,
-     * because a virtual base sits after the vbptr. It is also small, word-aligned, and not a code address. Returns
-     * null when [at] is further into the vbtable than any vbtable's entries reach.
+     * The vbase offset stored [at] bytes into [vbtable], an entry after the first. A real entry is positive,
+     * because a virtual base sits after the vbptr. It is also small and word-aligned, which no code address is.
      */
-    private fun vbtableEntry(at: Long): Long? {
-        val table = vbtables.values.filter { it.offset < at && at - it.offset <= MAX_ENTRIES * 4 }
-            .maxByOrNull { it.offset } ?: return null
-        if ((at - table.offset) % 4 != 0L) return null
-        val entry = runCatching { program.memory.getInt(table.add(at - table.offset)).toLong() }.getOrNull()
-        return entry?.takeIf { it > 0 && it < MAX_VBASE_OFFSET && it % 4 == 0L && !isCode(it) }
+    private fun vbtableEntry(vbtable: Address, at: Long): Long? {
+        if (at <= 0 || at > MAX_ENTRIES * 4 || at % 4 != 0L) return null
+        val entry = runCatching { program.memory.getInt(vbtable.add(at)).toLong() }.getOrNull()
+        return entry?.takeIf { it > 0 && it < MAX_VBASE_OFFSET && it % 4 == 0L }
     }
-
-    /** Whether [value] is the address of code. A vtable's slot holds one, but a vbtable's entry never does. */
-    private fun isCode(value: Long) = runCatching { program.addressFactory.defaultAddressSpace.getAddress(value) }
-        .getOrNull()?.let { program.memory.getBlock(it)?.isExecute } == true
 
     private companion object {
         const val MAX_DEPTH = 24
