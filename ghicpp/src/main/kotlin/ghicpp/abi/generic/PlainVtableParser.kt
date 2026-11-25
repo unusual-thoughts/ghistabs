@@ -10,6 +10,7 @@ import ghicpp.dissect.DissectingParser
 import ghicpp.dissect.DissectionCache
 import ghicpp.dissect.Dissections
 import ghicpp.dissect.ThisFunctionDissector
+import ghicpp.recover.GenericVftableFinder
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -368,21 +369,15 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
 
     override fun parse(monitor: TaskMonitor): ClassPassInput {
         monitor.message = "Reading vftable labels"
-        // The primary first, then its secondaries ([ClassNaming.plainSecondaryLabel]) by their subobjects' offsets.
-        val classes = symbols.getSymbols(ClassNaming.VFTABLE).iterator().asSequence()
-            .filter { it.isPlain() }
-            .groupBy { it.parentNamespace.id }
-            .values.map { labels ->
-                val ns = labels.first().parentNamespace
-                val secondaries = symbols.getSymbols(ns).iterator().asSequence()
-                    .mapNotNull { sym -> ClassNaming.plainSubobjectOffset(sym.name)?.let { it to sym } }
-                    .sortedBy { it.first }.map { it.second }
-                PlainClass(ns, (labels + secondaries).map { PlainVtables.recordAt(program, it.address) })
-            }
+        var classes = readClasses()
         // Look up the slots' functions before reading the storers. Looking one up can create it, which changes
         // the program, and the class pass would then have to decompile the storers again.
-        val targets = classes.associateWith { c ->
-            c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty()
+        var targets = targetsOf(classes)
+        var uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
+        if (GenericVftableFinder(program, sink = sink).regroup(secondaries(classes, uses)) > 0) {
+            classes = readClasses()
+            targets = targetsOf(classes)
+            uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
         }
         val own = targets.mapValues { (_, ats) ->
             ats.map { at -> at.takeIf { it.offset != 0L }?.let { program.slotFunction(it, PlainVtables) } }
@@ -393,7 +388,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         // the class pass reads the same functions next, through the same cache.
         val held = slots.values.flatMapTo(mutableSetOf()) { it.filterNotNull() }
         val holders = holders(classes)
-        val uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor, held)
+        uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor, held)
         monitor.message = "Inferring bases from constructors"
         BaseCandidates(
             slots,
@@ -401,6 +396,55 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             sink,
         ).inferBases(classes, uses, classes.associateWith(::subobjects))
         return ClassPassInput(classes, classes, holders)
+    }
+
+    /** The slots of each class's primary table, with its null ones, its functions looked up and so created. */
+    private fun targetsOf(classes: List<PlainClass>): Map<PlainClass, List<Address>> = classes.associateWith { c ->
+        c.vftables.firstOrNull()?.let { slotsOf(it, keepNulls = true) }.orEmpty()
+            .onEach { at -> at.takeIf { it.offset != 0L }?.let { program.slotFunction(it, PlainVtables) } }
+    }
+
+    /** The classes of the plain `vftable` labels: the primary first, then its secondaries by their offsets. */
+    private fun readClasses(): List<PlainClass> = symbols.getSymbols(ClassNaming.VFTABLE).iterator().asSequence()
+        .filter { it.isPlain() }
+        .groupBy { it.parentNamespace.id }
+        .values.map { labels ->
+            val ns = labels.first().parentNamespace
+            val secondaries = symbols.getSymbols(ns).iterator().asSequence()
+                .mapNotNull { sym -> ClassNaming.plainSubobjectOffset(sym.name)?.let { it to sym } }
+                .sortedBy { it.first }.map { it.second }
+            PlainClass(ns, (labels + secondaries).map { PlainVtables.recordAt(program, it.address) })
+        }
+
+    /**
+     * The classes of [classes] that are another's secondary table, each with that class and the offset of its
+     * subobject: a table only ever stored past `this` + 0, the last there, by functions that all store one class's
+     * primary at `this` + 0 and have no table of its at that offset already. An MSVC constructor stores a class's
+     * table for each base subobject past the first that way, over the one its base's constructor stored there; no
+     * `offset_to_top` in front of it, as an Itanium group has, says whose it is.
+     */
+    private fun secondaries(classes: List<PlainClass>, uses: Dissections): Map<Address, Pair<GhidraClass, Long>> {
+        val ownStored = uses.stores.values.flatMapTo(mutableSetOf()) { it.classes }
+        val placements = mutableMapOf<PlainClass, MutableSet<Pair<PlainClass, Long>>>()
+        val notLast = mutableSetOf<ClassDecl>()
+        for (stores in uses.stores.values) {
+            for ((offset, stored) in stores.elsewhere) {
+                notLast += stored.dropLast(1)
+                val table = stored.last() as? PlainClass ?: continue
+                // Of the primaries stored at `this` + 0, a base's inlined before, the longest: a class's table holds
+                // its bases' slots.
+                val longest = stores.classes.groupBy { c -> c.vftables.firstOrNull()?.slots(program)?.size ?: 0 }
+                    .maxByOrNull { it.key }?.value
+                val owner = longest?.singleOrNull() as? PlainClass
+                val placement = owner?.takeIf { o -> o.vftables.none { it.vfptrOffset(program) == offset } }
+                placements.getOrPut(table) { mutableSetOf() } += (placement ?: table) to offset
+            }
+        }
+        return classes.filter { it.vftables.size == 1 && it !in ownStored && it !in notLast }.mapNotNull { cls ->
+            val (owner, offset) = placements[cls]?.singleOrNull()?.takeIf { it.first != cls } ?: return@mapNotNull null
+            val ns = owner.ns as? GhidraClass ?: return@mapNotNull null
+            cls.vftables.single().addressPoint to (ns to offset)
+        }.toMap()
     }
 
     /**
