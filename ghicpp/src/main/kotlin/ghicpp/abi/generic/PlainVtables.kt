@@ -8,11 +8,11 @@ import ghicpp.abi.itanium.Itanium
 import ghicpp.abi.mangledBy
 import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.structorOf
+import ghicpp.abi.vtableHeader
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidrakt.pointerAt
-import ghidrakt.signedWordBefore
 
 /**
  * Vtables known only as tables of pointers to code, with no RTTI to say whose ABI laid them, such as those
@@ -53,13 +53,13 @@ object PlainVtables : CxxAbi {
  * Whether an Itanium vtable header comes before [table]: an `offset_to_top` that a subobject could have, then
  * an RTTI word ([isRttiWord]).
  */
-fun Program.hasVtableHeader(table: Address): Boolean {
-    val top = table.signedWordBefore(this, 2) ?: return false
-    return top <= 0 && -top < PlainVtables.MAX_SUBOBJECT_OFFSET &&
-        isRttiWord(table.subtractNoWrap(defaultPointerSize.toLong()))
-}
-
-/** Whether the word at [at] is an RTTI word: null, with no RTTI, or a pointer to data, a typeinfo. */
-fun Program.isRttiWord(at: Address) = pointerAt(at)?.let { p ->
-    p.offset == 0L || memory.getBlock(p)?.let { it.isInitialized && !it.isExecute } == true
+fun Program.hasVtableHeader(table: Address): Boolean = vtableHeader(table)?.let {
+    it.offsetToTop <= 0 && -it.offsetToTop < PlainVtables.MAX_SUBOBJECT_OFFSET && isRttiPointer(it.rtti)
 } == true
+
+/** Whether the word at [at] is an RTTI word ([isRttiPointer]). */
+fun Program.isRttiWord(at: Address) = pointerAt(at)?.let(::isRttiPointer) == true
+
+/** Whether [p] may be an RTTI word's value: address 0, with no RTTI, or a pointer to data, a typeinfo. */
+fun Program.isRttiPointer(p: Address) =
+    p.offset == 0L || memory.getBlock(p)?.let { it.isInitialized && !it.isExecute } == true

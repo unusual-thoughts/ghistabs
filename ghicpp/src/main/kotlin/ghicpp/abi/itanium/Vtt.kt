@@ -1,10 +1,10 @@
 package ghicpp.abi.itanium
 
+import ghicpp.ClassNaming.CONSTRUCTION_INFIX
+import ghicpp.abi.vtableAt
 import ghicpp.leafName
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.listing.Program
-import ghidra.program.model.scalar.Scalar
 import ghidrakt.*
 
 /**
@@ -41,7 +41,6 @@ internal class VttReader(
     private val dynamic: Set<Address>,
 ) {
     private val ptr = program.defaultPointerSize.toLong()
-    private val word = IntegerDataType.getSignedDataType(program.defaultPointerSize, null)
 
     /** A subobject of the VTT's class, at [delta] from the nearest virtual base above it ([anchor]) or the class. */
     private inner class Subobject(val typeinfo: Address, val isVirtual: Boolean, val parent: Subobject?, delta: Long) {
@@ -106,38 +105,30 @@ internal class VttReader(
         if (top) preorder(sub).filter { it.isVirtual }.forEach { addVtt(it, top = false) }
     }
 
-    /** The `offset_to_top` word in front of what the VTT entry at [at] points at, and the rtti word. */
-    private fun recordOf(at: Address): Pair<Address, Address?>? {
-        val top = program.pointerAt(at)?.let { runCatching { it.subtractNoWrap(2 * ptr) }.getOrNull() } ?: return null
-        return top to runCatching { program.pointerAt(top.add(ptr)) }.getOrNull()
-    }
-
-    private fun offsetToTop(top: Address) = program.valueAt<Scalar>(top, word)?.signedValue
-
     /** What [entry] points into, as `vtable for X-in-D` or `construction vtable for B-in-D`. */
     private fun comment(entry: Entry, root: Subobject): String {
-        val owner = if (entry.owner === root) "${root.shown}" else "${entry.owner.shown}-in-${root.shown}"
+        val inRoot = "$CONSTRUCTION_INFIX${root.shown}"
+        val owner = if (entry.owner === root) "${root.shown}" else "${entry.owner.shown}$inRoot"
         return when {
             entry.head && entry.owner === root -> "vtable for $owner"
             entry.head -> "construction vtable for $owner"
-            entry.owner === root -> "vtable for ${entry.subobject.shown}-in-$owner"
-            else -> "vtable for ${entry.subobject.shown}-in-$owner, in its construction vtable"
+            entry.owner === root -> "vtable for ${entry.subobject.shown}$CONSTRUCTION_INFIX$owner"
+            else -> "vtable for ${entry.subobject.shown}$CONSTRUCTION_INFIX$owner, in its construction vtable"
         }
     }
 
     /** The VTT at [at], or null if it isn't the one the typeinfo of the class its first word names describes. */
     fun vttAt(at: Address): Vtt? {
-        val typeinfo = recordOf(at)?.second ?: return null
+        val typeinfo = program.vtableAt(at)?.second?.rtti ?: return null
         val root = hierarchy(typeinfo)?.takeIf { it.hasVirtualBases } ?: return null
         val entries = buildList { addVtt(root, top = true) }
 
         val anchorOffset = hashMapOf(root to 0L)
         val records = entries.mapIndexed { i, entry ->
-            val (record, rtti) = recordOf(at.add(i * ptr)) ?: return null
-            val offset = offsetToTop(record) ?: return null
-            if (rtti != entry.owner.typeinfo || (entry.head && offset != 0L)) return null
-            if (entry.owner === root && entry.subobject.isVirtual) anchorOffset[entry.subobject] = -offset
-            record
+            val header = program.vtableAt(at.add(i * ptr))?.second ?: return null
+            if (header.rtti != entry.owner.typeinfo || (entry.head && header.offsetToTop != 0L)) return null
+            if (entry.owner === root && entry.subobject.isVirtual) anchorOffset[entry.subobject] = -header.offsetToTop
+            header.at
         }
         val words = entries.zip(records).mapIndexed { i, (entry, record) ->
             val sub = entry.subobject

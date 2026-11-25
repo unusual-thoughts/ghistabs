@@ -7,6 +7,7 @@ import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.generic.PlainVtables.MAX_SUBOBJECT_OFFSET
 import ghicpp.abi.generic.hasVtableHeader
+import ghicpp.abi.generic.isRttiPointer
 import ghicpp.abi.generic.isRttiWord
 import ghicpp.abi.ofVtableSymbol
 import ghicpp.describeVxTable
@@ -105,10 +106,11 @@ class GenericVftableFinder(
             var primary: PotentialVtable? = null
             var end: Address? = null
             for (table in potentialVtables.sortedBy { it.addr }) {
-                val top = table.addr.wordBefore(2)
+                val header = program.vtableHeader(table.addr)
+                val top = header?.offsetToTop
                 val contiguous = end != null && onlyOffsetsBetween(end, table.addr.subtractNoWrap(2 * ptr))
                 when {
-                    top == null || !program.isRttiWord(table.addr.subtractNoWrap(ptr)) -> primary = null
+                    header == null || top == null || !program.isRttiPointer(header.rtti) -> primary = null
 
                     top == 0L -> primary = table
 

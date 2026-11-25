@@ -2,6 +2,7 @@ package ghicpp.abi.generic
 
 import ghicpp.ClassDecl
 import ghicpp.abi.functionSlots
+import ghicpp.abi.vtableAt
 import ghicpp.dissect.Dissections
 import ghicpp.dissect.ThisFunctionDissector
 import ghicpp.recover.GenericVftableFinder
@@ -38,7 +39,7 @@ internal class VttStructors(private val program: Program) {
             val built = uses.stores[f]?.classes?.let(program::longestPrimary) ?: continue
             for (call in calls) {
                 if (uses.stores[call.callee]?.classes.orEmpty().isNotEmpty()) continue
-                val table = program.pointerAt(call.vtt)?.takeIf(::isConstructionTable) ?: continue
+                val table = program.vtableAt(call.vtt)?.first?.takeIf(::isConstructionTable) ?: continue
                 val base = byTable[table] ?: holding(functionSlots(table), primaries)
                 if (base == null) {
                     if (finder?.seedConstruction(table) == true) seeded = true
