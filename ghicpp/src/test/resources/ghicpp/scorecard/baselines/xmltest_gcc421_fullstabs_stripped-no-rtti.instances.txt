@@ -113,19 +113,19 @@ base-access-fn `std::wostream` of `std::wiostream`: none, is public
 base-access-fn `std::wostream` of `std::wofstream`: none, is public
 base-access-fn `std::wstreambuf` of `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>`: none, is public
 base-access-fn `std::wstreambuf` of `std::wfilebuf`: none, is public
-bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
-bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`
-bases-fn `?ctype_base` of `std::__ctype_abstract_base<char>`
-bases-fn `?ctype_base` of `std::__ctype_abstract_base<wchar_t>`
-bases-fn `?ctype_base` of `std::ctype<char>`
-bases-fn `?messages_base` of `std::messages<char>`
-bases-fn `?messages_base` of `std::messages<wchar_t>`
-bases-fn `?time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
-bases-fn `?time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
+bases-fn `std::codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
+bases-fn `std::codecvt_base` of `std::__codecvt_abstract_base<wchar_t,char,int>`
+bases-fn `std::ctype_base` of `std::__ctype_abstract_base<char>`
+bases-fn `std::ctype_base` of `std::__ctype_abstract_base<wchar_t>`
+bases-fn `std::ctype_base` of `std::ctype<char>`
+bases-fn `std::messages_base` of `std::messages<char>`
+bases-fn `std::messages_base` of `std::messages<wchar_t>`
 bases-fn `std::money_base` of `std::moneypunct<char,false>`
 bases-fn `std::money_base` of `std::moneypunct<char,true>`
 bases-fn `std::money_base` of `std::moneypunct<wchar_t,false>`
 bases-fn `std::money_base` of `std::moneypunct<wchar_t,true>`
+bases-fn `std::time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
+bases-fn `std::time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
 bases-fp `std::ios` (virtual) of `std::ifstream`
 bases-fp `std::ios` (virtual) of `std::ofstream`
 bases-fp `std::wios` (virtual) of `std::wifstream`
