@@ -270,6 +270,19 @@ class FoundStructors(
     val constructors = roles.filterValues { it.second == CONSTRUCTOR }.mapValues { it.value.first }
 
     /**
+     * The member objects each class's constructors build, each with its offset: the class of the constructor
+     * found here that one first calls on `this` + k, past `this` + 0, where that class is another. A base's
+     * subobject there is one too, as far as the class's size goes.
+     */
+    val memberObjects: Map<ClassDecl, List<Pair<ClassDecl, Long>>> by lazy {
+        constructors.entries.groupBy({ it.value }) { (f, cls) ->
+            subobjectCalls[f].orEmpty().filterKeys { it > 0 }.mapNotNull { (at, called) ->
+                constructors[called.first()]?.takeIf { it != cls }?.let { it to at }
+            }
+        }.mapValues { (_, found) -> found.flatten().distinct() }.filterValues { it.isNotEmpty() }
+    }
+
+    /**
      * The fields each class's constructors, its own and those folded into another's, store through `this`, by
      * offset into it: its own fields where nothing else is laid, and how large it is at least. Where two
      * constructors disagree, [NoisyStructureBuilder] keeps the more specific type, as it does for one.

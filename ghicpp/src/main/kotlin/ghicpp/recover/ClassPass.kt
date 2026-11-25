@@ -108,7 +108,7 @@ class ClassPass(
         val allocated = (called.keys + found.inlinedSizes.keys).associateWith { cls ->
             maxOf(called[cls] ?: 0L, found.inlinedSizes[cls] ?: 0L)
         }
-        val sizes = sizeClasses(read.classes, allocated, reached)
+        val sizes = sizeClasses(read.classes, allocated, reached, found.memberObjects)
         monitor.message = "Filling class structs"
         val filled = ClassStructFiller(program, abi, this, vfptrModel).fillAll(read.recorded, stores)
         program.typeAllocations(found, this, monitor)
@@ -199,18 +199,20 @@ class ClassPass(
     }
 
     /**
-     * Each class's size range, off what it is [allocated] with, its bases' and vptrs' offsets and how far its
-     * constructors store ([reached]). Each class
-     * gets a struct of its exact size, or else its least, where `RecoverClassesFromRTTIScript` files one: a
-     * stub of undefined bytes when it has none, and its own grown when shorter.
+     * Each class's size range, off what it is [allocated] with, its bases' and vptrs' offsets, how far its
+     * constructors store ([reached]) and how far the [members] they build reach. Each class gets a struct of its
+     * exact size, or else its least, where `RecoverClassesFromRTTIScript` files one: a stub of undefined bytes
+     * when it has none, and its own grown when shorter.
      */
     private fun sizeClasses(
         classes: Collection<ClassDecl>,
         allocated: Map<ClassDecl, Long>,
         reached: Map<ClassDecl, Long>,
+        members: Map<ClassDecl, List<Pair<ClassDecl, Long>>>,
     ): Map<ClassDecl, LongRange> {
         val all = classes.toList()
-        val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, program.defaultPointerSize.toLong(), reached)
+        val ptr = program.defaultPointerSize.toLong()
+        val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, ptr, reached, members)
         val sized = bounds.filterValues { it.first > 0 }
         for ((cls, size) in sized) {
             val ns = cls.ns?.toClass() ?: continue
