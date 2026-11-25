@@ -112,9 +112,11 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
 
     @Test
     fun `a class whose only vftable is its virtual base's has the base laid off the vbtable`() {
-        // `Down` adds no virtual, so its only vftable is `Core`'s, stored through the vbtable.
+        // `Down` adds no virtual functions, so its only vftable is the one for `Core`, stored through the vbtable.
+        // The constructor that stores it also stores `dn`, so `Down`'s own field is found too.
         program.layout("Down") mustBe listOf(
             0 to "vbptr: int *",
+            4 to "_data: Down_data",
             12 to "vfptr: Down_vftable *",
             16 to "_vbase_: Core_fields_4_8",
         )

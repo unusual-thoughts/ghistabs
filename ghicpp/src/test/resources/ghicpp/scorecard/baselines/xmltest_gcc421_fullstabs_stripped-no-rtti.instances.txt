@@ -39,6 +39,9 @@ base-access-fn `std::ios_base` of `std::ios`: none, is public
 base-access-fn `std::ios_base` of `std::wios`: none, is public
 base-access-fn `std::ios` of `std::istream`: none, is public
 base-access-fn `std::ios` of `std::ostream`: none, is public
+base-access-fn `std::iostream` of `std::fstream`: none, is public
+base-access-fn `std::istream` of `std::ifstream`: none, is public
+base-access-fn `std::istream` of `std::iostream`: none, is public
 base-access-fn `std::locale::facet` of `std::__codecvt_abstract_base<char,char,int>`: none, is public
 base-access-fn `std::locale::facet` of `std::__codecvt_abstract_base<wchar_t,char,int>`: none, is public
 base-access-fn `std::locale::facet` of `std::__ctype_abstract_base<char>`: none, is public
@@ -88,6 +91,8 @@ base-access-fn `std::moneypunct<wchar_t,false>` of `std::moneypunct_byname<wchar
 base-access-fn `std::moneypunct<wchar_t,true>` of `std::moneypunct_byname<wchar_t,true>`: none, is public
 base-access-fn `std::numpunct<char>` of `std::numpunct_byname<char>`: none, is public
 base-access-fn `std::numpunct<wchar_t>` of `std::numpunct_byname<wchar_t>`: none, is public
+base-access-fn `std::ostream` of `std::iostream`: none, is public
+base-access-fn `std::ostream` of `std::ofstream`: none, is public
 base-access-fn `std::runtime_error` of `std::overflow_error`: none, is public
 base-access-fn `std::runtime_error` of `std::range_error`: none, is public
 base-access-fn `std::runtime_error` of `std::underflow_error`: none, is public
@@ -101,6 +106,11 @@ base-access-fn `std::type_info` of `__cxxabiv1::__class_type_info`: none, is pub
 base-access-fn `std::wfilebuf` of `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`: none, is public
 base-access-fn `std::wios` of `std::wistream`: none, is public
 base-access-fn `std::wios` of `std::wostream`: none, is public
+base-access-fn `std::wiostream` of `std::wfstream`: none, is public
+base-access-fn `std::wistream` of `std::wifstream`: none, is public
+base-access-fn `std::wistream` of `std::wiostream`: none, is public
+base-access-fn `std::wostream` of `std::wiostream`: none, is public
+base-access-fn `std::wostream` of `std::wofstream`: none, is public
 base-access-fn `std::wstreambuf` of `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>`: none, is public
 base-access-fn `std::wstreambuf` of `std::wfilebuf`: none, is public
 bases-fn `?codecvt_base` of `std::__codecvt_abstract_base<char,char,int>`
@@ -112,28 +122,16 @@ bases-fn `?messages_base` of `std::messages<char>`
 bases-fn `?messages_base` of `std::messages<wchar_t>`
 bases-fn `?time_base` of `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>`
 bases-fn `?time_base` of `std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`
-bases-fn `std::iostream` of `std::fstream`
-bases-fn `std::istream` of `std::ifstream`
-bases-fn `std::istream` of `std::iostream`
 bases-fn `std::money_base` of `std::moneypunct<char,false>`
 bases-fn `std::money_base` of `std::moneypunct<char,true>`
 bases-fn `std::money_base` of `std::moneypunct<wchar_t,false>`
 bases-fn `std::money_base` of `std::moneypunct<wchar_t,true>`
-bases-fn `std::ostream` of `std::iostream`
-bases-fn `std::ostream` of `std::ofstream`
-bases-fn `std::wiostream` of `std::wfstream`
-bases-fn `std::wistream` of `std::wifstream`
-bases-fn `std::wistream` of `std::wiostream`
-bases-fn `std::wostream` of `std::wiostream`
-bases-fn `std::wostream` of `std::wofstream`
 bases-fp `std::ios` (virtual) of `std::ifstream`
 bases-fp `std::ios` (virtual) of `std::ofstream`
 bases-fp `std::wios` (virtual) of `std::wifstream`
 bases-fp `std::wios` (virtual) of `std::wofstream`
-class-splits-fp `NPKlass_00448d68` (inferred) of `std::ostream`
 class-splits-fp `NPKlass_0044c864` (inferred) of `std::string`
 class-splits-fp `NPKlass_0045142c` (inferred) of `std::__basic_file<char>`
-class-splits-fp `NPKlass_0045ec40` (inferred) of `std::wostream`
 classes-fn `__cxa_call_unexpected::end_catch_protect` (stabs)
 classes-fn `__cxa_guard_acquire::mutex_wrapper` (stabs)
 classes-fn `__cxxabiv1::__base_class_type_info` (stabs)
@@ -255,6 +253,10 @@ fields-fn `__cxxabiv1::__vmi_class_type_info`+12:4
 fields-fn `__cxxabiv1::__vmi_class_type_info`+16:8
 fields-fn `__cxxabiv1::__vmi_class_type_info`+4:4
 fields-fn `__cxxabiv1::__vmi_class_type_info`+8:4
+fields-fn `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`+28:4
+fields-fn `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`+28:4
+fields-fn `__gnu_cxx::stdio_sync_filebuf<char,std::char_traits<char>>`+28:4
+fields-fn `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>`+28:4
 fields-fn `std::__moneypunct_cache<char,false>`+48:4
 fields-fn `std::__moneypunct_cache<char,false>`+52:4
 fields-fn `std::__moneypunct_cache<char,false>`+56:11
@@ -284,16 +286,21 @@ fields-fn `std::ctype_byname<wchar_t>`+142:512
 fields-fn `std::ctype_byname<wchar_t>`+654:32
 fields-fn `std::ctype_byname<wchar_t>`+686:32
 fields-fn `std::domain_error`+4:4
+fields-fn `std::filebuf`+28:4
 fields-fn `std::fstream`+156:64
-fields-fn `std::fstream`+4:4
+fields-fn `std::fstream`+228:4
+fields-fn `std::fstream`+40:4
 fields-fn `std::ifstream`+152:64
-fields-fn `std::ifstream`+4:4
+fields-fn `std::ifstream`+224:4
+fields-fn `std::ifstream`+36:4
 fields-fn `std::invalid_argument`+4:4
 fields-fn `std::ios_base::failure`+4:4
 fields-fn `std::ios_base`+36:64
+fields-fn `std::ios`+108:4
 fields-fn `std::ios`+36:64
+fields-fn `std::iostream`+120:4
 fields-fn `std::iostream`+48:64
-fields-fn `std::iostream`+4:4
+fields-fn `std::istream`+116:4
 fields-fn `std::istream`+44:64
 fields-fn `std::length_error`+4:4
 fields-fn `std::logic_error`+4:4
@@ -302,6 +309,9 @@ fields-fn `std::messages<wchar_t>`+12:4
 fields-fn `std::messages_byname<char>`+12:4
 fields-fn `std::messages_byname<wchar_t>`+12:4
 fields-fn `std::ofstream`+148:64
+fields-fn `std::ofstream`+220:4
+fields-fn `std::ofstream`+32:4
+fields-fn `std::ostream`+112:4
 fields-fn `std::ostream`+40:64
 fields-fn `std::out_of_range`+4:4
 fields-fn `std::overflow_error`+4:4
@@ -310,15 +320,23 @@ fields-fn `std::runtime_error`+4:4
 fields-fn `std::string`+0:4
 fields-fn `std::type_info`+4:4
 fields-fn `std::underflow_error`+4:4
+fields-fn `std::wfilebuf`+28:4
 fields-fn `std::wfstream`+160:64
-fields-fn `std::wfstream`+4:4
+fields-fn `std::wfstream`+232:4
+fields-fn `std::wfstream`+40:4
 fields-fn `std::wifstream`+156:64
-fields-fn `std::wifstream`+4:4
+fields-fn `std::wifstream`+228:4
+fields-fn `std::wifstream`+36:4
+fields-fn `std::wios`+108:4
 fields-fn `std::wios`+36:64
+fields-fn `std::wiostream`+120:4
 fields-fn `std::wiostream`+48:64
-fields-fn `std::wiostream`+4:4
+fields-fn `std::wistream`+116:4
 fields-fn `std::wistream`+44:64
 fields-fn `std::wofstream`+152:64
+fields-fn `std::wofstream`+224:4
+fields-fn `std::wofstream`+32:4
+fields-fn `std::wostream`+112:4
 fields-fn `std::wostream`+40:64
 methods-fn `TiXmlAttribute::DoubleValue` 405b06
 methods-fn `TiXmlAttribute::IntValue` 405b3e
@@ -550,9 +568,6 @@ methods-fn `std::ios_base::sync_with_stdio` 474378
 methods-fn `std::ios_base::width` 43462c
 methods-fn `std::ios_base::width` 475d98
 methods-fn `std::ios_base::xalloc` 475dd0
-methods-fn `std::iostream::iostream` 441d8c
-methods-fn `std::iostream::iostream` 441ef0
-methods-fn `std::iostream::~iostream` 442380
 methods-fn `std::istream::_M_extract<bool>` 442708
 methods-fn `std::istream::_M_extract<double>` 4428c4
 methods-fn `std::istream::_M_extract<float>` 442c3c
@@ -577,7 +592,6 @@ methods-fn `std::istream::ignore` 444d80
 methods-fn `std::istream::ignore` 4450ec
 methods-fn `std::istream::ignore` 445580
 methods-fn `std::istream::istream` 4464c8
-methods-fn `std::istream::istream` 446520
 methods-fn `std::istream::operator>>` 446688
 methods-fn `std::istream::operator>>` 4466a0
 methods-fn `std::istream::operator>>` 4466c8
@@ -604,7 +618,6 @@ methods-fn `std::istream::seekg` 444890
 methods-fn `std::istream::sync` 444500
 methods-fn `std::istream::tellg` 444a60
 methods-fn `std::istream::unget` 444bbc
-methods-fn `std::istream::~istream` 44661c
 methods-fn `std::locale::_S_initialize_once` 46d590
 methods-fn `std::locale::_S_initialize` 46d55c
 methods-fn `std::locale::_S_normalize_category` 46d60c
@@ -981,9 +994,6 @@ methods-fn `std::wios::setstate` 479abc
 methods-fn `std::wios::tie` 4385ac
 methods-fn `std::wios::tie` 4795e0
 methods-fn `std::wios::widen` 438658
-methods-fn `std::wiostream::wiostream` 461144
-methods-fn `std::wiostream::wiostream` 4612a8
-methods-fn `std::wiostream::~wiostream` 461738
 methods-fn `std::wistream::_M_extract<bool>` 458570
 methods-fn `std::wistream::_M_extract<double>` 45872c
 methods-fn `std::wistream::_M_extract<float>` 458aa4
@@ -1034,8 +1044,6 @@ methods-fn `std::wistream::sync` 45a398
 methods-fn `std::wistream::tellg` 45a8f8
 methods-fn `std::wistream::unget` 45aa54
 methods-fn `std::wistream::wistream` 45c36c
-methods-fn `std::wistream::wistream` 45c3c4
-methods-fn `std::wistream::~wistream` 45c4c0
 methods-fn `std::wofstream::close` 46252c
 methods-fn `std::wofstream::is_open` 425718
 methods-fn `std::wofstream::is_open` 462570
@@ -1107,18 +1115,14 @@ methods-fp 43f588 of `std::collate<wchar_t>`: is `std::wstring`'s
 methods-fp 440c9c of `std::collate<wchar_t>`: is `std::wstring`'s
 methods-fp 440e0c of `std::messages<wchar_t>`: is `std::wstring`'s
 methods-fp 441198 of `std::collate<wchar_t>`: is `std::wstring`'s
-methods-fp 441d8c of `std::fstream`: is `std::iostream`'s
-methods-fp 441ef0 of `std::fstream`: is `std::iostream`'s
-methods-fp 442380 of `std::fstream`: is `std::iostream`'s
 methods-fp 44936c of `std::string`: is `std::string::_Alloc_hider`'s
 methods-fp 44bb98 of `std::collate<char>`: is `std::string`'s
 methods-fp 4525cc of `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`: is `std::filebuf`'s
 methods-fp 454be8 of `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`: is `std::wfilebuf`'s
-methods-fp 461144 of `std::wfstream`: is `std::wiostream`'s
-methods-fp 4612a8 of `std::wfstream`: is `std::wiostream`'s
-methods-fp 461738 of `std::wfstream`: is `std::wiostream`'s
 methods-fp 47f880 of unmatched `NPKlass_0047f880`
 methods-fp 47f960 of unmatched `NPKlass_0047f960`
+methods-fp 480c74 of unmatched `NPKlass_0047f880`
+methods-fp 480cc8 of unmatched `NPKlass_0047f960`
 sizes-fn `std::string`: none, is 4
 sizes-fp `TiXmlDeclaration`: 44, is 56
 sizes-fp `TiXmlPrinter`: 12, is 24
@@ -1143,15 +1147,8 @@ sizes-fp `std::range_error`: 4, is 8
 sizes-fp `std::runtime_error`: 4, is 8
 sizes-fp `std::type_info`: 4, is 8
 sizes-fp `std::underflow_error`: 4, is 8
-structors-fn 441d8c of `std::iostream`
-structors-fn 441ef0 of `std::iostream`
-structors-fn 442380 of `std::iostream`
 structors-fn 4464c8 of `std::istream`
-structors-fn 446520 of `std::istream`
-structors-fn 44661c of `std::istream`
 structors-fn 448d1c of `std::ostream`
-structors-fn 448d68 of `std::ostream`
-structors-fn 448e44 of `std::ostream`
 structors-fn 44bc98 of `std::string`
 structors-fn 44bccc of `std::string`
 structors-fn 44be5c of `std::string`
@@ -1173,20 +1170,13 @@ structors-fn 457bb8 of `std::wfstream`
 structors-fn 457d28 of `std::wfstream`
 structors-fn 4581f0 of `std::wfstream`
 structors-fn 45c36c of `std::wistream`
-structors-fn 45c3c4 of `std::wistream`
-structors-fn 45c4c0 of `std::wistream`
 structors-fn 45ebf4 of `std::wostream`
-structors-fn 45ec40 of `std::wostream`
-structors-fn 45ed1c of `std::wostream`
 structors-fn 45faec of `std::ifstream`
 structors-fn 45fc48 of `std::ifstream`
 structors-fn 4600e8 of `std::ifstream`
 structors-fn 4606a0 of `std::wifstream`
 structors-fn 4607fc of `std::wifstream`
 structors-fn 460c9c of `std::wifstream`
-structors-fn 461144 of `std::wiostream`
-structors-fn 4612a8 of `std::wiostream`
-structors-fn 461738 of `std::wiostream`
 structors-fn 461d08 of `std::ofstream`
 structors-fn 461e64 of `std::ofstream`
 structors-fn 462304 of `std::ofstream`
