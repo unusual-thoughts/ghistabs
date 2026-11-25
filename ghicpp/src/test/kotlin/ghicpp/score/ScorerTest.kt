@@ -267,4 +267,21 @@ class ScorerTest {
         card(null).tallies["virtual-methods"] mustBe Tally(fn = 3)
         card(setOf(0x14L, 0x24L)).tallies["virtual-methods"] mustBe Tally(fn = 2)
     }
+
+    @Test
+    fun `a class template's structors go by its name less the template arguments`() {
+        // g++'s stabs name a template's constructor and destructor without its arguments.
+        val box = cls(5, "Box<int>", Origin.STABS, 0x140, listOf(fn(0x50, "Box"), fn(0x54, "~Box")))
+        val boxTruth = ClassHierarchy(listOf(box))
+        val card = Scorer(
+            Truth(truthSnapshot.copy(hierarchy = boxTruth), Truth.describedScope(boxTruth), true, true),
+            Snapshot(
+                "subject",
+                ClassHierarchy(
+                    listOf(cls(10, "Box<int>", Origin.ITANIUM_RTTI, 0x140, listOf(fn(0x50, "Box"), fn(0x54, "~Box")))),
+                ),
+            ),
+        ).score()
+        card.tallies["structors"] mustBe Tally(tp = 2)
+    }
 }
