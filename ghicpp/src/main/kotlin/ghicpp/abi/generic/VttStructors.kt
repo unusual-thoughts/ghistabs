@@ -35,7 +35,7 @@ internal class VttStructors(private val program: Program) {
         val found = mutableListOf<VttStructor>()
         var seeded = false
         for ((f, calls) in uses.vttCalls) {
-            val built = uses.stores[f]?.classes?.let(::longest) ?: continue
+            val built = uses.stores[f]?.classes?.let(program::longestPrimary) ?: continue
             for (call in calls) {
                 if (uses.stores[call.callee]?.classes.orEmpty().isNotEmpty()) continue
                 val table = program.pointerAt(call.vtt)?.takeIf(::isConstructionTable) ?: continue
@@ -64,14 +64,6 @@ internal class VttStructors(private val program: Program) {
         val shortest = holders.values.minOfOrNull { it.size } ?: return null
         return holders.filterValues { it.size == shortest }.keys.singleOrNull()
     }
-
-    /**
-     * The class in [stored] with the longest primary table, or null on a tie. A class's table holds all of its
-     * bases' slots, so the longest one belongs to the most derived class.
-     */
-    private fun longest(stored: Set<ClassDecl>): PlainClass? =
-        stored.filterIsInstance<PlainClass>().groupBy { functionSlots(it.vftables.first().addressPoint).size }
-            .maxByOrNull { it.key }?.value?.singleOrNull()
 
     private fun functionSlots(at: Address) = program.functionSlots(at, PlainVtables).toList()
 

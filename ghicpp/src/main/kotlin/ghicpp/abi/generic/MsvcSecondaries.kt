@@ -32,10 +32,8 @@ internal fun msvcSecondaries(
             notLast += stored.dropLast(1)
             val table = stored.last() as? PlainClass ?: continue
             // Several primaries can be stored at `this` + 0 when a base's constructor is inlined first. The
-            // owner is the one with the longest table, since a class's table holds all of its bases' slots.
-            val longest = stores.classes.groupBy { c -> c.vftables.firstOrNull()?.slots(program)?.size ?: 0 }
-                .maxByOrNull { it.key }?.value
-            val owner = longest?.singleOrNull() as? PlainClass
+            // owner is the most derived of them.
+            val owner = program.longestPrimary(stores.classes)
             val placement = owner?.takeIf { o -> o.vftables.none { it.vfptrOffset(program) == offset } }
             placements.getOrPut(table) { mutableSetOf() } += (placement ?: table) to offset
         }

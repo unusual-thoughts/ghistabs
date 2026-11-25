@@ -26,6 +26,13 @@ import ghidrakt.diagnose.DummySink
 import ghidrakt.diagnose.Level
 
 /**
+ * The class in [stored] with the longest primary table, or null on a tie. A class's table holds all of its bases'
+ * slots, so the longest one belongs to the most derived class.
+ */
+internal fun Program.longestPrimary(stored: Collection<ClassDecl>): PlainClass? = stored.filterIsInstance<PlainClass>()
+    .groupBy { it.vftables.firstOrNull()?.slots(this)?.size ?: 0 }.maxByOrNull { it.key }?.value?.singleOrNull()
+
+/**
  * A class known by its vftables alone, with no RTTI to give it bases: those its structors show ([inferBases]). Its
  * [virtualBases] are its direct virtual ones, each where the secondary table its subobject has sits.
  */
@@ -371,22 +378,22 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
 
     override fun parse(monitor: TaskMonitor): ClassPassInput {
         monitor.message = "Reading vftable labels"
-        var classes = readClasses()
-        // Look up the slots' functions before reading the storers. Looking one up can create it, which changes
-        // the program, and the class pass would then have to decompile the storers again.
-        var targets = targetsOf(classes)
-        var uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
+        var classes = emptyList<PlainClass>()
+        var targets = emptyMap<PlainClass, List<Address>>()
+        lateinit var uses: Dissections
+
+        // Reads the classes, then their storers, again after the finder moved or seeded a table.
+        fun reread() {
+            classes = readClasses()
+            // Look up the slots' functions before reading the storers. Looking one up can create it, which changes
+            // the program, and the class pass would then have to decompile the storers again.
+            targets = targetsOf(classes)
+            uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
+        }
+        reread()
         val finder = GenericVftableFinder(program, sink = sink)
-        if (finder.regroup(msvcSecondaries(program, classes, uses)) > 0) {
-            classes = readClasses()
-            targets = targetsOf(classes)
-            uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
-        }
-        if (vtts.find(classes, uses, finder) == null) {
-            classes = readClasses()
-            targets = targetsOf(classes)
-            uses = ThisFunctionDissector(program, classes, sink, cache).readStorers(monitor)
-        }
+        if (finder.regroup(msvcSecondaries(program, classes, uses)) > 0) reread()
+        if (vtts.find(classes, uses, finder) == null) reread()
         val vtt = vtts.find(classes, uses, null).orEmpty()
         val own = targets.mapValues { (_, ats) ->
             ats.map { at -> at.takeIf { it.offset != 0L }?.let { program.slotFunction(it, PlainVtables) } }
