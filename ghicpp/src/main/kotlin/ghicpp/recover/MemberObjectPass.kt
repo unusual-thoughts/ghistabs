@@ -235,44 +235,48 @@ class MemberObjectPass(
             drafts = merged + structorBases(merged)
         }
 
-        fun NonPolymorphicClass.fresh(taken: MutableSet<Function>): NonPolymorphicClass? {
+        /**
+         * The base this class's structors build at `this` + 0, or null: what its constructors call first there and
+         * its destructors last, none of them a known structor, a function [taken] by another class, or one function
+         * both call. A destructor takes `this` alone, so one its destructors pass more is a member's method, such as
+         * an allocator's `deallocate`, and makes no base. Adds the base's structors to [taken].
+         */
+        private fun NonPolymorphicClass.baseAtZero(taken: MutableSet<Function>): NonPolymorphicClass? {
             fun Set<Function>.atZero(pick: (Set<Function>) -> Function?) = mapNotNull { f ->
                 calls[f].orEmpty()[0L]?.let(pick)?.takeIf {
                     it !in found.roles && it !in taken && it.takesThis()
                 }
             }.toSet()
-            val fresh = NonPolymorphicClass()
-            fresh.ctors += ctors.atZero { it.firstOrNull() }.ifEmpty { return null }
-            fresh.dtors += dtors.atZero { it.lastOrNull() }.ifEmpty { return null }
+            val base = NonPolymorphicClass()
+            base.ctors += ctors.atZero { it.firstOrNull() }.ifEmpty { return null }
+            base.dtors += dtors.atZero { it.lastOrNull() }.ifEmpty { return null }
             val passing = dissector.readCalls(dtors, monitor).objectCalls.values.flatten()
                 .filter { it.obj == CalledObject.This && it.offset == 0L && it.args > 0 }
                 .mapTo(mutableSetOf()) { it.callee }
-            if ((fresh.ctors intersect fresh.dtors).isNotEmpty() || (fresh.dtors intersect passing).isNotEmpty()) {
+            if ((base.ctors intersect base.dtors).isNotEmpty() || (base.dtors intersect passing).isNotEmpty()) {
                 return null
             }
-            taken += fresh.ctors + fresh.dtors
-            return fresh
+            taken += base.ctors + base.dtors
+            return base
         }
 
         /**
-         * The bases at `this` + 0 of [members] that no other structor builds: where a class's constructors call one
-         * function first there and its destructors another last, neither a class's structor already, those are a
-         * base's constructor and destructor. One function both call there is a method setting up its fields
-         * ([helperStores]). A destructor takes `this` alone, so one its destructors pass more is a method, such as
-         * an allocator member's `deallocate`, and makes no base. Their bases' own follow, down to [MAX_DEPTH].
+         * The bases at `this` + 0 of [members] that no other structor builds ([baseAtZero]), and their bases' own,
+         * down to [MAX_DEPTH]. One function both structors call there is a method setting up its fields
+         * ([helperStores]).
          */
         private fun structorBases(members: List<NonPolymorphicClass>): List<NonPolymorphicClass> = buildList {
             val taken = members.flatMapTo(mutableSetOf()) { it.functions }
             var derived = members
             repeat(MAX_DEPTH) {
-                val fresh = derived.mapNotNull { it.fresh(taken) }.ifEmpty { return@buildList }
-                val uses = dissector.readCalls(fresh.flatMap { it.functions }, monitor)
-                for (m in fresh) {
+                val bases = derived.mapNotNull { it.baseAtZero(taken) }.ifEmpty { return@buildList }
+                val uses = dissector.readCalls(bases.flatMap { it.functions }, monitor)
+                for (m in bases) {
                     m.stores = m.ctors.map { uses.thisStores[it].orEmpty() }.mergedStores()
                     for (f in m.functions) m.calls[f] = uses.subobjectCalls[f].orEmpty()
                 }
-                addAll(fresh)
-                derived = fresh
+                addAll(bases)
+                derived = bases
             }
         }
 
