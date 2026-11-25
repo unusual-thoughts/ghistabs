@@ -5,6 +5,7 @@ import ghicpp.abi.functionSlots
 import ghicpp.abi.vtableAt
 import ghicpp.dissect.Dissections
 import ghicpp.dissect.ThisFunctionDissector
+import ghicpp.dissect.classes
 import ghicpp.recover.GenericVftableFinder
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function

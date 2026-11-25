@@ -3,6 +3,7 @@ package ghicpp.abi.generic
 import ghicpp.ClassDecl
 import ghicpp.abi.slots
 import ghicpp.dissect.Dissections
+import ghicpp.dissect.classes
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -28,7 +29,9 @@ internal fun msvcSecondaries(
     val placements = mutableMapOf<PlainClass, MutableSet<Pair<PlainClass, Long>>>()
     val notLast = mutableSetOf<ClassDecl>()
     for (stores in uses.stores.values) {
-        for ((offset, stored) in stores.elsewhere) {
+        // A primary table stored past `this` + 0, where no primary belongs, by the offset it is stored at.
+        val elsewhere = stores.filter { it.home == 0L && it.offset > 0 }.groupBy({ it.offset }, { it.cls })
+        for ((offset, stored) in elsewhere) {
             notLast += stored.dropLast(1)
             val table = stored.last() as? PlainClass ?: continue
             // Several primaries can be stored at `this` + 0 when a base's constructor is inlined first. The

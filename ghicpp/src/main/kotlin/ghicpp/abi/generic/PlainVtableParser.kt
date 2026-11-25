@@ -1,16 +1,12 @@
 package ghicpp.abi.generic
 
 import ghicpp.*
-import ghicpp.abi.functionSlots
 import ghicpp.abi.holdsPureVirtualStub
 import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.ofVtableSymbol
 import ghicpp.abi.slotFunction
 import ghicpp.abi.slots
-import ghicpp.dissect.DissectingParser
-import ghicpp.dissect.DissectionCache
-import ghicpp.dissect.Dissections
-import ghicpp.dissect.ThisFunctionDissector
+import ghicpp.dissect.*
 import ghicpp.recover.GenericVftableFinder
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
@@ -146,10 +142,10 @@ internal class BaseCandidates(
      * function, as a constructor building its bases would.
      */
     private fun Dissections.destroys(f: Function): Boolean {
-        val own = stores[f] ?: return false
-        val onThis = subobjectCalls[f].orEmpty()[0L].orEmpty()
-        fun storesOther(g: Function) = g != f && g in onThis && stores[g]?.classes.orEmpty().any { it !in own.classes }
-        return own.after.any(::storesOther) && own.before.none(::storesOther)
+        val own = stores[f]?.classes ?: return false
+        fun storesOther(g: Function) = g != f && stores[g]?.classes.orEmpty().any { it !in own }
+        fun List<ObjectCall>.onThis() = filter { it.offset == 0L }.callees
+        return f.post().onThis().any(::storesOther) && f.pre().onThis().none(::storesOther)
     }
 
     /** Off the functions several tables hold in one slot, each introduced by the shortest. */
@@ -454,7 +450,8 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             emptySet()
         }
         cls.headerVbaseOffsets = vbaseOffsets
-        val throughVbtable = uses.stores.values.filter { cls in it.classes }.flatMapTo(mutableSetOf()) { it.vbases }
+        val throughVbtable = uses.stores.values.filter { cls in it.classes }
+            .flatMapTo(mutableSetOf()) { ss -> ss.filter { it.throughVbtable }.map { it.offset } }
         return cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } }
             .associateWith { it in vbaseOffsets || it in throughVbtable }
     }
