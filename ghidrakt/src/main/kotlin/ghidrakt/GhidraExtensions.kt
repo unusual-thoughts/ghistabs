@@ -23,6 +23,7 @@ import ghidra.program.model.mem.*
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.Reference
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
@@ -412,6 +413,13 @@ fun Program.pointerAt(addr: Address): Address? = valueAt(addr, PointerDataType(d
 
 /** Whether [addr] is in an executable block. */
 fun Program.isCode(addr: Address) = memory.getBlock(addr)?.isExecute == true
+
+/** The references to [addr] that take its address rather than call or jump there, from code or data. */
+fun Program.addressTakers(addr: Address): Sequence<Reference> = referenceManager.getReferencesTo(addr).iterator()
+    .asSequence().filterNot { it.referenceType.isCall || it.referenceType.isJump }
+
+/** Whether an instruction takes [addr]'s address, as a constructor takes its vtable's address point. */
+fun Program.isTakenByCode(addr: Address) = addressTakers(addr).any { listing.getInstructionAt(it.fromAddress) != null }
 
 /** Whether [addr] is in a block that holds bytes, which an EXTERNAL placeholder doesn't. */
 fun Program.isInitialized(addr: Address) = memory.getBlock(addr)?.isInitialized == true

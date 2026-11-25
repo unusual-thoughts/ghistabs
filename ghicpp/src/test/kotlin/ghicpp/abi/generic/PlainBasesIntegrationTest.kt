@@ -3,7 +3,7 @@ package ghicpp.abi.generic
 import ghicpp.ClassDecl
 import ghicpp.dissect.DissectionCache
 import ghicpp.dissect.Dissections
-import ghicpp.dissect.VptrStores
+import ghicpp.dissect.storer
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataType
 import ghidra.program.model.listing.Function
@@ -51,23 +51,24 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         stores: Map<String, Set<String>>,
         calls: Map<String, Map<Long, Set<String>>> = emptyMap(),
         slots: Map<String, List<String?>> = emptyMap(),
-        before: Map<String, Set<String>> = emptyMap(),
-        after: Map<String, Set<String>> = emptyMap(),
+        pre: Map<String, Set<String>> = emptyMap(),
+        post: Map<String, Set<String>> = emptyMap(),
     ): Map<String, List<Pair<String, Long?>>> {
         val uses = Dissections(
             (stores.keys + calls.keys).associate {
-                fn(it) to DissectionCache.Dissection(
+                val byOffset = calls[it]?.let { byOffset ->
+                    byOffset.mapValues { (_, called) -> called.mapTo(mutableSetOf(), ::fn) }
+                }.orEmpty()
+                fn(it) to (
                     stores[it]?.let { cs ->
-                        VptrStores(
+                        builder.program.storer(
                             cs.mapTo(mutableSetOf(), ::cls),
-                            before[it].orEmpty().mapTo(mutableSetOf(), ::fn),
-                            after[it].orEmpty().mapTo(mutableSetOf(), ::fn),
+                            pre[it].orEmpty().map { g -> 0L to fn(g) },
+                            post[it].orEmpty().map { g -> 0L to fn(g) },
+                            byOffset,
                         )
-                    },
-                    calls[it]?.let { byOffset ->
-                        byOffset.mapValues { (_, called) -> called.mapTo(mutableSetOf(), ::fn) }
-                    }.orEmpty(),
-                )
+                    } ?: DissectionCache.Dissection(subobjectCalls = byOffset)
+                    )
             },
         )
         val tables: Map<ClassDecl, List<Function?>> =
@@ -158,7 +159,7 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             mapOf("mDtor" to setOf("M"), "bDtor" to setOf("B")),
             mapOf("mDtor" to mapOf(0L to setOf("bDtor")), "cdDelete" to mapOf(0L to setOf("mDtor"))),
             slots,
-            after = mapOf("mDtor" to setOf("bDtor")),
+            post = mapOf("mDtor" to setOf("bDtor")),
         ) mustBe mapOf("M" to listOf("B" to 0L), "C" to listOf("M" to 0L), "D" to listOf("M" to 0L))
     }
 
@@ -178,7 +179,7 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             mapOf("mDtor" to setOf("M"), "bDtor" to setOf("B")),
             mapOf("mDtor" to mapOf(0L to setOf("bDtor")), "cdMake" to mapOf(0L to setOf("mDtor"))),
             slots,
-            after = mapOf("mDtor" to setOf("bDtor")),
+            post = mapOf("mDtor" to setOf("bDtor")),
         ).filterKeys { it != "M" } mustBe emptyMap()
     }
 
@@ -194,7 +195,7 @@ class PlainBasesIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             mapOf("mCtor" to setOf("M"), "bCtor" to setOf("B")),
             mapOf("mCtor" to mapOf(0L to setOf("bCtor")), "cdMake" to mapOf(0L to setOf("mCtor"))),
             slots,
-            before = mapOf("mCtor" to setOf("bCtor")),
+            pre = mapOf("mCtor" to setOf("bCtor")),
         ).filterKeys { it != "M" } mustBe emptyMap()
     }
 

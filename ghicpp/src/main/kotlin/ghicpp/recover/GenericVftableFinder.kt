@@ -3,10 +3,8 @@ package ghicpp.recover
 import ghicpp.ClassNaming
 import ghicpp.CxxAbi
 import ghicpp.abi.*
-import ghicpp.abi.generic.PlainVtableParser
-import ghicpp.abi.generic.PlainVtables
+import ghicpp.abi.generic.*
 import ghicpp.abi.generic.PlainVtables.MAX_SUBOBJECT_OFFSET
-import ghicpp.abi.ofVtableSymbol
 import ghicpp.describeVxTable
 import ghicpp.fixup.isTailJumpTarget
 import ghicpp.fixup.splitOffTailJumpTarget
@@ -26,6 +24,7 @@ import ghidra.util.task.TaskMonitor
 import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import ghidrakt.diagnose.DummySink
+import kotlin.math.abs
 
 /** The word at [src] holding [dst], and where code refers to it ([refs]). */
 data class Pointer(val src: Address, val dst: Address, val refs: List<Address>)
@@ -81,7 +80,7 @@ class GenericVftableFinder(
             .chunkWith { a, b -> b.src == a.src + ptr && !b.begins() && !isNamed(b.src) }
             .flatMap { it.splitAtNulls() }
             .filter { run -> run.first().begins() && !isClaimed(run.first().src) && run.any { it.dst.offset != 0L } }
-            .filter { run -> run.first().dst.offset != 0L || hasVtableHeader(run.first().src) }
+            .filter { run -> run.first().dst.offset != 0L || program.hasVtableHeader(run.first().src) }
             .map { PotentialVtable(it) }
     }
 
@@ -103,11 +102,11 @@ class GenericVftableFinder(
             var primary: PotentialVtable? = null
             var end: Address? = null
             for (table in potentialVtables.sortedBy { it.addr }) {
-                val top = table.addr.wordBefore(2)
-                val rtti = table.addr.wordBefore(1)
+                val header = program.vtableHeader(table.addr)
+                val top = header?.offsetToTop
                 val contiguous = end != null && onlyOffsetsBetween(end, table.addr.subtractNoWrap(2 * ptr))
                 when {
-                    top == null || rtti == null || !isRttiWord(rtti) -> primary = null
+                    header == null || top == null || !program.isRttiPointer(header.rtti) -> primary = null
 
                     top == 0L -> primary = table
 
@@ -124,33 +123,15 @@ class GenericVftableFinder(
     private fun Address.wordBefore(words: Int) = signedWordBefore(program, words)
 
     /**
-     * Whether an Itanium vtable header comes before [table]: an `offset_to_top` that a subobject could have, then
-     * an RTTI word.
-     */
-    private fun hasVtableHeader(table: Address): Boolean {
-        val top = table.wordBefore(2) ?: return false
-        val rtti = table.wordBefore(1) ?: return false
-        return top <= 0 && -top < MAX_SUBOBJECT_OFFSET && isRttiWord(rtti)
-    }
-
-    /** An rtti word: 0, with no RTTI, or a pointer to data, a typeinfo. */
-    private fun isRttiWord(word: Long) = word == 0L || runCatching {
-        program.memory.getBlock(program.addressFactory.defaultAddressSpace.getAddress(word))
-            ?.let { it.isInitialized && !it.isExecute }
-    }.getOrNull() == true
-
-    /**
      * Whether the words from [from] up to [until] are a few vbase, vcall and top offsets and rtti words, as a group
      * holds between tables: the header of a secondary with no slots of its own, a virtual base's, is all it has.
      */
     private fun onlyOffsetsBetween(from: Address, until: Address): Boolean {
         if (until < from) return false
-        val words = until.subtract(from) / ptr
+        val words = (until - from) / ptr
         return words <= MAX_OFFSET_WORDS && (0 until words).all { i ->
-            until.wordBefore((words - i).toInt())?.let {
-                kotlin.math.abs(it) < MAX_SUBOBJECT_OFFSET || isRttiWord(it)
-            } ==
-                true
+            val word = until.wordBefore((words - i).toInt()) ?: return@all false
+            abs(word) < MAX_SUBOBJECT_OFFSET || program.isRttiWord(until.subtractNoWrap((words - i) * ptr))
         }
     }
 
@@ -182,13 +163,13 @@ class GenericVftableFinder(
         val classOf = mutableMapOf<Address, GhidraClass>()
         for (table in potentialVtables.sortedBy { it.addr }) {
             monitor.increment()
-            val laid = listing.getDefinedDataContaining(table.addr)?.takeIf(::isSeeded)
+            val laid = listing.getDefinedDataContaining(table.addr)?.takeIf { it.isSeeded() }
             when {
                 laid == null -> {}
 
                 laid.address == table.addr -> {
                     if (laid.numComponents > table.slots.size) relay(laid, table.slots.size)
-                    symtab.getSymbols(table.addr).firstOrNull { it.name == ClassNaming.VFTABLE && isSeededLabel(it) }
+                    symtab.getSymbols(table.addr).firstOrNull { it.name == ClassNaming.VFTABLE && it.isSeededLabel() }
                         ?.let { classOf[table.addr] = it.parentNamespace as GhidraClass }
                     continue
                 }
@@ -215,25 +196,39 @@ class GenericVftableFinder(
     }
 
     /**
+     * Settles the tables [seed] left where [parser] reads them otherwise: it moves those that are other classes'
+     * secondary tables there ([regroup]), then seeds a class from each construction vtable no class holds the
+     * slots of ([seedConstruction]). Returns how many tables it moved or seeded.
+     */
+    fun settle(parser: PlainVtableParser, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
+        val misplaced = parser.misplacedTables(monitor)
+        val moved = regroup(misplaced.secondaries)
+        // Read again once a table moved: the classes it was seeded with are gone.
+        val construction = (if (moved > 0) parser.misplacedTables(monitor) else misplaced).construction
+        return moved + construction.count(::seedConstruction)
+    }
+
+    /**
      * Moves each seeded table in [secondaries] to the class it maps to, as that class's secondary table for the
      * base subobject at the mapped offset. The table is labelled and laid out in that class, and the class it was
      * seeded with is merged into it. Returns how many tables it moved.
      */
-    fun regroup(secondaries: Map<Address, Pair<GhidraClass, Long>>): Int {
+    private fun regroup(secondaries: Map<Address, Pair<GhidraClass, Long>>): Int {
         var moved = 0
         for ((at, target) in secondaries) {
             val (ns, offset) = target
-            val label = symtab.getSymbols(at).firstOrNull { it.name == ClassNaming.VFTABLE && isSeededLabel(it) }
+            val label = symtab.getSymbols(at).firstOrNull { it.name == ClassNaming.VFTABLE && it.isSeededLabel() }
                 ?: continue
             val seeded = label.parentNamespace as? GhidraClass ?: continue
             if (seeded == ns) continue
-            val slots = listing.getDataAt(at)?.takeIf(::isSeeded)
+            val slots = listing.getDataAt(at)?.takeIf { it.isSeeded() }
                 ?.let { d -> (0 until d.numComponents).mapNotNull { d.getComponent(it).value as? Address } }
                 ?: continue
             label.delete()
-            for (sym in symtab.getSymbols(seeded).iterator().asSequence().toList()) {
-                runCatching { sym.setNamespace(ns) }
-                    .onFailure { warn("vftable-regroup-member", "${sym.name} into ${ns.name}: $it", sym.address) }
+            for (sym in symtab.getSymbols(seeded)) {
+                runCatching { sym.setNamespace(ns) }.onFailure {
+                    warn("vftable-regroup-member", "${sym.name} into ${ns.name}: $it", sym.address)
+                }
             }
             if (!symtab.getSymbols(seeded).hasNext()) seeded.symbol.delete()
             val secondary = ClassNaming.plainSecondaryLabel(offset)
@@ -251,7 +246,7 @@ class GenericVftableFinder(
      * a VTT points at it. The new class stands for the base the table is built for, whose slots it holds. Returns
      * whether it seeded a class. It doesn't when a table is already laid out or labelled at [table].
      */
-    fun seedConstruction(table: Address): Boolean {
+    private fun seedConstruction(table: Address): Boolean {
         if (symtab.getSymbols(table).any { it.source != SourceType.DEFAULT } || !isFree(table)) return false
         val slots = program.functionSlots(table, PlainVtables).toList().takeIf { it.isNotEmpty() } ?: return false
         val ns = symtab.buildClassNamespaces(listOf("$SEEDED_CLASS_PREFIX$table"), SEEDED)
@@ -312,7 +307,7 @@ class GenericVftableFinder(
 
     /** Whether a vtable label or symbol of any ABI's is at [at], other than one this finder seeded. */
     private fun isClaimed(at: Address) = symtab.getSymbols(at).any {
-        (ClassNaming.isVftableLabel(it.name) && !isSeededLabel(it)) ||
+        (ClassNaming.isVftableLabel(it.name) && !it.isSeededLabel()) ||
             it.name == ClassNaming.VTABLE ||
             CxxAbi.ofVtableSymbol(it.name) != null
     }
@@ -323,21 +318,19 @@ class GenericVftableFinder(
      */
     private fun isFree(at: Address): Boolean {
         val laid = listing.getDefinedDataContaining(at) ?: return true
-        if (isSeeded(laid)) return true
+        if (laid.isSeeded()) return true
         val dt = laid.baseDataType
         return laid.address == at && laid.length.toLong() == ptr && dt !is Composite && dt !is Array
     }
 
     /** Whether [laid] is a `<Class>_vftable` this finder laid, under its `vftable` label. */
-    private fun isSeeded(laid: Data) =
-        laid.dataType is Structure && symtab.getSymbols(laid.address).any(::isSeededLabel)
+    private fun Data.isSeeded() = dataType is Structure && symtab.getSymbols(address).any { it.isSeededLabel() }
 
-    private fun isSeededLabel(sym: Symbol) = ClassNaming.isClassVftableLabel(sym.name) && sym.source == SEEDED &&
-        sym.parentNamespace.name.startsWith(SEEDED_CLASS_PREFIX)
+    private fun Symbol.isSeededLabel() = ClassNaming.isClassVftableLabel(name) && source == SEEDED &&
+        parentNamespace.name.startsWith(SEEDED_CLASS_PREFIX)
 
-    private fun isNamed(at: Address) = symtab.getPrimarySymbol(at)?.let {
-        it.source != SourceType.DEFAULT && !isSeededLabel(it)
-    } == true
+    private fun isNamed(at: Address) = symtab.getPrimarySymbol(at)
+        ?.let { it.source != SourceType.DEFAULT && !it.isSeededLabel() } == true
 
     /**
      * Whether the word at [pfn] can be a slot pointing at [target]: an imported function's thunk, or code

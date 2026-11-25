@@ -8,6 +8,7 @@ import ghicpp.abi.slots
 import ghicpp.dissect.DissectingParser
 import ghicpp.dissect.DissectionCache
 import ghicpp.dissect.ThisFunctionDissector
+import ghicpp.dissect.findVbtables
 import ghidra.app.cmd.data.rtti.Rtti1Model
 import ghidra.app.cmd.data.rtti.Rtti3Model
 import ghidra.app.cmd.data.rtti.Rtti4Model
