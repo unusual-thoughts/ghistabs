@@ -369,7 +369,7 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         /** [ns]'s members, and its [imports]: the same class's namespaces under the libraries it's imported from. */
         fun membersOf(ns: Namespace, imports: List<Namespace> = emptyList()): List<Member> {
             val slots by lazy { program.slotsOf(ns) }
-            val virtuals by lazy { slots.keys }
+            val virtuals by lazy { slots.keys + program.constructionSlotTargets(ns) }
             val (symbols, aliases) = (listOf(ns) + imports).flatMap { symtab.getSymbols(it) }
                 .withoutRepeats { it.labelKind() == MemberKind.LABEL }
             val members = symbols.mapNotNull { sym ->
