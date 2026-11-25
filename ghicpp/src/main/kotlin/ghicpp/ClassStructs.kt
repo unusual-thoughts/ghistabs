@@ -142,8 +142,6 @@ fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
  */
 internal fun DiagnosticSink.placeMember(owner: Structure, at: Int, member: Structure) {
     if (member == owner) return
-    // A base subobject the class pass laid there already, a virtual one too, which the constructors build alike.
-    if (owner.definedComponents.any { it.isAt(at, member) }) return
     val field = ClassNaming.fieldName(at)
     fun DataTypeComponent.isOwnVfptr(into: Structure) =
         into == owner && at > 0 && this.offset == at && fieldName == ClassUtils.VFPTR
