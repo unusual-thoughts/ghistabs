@@ -235,6 +235,25 @@ class MemberObjectPass(
             drafts = merged + structorBases(merged)
         }
 
+        fun NonPolymorphicClass.fresh(taken: MutableSet<Function>): NonPolymorphicClass? {
+            fun Set<Function>.atZero(pick: (Set<Function>) -> Function?) = mapNotNull { f ->
+                calls[f].orEmpty()[0L]?.let(pick)?.takeIf {
+                    it !in found.roles && it !in taken && it.takesThis()
+                }
+            }.toSet()
+            val fresh = NonPolymorphicClass()
+            fresh.ctors += ctors.atZero { it.firstOrNull() }.ifEmpty { return null }
+            fresh.dtors += dtors.atZero { it.lastOrNull() }.ifEmpty { return null }
+            val passing = dissector.readCalls(dtors, monitor).objectCalls.values.flatten()
+                .filter { it.obj == CalledObject.This && it.offset == 0L && it.args > 0 }
+                .mapTo(mutableSetOf()) { it.callee }
+            if ((fresh.ctors intersect fresh.dtors).isNotEmpty() || (fresh.dtors intersect passing).isNotEmpty()) {
+                return null
+            }
+            taken += fresh.ctors + fresh.dtors
+            return fresh
+        }
+
         /**
          * The bases at `this` + 0 of [members] that no other structor builds: where a class's constructors call one
          * function first there and its destructors another last, neither a class's structor already, those are a
@@ -242,40 +261,19 @@ class MemberObjectPass(
          * ([helperStores]). A destructor takes `this` alone, so one its destructors pass more is a method, such as
          * an allocator member's `deallocate`, and makes no base. Their bases' own follow, down to [MAX_DEPTH].
          */
-        private fun structorBases(members: List<NonPolymorphicClass>): List<NonPolymorphicClass> {
+        private fun structorBases(members: List<NonPolymorphicClass>): List<NonPolymorphicClass> = buildList {
             val taken = members.flatMapTo(mutableSetOf()) { it.functions }
-            val bases = mutableListOf<NonPolymorphicClass>()
             var derived = members
             repeat(MAX_DEPTH) {
-                val fresh = derived.mapNotNull { m ->
-                    fun atZero(fs: Set<Function>, pick: (Set<Function>) -> Function?) = fs.mapNotNull { f ->
-                        m.calls[f].orEmpty()[0L]?.let(pick)
-                            ?.takeIf { it !in found.roles && it !in taken && it.takesThis() }
-                    }.toSet()
-                    val ctors = atZero(m.ctors) { it.firstOrNull() }
-                    if (ctors.isEmpty()) return@mapNotNull null
-                    val passing = dissector.readCalls(m.dtors, monitor).objectCalls.values.flatten()
-                        .filter { it.obj == CalledObject.This && it.offset == 0L && it.args > 0 }
-                        .mapTo(mutableSetOf()) { it.callee }
-                    val dtors = atZero(m.dtors) { it.lastOrNull() }
-                    val disjoint = (ctors intersect dtors).isEmpty() && (dtors intersect passing).isEmpty()
-                    if (dtors.isEmpty() || !disjoint) return@mapNotNull null
-                    taken += ctors + dtors
-                    NonPolymorphicClass().also {
-                        it.ctors += ctors
-                        it.dtors += dtors
-                    }
-                }
-                if (fresh.isEmpty()) return bases
+                val fresh = derived.mapNotNull { it.fresh(taken) }.ifEmpty { return@buildList }
                 val uses = dissector.readCalls(fresh.flatMap { it.functions }, monitor)
                 for (m in fresh) {
                     m.stores = m.ctors.map { uses.thisStores[it].orEmpty() }.mergedStores()
                     for (f in m.functions) m.calls[f] = uses.subobjectCalls[f].orEmpty()
                 }
-                bases += fresh
+                addAll(fresh)
                 derived = fresh
             }
-            return bases
         }
 
         /**
@@ -289,8 +287,7 @@ class MemberObjectPass(
                     f !in found.roles && byFunction[f].let { it == null || it == m } && f !in m.ctors &&
                         !f.isExternal && f.takesThis()
                 }
-            }.filterValues { it.isNotEmpty() }
-            if (helpers.isEmpty()) return
+            }.filterValues { it.isNotEmpty() }.ifEmpty { return }
             val uses = dissector.readCalls(
                 helpers.values.flatten().distinct(),
                 monitor,
