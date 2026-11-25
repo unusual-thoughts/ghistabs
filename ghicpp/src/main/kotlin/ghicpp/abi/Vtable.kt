@@ -144,7 +144,7 @@ internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function
  */
 private fun Program.startsTable(pfn: Address): Boolean =
     symbolTable.getPrimarySymbol(pfn)?.source?.let { it != SourceType.DEFAULT } == true ||
-        referenceManager.getReferencesTo(pfn).any { listing.getInstructionAt(it.fromAddress) != null }
+        isTakenByCode(pfn)
 
 /**
  * Whether the slot at [pfn] points at code: executable memory, and not back into the read-only block the

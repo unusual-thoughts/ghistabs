@@ -6,6 +6,8 @@ import ghicpp.abi.*
 import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.abi.generic.PlainVtables
 import ghicpp.abi.generic.PlainVtables.MAX_SUBOBJECT_OFFSET
+import ghicpp.abi.generic.hasVtableHeader
+import ghicpp.abi.generic.isRttiWord
 import ghicpp.abi.ofVtableSymbol
 import ghicpp.describeVxTable
 import ghicpp.fixup.isTailJumpTarget
@@ -81,7 +83,7 @@ class GenericVftableFinder(
             .chunkWith { a, b -> b.src == a.src + ptr && !b.begins() && !isNamed(b.src) }
             .flatMap { it.splitAtNulls() }
             .filter { run -> run.first().begins() && !isClaimed(run.first().src) && run.any { it.dst.offset != 0L } }
-            .filter { run -> run.first().dst.offset != 0L || hasVtableHeader(run.first().src) }
+            .filter { run -> run.first().dst.offset != 0L || program.hasVtableHeader(run.first().src) }
             .map { PotentialVtable(it) }
     }
 
@@ -104,10 +106,9 @@ class GenericVftableFinder(
             var end: Address? = null
             for (table in potentialVtables.sortedBy { it.addr }) {
                 val top = table.addr.wordBefore(2)
-                val rtti = table.addr.wordBefore(1)
                 val contiguous = end != null && onlyOffsetsBetween(end, table.addr.subtractNoWrap(2 * ptr))
                 when {
-                    top == null || rtti == null || !isRttiWord(rtti) -> primary = null
+                    top == null || !program.isRttiWord(table.addr.subtractNoWrap(ptr)) -> primary = null
 
                     top == 0L -> primary = table
 
@@ -124,22 +125,6 @@ class GenericVftableFinder(
     private fun Address.wordBefore(words: Int) = signedWordBefore(program, words)
 
     /**
-     * Whether an Itanium vtable header comes before [table]: an `offset_to_top` that a subobject could have, then
-     * an RTTI word.
-     */
-    private fun hasVtableHeader(table: Address): Boolean {
-        val top = table.wordBefore(2) ?: return false
-        val rtti = table.wordBefore(1) ?: return false
-        return top <= 0 && -top < MAX_SUBOBJECT_OFFSET && isRttiWord(rtti)
-    }
-
-    /** An rtti word: 0, with no RTTI, or a pointer to data, a typeinfo. */
-    private fun isRttiWord(word: Long) = word == 0L || runCatching {
-        program.memory.getBlock(program.addressFactory.defaultAddressSpace.getAddress(word))
-            ?.let { it.isInitialized && !it.isExecute }
-    }.getOrNull() == true
-
-    /**
      * Whether the words from [from] up to [until] are a few vbase, vcall and top offsets and rtti words, as a group
      * holds between tables: the header of a secondary with no slots of its own, a virtual base's, is all it has.
      */
@@ -147,10 +132,8 @@ class GenericVftableFinder(
         if (until < from) return false
         val words = until.subtract(from) / ptr
         return words <= MAX_OFFSET_WORDS && (0 until words).all { i ->
-            until.wordBefore((words - i).toInt())?.let {
-                kotlin.math.abs(it) < MAX_SUBOBJECT_OFFSET || isRttiWord(it)
-            } ==
-                true
+            val word = until.wordBefore((words - i).toInt()) ?: return@all false
+            kotlin.math.abs(word) < MAX_SUBOBJECT_OFFSET || program.isRttiWord(until.subtractNoWrap((words - i) * ptr))
         }
     }
 

@@ -89,9 +89,7 @@ internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
                     obj.offset,
                     returns,
                     inSlot,
-                    next.takeUnless {
-                        inSlot
-                    },
+                    next = next.takeUnless { inSlot },
                 )
             }
     }.toList()
