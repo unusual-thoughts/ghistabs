@@ -111,6 +111,23 @@ class ClassStructLayoutIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
     }
 
     @Test
+    fun `a member stretching its holder's own fields back takes over an empty base's field inside them`() {
+        val (owner, member) = edit {
+            owner(data(0xc, 0xc), 0xc).also {
+                val empty = add(StructureDataType(CategoryPath("/ClassDataTypes/Empty"), "Empty", 0))
+                    .apply { isPackingEnabled = true }
+                it.insertAtOffset(0xc, empty, 0, "_base_", null)
+            } to member()
+        }
+        edit { sink.placeMember(owner, 8, member) }
+        val own = owner.getComponentAt(8).dataType as Structure
+        own.name mustBe "Owner_data"
+        own.getComponentAt(0).dataType mustBe member
+        owner.definedComponents.none { it.length == 0 } mustBe true
+        unplaced() mustBe emptyList()
+    }
+
+    @Test
     fun `split around a vptr, a member goes in the own fields inside the class's fields run`() {
         val (owner, member) = edit { splitOwner(4, 0xc) to member() }
         edit { sink.placeMember(owner, 8, member) }
