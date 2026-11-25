@@ -33,8 +33,12 @@ import ghidrakt.diagnose.DiagnosticSink
  * So does an object `operator new` allocates whose constructor stores no vptr: the first function called on what
  * it returns, where that's no structor the class pass found, builds a class at least as large as allocated.
  *
- * A call at `this` + 0 builds a base, which the class pass reads. An ordinary method a constructor calls first
- * on a member with no constructor of its own looks the same as one, so this is a guess, as the pass's are.
+ * A call at `this` + 0 builds a base, which the class pass reads. So does one a constructor of a class with no
+ * vtable makes to another's constructor, or a destructor's last to another's destructor: that class is its base
+ * at 0. Where the call is to a polymorphic class's constructor, that class is a member at 0, as a class deriving
+ * from it would store a vptr of its own. Any other function a constructor calls on `this` + 0 sets up its fields
+ * ([MemberObjects.helperStores]), so what it stores is the class's too. An ordinary method a constructor calls
+ * first on a member with no constructor of its own looks the same as one, so this is a guess, as the pass's are.
  */
 class MemberObjectPass(
     private val program: Program,
@@ -68,6 +72,9 @@ class MemberObjectPass(
         val dtors = linkedSetOf<Function>()
         var stores: Stores = emptyMap()
         var cls: PlainClass? = null
+
+        /** What each of its structors calls on `this` + k, by k. */
+        val calls = mutableMapOf<Function, Map<Long, Set<Function>>>()
 
         /** The size `operator new` allocates it with, the largest; 0 where nothing allocates it. */
         var allocated = 0L
@@ -119,9 +126,13 @@ class MemberObjectPass(
     fun run(found: FoundStructors, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
         val objects = MemberObjects(found, monitor)
         for (m in objects.drafts) m.buildClass()
+        val byFunction = objects.drafts.flatMap { m -> m.functions.map { it to m } }.toMap()
+        val atZero = mutableListOf<Pair<Subobject, ContainingClass>>()
+        val bases = addNonPolymorphicBases(objects.drafts, byFunction, found, atZero)
+        objects.helperStores(byFunction)
         val derived = addEmptyBases(objects.emptyBases.mapValues { (_, bases) -> bases.map { it.merged } })
         val classes = objects.drafts.filter { it.cls != null }
-        val sizes = objects.sizes(classes)
+        val sizes = objects.sizes(classes, bases)
         monitor.initialize(classes.size.toLong(), "Naming member object classes' constructors and destructors")
         for (m in classes) {
             monitor.increment()
@@ -144,8 +155,10 @@ class MemberObjectPass(
             plainClasses,
             classes.associate { it.cls!! to it.stores },
         )
-        monitor.initialize(objects.subobjects.size.toLong(), "Laying member objects in their classes")
-        for ((sub, what) in objects.subobjects) {
+        // A polymorphic class at 0 is whole already: it goes in first.
+        val laid = atZero + objects.subobjects
+        monitor.initialize(laid.size.toLong(), "Laying member objects in their classes")
+        for ((sub, what) in laid) {
             monitor.increment()
             val member = what.decl?.let(::structOf)?.takeUnless { it.isZeroLength } ?: continue
             sub.container.decl?.let(::structOf)?.let { placeMember(it, sub.offset.toInt(), member) }
@@ -209,22 +222,95 @@ class MemberObjectPass(
                 structors = withCalls(structors.flatMap(::members), monitor)
             }
             subobjects = levels.asReversed().flatMap { it.toList() }
-            drafts = drafted.values.map { it.merged }.distinct()
-            val reads = dissector.readCalls(drafts.flatMap { it.ctors }, monitor)
-            for (m in drafts) {
+            val merged = drafted.values.map { it.merged }.distinct()
+            val reads = dissector.readCalls(merged.flatMap { it.functions }, monitor)
+            for (m in merged) {
                 m.stores = m.ctors.map { reads.thisStores[it].orEmpty() }.mergedStores()
+                for (f in m.functions) m.calls[f] = reads.subobjectCalls[f].orEmpty()
                 // A function that both builds one and destroys one is neither's.
                 val both = m.ctors intersect m.dtors
                 m.ctors -= both
                 m.dtors -= both
             }
+            drafts = merged + structorBases(merged)
         }
 
         /**
-         * Each of [classes]' size: how far its constructors store or its own members reach, the further: the
-         * deepest first, so each member's is known by then, but for members of classes merged across levels.
+         * The base this class's structors build at `this` + 0, or null: what its constructors call first there and
+         * its destructors last, none of them a known structor, a function [taken] by another class, or one function
+         * both call. A destructor takes `this` alone, so one its destructors pass more is a member's method, such as
+         * an allocator's `deallocate`, and makes no base. Adds the base's structors to [taken].
          */
-        fun sizes(classes: List<NonPolymorphicClass>): Map<NonPolymorphicClass, Int> {
+        private fun NonPolymorphicClass.baseAtZero(taken: MutableSet<Function>): NonPolymorphicClass? {
+            fun Set<Function>.atZero(pick: (Set<Function>) -> Function?) = mapNotNull { f ->
+                calls[f].orEmpty()[0L]?.let(pick)?.takeIf {
+                    it !in found.roles && it !in taken && it.takesThis()
+                }
+            }.toSet()
+            val base = NonPolymorphicClass()
+            base.ctors += ctors.atZero { it.firstOrNull() }.ifEmpty { return null }
+            base.dtors += dtors.atZero { it.lastOrNull() }.ifEmpty { return null }
+            val passing = dissector.readCalls(dtors, monitor).objectCalls.values.flatten()
+                .filter { it.obj == CalledObject.This && it.offset == 0L && it.args > 0 }
+                .mapTo(mutableSetOf()) { it.callee }
+            if ((base.ctors intersect base.dtors).isNotEmpty() || (base.dtors intersect passing).isNotEmpty()) {
+                return null
+            }
+            taken += base.ctors + base.dtors
+            return base
+        }
+
+        /**
+         * The bases at `this` + 0 of [members] that no other structor builds ([baseAtZero]), and their bases' own,
+         * down to [MAX_DEPTH]. One function both structors call there is a method setting up its fields
+         * ([helperStores]).
+         */
+        private fun structorBases(members: List<NonPolymorphicClass>): List<NonPolymorphicClass> = buildList {
+            val taken = members.flatMapTo(mutableSetOf()) { it.functions }
+            var derived = members
+            repeat(MAX_DEPTH) {
+                val bases = derived.mapNotNull { it.baseAtZero(taken) }.ifEmpty { return@buildList }
+                val uses = dissector.readCalls(bases.flatMap { it.functions }, monitor)
+                for (m in bases) {
+                    m.stores = m.ctors.map { uses.thisStores[it].orEmpty() }.mergedStores()
+                    for (f in m.functions) m.calls[f] = uses.subobjectCalls[f].orEmpty()
+                }
+                addAll(bases)
+                derived = bases
+            }
+        }
+
+        /**
+         * Adds to each of [drafts]' stores what the functions its constructors call on `this` + 0 store, but the
+         * structors of a class ([byFunction]): a method setting up its fields, such as one its destructor calls
+         * too, or one a compiler folded into its destructor, where its constructor stores nothing itself.
+         */
+        fun helperStores(byFunction: Map<Function, NonPolymorphicClass>) {
+            val helpers = drafts.associateWith { m ->
+                m.ctors.flatMap { m.calls[it].orEmpty()[0L].orEmpty() }.distinct().filter { f ->
+                    f !in found.roles && byFunction[f].let { it == null || it == m } && f !in m.ctors &&
+                        !f.isExternal && f.takesThis()
+                }
+            }.filterValues { it.isNotEmpty() }.ifEmpty { return }
+            val uses = dissector.readCalls(
+                helpers.values.flatten().distinct(),
+                monitor,
+                "Decompiling what member constructors call on this",
+            )
+            for ((m, fs) in helpers) {
+                m.stores = (listOf(m.stores) + fs.map { uses.thisStores[it].orEmpty() }).mergedStores()
+            }
+        }
+
+        /**
+         * Each of [classes]' size: how far its constructors store or its own members, or its base ([bases]), reach,
+         * the furthest: the deepest first, so each member's is known by then, but for members of classes merged
+         * across levels.
+         */
+        fun sizes(
+            classes: List<NonPolymorphicClass>,
+            bases: Map<NonPolymorphicClass, NonPolymorphicClass>,
+        ): Map<NonPolymorphicClass, Int> {
             val size = classes.associateWith { m ->
                 maxOf(m.stores.maxOfOrNull { (at, dt) -> at + dt.length } ?: 0, m.allocated.toInt())
             }.toMutableMap()
@@ -235,6 +321,7 @@ class MemberObjectPass(
                     val end = sub.offset.toInt() + (size[m] ?: 0)
                     if (end > (size[container] ?: 0)) size[container] = end
                 }
+                for ((m, base) in bases) size[m] = maxOf(size[m] ?: 0, size[base] ?: 0)
             }
             return size
         }
@@ -350,6 +437,34 @@ class MemberObjectPass(
      * empty function among the no-op virtuals of many classes. A constructor is only ever called.
      */
     private fun Function.isAddressTaken() = program.addressTakers(entryPoint).any()
+
+    /**
+     * Gives each of [members] the base its structors build at `this` + 0, the class of another of [members]
+     * ([byFunction]): the one its constructor calls first there, or its destructor last. Where its constructor
+     * calls a polymorphic class's first there, that class goes [atZero]. Returns each class given a base, and
+     * that base.
+     */
+    private fun addNonPolymorphicBases(
+        members: List<NonPolymorphicClass>,
+        byFunction: Map<Function, NonPolymorphicClass>,
+        found: FoundStructors,
+        atZero: MutableList<Pair<Subobject, ContainingClass>>,
+    ): Map<NonPolymorphicClass, NonPolymorphicClass> = buildMap {
+        for (m in members) {
+            val cls = m.cls ?: continue
+            val first = m.ctors.mapNotNull { m.calls[it].orEmpty()[0L]?.firstOrNull() }
+            val last = m.dtors.mapNotNull { m.calls[it].orEmpty()[0L]?.lastOrNull() }
+            first.firstNotNullOfOrNull { f -> found.roles[f]?.takeIf { it.second == CONSTRUCTOR }?.first }
+                ?.let { atZero += Subobject(m, 0L) to ContainingClass.Existing(it) }
+            val structors = first.filter { f -> byFunction[f]?.ctors?.contains(f) == true } +
+                last.filter { f -> byFunction[f]?.dtors?.contains(f) == true }
+            val base = structors.map(byFunction::getValue)
+                .firstOrNull { it != m && it.cls?.derivesFrom(cls) == false } ?: continue
+            cls.bases += ClassBase(base.cls!!, isVirtual = false, access = null, 0L)
+            debug("base-inferred-structor", "${cls.name} : ${base.cls!!.name}, off the structor it calls on `this`")
+            put(m, base)
+        }
+    }
 
     /** Adds each of [empty]'s classes as a base at offset 0 of its class, and returns the classes given one. */
     private fun addEmptyBases(empty: Map<ClassDecl, List<NonPolymorphicClass>>): List<ClassDecl> =
