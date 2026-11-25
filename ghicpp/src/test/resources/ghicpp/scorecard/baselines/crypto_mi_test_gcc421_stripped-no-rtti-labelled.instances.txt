@@ -782,8 +782,6 @@ fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP:
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>,CryptoPP::SHA256>`+92:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::SimpleKeyingInterfaceImpl<CryptoPP::HMAC_Base,CryptoPP::HMAC<CryptoPP::SHA1>>,CryptoPP::HMAC<CryptoPP::SHA1>>`+12:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::SimpleKeyingInterfaceImpl<CryptoPP::HMAC_Base,CryptoPP::HMAC<CryptoPP::SHA1>>,CryptoPP::HMAC<CryptoPP::SHA1>>`+16:4
-fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+112:4
-fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+116:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+120:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+124:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+128:4
@@ -795,16 +793,12 @@ fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+148:1
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+16:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+176:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+180:4
-fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+208:4
-fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+212:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+216:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+220:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+224:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+228:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+248:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+252:4
-fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+44:4
-fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+48:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+52:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+56:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+60:4
@@ -816,8 +810,6 @@ fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+108:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+12:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+140:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+16:4
-fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+44:4
-fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+48:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+52:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+56:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+60:4
@@ -3978,8 +3970,6 @@ fields-fn `CryptoPP::HashFilter`+16:4
 fields-fn `CryptoPP::HashFilter`+48:4
 fields-fn `CryptoPP::HashVerificationFilter`+12:4
 fields-fn `CryptoPP::HashVerificationFilter`+16:4
-fields-fn `CryptoPP::HashVerificationFilter`+44:4
-fields-fn `CryptoPP::HashVerificationFilter`+48:4
 fields-fn `CryptoPP::HashVerificationFilter`+52:4
 fields-fn `CryptoPP::HashVerificationFilter`+56:4
 fields-fn `CryptoPP::HashVerificationFilter`+60:4
@@ -3999,8 +3989,6 @@ fields-fn `CryptoPP::HexDecoder`+52:4
 fields-fn `CryptoPP::HexDecoder`+56:4
 fields-fn `CryptoPP::HexEncoder`+12:4
 fields-fn `CryptoPP::HexEncoder`+16:4
-fields-fn `CryptoPP::HexEncoder`+44:4
-fields-fn `CryptoPP::HexEncoder`+48:4
 fields-fn `CryptoPP::HexEncoder`+52:4
 fields-fn `CryptoPP::HexEncoder`+56:4
 fields-fn `CryptoPP::HexEncoder`+60:4
@@ -4679,8 +4667,6 @@ fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+88:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+8:4
 fields-fn `CryptoPP::ProxyFilter`+12:4
 fields-fn `CryptoPP::ProxyFilter`+16:4
-fields-fn `CryptoPP::ProxyFilter`+44:4
-fields-fn `CryptoPP::ProxyFilter`+48:4
 fields-fn `CryptoPP::ProxyFilter`+52:4
 fields-fn `CryptoPP::ProxyFilter`+56:4
 fields-fn `CryptoPP::ProxyFilter`+60:4
@@ -4724,8 +4710,6 @@ fields-fn `CryptoPP::SHA256`+92:4
 fields-fn `CryptoPP::SHA256`+96:64
 fields-fn `CryptoPP::SignatureVerificationFilter`+12:4
 fields-fn `CryptoPP::SignatureVerificationFilter`+16:4
-fields-fn `CryptoPP::SignatureVerificationFilter`+44:4
-fields-fn `CryptoPP::SignatureVerificationFilter`+48:4
 fields-fn `CryptoPP::SignatureVerificationFilter`+52:4
 fields-fn `CryptoPP::SignatureVerificationFilter`+56:4
 fields-fn `CryptoPP::SignatureVerificationFilter`+60:4
@@ -4741,8 +4725,6 @@ fields-fn `CryptoPP::SimpleKeyingInterfaceImpl<CryptoPP::HMAC_Base,CryptoPP::HMA
 fields-fn `CryptoPP::SimpleKeyingInterfaceImpl<CryptoPP::HMAC_Base,CryptoPP::HMAC<CryptoPP::SHA1>>`+16:4
 fields-fn `CryptoPP::SimpleProxyFilter`+12:4
 fields-fn `CryptoPP::SimpleProxyFilter`+16:4
-fields-fn `CryptoPP::SimpleProxyFilter`+44:4
-fields-fn `CryptoPP::SimpleProxyFilter`+48:4
 fields-fn `CryptoPP::SimpleProxyFilter`+52:4
 fields-fn `CryptoPP::SimpleProxyFilter`+56:4
 fields-fn `CryptoPP::SimpleProxyFilter`+60:4
@@ -4757,8 +4739,6 @@ fields-fn `CryptoPP::Source`+12:4
 fields-fn `CryptoPP::Source`+16:4
 fields-fn `CryptoPP::StreamTransformationFilter`+12:4
 fields-fn `CryptoPP::StreamTransformationFilter`+16:4
-fields-fn `CryptoPP::StreamTransformationFilter`+44:4
-fields-fn `CryptoPP::StreamTransformationFilter`+48:4
 fields-fn `CryptoPP::StreamTransformationFilter`+52:4
 fields-fn `CryptoPP::StreamTransformationFilter`+56:4
 fields-fn `CryptoPP::StreamTransformationFilter`+60:4
@@ -6036,77 +6016,43 @@ sizes-fp `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCiphe
 sizes-fp `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`: 28, is 48
 sizes-fp `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`: 28, is 48
 sizes-fp `CryptoPP::DES_XEX3::Base`: 12, is 72
-sizes-fp `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`: 16, is 104
-sizes-fp `CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`: 12, is 184
-sizes-fp `CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`: 12, is 184
+sizes-fp `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`: 92, is 104
+sizes-fp `CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`: 172, is 184
 sizes-fp `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`: 4, is 8
 sizes-fp `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`: 4, is 8
-sizes-fp `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`: 12, is 100
-sizes-fp `CryptoPP::DL_GroupParameters_DSA`: 12, is 100
-sizes-fp `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`: 12, is 100
-sizes-fp `CryptoPP::DL_GroupParameters_GFP`: 12, is 100
-sizes-fp `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`: 12, is 100
-sizes-fp `CryptoPP::DL_GroupParameters_IntegerBased`: 12, is 32
-sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`: 8, is 148
-sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`: 8, is 244
-sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`: 8, is 208
-sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`: 8, is 148
-sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`: 8, is 148
-sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`: 8, is 108
-sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`: 8, is 204
-sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`: 8, is 168
-sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`: 8, is 108
-sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`: 8, is 108
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_DecryptorBase<CryptoPP::Integer>,CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>,CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>>`: 12, is 184
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_EncryptorBase<CryptoPP::Integer>,CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>>`: 12, is 184
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_SignerBase<CryptoPP::EC2NPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>>`: 12, is 280
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_SignerBase<CryptoPP::ECPPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>>`: 12, is 244
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_SignerBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 12, is 184
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_SignerBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>,CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 12, is 184
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_SignerBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>>`: 12, is 184
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::EC2NPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>>`: 12, is 288
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::ECPPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>>`: 12, is 268
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 12, is 184
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 12, is 184
-sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>>`: 12, is 184
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_DecryptorBase<CryptoPP::Integer>,CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>,CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>>`: 24, is 184
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_EncryptorBase<CryptoPP::Integer>,CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>>`: 24, is 184
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_SignerBase<CryptoPP::EC2NPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>>`: 24, is 280
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_SignerBase<CryptoPP::ECPPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>>`: 24, is 244
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_SignerBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 24, is 184
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_SignerBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>,CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 24, is 184
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_SignerBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>>`: 24, is 184
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::EC2NPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>>`: 24, is 288
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::ECPPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>>`: 24, is 268
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 24, is 184
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 24, is 184
-sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>>`: 24, is 184
-sizes-fp `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_DSA>`: 12, is 172
-sizes-fp `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`: 12, is 268
-sizes-fp `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`: 12, is 232
-sizes-fp `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`: 12, is 268
-sizes-fp `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`: 12, is 232
-sizes-fp `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: 12, is 172
-sizes-fp `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>`: 12, is 172
-sizes-fp `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: 12, is 172
-sizes-fp `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>`: 12, is 268
-sizes-fp `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>`: 12, is 232
-sizes-fp `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`: 12, is 172
-sizes-fp `CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>`: 12, is 276
-sizes-fp `CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>`: 12, is 256
-sizes-fp `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: 12, is 172
-sizes-fp `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>`: 12, is 172
-sizes-fp `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: 12, is 172
-sizes-fp `CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>`: 12, is 280
-sizes-fp `CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>`: 12, is 244
-sizes-fp `CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>`: 12, is 184
-sizes-fp `CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>>`: 12, is 184
-sizes-fp `CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>`: 12, is 184
-sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>`: 12, is 288
-sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>`: 12, is 268
-sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>`: 12, is 184
-sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>>`: 12, is 184
-sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>`: 12, is 184
+sizes-fp `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`: 88, is 100
+sizes-fp `CryptoPP::DL_GroupParameters_DSA`: 88, is 100
+sizes-fp `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`: 88, is 100
+sizes-fp `CryptoPP::DL_GroupParameters_GFP`: 88, is 100
+sizes-fp `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`: 88, is 100
+sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`: 136, is 148
+sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`: 136, is 148
+sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`: 136, is 148
+sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`: 96, is 108
+sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`: 96, is 108
+sizes-fp `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`: 96, is 108
+sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_EncryptorBase<CryptoPP::Integer>,CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>>`: 172, is 184
+sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::EC2NPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>>`: 276, is 288
+sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::ECPPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>>`: 256, is 268
+sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 172, is 184
+sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 172, is 184
+sizes-fp `CryptoPP::DL_ObjectImpl<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>>`: 172, is 184
+sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_EncryptorBase<CryptoPP::Integer>,CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>>`: 172, is 184
+sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::EC2NPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>>`: 276, is 288
+sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::ECPPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>>`: 256, is 268
+sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 172, is 184
+sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>>`: 172, is 184
+sizes-fp `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_VerifierBase<CryptoPP::Integer>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>,CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>>`: 172, is 184
+sizes-fp `CryptoPP::DL_PublicKey_EC<CryptoPP::EC2N>`: 264, is 276
+sizes-fp `CryptoPP::DL_PublicKey_EC<CryptoPP::ECP>`: 244, is 256
+sizes-fp `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_DSA>`: 160, is 172
+sizes-fp `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP>`: 160, is 172
+sizes-fp `CryptoPP::DL_PublicKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`: 160, is 172
+sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>`: 276, is 288
+sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>`: 256, is 268
+sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>`: 172, is 184
+sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>>`: 172, is 184
+sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>`: 172, is 184
 sizes-fp `CryptoPP::ECB_OneWay`: 24, is 36
 sizes-fp `CryptoPP::EqualityComparisonFilter`: 36, is 308
 sizes-fp `CryptoPP::FilterWithBufferedInput`: 52, is 68
@@ -6115,28 +6061,22 @@ sizes-fp `CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,32u,CryptoPP::Nu
 sizes-fp `CryptoPP::LC_RNG`: 4, is 8
 sizes-fp `CryptoPP::MaurerRandomnessTest`: 28, is 1056
 sizes-fp `CryptoPP::MeterFilter`: 24, is 112
-sizes-fp `CryptoPP::PKCS8PrivateKey`: 8, is 48
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>>`: 12, is 184
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>>`: 12, is 184
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>>`: 12, is 280
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>>`: 12, is 244
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>>`: 12, is 184
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>>>`: 12, is 184
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_SignerImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>>`: 12, is 184
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>>`: 12, is 288
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>>`: 12, is 268
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>>`: 12, is 184
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>>>`: 12, is 184
-sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>>`: 12, is 184
+sizes-fp `CryptoPP::PKCS8PrivateKey`: 44, is 48
+sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>>`: 172, is 184
+sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>>`: 276, is 288
+sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>>>`: 256, is 268
+sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>>`: 172, is 184
+sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>>>`: 172, is 184
+sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>>`: 172, is 184
 sizes-fp `CryptoPP::RandomNumberSink`: 12, is 16
 sizes-fp `CryptoPP::RandomNumberStore`: 20, is 40
 sizes-fp `CryptoPP::Redirector`: 12, is 20
 sizes-fp `CryptoPP::Rijndael::Dec`: 272, is 2592
 sizes-fp `CryptoPP::Rijndael::Enc`: 272, is 2592
 sizes-fp `CryptoPP::SignatureVerificationFilter`: 92, is 96
-sizes-fp `CryptoPP::SimpleProxyFilter`: 40, is 72
+sizes-fp `CryptoPP::SimpleProxyFilter`: 52, is 72
 sizes-fp `CryptoPP::SourceTemplate<CryptoPP::StringStore>`: 44, is 56
-sizes-fp `CryptoPP::StringSource`: 24, is 56
+sizes-fp `CryptoPP::StringSource`: 44, is 56
 sizes-fp `CryptoPP::StringStore`: 20, is 32
 sizes-fp `CryptoPP::TimerBase`: 12, is 32
 sizes-fp `CryptoPP::Timer`: 12, is 32

@@ -53,9 +53,13 @@ class BaseSplitter(private val registry: DtmRegistry, sink: DiagnosticSink) : Di
                 layouts.forEach { embed(it, own, run, name) }
             }
 
+        // A base sized past its vptr, whose fields its member objects only lay later, is as bare as one that is
+        // nothing but it: a copy of its undefined bytes would never see them.
+        val emptyTail = split.tail?.let { t -> baseDt.definedComponents.none { it.length > 0 && t.overlaps(it) } }
+        val bareOnly = split.head == null && emptyTail != false
         val head = split.head?.baseFieldsRun(baseDt)
-        val tail = split.tail?.baseFieldsRun(baseDt)
-        val bare = if (split.head == null && split.tail == null) baseDt.bareTail(tailFrom, layouts) else null
+        val tail = split.tail?.takeUnless { bareOnly }?.baseFieldsRun(baseDt)
+        val bare = if (bareOnly) baseDt.bareTail(tailFrom, layouts) else null
         // Read before the replacements: the component is live, and the vfptr's once replaced.
         val (baseName, baseComment) = baseComp.fieldName to baseComp.comment
         return (head != null || tail != null || bare != null) && runCatching {
