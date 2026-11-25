@@ -249,6 +249,42 @@ class ScorerTest {
     }
 
     @Test
+    fun `a truth base named without its namespace goes by its leaf name, and one with no class is not missed`() {
+        val unqualified = ClassHierarchy(
+            truth.classes.map {
+                when (it.id) {
+                    2L -> it.copy(bases = it.bases + base("Empty", null, offset = 4) + base("Nowhere", null))
+                    4L -> it.copy(path = listOf("ns", "Empty"))
+                    else -> it
+                }
+            },
+        )
+        val card = Scorer(
+            Truth(truthSnapshot.copy(hierarchy = unqualified), Truth.describedScope(unqualified), true, true),
+            Snapshot(
+                "subject",
+                ClassHierarchy(
+                    listOf(
+                        cls(
+                            10,
+                            "Circle",
+                            Origin.ITANIUM_RTTI,
+                            0x120,
+                            bases = listOf(base("Shape", null), base("Empty", 11)),
+                        ),
+                        ClassHierarchy.ClassView(
+                            11, listOf("ns", "Empty"), Origin.ITANIUM_RTTI,
+                            null, null, null, null, null, false, emptyList(), emptyList(), null,
+                        ),
+                    ),
+                ),
+            ),
+        ).score()
+        card.tallies["bases"] mustBe Tally(tp = 2)
+        card.notes mustBe listOf("base `?Nowhere` of `Circle`: no vtable nor function to find it by")
+    }
+
+    @Test
     fun `a destructor variant no truth vtable slot holds is not a virtual method`() {
         val d0 = fn(0x10, "~Shape", true).copy(variants = listOf(ItaniumStructor.DELETING_DTOR))
         val unslotted = ClassHierarchy(
@@ -266,5 +302,48 @@ class ScorerTest {
         ).score()
         card(null).tallies["virtual-methods"] mustBe Tally(fn = 3)
         card(setOf(0x14L, 0x24L)).tallies["virtual-methods"] mustBe Tally(fn = 2)
+    }
+
+    @Test
+    fun `a class template's structors go by its name less the template arguments`() {
+        // g++'s stabs name a template's constructor and destructor without its arguments.
+        val box = cls(5, "Box<int>", Origin.STABS, 0x140, listOf(fn(0x50, "Box"), fn(0x54, "~Box")))
+        val boxTruth = ClassHierarchy(listOf(box))
+        val card = Scorer(
+            Truth(truthSnapshot.copy(hierarchy = boxTruth), Truth.describedScope(boxTruth), true, true),
+            Snapshot(
+                "subject",
+                ClassHierarchy(
+                    listOf(cls(10, "Box<int>", Origin.ITANIUM_RTTI, 0x140, listOf(fn(0x50, "Box"), fn(0x54, "~Box")))),
+                ),
+            ),
+        ).score()
+        card.tallies["structors"] mustBe Tally(tp = 2)
+    }
+
+    @Test
+    fun `a vftable claimed for a polymorphic class the binary has no vtable of is not scored`() {
+        val up = cls(5, "Up", Origin.STABS, members = listOf(fn(0x50, "g", true)))
+        val plain = cls(6, "Plain", Origin.STABS, members = listOf(fn(0x60, "h")))
+        val upTruth = ClassHierarchy(listOf(up, plain))
+        val card = Scorer(
+            Truth(
+                truthSnapshot.copy(hierarchy = upTruth, vtables = emptyList()),
+                Truth.describedScope(upTruth),
+                true,
+                true,
+            ),
+            Snapshot(
+                "subject",
+                ClassHierarchy(
+                    listOf(
+                        cls(10, "Up", Origin.ITANIUM_RTTI, 0x140, listOf(fn(0x50, "g", true))),
+                        cls(11, "Plain", Origin.ITANIUM_RTTI, 0x160, listOf(fn(0x60, "h"))),
+                    ),
+                ),
+            ),
+        ).score()
+        card.tallies["vftables"] mustBe Tally(fp = 1)
+        card.instances["vftables-fp"] mustBe listOf("${DetachedAddresses.at(0x160)} of `Plain`")
     }
 }

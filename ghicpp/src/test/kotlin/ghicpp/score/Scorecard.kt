@@ -307,11 +307,36 @@ class Scorer(
         ?: truthByName[name]?.firstOrNull()?.let { "#${it.id}" }
         ?: "?$name"
 
-    private fun BaseRef.ownKey(): String = targetId?.let { "#$it" } ?: truthByName[name]?.firstOrNull()
-        ?.let { "#${it.id}" } ?: "?$name"
+    /**
+     * The truth class a truth base names. The stabs sometimes name a base without its namespace and leave its id
+     * out, as `Empty` for `CryptoPP::Empty`. Such a name goes to the one truth class it ends the name of.
+     */
+    private fun BaseRef.ownKey(): String = targetId?.let { "#$it" }
+        ?: (truthByName[name] ?: truthByLeaf[name]?.takeIf { it.size == 1 })?.firstOrNull()?.let { "#${it.id}" }
+        ?: "?$name"
 
-    /** Whether the truth class with this key has no vtable and no functions, leaving a recovery nothing to find. */
-    private fun String.isUnreachable() = removePrefix("#").toLongOrNull()?.let { t[it] }
+    private val truthByLeaf by lazy {
+        t.classes.flatMap { c -> leafNames(c.qualifiedName).map { it to c } }.groupBy({ it.first }, { it.second })
+    }
+
+    /** Each name [qualified] ends with after a `::` outside template arguments: `C`, then `B::C`, of `A::B::C`. */
+    private fun leafNames(qualified: String): List<String> {
+        var depth = 0
+        return qualified.indices.mapNotNull { i ->
+            when (qualified[i]) {
+                '<' -> depth++
+                '>' -> depth--
+            }
+            val atSeparator = depth == 0 && qualified.startsWith("::", i)
+            if (atSeparator) qualified.substring(i + 2) else null
+        }
+    }
+
+    /**
+     * Whether the truth class with this key has no vtable and no functions, leaving a recovery nothing to find.
+     * So has a base the truth holds no class for, since nothing names its class's functions or vtable either.
+     */
+    private fun String.isUnreachable() = startsWith("?") || removePrefix("#").toLongOrNull()?.let { t[it] }
         ?.let { it.vftable == null && it.functions().isEmpty() } == true
 
     private fun keyName(key: String) = key.removePrefix("#").toLongOrNull()?.let { t[it]?.qualifiedName } ?: key
@@ -363,6 +388,11 @@ class Scorer(
     private fun vftables(): Tally = scoredPairs.fold(Tally()) { acc, (tc, sc) ->
         acc + when {
             tc.vftable == null && sc.vftable == null -> Tally()
+
+            // A polymorphic class the binary has no vtable of, as gcc leaves out a class that is only ever built
+            // as a base: the table its base-object structors use inside a derived class is the best a recovery has.
+            tc.vftable == null && tc.id !in truthVtableClasses && tc.functions().any { isTrulyVirtual(tc, it) } ->
+                Tally()
 
             tc.vftable == null -> Tally(fp = 1).also { fp("vftables", "${sc.vftable} of `${tc.qualifiedName}`") }
 
@@ -447,7 +477,7 @@ class Scorer(
         val claimed = sc.functions().filter { sc.isStructor(it) }.map { it.at }.filter {
             it !in truthThunks
         }
-        val actual = tc.functions().filter { it.name == tc.name || it.name == "~${tc.name}" }.map { it.at }
+        val actual = tc.functions().filter { tc.isStructorName(it.name) }.map { it.at }
         (claimed.toSet() - actual.toSet()).forEach { fp("structors", "${"%x".format(it)} of `${tc.qualifiedName}`") }
         (actual.toSet() - claimed.toSet()).forEach { fn("structors", "${"%x".format(it)} of `${tc.qualifiedName}`") }
         acc + Tally.of(claimed, actual)
