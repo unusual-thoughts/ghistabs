@@ -734,64 +734,42 @@ field-sizes-fp `CryptoPP::IteratedHashBase<unsigned_long_long,CryptoPP::MessageA
 field-sizes-fp `CryptoPP::MaurerRandomnessTest`+16: 4, is 8
 field-sizes-fp `CryptoPP::NullStore`+24: 4, is 8
 field-sizes-fp `std::ios_base`+36: 4, is 64
+fields-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::Integer>`+4:4
 fields-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::PolynomialMod2>`+16:4
 fields-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::PolynomialMod2>`+20:4
-fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>`+16:4
-fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>`+20:4
+fields-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::PolynomialMod2>`+4:4
 fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>`+32:4
 fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>`+36:4
-fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>`+16:4
-fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>`+20:4
-fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>`+16:4
-fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>`+20:4
 fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>`+32:4
 fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>`+36:4
 fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>`+40:4
 fields-fn `CryptoPP::AbstractRing<CryptoPP::Integer>::MultiplicativeGroupT`+4:4
 fields-fn `CryptoPP::AbstractRing<CryptoPP::PolynomialMod2>::MultiplicativeGroupT`+4:4
-fields-fn `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>`+16:4
-fields-fn `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>`+20:4
 fields-fn `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>`+32:4
 fields-fn `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>`+36:4
 fields-fn `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>`+56:4
-fields-fn `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>`+16:4
-fields-fn `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>`+20:4
 fields-fn `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>`+44:4
 fields-fn `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::SymmetricCipher>>`+24:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>>`+16:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>>`+20:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>>`+28:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>>`+32:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>>`+16:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>>`+20:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>>`+28:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>>`+32:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+16:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+20:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+32:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+36:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+48:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+52:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+56:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+16:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+20:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+36:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+40:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`+44:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+16:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+20:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+32:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+36:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+40:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+44:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+16:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+20:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+32:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+36:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+40:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`+44:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ECB_OneWay,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>>`+16:4
-fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ECB_OneWay,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>>`+20:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ECB_OneWay,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>>`+28:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::ECB_OneWay,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>>`+32:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>,CryptoPP::SHA1>`+16:64
@@ -804,16 +782,6 @@ fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP:
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>,CryptoPP::SHA256>`+92:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::SimpleKeyingInterfaceImpl<CryptoPP::HMAC_Base,CryptoPP::HMAC<CryptoPP::SHA1>>,CryptoPP::HMAC<CryptoPP::SHA1>>`+12:4
 fields-fn `CryptoPP::AlgorithmImpl<CryptoPP::SimpleKeyingInterfaceImpl<CryptoPP::HMAC_Base,CryptoPP::HMAC<CryptoPP::SHA1>>,CryptoPP::HMAC<CryptoPP::SHA1>>`+16:4
-fields-fn `CryptoPP::AlgorithmParametersBase::ParameterNotUsed`+8:4
-fields-fn `CryptoPP::AlgorithmParametersTemplate<CryptoPP::BlockPaddingSchemeDef::BlockPaddingScheme>`+12:4
-fields-fn `CryptoPP::AlgorithmParametersTemplate<CryptoPP::ConstByteArrayParameter>`+12:4
-fields-fn `CryptoPP::AlgorithmParametersTemplate<CryptoPP::Integer::RandomNumberType>`+12:4
-fields-fn `CryptoPP::AlgorithmParametersTemplate<CryptoPP::Integer>`+12:4
-fields-fn `CryptoPP::AlgorithmParametersTemplate<bool>`+12:4
-fields-fn `CryptoPP::AlgorithmParametersTemplate<int>`+12:4
-fields-fn `CryptoPP::AlgorithmParametersTemplate<int_const*>`+12:4
-fields-fn `CryptoPP::AlgorithmParametersTemplate<unsigned_char_const*>`+12:4
-fields-fn `CryptoPP::AlgorithmParametersTemplate<unsigned_int>`+12:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+112:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+116:4
 fields-fn `CryptoPP::AuthenticatedDecryptionFilter`+120:4
@@ -869,8 +837,8 @@ fields-fn `CryptoPP::AutoSeededRandomPool`+56:16
 fields-fn `CryptoPP::AutoSeededRandomPool`+73:1
 fields-fn `CryptoPP::AutoSeededRandomPool`+80:4
 fields-fn `CryptoPP::AutoSeededRandomPool`+84:4
+fields-fn `CryptoPP::AutoSeededRandomPool`+88:4
 fields-fn `CryptoPP::AutoSeededRandomPool`+8:32
-fields-fn `CryptoPP::BERDecodeErr`+8:4
 fields-fn `CryptoPP::BERGeneralDecoder`+25:1
 fields-fn `CryptoPP::BERGeneralDecoder`+32:8
 fields-fn `CryptoPP::BERSequenceDecoder`+25:1
@@ -899,80 +867,50 @@ fields-fn `CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael:
 fields-fn `CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>`+257:1
 fields-fn `CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>`+264:4
 fields-fn `CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>`+268:4
-fields-fn `CryptoPP::BlockOrientedCipherModeBase`+16:4
-fields-fn `CryptoPP::BlockOrientedCipherModeBase`+20:4
-fields-fn `CryptoPP::BufferedTransformation::BlockingInputOnly`+8:4
-fields-fn `CryptoPP::BufferedTransformation::InvalidChannelName`+8:4
-fields-fn `CryptoPP::BufferedTransformation::NoChannelSupport`+8:4
 fields-fn `CryptoPP::Bufferless<CryptoPP::Filter>`+12:4
 fields-fn `CryptoPP::Bufferless<CryptoPP::Filter>`+16:4
 fields-fn `CryptoPP::ByteQueue`+12:1
 fields-fn `CryptoPP::ByteQueue`+16:4
 fields-fn `CryptoPP::ByteQueue`+36:1
-fields-fn `CryptoPP::CBC_CTS_Decryption`+16:4
-fields-fn `CryptoPP::CBC_CTS_Decryption`+20:4
 fields-fn `CryptoPP::CBC_CTS_Decryption`+28:4
 fields-fn `CryptoPP::CBC_CTS_Decryption`+32:4
 fields-fn `CryptoPP::CBC_CTS_Decryption`+40:4
 fields-fn `CryptoPP::CBC_CTS_Decryption`+44:4
-fields-fn `CryptoPP::CBC_CTS_Encryption`+16:4
-fields-fn `CryptoPP::CBC_CTS_Encryption`+20:4
 fields-fn `CryptoPP::CBC_CTS_Encryption`+28:4
 fields-fn `CryptoPP::CBC_CTS_Encryption`+32:4
 fields-fn `CryptoPP::CBC_CTS_Encryption`+36:4
-fields-fn `CryptoPP::CBC_Decryption`+16:4
-fields-fn `CryptoPP::CBC_Decryption`+20:4
 fields-fn `CryptoPP::CBC_Decryption`+28:4
 fields-fn `CryptoPP::CBC_Decryption`+32:4
-fields-fn `CryptoPP::CBC_Encryption`+16:4
-fields-fn `CryptoPP::CBC_Encryption`+20:4
 fields-fn `CryptoPP::CBC_Encryption`+28:4
 fields-fn `CryptoPP::CBC_Encryption`+32:4
-fields-fn `CryptoPP::CBC_ModeBase`+16:4
-fields-fn `CryptoPP::CBC_ModeBase`+20:4
 fields-fn `CryptoPP::CBC_ModeBase`+28:4
 fields-fn `CryptoPP::CBC_ModeBase`+32:4
-fields-fn `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+16:4
-fields-fn `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+20:4
 fields-fn `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+32:4
 fields-fn `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+36:4
 fields-fn `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+40:4
 fields-fn `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+44:4
 fields-fn `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::SymmetricCipher>>`+8:4
-fields-fn `CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+16:4
-fields-fn `CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+20:4
 fields-fn `CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+32:4
 fields-fn `CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+36:4
 fields-fn `CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+40:4
 fields-fn `CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+44:4
 fields-fn `CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::SymmetricCipher>>`+8:4
-fields-fn `CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+16:4
-fields-fn `CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+20:4
 fields-fn `CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+32:4
 fields-fn `CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+36:4
 fields-fn `CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+40:4
 fields-fn `CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`+44:4
 fields-fn `CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::SymmetricCipher>>`+8:4
-fields-fn `CryptoPP::CFB_ModePolicy`+16:4
-fields-fn `CryptoPP::CFB_ModePolicy`+20:4
 fields-fn `CryptoPP::CFB_ModePolicy`+40:4
-fields-fn `CryptoPP::CTR_ModePolicy`+16:4
-fields-fn `CryptoPP::CTR_ModePolicy`+20:4
-fields-fn `CryptoPP::CannotFlush`+8:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+16:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+185:1
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+192:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+196:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+28:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+32:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+40:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+44:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+48:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`+56:128
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+16:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+209:1
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+216:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+220:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+32:4
@@ -984,11 +922,9 @@ fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherF
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+68:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+72:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+80:128
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+16:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+193:1
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+200:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+204:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+36:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+40:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+44:4
@@ -996,11 +932,9 @@ fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherF
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+52:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+56:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+64:128
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+16:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+193:1
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+200:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+204:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+32:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+36:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+40:4
@@ -1009,11 +943,9 @@ fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherF
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+52:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+56:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+64:128
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+16:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+193:1
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+200:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+204:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+32:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+36:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+40:4
@@ -1022,19 +954,15 @@ fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherF
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+52:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+56:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`+64:128
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+16:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+185:1
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+192:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+196:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+28:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+32:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+40:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+44:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+48:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`+56:128
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`+16:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`+28:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`+297:1
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`+304:4
@@ -1045,36 +973,24 @@ fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherF
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`+48:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`+52:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`+56:240
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Decryption>`+16:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Decryption>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Decryption>`+28:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Decryption>`+32:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Decryption>`+40:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Decryption>`+44:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Encryption>`+16:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Encryption>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Encryption>`+28:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Encryption>`+32:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Encryption>`+36:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Decryption>`+16:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Decryption>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Decryption>`+28:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Decryption>`+32:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Decryption>`+40:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Decryption>`+44:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Encryption>`+16:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Encryption>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Encryption>`+28:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Encryption>`+32:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+16:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+32:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+36:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+48:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+52:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`+56:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ECB_OneWay>`+16:4
-fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ECB_OneWay>`+20:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ECB_OneWay>`+28:4
 fields-fn `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ECB_OneWay>`+32:4
 fields-fn `CryptoPP::ClonableImpl<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::DES::Base>`+145:1
@@ -1093,31 +1009,22 @@ fields-fn `CryptoPP::ClonableImpl<CryptoPP::SHA256,CryptoPP::AlgorithmImpl<Crypt
 fields-fn `CryptoPP::ClonableImpl<CryptoPP::SHA256,CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>,CryptoPP::SHA256>>`+81:1
 fields-fn `CryptoPP::ClonableImpl<CryptoPP::SHA256,CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>,CryptoPP::SHA256>>`+88:4
 fields-fn `CryptoPP::ClonableImpl<CryptoPP::SHA256,CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>,CryptoPP::SHA256>>`+92:4
-fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+16:4
-fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+20:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+32:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+36:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+48:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+52:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+56:4
-fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+16:4
-fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+20:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+36:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+40:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`+44:4
-fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+16:4
-fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+20:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+32:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+36:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+40:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+44:4
-fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+16:4
-fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+20:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+32:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+36:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+40:4
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+44:4
-fields-fn `CryptoPP::CryptoMaterial::InvalidMaterial`+8:4
 fields-fn `CryptoPP::CustomFlushPropagation<CryptoPP::Filter>`+12:4
 fields-fn `CryptoPP::CustomFlushPropagation<CryptoPP::Filter>`+16:4
 fields-fn `CryptoPP::DERGeneralEncoder`+12:1
@@ -1179,7 +1086,6 @@ fields-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime
 fields-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`+88:4
 fields-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`+92:4
 fields-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`+96:4
-fields-fn `CryptoPP::DL_BadElement`+8:4
 fields-fn `CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`+100:4
 fields-fn `CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`+104:4
 fields-fn `CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`+108:4
@@ -2973,8 +2879,6 @@ fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+36:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+40:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+44:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+48:1
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+52:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+56:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+60:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+64:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+72:4
@@ -3005,8 +2909,6 @@ fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultS
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+40:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+44:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+48:1
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+52:4
-fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+56:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+60:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+64:4
 fields-fn `CryptoPP::DL_PrivateKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+72:4
@@ -3373,10 +3275,8 @@ fields-fn `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+100:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+104:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+108:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+12:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+160:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+168:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+16:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+20:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+24:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+32:4
@@ -3397,35 +3297,17 @@ fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_DSA>`+96:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+100:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+108:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+112:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+116:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+120:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+128:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+12:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+132:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+136:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+140:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+144:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+148:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+152:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+156:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+160:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+164:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+16:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+172:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+176:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+180:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+184:1
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+185:1
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+188:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+196:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+200:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+204:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+20:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+220:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+224:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+232:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+236:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+24:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+264:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+268:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+272:4
@@ -3434,60 +3316,28 @@ fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+40:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+48:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+52:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+56:1
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+64:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+68:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+76:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+80:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+84:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+88:1
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>>`+96:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+100:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+104:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+108:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+112:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+116:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+120:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+124:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+128:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+12:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+136:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+140:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+144:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+148:1
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+149:1
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+152:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+160:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+164:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+168:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+16:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+20:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+244:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+248:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+24:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+252:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+28:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+32:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+36:1
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+40:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+48:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+52:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+56:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+60:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+68:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+72:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+76:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+80:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+84:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+92:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>>`+96:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+100:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+104:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+108:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+12:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+160:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+168:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+16:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+20:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+24:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+32:4
@@ -3508,10 +3358,8 @@ fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP>`+96:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+100:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+104:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+108:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+12:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+160:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+168:4
-fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+16:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+20:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+24:4
 fields-fn `CryptoPP::DL_PublicKeyImpl<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`+32:4
@@ -4209,8 +4057,6 @@ fields-fn `CryptoPP::EC2N`+44:4
 fields-fn `CryptoPP::EC2N`+4:4
 fields-fn `CryptoPP::EC2N`+52:4
 fields-fn `CryptoPP::EC2N`+56:4
-fields-fn `CryptoPP::ECB_OneWay`+16:4
-fields-fn `CryptoPP::ECB_OneWay`+20:4
 fields-fn `CryptoPP::ECB_OneWay`+28:4
 fields-fn `CryptoPP::ECB_OneWay`+32:4
 fields-fn `CryptoPP::ECP`+4:4
@@ -4225,7 +4071,6 @@ fields-fn `CryptoPP::EcPrecomputation<CryptoPP::EC2N>`+60:4
 fields-fn `CryptoPP::EcPrecomputation<CryptoPP::EC2N>`+8:4
 fields-fn `CryptoPP::EcPrecomputation<CryptoPP::ECP>`+4:4
 fields-fn `CryptoPP::EcPrecomputation<CryptoPP::ECP>`+8:4
-fields-fn `CryptoPP::EqualityComparisonFilter::MismatchDetected`+8:4
 fields-fn `CryptoPP::EqualityComparisonFilter`+12:4
 fields-fn `CryptoPP::EqualityComparisonFilter`+16:4
 fields-fn `CryptoPP::EqualityComparisonFilter`+24:1
@@ -4235,10 +4080,12 @@ fields-fn `CryptoPP::EuclideanDomainOf<CryptoPP::Integer>`+12:4
 fields-fn `CryptoPP::EuclideanDomainOf<CryptoPP::Integer>`+20:4
 fields-fn `CryptoPP::EuclideanDomainOf<CryptoPP::Integer>`+24:4
 fields-fn `CryptoPP::EuclideanDomainOf<CryptoPP::Integer>`+28:4
+fields-fn `CryptoPP::EuclideanDomainOf<CryptoPP::Integer>`+4:4
 fields-fn `CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>`+16:4
 fields-fn `CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>`+20:4
 fields-fn `CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>`+28:4
 fields-fn `CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>`+32:4
+fields-fn `CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>`+4:4
 fields-fn `CryptoPP::FilterWithBufferedInput`+12:4
 fields-fn `CryptoPP::FilterWithBufferedInput`+16:4
 fields-fn `CryptoPP::FilterWithBufferedInput`+44:4
@@ -4283,6 +4130,7 @@ fields-fn `CryptoPP::GF2NPP`+28:4
 fields-fn `CryptoPP::GF2NPP`+32:4
 fields-fn `CryptoPP::GF2NPP`+40:4
 fields-fn `CryptoPP::GF2NPP`+44:4
+fields-fn `CryptoPP::GF2NPP`+4:4
 fields-fn `CryptoPP::GF2NPP`+52:4
 fields-fn `CryptoPP::GF2NPP`+56:4
 fields-fn `CryptoPP::GF2NP`+12:4
@@ -4292,6 +4140,7 @@ fields-fn `CryptoPP::GF2NP`+28:4
 fields-fn `CryptoPP::GF2NP`+32:4
 fields-fn `CryptoPP::GF2NP`+40:4
 fields-fn `CryptoPP::GF2NP`+44:4
+fields-fn `CryptoPP::GF2NP`+4:4
 fields-fn `CryptoPP::GF2NP`+52:4
 fields-fn `CryptoPP::GF2NP`+56:4
 fields-fn `CryptoPP::GF2NT`+12:4
@@ -4301,6 +4150,7 @@ fields-fn `CryptoPP::GF2NT`+28:4
 fields-fn `CryptoPP::GF2NT`+32:4
 fields-fn `CryptoPP::GF2NT`+40:4
 fields-fn `CryptoPP::GF2NT`+44:4
+fields-fn `CryptoPP::GF2NT`+4:4
 fields-fn `CryptoPP::GF2NT`+52:4
 fields-fn `CryptoPP::GF2NT`+56:4
 fields-fn `CryptoPP::GF2NT`+76:4
@@ -4324,8 +4174,6 @@ fields-fn `CryptoPP::HashFilter`+16:4
 fields-fn `CryptoPP::HashFilter`+28:4
 fields-fn `CryptoPP::HashFilter`+32:4
 fields-fn `CryptoPP::HashFilter`+48:4
-fields-fn `CryptoPP::HashInputTooLong`+8:4
-fields-fn `CryptoPP::HashVerificationFilter::HashVerificationFailed`+8:4
 fields-fn `CryptoPP::HashVerificationFilter`+12:4
 fields-fn `CryptoPP::HashVerificationFilter`+16:4
 fields-fn `CryptoPP::HashVerificationFilter`+44:4
@@ -4356,17 +4204,8 @@ fields-fn `CryptoPP::HexEncoder`+56:4
 fields-fn `CryptoPP::HexEncoder`+60:4
 fields-fn `CryptoPP::HexEncoder`+64:4
 fields-fn `CryptoPP::HexEncoder`+68:4
-fields-fn `CryptoPP::InputRejecting<CryptoPP::BufferedTransformation>::InputRejected`+8:4
-fields-fn `CryptoPP::InputRejecting<CryptoPP::Filter>::InputRejected`+8:4
 fields-fn `CryptoPP::InputRejecting<CryptoPP::Filter>`+12:4
 fields-fn `CryptoPP::InputRejecting<CryptoPP::Filter>`+16:4
-fields-fn `CryptoPP::Integer::DivideByZero`+8:4
-fields-fn `CryptoPP::Integer::OpenPGPDecodeErr`+8:4
-fields-fn `CryptoPP::Integer::RandomNumberNotFound`+8:4
-fields-fn `CryptoPP::InvalidArgument`+8:4
-fields-fn `CryptoPP::InvalidCiphertext`+8:4
-fields-fn `CryptoPP::InvalidDataFormat`+8:4
-fields-fn `CryptoPP::InvalidKeyLength`+8:4
 fields-fn `CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>`+16:64
 fields-fn `CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>`+81:1
 fields-fn `CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>`+88:4
@@ -4435,12 +4274,7 @@ fields-fn `CryptoPP::MeterFilter`+88:4
 fields-fn `CryptoPP::MeterFilter`+92:4
 fields-fn `CryptoPP::MeterFilter`+96:4
 fields-fn `CryptoPP::ModExpPrecomputation`+4:4
-fields-fn `CryptoPP::ModePolicyCommonTemplate<CryptoPP::AdditiveCipherAbstractPolicy>`+16:4
-fields-fn `CryptoPP::ModePolicyCommonTemplate<CryptoPP::AdditiveCipherAbstractPolicy>`+20:4
-fields-fn `CryptoPP::ModePolicyCommonTemplate<CryptoPP::CFB_CipherAbstractPolicy>`+16:4
-fields-fn `CryptoPP::ModePolicyCommonTemplate<CryptoPP::CFB_CipherAbstractPolicy>`+20:4
-fields-fn `CryptoPP::ModularArithmetic`+32:4
-fields-fn `CryptoPP::ModularArithmetic`+48:4
+fields-fn `CryptoPP::ModularArithmetic`+4:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+12:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+20:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+24:4
@@ -4449,17 +4283,13 @@ fields-fn `CryptoPP::MontgomeryRepresentation`+32:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+40:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+44:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+48:4
+fields-fn `CryptoPP::MontgomeryRepresentation`+4:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+52:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+60:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+64:4
 fields-fn `CryptoPP::MontgomeryRepresentation`+68:4
 fields-fn `CryptoPP::Multichannel<CryptoPP::Filter>`+12:4
 fields-fn `CryptoPP::Multichannel<CryptoPP::Filter>`+16:4
-fields-fn `CryptoPP::NameValuePairs::ValueTypeMismatch`+8:4
-fields-fn `CryptoPP::NotImplemented`+8:4
-fields-fn `CryptoPP::OFB_ModePolicy`+16:4
-fields-fn `CryptoPP::OFB_ModePolicy`+20:4
-fields-fn `CryptoPP::OS_RNG_Err`+8:4
 fields-fn `CryptoPP::PKCS8PrivateKey`+12:4
 fields-fn `CryptoPP::PKCS8PrivateKey`+16:4
 fields-fn `CryptoPP::PKCS8PrivateKey`+20:1
@@ -5018,28 +4848,57 @@ fields-fn `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_Sig
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+100:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+104:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+112:64
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+12:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+177:1
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+184:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+188:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+192:64
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+20:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+24:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+257:1
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+264:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+268:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+32:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+36:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+44:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+48:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+52:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+60:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+64:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+68:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+72:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+80:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+84:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+88:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+8:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA1>`+96:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+100:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+104:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+112:64
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+12:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+177:1
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+184:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+188:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+192:64
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+20:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+24:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+257:1
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+264:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+268:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+32:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+36:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+44:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+48:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+52:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+60:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+64:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+68:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+72:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+80:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+84:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+88:4
+fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+8:4
 fields-fn `CryptoPP::PK_MessageAccumulatorImpl<CryptoPP::SHA256>`+96:4
-fields-fn `CryptoPP::PK_SignatureScheme::InvalidKeyLength`+8:4
-fields-fn `CryptoPP::PK_SignatureScheme::KeyTooShort`+8:4
-fields-fn `CryptoPP::PolynomialMod2::DivideByZero`+8:4
 fields-fn `CryptoPP::ProxyFilter`+12:4
 fields-fn `CryptoPP::ProxyFilter`+16:4
 fields-fn `CryptoPP::ProxyFilter`+44:4
@@ -5048,10 +4907,12 @@ fields-fn `CryptoPP::ProxyFilter`+52:4
 fields-fn `CryptoPP::ProxyFilter`+56:4
 fields-fn `CryptoPP::ProxyFilter`+60:4
 fields-fn `CryptoPP::ProxyFilter`+64:4
+fields-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>`+16:4
 fields-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>`+28:4
 fields-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>`+32:4
 fields-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>`+40:4
 fields-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>`+44:4
+fields-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>`+4:4
 fields-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>`+52:4
 fields-fn `CryptoPP::QuotientRing<CryptoPP::EuclideanDomainOf<CryptoPP::PolynomialMod2>>`+56:4
 fields-fn `CryptoPP::RandomNumberSink`+12:4
@@ -5096,8 +4957,6 @@ fields-fn `CryptoPP::SHA256`+81:1
 fields-fn `CryptoPP::SHA256`+88:4
 fields-fn `CryptoPP::SHA256`+92:4
 fields-fn `CryptoPP::SHA256`+96:64
-fields-fn `CryptoPP::SelfTestFailure`+8:4
-fields-fn `CryptoPP::SignatureVerificationFilter::SignatureVerificationFailed`+8:4
 fields-fn `CryptoPP::SignatureVerificationFilter`+12:4
 fields-fn `CryptoPP::SignatureVerificationFilter`+16:4
 fields-fn `CryptoPP::SignatureVerificationFilter`+44:4
@@ -5164,7 +5023,6 @@ fields-fn `CryptoPP::Unflushable<CryptoPP::Filter>`+12:4
 fields-fn `CryptoPP::Unflushable<CryptoPP::Filter>`+16:4
 fields-fn `CryptoPP::Unflushable<CryptoPP::Multichannel<CryptoPP::Filter>>`+12:4
 fields-fn `CryptoPP::Unflushable<CryptoPP::Multichannel<CryptoPP::Filter>>`+16:4
-fields-fn `CryptoPP::UnknownOID`+8:4
 fields-fn `CryptoPP::X509PublicKey`+4:4
 fields-fn `CryptoPP::clonable_ptr<CryptoPP::GF2NP>`+0:4
 fields-fn `CryptoPP::clonable_ptr<CryptoPP::ModularArithmetic>`+0:4
@@ -5348,6 +5206,12 @@ methods-fn `CryptoPP::DL_Algorithm_GDSA<CryptoPP::EC2NPoint>::StaticAlgorithmNam
 methods-fn `CryptoPP::DL_Algorithm_GDSA<CryptoPP::ECPPoint>::StaticAlgorithmName` 4ae410
 methods-fn `CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>::StaticAlgorithmName` 4ae3e8
 methods-fn `CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>::StaticAlgorithmName` 4a12fc
+methods-fn `CryptoPP::DL_Base<CryptoPP::DL_PrivateKey<CryptoPP::EC2NPoint>>::GetAbstractGroupParameters` 521de4
+methods-fn `CryptoPP::DL_Base<CryptoPP::DL_PrivateKey<CryptoPP::ECPPoint>>::GetAbstractGroupParameters` 521db8
+methods-fn `CryptoPP::DL_Base<CryptoPP::DL_PrivateKey<CryptoPP::Integer>>::GetAbstractGroupParameters` 521d8c
+methods-fn `CryptoPP::DL_Base<CryptoPP::DL_PublicKey<CryptoPP::EC2NPoint>>::GetAbstractGroupParameters` 521d60
+methods-fn `CryptoPP::DL_Base<CryptoPP::DL_PublicKey<CryptoPP::ECPPoint>>::GetAbstractGroupParameters` 521d34
+methods-fn `CryptoPP::DL_Base<CryptoPP::DL_PublicKey<CryptoPP::Integer>>::GetAbstractGroupParameters` 521d08
 methods-fn `CryptoPP::DL_FixedBasePrecomputation<CryptoPP::EC2NPoint>::operator=` 4d659c
 methods-fn `CryptoPP::DL_FixedBasePrecomputation<CryptoPP::ECPPoint>::operator=` 4d6584
 methods-fn `CryptoPP::DL_FixedBasePrecomputation<CryptoPP::Integer>::operator=` 4d656c
@@ -5442,18 +5306,12 @@ methods-fn `CryptoPP::DL_Key<CryptoPP::EC2NPoint>::operator=` 4eb16c
 methods-fn `CryptoPP::DL_Key<CryptoPP::ECPPoint>::operator=` 4eb154
 methods-fn `CryptoPP::DL_Key<CryptoPP::Integer>::operator=` 4eb13c
 methods-fn `CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>::StaticAlgorithmName` 4d8edc
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::AccessGroupParameters` 48c96c
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::DL_KeyImpl` 48c9a8
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::DL_KeyImpl` 48cab4
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::GetGroupParameters` 4f6924
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::operator=` 48d0bc
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::AccessGroupParameters` 48c2f8
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::DL_KeyImpl` 48c32c
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::GetGroupParameters` 4f68c4
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::operator=` 48c934
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::AccessGroupParameters` 48bc84
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::DL_KeyImpl` 48bcb8
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::GetGroupParameters` 4f6864
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::operator=` 48c2c0
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::AccessGroupParameters` 48d0f4
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::GetGroupParameters` 4f698c
@@ -5806,6 +5664,7 @@ methods-fn `CryptoPP::SimpleKeyingInterface::ThrowIfResynchronizable` 404bac
 methods-fn `CryptoPP::Source::PumpAll` 4eb914
 methods-fn `CryptoPP::Source::SourceInitialize` 4eb8d8
 methods-fn `CryptoPP::Store::CopyMessagesTo` 409bdc
+methods-fn `CryptoPP::StreamTransformation::ProcessString` 4c2950
 methods-fn `CryptoPP::StreamTransformation::ProcessString` 4c2974
 methods-fn `CryptoPP::StreamTransformationFilter::LastBlockSize` 409936
 methods-fn `CryptoPP::TF_CryptoSystemBase<CryptoPP::PK_Decryptor,CryptoPP::TF_Base<CryptoPP::TrapdoorFunctionInverse,CryptoPP::PK_EncryptionMessageEncodingMethod>>::PaddedBlockByteLength` 513394
@@ -6183,16 +6042,6 @@ methods-fp 46b8e2 of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 4728a8 of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 474d9c of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 478b18 of `CryptoPP::Integer`: is `CryptoPP`'s
-methods-fp 489dcc of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`'s
-methods-fp 48a3ec of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`'s
-methods-fp 48aa0c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`'s
-methods-fp 48b034 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`'s
-methods-fp 48b65c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`'s
-methods-fp 48bc84 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`'s
-methods-fp 48c2f8 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`'s
-methods-fp 48c96c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`'s
-methods-fp 48d0f4 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`'s
-methods-fp 48d770 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`'s
 methods-fp 48f9ac of `CryptoPP::value_ptr<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>`: is `CryptoPP::member_ptr<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>>`'s
 methods-fp 48fa18 of `CryptoPP::clonable_ptr<CryptoPP::ModularArithmetic>`: is `CryptoPP::member_ptr<CryptoPP::ModularArithmetic>`'s
 methods-fp 48fa28 of `CryptoPP::clonable_ptr<CryptoPP::ModularArithmetic>`: is `CryptoPP::member_ptr<CryptoPP::ModularArithmetic>`'s
@@ -6284,16 +6133,6 @@ methods-fp 4f200c of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 4f2138 of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 4f2180 of `CryptoPP::Integer`: is `CryptoPP`'s
 methods-fp 4f21a4 of `CryptoPP::Integer`: is `CryptoPP`'s
-methods-fp 4f666c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`'s
-methods-fp 4f66cc of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`'s
-methods-fp 4f672c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`'s
-methods-fp 4f6794 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`'s
-methods-fp 4f67fc of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`'s
-methods-fp 4f6864 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`'s
-methods-fp 4f68c4 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`'s
-methods-fp 4f6924 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`'s
-methods-fp 4f698c of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`'s
-methods-fp 4f69f4 of `CryptoPP::ASN1Object`: is `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`'s
 methods-fp 513394 of `CryptoPP::TF_DecryptorBase`: is `CryptoPP::TF_CryptoSystemBase<CryptoPP::PK_Decryptor,CryptoPP::TF_Base<CryptoPP::TrapdoorFunctionInverse,CryptoPP::PK_EncryptionMessageEncodingMethod>>`'s
 methods-fp 513630 of `CryptoPP::TF_EncryptorBase`: is `CryptoPP::TF_CryptoSystemBase<CryptoPP::PK_Encryptor,CryptoPP::TF_Base<CryptoPP::RandomizedTrapdoorFunction,CryptoPP::PK_EncryptionMessageEncodingMethod>>`'s
 methods-fp 517830 of `CryptoPP::DL_VerifierBase<CryptoPP::Integer>`: is `CryptoPP::DL_SignatureSchemeBase<CryptoPP::PK_Verifier,CryptoPP::DL_PublicKey<CryptoPP::Integer>>`'s
@@ -6382,28 +6221,23 @@ sizes-fp `CryptoPP::AbstractRing<CryptoPP::PolynomialMod2>::MultiplicativeGroupT
 sizes-fp `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>`: 56, is 60
 sizes-fp `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>`: 44, is 48
 sizes-fp `CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::SymmetricCipher>>`: 24, is 28
-sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>>`: 12, is 36
-sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>>`: 12, is 36
+sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>>`: 24, is 36
+sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::CBC_Encryption,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>>`: 24, is 36
 sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`: 44, is 60
 sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>>`: 32, is 48
 sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`: 28, is 48
 sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>>`: 28, is 48
-sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::ECB_OneWay,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>>`: 12, is 36
+sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::ECB_OneWay,CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>>`: 24, is 36
 sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>,CryptoPP::SHA1>`: 12, is 96
 sizes-fp `CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>,CryptoPP::SHA256>`: 12, is 96
-sizes-fp `CryptoPP::AlgorithmParametersBase::ParameterNotUsed`: 8, is 12
-sizes-fp `CryptoPP::BERDecodeErr`: 8, is 12
 sizes-fp `CryptoPP::BERGeneralDecoder`: 28, is 40
 sizes-fp `CryptoPP::BERSequenceDecoder`: 28, is 40
-sizes-fp `CryptoPP::BufferedTransformation::BlockingInputOnly`: 8, is 12
-sizes-fp `CryptoPP::BufferedTransformation::InvalidChannelName`: 8, is 12
-sizes-fp `CryptoPP::BufferedTransformation::NoChannelSupport`: 8, is 12
 sizes-fp `CryptoPP::ByteQueue::Walker`: 44, is 48
 sizes-fp `CryptoPP::ByteQueue`: 36, is 40
-sizes-fp `CryptoPP::CBC_CTS_Decryption`: 12, is 48
-sizes-fp `CryptoPP::CBC_CTS_Encryption`: 12, is 40
-sizes-fp `CryptoPP::CBC_Encryption`: 12, is 36
-sizes-fp `CryptoPP::CBC_ModeBase`: 12, is 36
+sizes-fp `CryptoPP::CBC_CTS_Decryption`: 24, is 48
+sizes-fp `CryptoPP::CBC_CTS_Encryption`: 24, is 40
+sizes-fp `CryptoPP::CBC_Encryption`: 24, is 36
+sizes-fp `CryptoPP::CBC_ModeBase`: 24, is 36
 sizes-fp `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`: 28, is 48
 sizes-fp `CryptoPP::CFB_CipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::SymmetricCipher>>`: 8, is 12
 sizes-fp `CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`: 28, is 48
@@ -6411,20 +6245,19 @@ sizes-fp `CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<Crypto
 sizes-fp `CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>`: 28, is 48
 sizes-fp `CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::SymmetricCipher>>`: 8, is 12
 sizes-fp `CryptoPP::CFB_ModePolicy`: 40, is 44
-sizes-fp `CryptoPP::CannotFlush`: 8, is 12
-sizes-fp `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`: 12, is 200
+sizes-fp `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::CBC_Encryption>`: 24, is 200
 sizes-fp `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`: 44, is 224
 sizes-fp `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`: 32, is 208
 sizes-fp `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`: 28, is 208
 sizes-fp `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>>`: 28, is 208
-sizes-fp `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`: 12, is 200
-sizes-fp `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`: 12, is 312
-sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Decryption>`: 12, is 48
-sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Encryption>`: 12, is 40
-sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Decryption>`: 12, is 48
-sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Encryption>`: 12, is 36
+sizes-fp `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::ECB_OneWay>`: 24, is 200
+sizes-fp `CryptoPP::CipherModeFinalTemplate_CipherHolder<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::CBC_Encryption>`: 24, is 312
+sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Decryption>`: 24, is 48
+sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_CTS_Encryption>`: 24, is 40
+sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Decryption>`: 24, is 48
+sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::CBC_Encryption>`: 24, is 36
 sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>>`: 44, is 60
-sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ECB_OneWay>`: 12, is 36
+sizes-fp `CryptoPP::CipherModeFinalTemplate_ExternalCipher<CryptoPP::ECB_OneWay>`: 24, is 36
 sizes-fp `CryptoPP::ClonableImpl<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base>,CryptoPP::DES::Base>`: 12, is 160
 sizes-fp `CryptoPP::ClonableImpl<CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>,CryptoPP::Rijndael::Enc>`: 16, is 272
 sizes-fp `CryptoPP::ClonableImpl<CryptoPP::SHA1,CryptoPP::AlgorithmImpl<CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>,CryptoPP::SHA1>>`: 12, is 96
@@ -6433,13 +6266,11 @@ sizes-fp `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCiphe
 sizes-fp `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::AdditiveCipherTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::OFB_ModePolicy>>,CryptoPP::AdditiveCipherAbstractPolicy>`: 32, is 48
 sizes-fp `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_DecryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`: 28, is 48
 sizes-fp `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`: 28, is 48
-sizes-fp `CryptoPP::CryptoMaterial::InvalidMaterial`: 8, is 12
 sizes-fp `CryptoPP::DES::Base`: 12, is 160
 sizes-fp `CryptoPP::DES_EDE2::Base`: 12, is 304
 sizes-fp `CryptoPP::DES_EDE3::Base`: 12, is 448
 sizes-fp `CryptoPP::DES_XEX3::Base`: 12, is 72
 sizes-fp `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`: 16, is 104
-sizes-fp `CryptoPP::DL_BadElement`: 8, is 12
 sizes-fp `CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`: 12, is 184
 sizes-fp `CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>`: 12, is 184
 sizes-fp `CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>`: 56, is 68
@@ -6520,22 +6351,10 @@ sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP
 sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>`: 12, is 184
 sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>>`: 12, is 184
 sizes-fp `CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>`: 12, is 184
-sizes-fp `CryptoPP::ECB_OneWay`: 12, is 36
+sizes-fp `CryptoPP::ECB_OneWay`: 24, is 36
 sizes-fp `CryptoPP::EcPrecomputation<CryptoPP::ECP>`: 4, is 12
-sizes-fp `CryptoPP::EqualityComparisonFilter::MismatchDetected`: 8, is 12
 sizes-fp `CryptoPP::EqualityComparisonFilter`: 36, is 308
 sizes-fp `CryptoPP::FilterWithBufferedInput`: 40, is 68
-sizes-fp `CryptoPP::HashInputTooLong`: 8, is 12
-sizes-fp `CryptoPP::HashVerificationFilter::HashVerificationFailed`: 8, is 12
-sizes-fp `CryptoPP::InputRejecting<CryptoPP::BufferedTransformation>::InputRejected`: 8, is 12
-sizes-fp `CryptoPP::InputRejecting<CryptoPP::Filter>::InputRejected`: 8, is 12
-sizes-fp `CryptoPP::Integer::DivideByZero`: 8, is 12
-sizes-fp `CryptoPP::Integer::OpenPGPDecodeErr`: 8, is 12
-sizes-fp `CryptoPP::Integer::RandomNumberNotFound`: 8, is 12
-sizes-fp `CryptoPP::InvalidArgument`: 8, is 12
-sizes-fp `CryptoPP::InvalidCiphertext`: 8, is 12
-sizes-fp `CryptoPP::InvalidDataFormat`: 8, is 12
-sizes-fp `CryptoPP::InvalidKeyLength`: 8, is 12
 sizes-fp `CryptoPP::IteratedHash<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,CryptoPP::HashTransformation>`: 12, is 96
 sizes-fp `CryptoPP::IteratedHashWithStaticTransform<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,20u,CryptoPP::SHA1,0u,false>`: 12, is 176
 sizes-fp `CryptoPP::IteratedHashWithStaticTransform<unsigned_int,CryptoPP::EnumToType<CryptoPP::ByteOrder,1>,64u,32u,CryptoPP::SHA256,32u,true>`: 12, is 176
@@ -6543,8 +6362,6 @@ sizes-fp `CryptoPP::LC_RNG`: 4, is 8
 sizes-fp `CryptoPP::MaurerRandomnessTest`: 28, is 1056
 sizes-fp `CryptoPP::MeterFilter`: 24, is 112
 sizes-fp `CryptoPP::ModExpPrecomputation`: 4, is 8
-sizes-fp `CryptoPP::NotImplemented`: 8, is 12
-sizes-fp `CryptoPP::OS_RNG_Err`: 8, is 12
 sizes-fp `CryptoPP::PKCS8PrivateKey`: 8, is 48
 sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>>`: 12, is 184
 sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_EncryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>>`: 12, is 184
@@ -6558,17 +6375,12 @@ sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_Sign
 sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>>`: 12, is 184
 sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>>>`: 12, is 184
 sizes-fp `CryptoPP::PK_FinalTemplate<CryptoPP::DL_VerifierImpl<CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>>>`: 12, is 184
-sizes-fp `CryptoPP::PK_SignatureScheme::InvalidKeyLength`: 8, is 12
-sizes-fp `CryptoPP::PK_SignatureScheme::KeyTooShort`: 8, is 12
-sizes-fp `CryptoPP::PolynomialMod2::DivideByZero`: 8, is 12
 sizes-fp `CryptoPP::RandomNumberSink`: 12, is 16
 sizes-fp `CryptoPP::RandomNumberStore`: 20, is 40
 sizes-fp `CryptoPP::Redirector`: 12, is 20
 sizes-fp `CryptoPP::Rijndael::Base`: 16, is 272
 sizes-fp `CryptoPP::Rijndael::Dec`: 16, is 2592
 sizes-fp `CryptoPP::Rijndael::Enc`: 16, is 2592
-sizes-fp `CryptoPP::SelfTestFailure`: 8, is 12
-sizes-fp `CryptoPP::SignatureVerificationFilter::SignatureVerificationFailed`: 8, is 12
 sizes-fp `CryptoPP::SignatureVerificationFilter`: 92, is 96
 sizes-fp `CryptoPP::SimpleProxyFilter`: 40, is 72
 sizes-fp `CryptoPP::SourceTemplate<CryptoPP::StringStore>`: 44, is 56
@@ -6576,7 +6388,6 @@ sizes-fp `CryptoPP::StringSource`: 24, is 56
 sizes-fp `CryptoPP::StringStore`: 20, is 32
 sizes-fp `CryptoPP::TimerBase`: 12, is 32
 sizes-fp `CryptoPP::Timer`: 12, is 32
-sizes-fp `CryptoPP::UnknownOID`: 8, is 12
 sizes-fp `std::__codecvt_abstract_base<char,char,int>`: 4, is 8
 sizes-fp `std::__codecvt_abstract_base<wchar_t,char,int>`: 4, is 8
 sizes-fp `std::__ctype_abstract_base<wchar_t>`: 4, is 8

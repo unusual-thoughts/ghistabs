@@ -252,10 +252,6 @@ fields-fn `__cxxabiv1::__vmi_class_type_info`+12:4
 fields-fn `__cxxabiv1::__vmi_class_type_info`+16:8
 fields-fn `__cxxabiv1::__vmi_class_type_info`+4:4
 fields-fn `__cxxabiv1::__vmi_class_type_info`+8:4
-fields-fn `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`+28:4
-fields-fn `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`+28:4
-fields-fn `__gnu_cxx::stdio_sync_filebuf<char,std::char_traits<char>>`+28:4
-fields-fn `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>`+28:4
 fields-fn `std::__moneypunct_cache<char,false>`+48:4
 fields-fn `std::__moneypunct_cache<char,false>`+52:4
 fields-fn `std::__moneypunct_cache<char,false>`+56:11
@@ -285,21 +281,13 @@ fields-fn `std::ctype_byname<wchar_t>`+142:512
 fields-fn `std::ctype_byname<wchar_t>`+654:32
 fields-fn `std::ctype_byname<wchar_t>`+686:32
 fields-fn `std::domain_error`+4:4
-fields-fn `std::filebuf`+28:4
 fields-fn `std::fstream`+156:64
-fields-fn `std::fstream`+228:4
-fields-fn `std::fstream`+40:4
 fields-fn `std::ifstream`+152:64
-fields-fn `std::ifstream`+224:4
-fields-fn `std::ifstream`+36:4
 fields-fn `std::invalid_argument`+4:4
 fields-fn `std::ios_base::failure`+4:4
 fields-fn `std::ios_base`+36:64
-fields-fn `std::ios`+108:4
 fields-fn `std::ios`+36:64
-fields-fn `std::iostream`+120:4
 fields-fn `std::iostream`+48:64
-fields-fn `std::istream`+116:4
 fields-fn `std::istream`+44:64
 fields-fn `std::length_error`+4:4
 fields-fn `std::logic_error`+4:4
@@ -308,9 +296,6 @@ fields-fn `std::messages<wchar_t>`+12:4
 fields-fn `std::messages_byname<char>`+12:4
 fields-fn `std::messages_byname<wchar_t>`+12:4
 fields-fn `std::ofstream`+148:64
-fields-fn `std::ofstream`+220:4
-fields-fn `std::ofstream`+32:4
-fields-fn `std::ostream`+112:4
 fields-fn `std::ostream`+40:64
 fields-fn `std::out_of_range`+4:4
 fields-fn `std::overflow_error`+4:4
@@ -319,23 +304,12 @@ fields-fn `std::runtime_error`+4:4
 fields-fn `std::string`+0:4
 fields-fn `std::type_info`+4:4
 fields-fn `std::underflow_error`+4:4
-fields-fn `std::wfilebuf`+28:4
 fields-fn `std::wfstream`+160:64
-fields-fn `std::wfstream`+232:4
-fields-fn `std::wfstream`+40:4
 fields-fn `std::wifstream`+156:64
-fields-fn `std::wifstream`+228:4
-fields-fn `std::wifstream`+36:4
-fields-fn `std::wios`+108:4
 fields-fn `std::wios`+36:64
-fields-fn `std::wiostream`+120:4
 fields-fn `std::wiostream`+48:64
-fields-fn `std::wistream`+116:4
 fields-fn `std::wistream`+44:64
 fields-fn `std::wofstream`+152:64
-fields-fn `std::wofstream`+224:4
-fields-fn `std::wofstream`+32:4
-fields-fn `std::wostream`+112:4
 fields-fn `std::wostream`+40:64
 methods-fn `TiXmlAttribute::DoubleValue` 405b06
 methods-fn `TiXmlAttribute::IntValue` 405b3e
@@ -1121,8 +1095,6 @@ methods-fp 4525cc of `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`: is
 methods-fp 454be8 of `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`: is `std::wfilebuf`'s
 methods-fp 47f880 of unmatched `NPKlass_0047f880`
 methods-fp 47f960 of unmatched `NPKlass_0047f960`
-methods-fp 480c74 of unmatched `NPKlass_0047f880`
-methods-fp 480cc8 of unmatched `NPKlass_0047f960`
 sizes-fn `std::money_base`: none, is 1
 sizes-fn `std::string`: none, is 4
 sizes-fp `TiXmlDeclaration`: 44, is 56
