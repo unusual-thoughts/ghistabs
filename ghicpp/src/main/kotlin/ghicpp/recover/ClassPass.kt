@@ -75,7 +75,7 @@ class ClassPass(
         val inspector = ThisFunctionDissector(program, read.classes, this, cache)
         // Find the structors before stubbing the structs. Stubbing changes the program, and the parser's reads of
         // the storers, which this reuses, would then be out of date.
-        val found = inspector.find(read.holders, abi, monitor)
+        val found = inspector.find(read.holders, abi, monitor, read.vttStructors)
         stubStructs(read.classes)
         val structors = found.roles
         var moved = 0

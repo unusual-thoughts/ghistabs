@@ -75,6 +75,15 @@ fun HighFunction.constantStores(): Map<HighVariable, Map<Long, Address>> {
     return stores
 }
 
+/**
+ * The address in memory that this constant varnode holds, including the decompiler's `&DAT_…` forms, looking
+ * through casts. A 32-bit caller's stack argument often comes wrapped in a cast.
+ */
+internal fun Varnode.constantAddress(program: Program): Address? = castless().constant()?.let { program.addressIn(it) }
+
+/** This varnode with all the casts around it removed. */
+private tailrec fun Varnode.castless(): Varnode = if (def?.opcode == PcodeOp.CAST) def.getInput(0).castless() else this
+
 /** The constant [this] is, the decompiler's `&DAT_…` (`PTRSUB 0, addr`) included. */
 private fun Varnode.constant(): Long? = when {
     isConstant -> offset
