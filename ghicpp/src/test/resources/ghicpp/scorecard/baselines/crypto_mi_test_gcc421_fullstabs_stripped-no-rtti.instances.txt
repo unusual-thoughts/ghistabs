@@ -6132,6 +6132,7 @@ methods-fn `CryptoPP::X509PublicKey::operator=` 49e2c4
 methods-fn `CryptoPP::clonable_ptr<CryptoPP::GF2NP>::operator=` 498f98
 methods-fn `CryptoPP::clonable_ptr<CryptoPP::ModularArithmetic>::operator=` 498ed8
 methods-fn `CryptoPP::value_ptr<CryptoPP::ECP>::operator=` 4f4ac4
+methods-fn `CryptoPP::value_ptr<CryptoPP::ECP>::value_ptr` 4f49e4
 methods-fn `CryptoPP::value_ptr<CryptoPP::MontgomeryRepresentation>::operator=` 4f48c4
 methods-fn `__cxxabiv1::__class_type_info::__find_public_src` 4f8db0
 methods-fn `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>::fd` 4f6238

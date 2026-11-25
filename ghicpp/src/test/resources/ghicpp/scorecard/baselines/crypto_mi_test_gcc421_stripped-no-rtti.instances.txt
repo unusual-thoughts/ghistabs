@@ -5927,6 +5927,7 @@ methods-fn `CryptoPP::X509PublicKey::operator=` 49b4ac
 methods-fn `CryptoPP::clonable_ptr<CryptoPP::GF2NP>::operator=` 496180
 methods-fn `CryptoPP::clonable_ptr<CryptoPP::ModularArithmetic>::operator=` 4960c0
 methods-fn `CryptoPP::value_ptr<CryptoPP::ECP>::operator=` 4f1cac
+methods-fn `CryptoPP::value_ptr<CryptoPP::ECP>::value_ptr` 4f1bcc
 methods-fn `CryptoPP::value_ptr<CryptoPP::MontgomeryRepresentation>::operator=` 4f1aac
 methods-fn `std::__timepunct<char>::_M_am_pm_format` 526fa0
 methods-fn `std::__timepunct<char>::_M_am_pm` 527180

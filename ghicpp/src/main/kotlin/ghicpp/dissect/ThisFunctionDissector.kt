@@ -390,6 +390,7 @@ class ThisFunctionDissector(
             after = calls.filter { it.at > last }.mapTo(mutableSetOf()) { it.callee },
             elsewhere = elsewhere,
             vbases = vbases,
+            afterOffsets = calls.filter { it.at > last }.sortedBy { it.at }.map { it.offset },
         )
     }
 
