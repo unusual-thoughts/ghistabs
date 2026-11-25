@@ -26,6 +26,7 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.SymbolType
 import ghidrakt.*
 import ghidrakt.diagnose.DiagnosticSink
 import kotlinx.serialization.Serializable
@@ -445,6 +446,19 @@ internal fun Program.slotPointers(vftable: Address): List<Address> {
     val laid = laidAt(vftable) ?: return offsets.take(functionSlots(vftable, abi).count()).toList()
     return offsets.takeWhile { it.add(defaultPointerSize - 1L) <= laid.maxAddress }.toList()
 }
+
+/**
+ * What the slots of [ns]'s construction vtables point at. The sweep lays `_ZTC4Both0_2Up` in an `Up-in-Both`
+ * namespace beside Both. It holds Up's virtual functions even where the binary has no vtable of Up's own,
+ * as when Up is only ever built as a base.
+ */
+internal fun Program.constructionSlotTargets(ns: Namespace): Set<Address> =
+    symbolTable.getChildren(ns.parentNamespace.symbol).iterator().asSequence()
+        .filter { it.symbolType == SymbolType.NAMESPACE && it.name.startsWith("${ns.name}-in-") }
+        .mapNotNull { it.`object` as? Namespace }
+        .flatMap { symbolTable.getSymbols(it).iterator().asSequence() }
+        .filter { ClassNaming.isVftableLabel(it.name) }
+        .flatMapTo(HashSet()) { slotTargets(it.address) }
 
 /** What [vftable]'s slots point at, empty and pure virtual ones among them ([slotPointers]). */
 internal fun Program.slotTargets(vftable: Address): Sequence<Address> =

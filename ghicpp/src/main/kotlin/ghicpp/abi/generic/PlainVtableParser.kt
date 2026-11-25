@@ -554,7 +554,9 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
      */
     private fun subobjects(cls: PlainClass, uses: Dissections): Map<Long, Boolean> {
         val primary = cls.vftables.firstOrNull()?.addressPoint ?: return emptyMap()
-        val vbaseOffsets = if (primary.signedWordBefore(program, 2) == 0L) {
+        // A construction vtable's vbase offsets place the virtual bases in the class it is built inside, not in
+        // this one. Only a VTT points at a construction vtable: no code takes its address.
+        val vbaseOffsets = if (primary.signedWordBefore(program, 2) == 0L && primary.isTakenByCode()) {
             (3..2 + MAX_VBASE_WORDS).asSequence().map { primary.signedWordBefore(program, it) }
                 .takeWhile { it != null && it in ptr until PlainVtables.MAX_SUBOBJECT_OFFSET }
                 .filterNotNull().toSet()
@@ -566,6 +568,9 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         return cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } }
             .associateWith { it in vbaseOffsets || it in throughVbtable }
     }
+
+    private fun Address.isTakenByCode() =
+        program.referenceManager.getReferencesTo(this).any { program.listing.getInstructionAt(it.fromAddress) != null }
 
     /**
      * The indices of each class's primary table's pure virtual slots, off what its slots point at ([targets]) and
