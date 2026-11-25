@@ -1,3 +1,4 @@
+class-splits-fp `NPKlass_00012016` (inferred) of `Down`
 classes-fn `Boot` (stabs)
 classes-fn `Box` (stabs)
 classes-fn `Quals` (stabs)
@@ -31,8 +32,6 @@ fields-fn `Up`+8:4
 fields-fp `Diamond`+27:1
 fields-fp `Label`+35:1
 fields-fp `Named`+11:1
-methods-fn `Down::Down` 12016
-methods-fn `Down::~Down` 120fa
 methods-fn `Shape::~Shape` 11bb2
 methods-fn `Up::g` 12000
 methods-fn `Up::~Up` 120c6

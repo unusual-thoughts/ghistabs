@@ -16,53 +16,8 @@ classes-fp invented `std::ctype_base` (itanium_rtti)
 classes-fp invented `std::messages_base` (itanium_rtti)
 classes-fp invented `std::time_base` (itanium_rtti)
 field-sizes-fp `std::ios_base`+36: 4, is 64
-fields-fn `TiXmlAttribute`+20:4
-fields-fn `TiXmlAttribute`+24:4
-fields-fn `TiXmlAttribute`+4:4
-fields-fn `TiXmlAttribute`+8:4
-fields-fn `TiXmlBase`+4:4
-fields-fn `TiXmlBase`+8:4
-fields-fn `TiXmlComment`+32:4
-fields-fn `TiXmlComment`+4:4
-fields-fn `TiXmlComment`+8:4
-fields-fn `TiXmlDeclaration`+32:4
-fields-fn `TiXmlDeclaration`+44:4
-fields-fn `TiXmlDeclaration`+48:4
-fields-fn `TiXmlDeclaration`+4:4
-fields-fn `TiXmlDeclaration`+52:4
-fields-fn `TiXmlDeclaration`+8:4
-fields-fn `TiXmlDocument`+32:4
 fields-fn `TiXmlDocument`+44:1
 fields-fn `TiXmlDocument`+48:4
-fields-fn `TiXmlDocument`+4:4
-fields-fn `TiXmlDocument`+52:4
-fields-fn `TiXmlDocument`+60:4
-fields-fn `TiXmlDocument`+64:4
-fields-fn `TiXmlDocument`+8:4
-fields-fn `TiXmlElement`+32:4
-fields-fn `TiXmlElement`+44:4
-fields-fn `TiXmlElement`+48:4
-fields-fn `TiXmlElement`+4:4
-fields-fn `TiXmlElement`+52:4
-fields-fn `TiXmlElement`+56:4
-fields-fn `TiXmlElement`+60:4
-fields-fn `TiXmlElement`+64:4
-fields-fn `TiXmlElement`+68:4
-fields-fn `TiXmlElement`+72:4
-fields-fn `TiXmlElement`+76:4
-fields-fn `TiXmlElement`+8:4
-fields-fn `TiXmlNode`+32:4
-fields-fn `TiXmlNode`+4:4
-fields-fn `TiXmlNode`+8:4
-fields-fn `TiXmlPrinter`+12:4
-fields-fn `TiXmlPrinter`+16:4
-fields-fn `TiXmlPrinter`+20:4
-fields-fn `TiXmlText`+32:4
-fields-fn `TiXmlText`+4:4
-fields-fn `TiXmlText`+8:4
-fields-fn `TiXmlUnknown`+32:4
-fields-fn `TiXmlUnknown`+4:4
-fields-fn `TiXmlUnknown`+8:4
 fields-fn `std::__codecvt_abstract_base<char,char,int>`+4:4
 fields-fn `std::__codecvt_abstract_base<wchar_t,char,int>`+4:4
 fields-fn `std::__ctype_abstract_base<wchar_t>`+4:4
@@ -78,8 +33,6 @@ fields-fn `std::ctype_byname<wchar_t>`+13:128
 fields-fn `std::ctype_byname<wchar_t>`+142:512
 fields-fn `std::ctype_byname<wchar_t>`+654:32
 fields-fn `std::ctype_byname<wchar_t>`+686:32
-fields-fn `std::ios_base::failure`+4:4
-fields-fn `std::ios_base`+108:4
 fields-fn `std::locale::facet`+4:4
 fields-fn `std::messages<char>`+12:4
 fields-fn `std::messages<wchar_t>`+12:4
@@ -371,7 +324,6 @@ methods-fp 406eb8 of `TiXmlDocument`: is `TiXmlNode`'s
 methods-fp 41adf0 of `TiXmlText`: is `TiXmlNode`'s
 methods-fp 41db50 of `TiXmlElement`: is `TiXmlNode`'s
 methods-fp 450a10 of `std::messages<wchar_t>`: is `std::wstring`'s
-methods-fp 459760 of `std::messages<char>`: is `std::string`'s
 methods-fp 46dc20 of `std::collate<char>`: is `std::collate_byname<char>`'s
 methods-fp 46dcd0 of `std::collate<char>`: is `std::collate_byname<char>`'s
 methods-fp 46e100 of `std::collate<wchar_t>`: is `std::collate_byname<wchar_t>`'s
@@ -384,14 +336,11 @@ methods-fp 46ff60 of `std::time_put<char,std::ostreambuf_iterator<char,std::char
 methods-fp 46ff80 of `std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`: is `std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>`'s
 methods-fp 470010 of `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: is `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`'s
 methods-fp 470030 of `std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`: is `std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>`'s
-sizes-fp `TiXmlPrinter`: 12, is 24
 sizes-fp `std::__codecvt_abstract_base<char,char,int>`: 4, is 8
 sizes-fp `std::__codecvt_abstract_base<wchar_t,char,int>`: 4, is 8
 sizes-fp `std::__ctype_abstract_base<wchar_t>`: 4, is 8
 sizes-fp `std::ctype<wchar_t>`: 16, is 720
 sizes-fp `std::ctype_byname<wchar_t>`: 16, is 720
-sizes-fp `std::ios_base::failure`: 4, is 8
-sizes-fp `std::ios_base`: 108, is 112
 sizes-fp `std::locale::facet`: 4, is 8
 sizes-fp `std::messages<char>`: 12, is 16
 sizes-fp `std::messages<wchar_t>`: 12, is 16
