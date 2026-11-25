@@ -205,6 +205,43 @@ private fun List<Parameter>.keepStorageUnder(model: PrototypeModel, program: Pro
 fun Function.fixMethodConvention(takesThis: Boolean = false): Boolean =
     fastcallToThiscall() or (takesThis && thiscallFromDefaultConvention()) or restoreThisParam()
 
+/**
+ * Gives [this], a function with no parameter, a `this`: as a method's where its convention can be made one
+ * ([fixMethodConvention]), else as a first pointer parameter, where a `__cdecl` method such as gcc's takes it.
+ */
+fun Function.giveThis() {
+    if (fixMethodConvention(takesThis = true) && parameterCount > 0) return
+    val pointer = PointerDataType(program.dataTypeManager)
+    updateFunction(
+        callingConventionName,
+        null,
+        listOf(ParameterImpl(Function.THIS_PARAM_NAME, pointer, program, SourceType.ANALYSIS)),
+        Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+        true,
+        SourceType.ANALYSIS,
+    )
+}
+
+/**
+ * Whether [this] only returns: its body sets up and tears down a frame at most. Such are the constructors
+ * of an empty class, as gcc emits them out of line.
+ */
+fun Function.hasEmptyBody(): Boolean {
+    val instructions = program.listing.getInstructions(body, true).iterator().asSequence()
+        .take(MAX_EMPTY_BODY + 1).toList()
+    return instructions.size <= MAX_EMPTY_BODY && instructions.lastOrNull()?.flowType?.isTerminal == true &&
+        instructions.all { it.toString().replace(" ", "") in EMPTY_BODY }
+}
+
+/** How many instructions an empty body ([hasEmptyBody]) runs to at most. */
+private const val MAX_EMPTY_BODY = 6
+
+/** The instructions an empty body is made of, spaces left out: a frame set up and torn down, and a return. */
+private val EMPTY_BODY = setOf(
+    "PUSHEBP", "MOVEBP,ESP", "POPEBP", "PUSHRBP", "MOVRBP,RSP", "POPRBP", "LEAVE", "RET", "NOP", "ENDBR32",
+    "ENDBR64",
+)
+
 private const val FASTCALL = CompilerSpec.CALLING_CONVENTION_fastcall
 private const val STDCALL = CompilerSpec.CALLING_CONVENTION_stdcall
 private const val THISCALL = CompilerSpec.CALLING_CONVENTION_thiscall
