@@ -399,6 +399,19 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             val isVirtual = v.offset in v.built.headerVbaseOffsets
             v.built.bases += ClassBase(v.base, isVirtual, access = null, v.offset)
         }
+        // A class built only inside others has no table of its own that code stores: its virtual bases are known
+        // off the sub-VTTs it is built with alone.
+        for (v in vtt) {
+            for (vb in v.virtualBases) {
+                if (v.base.bases.any { it.cls == vb } || vb.derivesFrom(v.base) || v.base.derivesFrom(vb)) continue
+                v.base.bases += ClassBase(vb, isVirtual = true, access = null, offset = null, SourceType.DEFAULT)
+                sink.debug(
+                    "base-inferred-vtt",
+                    "${v.base.name} : virtual ${vb.name}, off a sub-VTT",
+                    v.base.vftables.firstOrNull()?.addressPoint,
+                )
+            }
+        }
         return ClassPassInput(classes, classes, holders, vtt.associate { it.structor to it.base })
     }
 
@@ -511,7 +524,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         return laid.components.mapNotNull { it.value as? Address }.filter { keepNulls || it.offset != 0L }
     }
 
-    private companion object {
+    internal companion object {
         /** How many vbase offsets to read in front of a primary table. */
         const val MAX_VBASE_WORDS = 8
 

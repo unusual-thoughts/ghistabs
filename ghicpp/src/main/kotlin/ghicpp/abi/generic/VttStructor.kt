@@ -11,8 +11,17 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidrakt.*
 
-/** A base-object [structor] of [base], which a structor of [built] calls on its subobject at [offset]. */
-internal class VttStructor(val structor: Function, val base: PlainClass, val built: PlainClass, val offset: Long)
+/**
+ * A base-object [structor] of [base], which a structor of [built] calls on its subobject at [offset]; [base]'s
+ * [virtualBases], off the sub-VTT it is passed ([virtualBasesOf]).
+ */
+internal class VttStructor(
+    val structor: Function,
+    val base: PlainClass,
+    val built: PlainClass,
+    val offset: Long,
+    val virtualBases: List<PlainClass> = emptyList(),
+)
 
 /**
  * The base-object structors that load their vptrs from a VTT, each with its class.
@@ -41,11 +50,47 @@ internal fun Program.findVttStructors(
             if (uses.stores[call.callee]?.classes.orEmpty().isNotEmpty()) continue
             val table = vtableAt(call.vtt)?.first?.takeIf(::isConstructionTable) ?: continue
             val base = byTable[table] ?: holding(functionSlots(table), primaries)
-            if (base == null) unmatched?.add(table) else found += VttStructor(call.callee, base, built, call.offset)
+            if (base == null) {
+                unmatched?.add(table)
+            } else {
+                val virtual = virtualBasesOf(call.vtt, table, byTable, primaries) - base
+                found += VttStructor(call.callee, base, built, call.offset, virtual)
+            }
         }
     }
     return found
 }
+
+/**
+ * The virtual bases of the class whose construction vtable [table] the sub-VTT at [vtt] opens with. The words after
+ * it point at the construction vtable's secondaries, each before the `offset_to_top` that is minus its subobject's
+ * offset, up to the next sub-VTT's primary, whose is 0. A secondary is a virtual base's where that offset is one of
+ * the vbase offsets in front of [table]'s header; its class is the one whose table holds its slots ([holding]).
+ * They place the base inside the class built, so only the class is kept, not the offset.
+ */
+private fun Program.virtualBasesOf(
+    vtt: Address,
+    table: Address,
+    byTable: Map<Address, PlainClass>,
+    primaries: Map<PlainClass, List<Address>>,
+): List<PlainClass> {
+    val ptr = defaultPointerSize.toLong()
+    val vbaseOffsets = (3..2 + PlainVtableParser.MAX_VBASE_WORDS).asSequence()
+        .map { table.signedWordBefore(this, it) }
+        .takeWhile { it != null && it in ptr until PlainVtables.MAX_SUBOBJECT_OFFSET }
+        .filterNotNull().toSet()
+    if (vbaseOffsets.isEmpty()) return emptyList()
+    return (1..vbaseOffsets.size + MAX_SUB_VTT_WORDS).asSequence()
+        .map { i -> vtableAt(vtt.add(i * ptr))?.first }
+        .takeWhile { it != null && isConstructionTable(it) && (vtableHeader(it)?.offsetToTop ?: 0L) < 0 }
+        .filterNotNull()
+        .filter { -(vtableHeader(it)?.offsetToTop ?: 0L) in vbaseOffsets }
+        .mapNotNull { byTable[it] ?: holding(functionSlots(it), primaries) }
+        .distinct().toList()
+}
+
+/** How many more words than a class has virtual bases its sub-VTT may hold: its non-virtual bases' secondaries. */
+private const val MAX_SUB_VTT_WORDS = 16
 
 /**
  * The class whose primary table holds the functions of [slots], each in the same slot. A null slot matches
