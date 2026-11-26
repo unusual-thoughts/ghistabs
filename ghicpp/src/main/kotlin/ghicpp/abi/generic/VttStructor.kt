@@ -168,13 +168,14 @@ internal fun Program.rttiVttStructors(classes: Collection<ClassDecl>, uses: Diss
 
 /**
  * Whether the [table] that a VTT word points at is a vtable's address point: in data, after a vtable header
- * ([hasVtableHeader]), with at least one function in its slots. Not every slot needs one, because a
- * construction vtable may leave its destructor slots null.
+ * ([hasVtableHeader]), with at least one function in its slots or vbase offsets in front of its header. Not every
+ * slot needs a function, because a construction vtable may leave its destructor slots null, and a base whose only
+ * virtual thing is a virtual base has no slots at all.
  */
 private fun Program.isConstructionTable(table: Address): Boolean {
     val block = memory.getBlock(table) ?: return false
     return !block.isExecute && block.isInitialized && hasVtableHeader(table) &&
-        functionSlots(table).any { it.offset != 0L }
+        (functionSlots(table).any { it.offset != 0L } || headerVbaseOffsets(table).isNotEmpty())
 }
 
 /**
