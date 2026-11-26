@@ -83,35 +83,8 @@ classes-fp invented `Klass_0049668c` (inferred, vftable 0049668c)
 classes-fp invented `Klass_004966cc` (inferred, vftable 004966cc)
 classes-fp invented `Klass_0049670c` (inferred, vftable 0049670c)
 field-sizes-fp `std::ios_base`+36: 4, is 64
-fields-fn `TiXmlAttribute`+4:4
-fields-fn `TiXmlAttribute`+8:4
-fields-fn `TiXmlBase`+4:4
-fields-fn `TiXmlBase`+8:4
-fields-fn `TiXmlComment`+4:4
-fields-fn `TiXmlComment`+8:4
-fields-fn `TiXmlDeclaration`+4:4
-fields-fn `TiXmlDeclaration`+8:4
 fields-fn `TiXmlDocument`+44:1
 fields-fn `TiXmlDocument`+48:4
-fields-fn `TiXmlDocument`+4:4
-fields-fn `TiXmlDocument`+60:4
-fields-fn `TiXmlDocument`+64:4
-fields-fn `TiXmlDocument`+8:4
-fields-fn `TiXmlElement`+44:4
-fields-fn `TiXmlElement`+48:4
-fields-fn `TiXmlElement`+4:4
-fields-fn `TiXmlElement`+52:4
-fields-fn `TiXmlElement`+56:4
-fields-fn `TiXmlElement`+60:4
-fields-fn `TiXmlElement`+64:4
-fields-fn `TiXmlElement`+68:4
-fields-fn `TiXmlElement`+8:4
-fields-fn `TiXmlNode`+4:4
-fields-fn `TiXmlNode`+8:4
-fields-fn `TiXmlText`+4:4
-fields-fn `TiXmlText`+8:4
-fields-fn `TiXmlUnknown`+4:4
-fields-fn `TiXmlUnknown`+8:4
 fields-fn `std::__codecvt_abstract_base<char,char,int>`+4:4
 fields-fn `std::__codecvt_abstract_base<wchar_t,char,int>`+4:4
 fields-fn `std::__ctype_abstract_base<wchar_t>`+4:4

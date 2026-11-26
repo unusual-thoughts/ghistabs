@@ -31,16 +31,12 @@ fields-fn `Up`+8:4
 fields-fp `Diamond`+27:1
 fields-fp `Label`+35:1
 fields-fp `Named`+11:1
-methods-fn `Down::Down` 12016
-methods-fn `Down::~Down` 120fa
 methods-fn `Shape::~Shape` 11bb2
 methods-fn `Up::g` 12000
 methods-fn `Up::~Up` 120c6
 methods-fp 11559 of `Circle`: no method
 methods-fp 120c6 of `Both`: is `Up`'s
 structors-fn 11bb2 of `Shape`
-structors-fn 12016 of `Down`
 structors-fn 120c6 of `Up`
-structors-fn 120fa of `Down`
 virtual-methods-fn `Shape::~Shape` 11bb2
 virtual-methods-fn `Up::g` 12000
