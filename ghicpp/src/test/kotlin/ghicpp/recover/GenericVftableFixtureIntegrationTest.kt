@@ -129,6 +129,8 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             0x6960L to listOf(0x6988L), // Secret : Logger
             0x69b8L to listOf(0x6b58L, 0x6a88L), // Both : Down, Up
             0x6b58L to listOf(0x6bc8L), // Down : virtual Core
+            // Up : virtual Core, off the sub-VTT Both builds Up with: Up's own table no code stores.
+            0x6a88L to listOf(0x6bc8L),
             0x6bf0L to listOf(0x6c48L, 0x6d00L), // Label : Rect, Named
             0x6c48L to listOf(SHAPE), // Rect
             0x6c88L to listOf(0x6d00L), // Diamond : Named, past its Left and Right, which have no table of their own
