@@ -46,6 +46,27 @@ data class VptrStore(
     val throughVbtable: Boolean = false,
 )
 
+/**
+ * These stores, each store of a primary table that a function makes through a vbtable, at `this` + k, where it
+ * stores no table at `this` + 0, taken as one where the table belongs: MSVC gives a class whose virtuals all
+ * override its virtual bases' no vfptr of its own, so its only table is the one for the virtual base at k. Not where
+ * what the function calls on `this` + k stores the same table, as a virtual base's own structor does.
+ */
+private fun Map<Function, List<VptrStore>>.withVbaseHomes(
+    from: Map<Function, DissectionCache.Dissection>,
+): Map<Function, List<VptrStore>> = mapValues { (f, stored) ->
+    if (stored.any { it.offset == 0L && !it.throughVbtable }) return@mapValues stored
+    val calls = from[f]?.subobjectCalls.orEmpty()
+    stored.map { s ->
+        val vbase = s.throughVbtable && s.home == 0L && s.offset > 0L
+        if (vbase && calls[s.offset].orEmpty().none { g -> this[g].orEmpty().any { it.cls == s.cls } }) {
+            s.copy(home = s.offset)
+        } else {
+            s
+        }
+    }
+}
+
 /** The stores of a vptr where it belongs. */
 val List<VptrStore>.own: List<VptrStore> get() = filter { it.offset == it.home }
 
@@ -88,7 +109,8 @@ class InlinedConstruction(val function: Function, val at: Address, val size: Lon
  * ([inlined]).
  */
 class Dissections internal constructor(from: Map<Function, DissectionCache.Dissection> = emptyMap()) {
-    val stores: Map<Function, List<VptrStore>> = from.mapNotNull { (f, r) -> r.stores?.let { f to it } }.toMap()
+    val stores: Map<Function, List<VptrStore>> =
+        from.mapNotNull { (f, r) -> r.stores?.let { f to it } }.toMap().withVbaseHomes(from)
     val subobjectCalls: Map<Function, Map<Long, Set<Function>>> = from.mapValues { (_, r) -> r.subobjectCalls }
     val thisStores: ThisStores = from.mapValues { (_, r) -> r.thisStores }
     val inlined: List<InlinedConstruction> = from.flatMap { (_, r) -> r.inlined }
@@ -97,6 +119,10 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
     val objectCalls: Map<Function, List<ObjectCall>> = from.mapValues { (_, r) -> r.objectCalls }
 
     private fun Function.callsOnThis() = objectCalls[this]?.filter { it.obj == CalledObject.This && !it.slot }.orEmpty()
+
+    /** The constants each function stores into `this` that may be vbtables, by offset. */
+    val vbtables: Map<Function, Map<Long, Address>> =
+        from.mapValues { (_, r) -> r.vbtables }.filterValues { it.isNotEmpty() }
 
     /**
      * The objects each vptr storer builds ([objectsBuilt]). For each object, maps its class to the constant

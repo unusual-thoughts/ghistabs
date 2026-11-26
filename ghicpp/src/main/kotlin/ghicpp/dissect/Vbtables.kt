@@ -22,7 +22,7 @@ private fun Varnode.isConstantPointer(): Boolean = isConstant ||
  * Whether [at] may be an MSVC vbtable. A vbtable's first entry is the offset from the vbptr back to the start of
  * its subobject, so it is zero or negative.
  */
-private fun Program.mayBeVbtable(at: Address) = runCatching { memory.getInt(at) <= 0 }.getOrDefault(false)
+internal fun Program.mayBeVbtable(at: Address) = runCatching { memory.getInt(at) <= 0 }.getOrDefault(false)
 
 /**
  * Finds the MSVC vbtables that the functions in [uses] store, for each class in [vbptrs], which gives where each
