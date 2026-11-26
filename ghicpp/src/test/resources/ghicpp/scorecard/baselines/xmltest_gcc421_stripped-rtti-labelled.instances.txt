@@ -50,8 +50,6 @@ methods-fn `TiXmlAttribute::QueryDoubleValue` 40631c
 methods-fn `TiXmlAttribute::QueryIntValue` 4064a2
 methods-fn `TiXmlAttribute::SetDoubleValue` 405b64
 methods-fn `TiXmlAttribute::SetIntValue` 405c4a
-methods-fn `TiXmlAttribute::SetName` 41a094
-methods-fn `TiXmlAttribute::SetName` 41a0b4
 methods-fn `TiXmlAttribute::SetValue` 41a0d4
 methods-fn `TiXmlAttribute::SetValue` 41a0f4
 methods-fn `TiXmlAttribute::ValueStr` 41da8c
@@ -138,7 +136,6 @@ methods-fn `TiXmlNode::SetValue` 41adf0
 methods-fn `TiXmlNode::Type` 41db44
 methods-fn `TiXmlNode::ValueTStr` 41dba8
 methods-fn `TiXmlNode::Value` 41db50
-methods-fn `TiXmlText::Blank` 4081ba
 methods-fn `TiXmlText::CDATA` 41dbb4
 methods-fn `std::__timepunct<char>::_M_am_pm_format` 420460
 methods-fn `std::__timepunct<char>::_M_am_pm` 420640

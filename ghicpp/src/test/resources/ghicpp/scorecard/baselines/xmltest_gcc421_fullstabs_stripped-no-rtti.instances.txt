@@ -269,8 +269,6 @@ methods-fn `TiXmlAttribute::QueryDoubleValue` 40631c
 methods-fn `TiXmlAttribute::QueryIntValue` 4064a2
 methods-fn `TiXmlAttribute::SetDoubleValue` 405b64
 methods-fn `TiXmlAttribute::SetIntValue` 405c4a
-methods-fn `TiXmlAttribute::SetName` 41c97c
-methods-fn `TiXmlAttribute::SetName` 41c99c
 methods-fn `TiXmlAttribute::SetValue` 41c9bc
 methods-fn `TiXmlAttribute::SetValue` 41c9dc
 methods-fn `TiXmlAttribute::ValueStr` 420e70
@@ -357,7 +355,6 @@ methods-fn `TiXmlNode::SetValue` 41da74
 methods-fn `TiXmlNode::Type` 420f28
 methods-fn `TiXmlNode::ValueTStr` 420f8c
 methods-fn `TiXmlNode::Value` 420f34
-methods-fn `TiXmlText::Blank` 4081ba
 methods-fn `TiXmlText::CDATA` 420f98
 methods-fn `__cxxabiv1::__class_type_info::__find_public_src` 4201a4
 methods-fn `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>::fd` 41dd78
