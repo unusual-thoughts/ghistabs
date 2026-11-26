@@ -61,6 +61,8 @@ data class SlotRenames(val functions: Int, val fields: Int, val skipped: List<St
  * Where a slot is, and what it holds, is read off memory by the ABI's geometry, laid or not; its name and
  * type are its field's ([field]), in whatever struct is laid over it, edited or not.
  */
+// One query or edit per slot question the class tree and the decompiler ask: 12, one past the stock limit.
+@Suppress("TooManyFunctions")
 class VirtualSlots(private val program: Program, private val hierarchy: ClassHierarchy) {
     private val tables: Map<Long, List<SlotTable>> =
         hierarchy.classes.associate { c -> c.id to program.resolve(c)?.let(program::slotTablesOf).orEmpty() }
@@ -148,7 +150,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
      * The slots whose field is [struct]'s at [offset], in every table laid with [struct]: the slot a call the
      * decompiler shows through `vptr->field` goes through.
      */
-    fun slotsAt(struct: Structure, offset: Int): List<VirtualSlot> {
+    private fun slotsAt(struct: Structure, offset: Int): List<VirtualSlot> {
         val dtm = program.dataTypeManager
         val id = dtm.getID(struct)
         val ordinal = struct.getComponentContaining(offset)?.ordinal ?: return emptyList()

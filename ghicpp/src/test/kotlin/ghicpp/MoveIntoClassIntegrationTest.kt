@@ -44,7 +44,7 @@ class MoveIntoClassIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             f.updateFunction(
                 convention,
                 ReturnParameterImpl(IntegerDataType.dataType, program),
-                params.mapIndexed { i, t -> ParameterImpl("param_${i + 1}", t, program, SourceType.USER_DEFINED) },
+                params.mapIndexed { i, t -> ParameterImpl("arg${i + 1}", t, program, SourceType.USER_DEFINED) },
                 Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
                 true,
                 source,
@@ -78,7 +78,7 @@ class MoveIntoClassIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         cls.getName(true) mustBe "outer::Inner"
         (f.parentNamespace is GhidraClass).mustBeTrue()
         f.callingConventionName mustBe "__thiscall"
-        f.storage mustBe listOf("this@Stack[0x4]:4 (auto)", "param_2@Stack[0x8]:4")
+        f.storage mustBe listOf("this@Stack[0x4]:4 (auto)", "arg2@Stack[0x8]:4")
         f.thisType mustBe "Inner *"
     }
 

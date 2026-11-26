@@ -21,6 +21,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 /**
  * Three Itanium classes, laid by hand: `A` declares the pure virtual `f`, `C` derives from `A` at offset 4 and
@@ -118,7 +119,6 @@ class PureSlotsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun `renaming a slot off a pure table's field renames the override that fills it, and every table's field`() {
         val slots = VirtualSlots(program, hierarchy)
-        slots.slotsAt(struct("A", "A_vftable"), 0).map { it.table } mustBe listOf(builder.addr(A_TABLE))
         val done = program.runTransaction { slots.renameField(struct("A", "A_vftable"), 0, "g") }
         done.functions mustBe 1
         program.functionManager.getFunctionAt(builder.addr(D_F)).name mustBe "g"
@@ -134,7 +134,9 @@ class PureSlotsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 DataTypeConflictHandler.DEFAULT_HANDLER,
             ) as Structure
         }
-        VirtualSlots(program, hierarchy).slotsAt(loose, 0) mustBe emptyList()
+        assertThrows<IllegalArgumentException> {
+            program.runTransaction { VirtualSlots(program, hierarchy).renameField(loose, 0, "g") }
+        }
     }
 
     private fun classNamed(name: String): GhidraClass =
