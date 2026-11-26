@@ -48,6 +48,8 @@ class ItaniumClassAnalyzer :
         options.register(VfptrModel.OPTION, FILL_ARRAYS, INLINED_CONSTRUCTORS, MEMBER_OBJECTS)
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
+        // Nothing to read without RTTI, and the pass would otherwise go over the classes another analyzer made.
+        if (!ItaniumRttiParser.hasRtti(program)) return false
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val pass = ClassPass(program, ItaniumRttiParser(program, sink), sink, program.analyzerOptions(NAME))
         val result = pass.run(monitor)

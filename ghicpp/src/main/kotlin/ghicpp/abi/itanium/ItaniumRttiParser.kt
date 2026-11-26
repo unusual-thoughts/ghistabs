@@ -168,7 +168,11 @@ class ItaniumRttiParser(private val program: Program, private val sink: Diagnost
     // A SymbolIterator is an Iterator and an Iterable, and `asSequence` is on both.
     private fun SymbolIterator.symbols(): Sequence<Symbol> = (this as Iterator<Symbol>).asSequence()
 
-    private companion object {
-        val VTABLE_LABELS = setOf(ClassNaming.vtableLabel(internal = false), ClassNaming.vtableLabel(internal = true))
+    companion object {
+        private val VTABLE_LABELS =
+            setOf(ClassNaming.vtableLabel(internal = false), ClassNaming.vtableLabel(internal = true))
+
+        /** Whether any `typeinfo` is labelled, which every class [parse] reads comes from. */
+        fun hasRtti(program: Program) = program.symbolTable.getSymbols(ClassNaming.TYPEINFO).hasNext()
     }
 }

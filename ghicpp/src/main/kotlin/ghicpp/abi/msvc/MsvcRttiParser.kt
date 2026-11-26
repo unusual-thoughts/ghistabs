@@ -217,6 +217,12 @@ class MsvcRttiParser(private val program: Program, sink: DiagnosticSink) :
     private fun typeDescriptorClass(at: Address) = symbols.getSymbols(at)
         .firstOrNull { it.name == Msvc.TYPE_DESCRIPTOR && !it.parentNamespace.isGlobal }
         ?.parentNamespace?.toClass()
+
+    companion object {
+        /** Whether Ghidra's RTTI analyzer laid any of the records [parse] reads: a hierarchy or a vftable's locator. */
+        fun hasRtti(program: Program) = listOf(Msvc.CLASS_HIERARCHY_DESCRIPTOR, Msvc.VFTABLE_META_PTR)
+            .any { program.symbolTable.getSymbols(it).hasNext() }
+    }
 }
 
 /**
