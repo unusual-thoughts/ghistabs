@@ -40,6 +40,11 @@ class PlainClass(override val ns: Namespace, override val vftables: List<VtableR
     var headerVbaseOffsets: Set<Long> = emptySet()
 
     override val vbaseOffsets get() = super.vbaseOffsets + headerVbaseOffsets
+
+    /** The [vbaseOffsets] of virtual bases inside its non-virtual part ([nestVirtualBases]), which it ends past. */
+    var nestedVbaseOffsets: Set<Long> = emptySet()
+
+    override val nonVirtualSize get() = (vbaseOffsets - nestedVbaseOffsets).minOrNull()
 }
 
 /**
@@ -399,6 +404,20 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             val isVirtual = v.offset in v.built.headerVbaseOffsets
             v.built.bases += ClassBase(v.base, isVirtual, access = null, v.offset)
         }
+        program.nestVirtualBases(vtt)
+        // A class built only inside others has no table of its own that code stores: its virtual bases are known
+        // off the sub-VTTs it is built with alone.
+        for (v in vtt) {
+            for (vb in v.virtualBases) {
+                if (v.base.bases.any { it.cls == vb } || vb.derivesFrom(v.base) || v.base.derivesFrom(vb)) continue
+                v.base.bases += ClassBase(vb, isVirtual = true, access = null, offset = null, SourceType.DEFAULT)
+                sink.debug(
+                    "base-inferred-vtt",
+                    "${v.base.name} : virtual ${vb.name}, off a sub-VTT",
+                    v.base.vftables.firstOrNull()?.addressPoint,
+                )
+            }
+        }
         return ClassPassInput(classes, classes, holders, vtt.associate { it.structor to it.base })
     }
 
@@ -445,9 +464,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         // A construction vtable's vbase offsets place the virtual bases in the class it is built inside, not in
         // this one. Only a VTT points at a construction vtable: no code takes its address.
         val vbaseOffsets = if (primary.signedWordBefore(program, 2) == 0L && program.isTakenByCode(primary)) {
-            (3..2 + MAX_VBASE_WORDS).asSequence().map { primary.signedWordBefore(program, it) }
-                .takeWhile { it != null && it in ptr until PlainVtables.MAX_SUBOBJECT_OFFSET }
-                .filterNotNull().toSet()
+            program.headerVbaseOffsets(primary)
         } else {
             emptySet()
         }
@@ -511,7 +528,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         return laid.components.mapNotNull { it.value as? Address }.filter { keepNulls || it.offset != 0L }
     }
 
-    private companion object {
+    internal companion object {
         /** How many vbase offsets to read in front of a primary table. */
         const val MAX_VBASE_WORDS = 8
 

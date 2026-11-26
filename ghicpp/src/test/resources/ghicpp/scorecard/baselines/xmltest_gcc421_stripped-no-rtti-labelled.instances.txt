@@ -77,9 +77,13 @@ classes-fp invented `Klass_0049660c` (inferred, vftable 0049660c)
 classes-fp invented `Klass_0049668c` (inferred, vftable 0049668c)
 classes-fp invented `Klass_004966cc` (inferred, vftable 004966cc)
 classes-fp invented `Klass_0049670c` (inferred, vftable 0049670c)
+field-sizes-fp `std::ctype<wchar_t>`+142: 2, is 512
+field-sizes-fp `std::ctype<wchar_t>`+654: 2, is 32
+field-sizes-fp `std::ctype<wchar_t>`+686: 2, is 32
+field-sizes-fp `std::ctype_byname<wchar_t>`+142: 2, is 512
+field-sizes-fp `std::ctype_byname<wchar_t>`+654: 2, is 32
+field-sizes-fp `std::ctype_byname<wchar_t>`+686: 2, is 32
 field-sizes-fp `std::ios_base`+36: 4, is 64
-fields-fn `TiXmlDocument`+44:1
-fields-fn `TiXmlDocument`+48:4
 fields-fn `std::__codecvt_abstract_base<char,char,int>`+4:4
 fields-fn `std::__codecvt_abstract_base<wchar_t,char,int>`+4:4
 fields-fn `std::__ctype_abstract_base<wchar_t>`+4:4
@@ -95,16 +99,9 @@ fields-fn `std::collate_byname<wchar_t>`+4:4
 fields-fn `std::collate_byname<wchar_t>`+8:4
 fields-fn `std::ctype<char>`+8:4
 fields-fn `std::ctype<wchar_t>`+13:128
-fields-fn `std::ctype<wchar_t>`+142:512
-fields-fn `std::ctype<wchar_t>`+654:32
-fields-fn `std::ctype<wchar_t>`+686:32
 fields-fn `std::ctype_byname<char>`+8:4
-fields-fn `std::ctype_byname<wchar_t>`+12:1
 fields-fn `std::ctype_byname<wchar_t>`+13:128
-fields-fn `std::ctype_byname<wchar_t>`+142:512
 fields-fn `std::ctype_byname<wchar_t>`+4:4
-fields-fn `std::ctype_byname<wchar_t>`+654:32
-fields-fn `std::ctype_byname<wchar_t>`+686:32
 fields-fn `std::ctype_byname<wchar_t>`+8:4
 fields-fn `std::locale::facet`+4:4
 fields-fn `std::messages<char>`+12:4
@@ -123,6 +120,8 @@ methods-fn `TiXmlAttribute::QueryDoubleValue` 40631c
 methods-fn `TiXmlAttribute::QueryIntValue` 4064a2
 methods-fn `TiXmlAttribute::SetDoubleValue` 405b64
 methods-fn `TiXmlAttribute::SetIntValue` 405c4a
+methods-fn `TiXmlAttribute::SetName` 41a094
+methods-fn `TiXmlAttribute::SetName` 41a0b4
 methods-fn `TiXmlAttribute::SetValue` 41a0d4
 methods-fn `TiXmlAttribute::SetValue` 41a0f4
 methods-fn `TiXmlAttribute::ValueStr` 41da8c
@@ -209,6 +208,7 @@ methods-fn `TiXmlNode::SetValue` 41adf0
 methods-fn `TiXmlNode::Type` 41db44
 methods-fn `TiXmlNode::ValueTStr` 41dba8
 methods-fn `TiXmlNode::Value` 41db50
+methods-fn `TiXmlText::Blank` 4081ba
 methods-fn `TiXmlText::CDATA` 41dbb4
 methods-fn `std::__timepunct<char>::_M_am_pm_format` 420460
 methods-fn `std::__timepunct<char>::_M_am_pm` 420640
@@ -499,8 +499,8 @@ sizes-fp `std::codecvt_byname<char,char,int>`: 4, is 12
 sizes-fp `std::codecvt_byname<wchar_t,char,int>`: 4, is 12
 sizes-fp `std::collate_byname<char>`: 4, is 12
 sizes-fp `std::collate_byname<wchar_t>`: 4, is 12
-sizes-fp `std::ctype<wchar_t>`: 16, is 720
-sizes-fp `std::ctype_byname<wchar_t>`: 4, is 720
+sizes-fp `std::ctype<wchar_t>`: 688, is 720
+sizes-fp `std::ctype_byname<wchar_t>`: 688, is 720
 sizes-fp `std::locale::facet`: 4, is 8
 sizes-fp `std::messages<char>`: 12, is 16
 sizes-fp `std::messages<wchar_t>`: 12, is 16
