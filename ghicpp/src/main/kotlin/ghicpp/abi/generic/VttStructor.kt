@@ -11,8 +11,17 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidrakt.*
 
-/** A base-object [structor] of [base], which a structor of [built] calls on its subobject at [offset]. */
-internal class VttStructor(val structor: Function, val base: PlainClass, val built: PlainClass, val offset: Long)
+/**
+ * A base-object [structor] of [base], which a structor of [built] calls on its subobject at [offset], passing it a
+ * sub-VTT that opens with [table], the construction vtable of [base] in [built].
+ */
+internal class VttStructor(
+    val structor: Function,
+    val base: PlainClass,
+    val built: PlainClass,
+    val offset: Long,
+    val table: Address,
+)
 
 /**
  * The base-object structors that load their vptrs from a VTT, each with its class.
@@ -41,10 +50,50 @@ internal fun Program.findVttStructors(
             if (uses.stores[call.callee]?.classes.orEmpty().isNotEmpty()) continue
             val table = vtableAt(call.vtt)?.first?.takeIf(::isConstructionTable) ?: continue
             val base = byTable[table] ?: holding(functionSlots(table), primaries)
-            if (base == null) unmatched?.add(table) else found += VttStructor(call.callee, base, built, call.offset)
+            if (base == null) {
+                unmatched?.add(table)
+            } else {
+                found += VttStructor(call.callee, base, built, call.offset, table)
+            }
         }
     }
     return found
+}
+
+/**
+ * The vbase offsets in front of [table]'s header: the words before its `offset_to_top` and RTTI word, while they are
+ * offsets a subobject could have.
+ */
+internal fun Program.headerVbaseOffsets(table: Address): Set<Long> {
+    val ptr = defaultPointerSize.toLong()
+    return (3..2 + PlainVtableParser.MAX_VBASE_WORDS).asSequence().map { table.signedWordBefore(this, it) }
+        .takeWhile { it != null && it in ptr until PlainVtables.MAX_SUBOBJECT_OFFSET }
+        .filterNotNull().toSet()
+}
+
+/**
+ * Marks the virtual bases that sit inside a base's non-virtual part ([PlainClass.nestedVbaseOffsets]). gcc lays a
+ * nearly empty virtual base over the vptr of a non-virtual base it is the primary base of, so the vbase offset is
+ * no longer where the non-virtual part ends: `DL_KeyImpl`'s `CryptoMaterial` shares the vptr of its `PublicKey` at
+ * +4, ahead of its own fields. A virtual base past the non-virtual part moves when the class is built inside
+ * another with fields past it, as `std::ostream`'s `std::ios` does in `std::ofstream`. One at the same offset in the
+ * class's own table, in its construction table in each class deriving from it, and in those classes' own tables,
+ * never moves, so it is inside. Where the class is the last part of every class deriving from it, as
+ * `std::ostream` is of `std::iostream`, that reads one past it as inside too.
+ * What is inside a base is inside the class deriving from it too, so the marks are carried up the derivations.
+ */
+internal fun Program.nestVirtualBases(vtt: List<VttStructor>) {
+    for ((base, builds) in vtt.groupBy { it.base }) {
+        base.nestedVbaseOffsets += base.headerVbaseOffsets.filter { k ->
+            builds.all { v -> k in headerVbaseOffsets(v.table) && v.offset + k in v.built.headerVbaseOffsets }
+        }
+    }
+    do {
+        val carried = vtt.count { v ->
+            val inside = v.base.nestedVbaseOffsets.map { v.offset + it }.filter { it in v.built.headerVbaseOffsets }
+            !v.built.nestedVbaseOffsets.containsAll(inside).also { v.built.nestedVbaseOffsets += inside }
+        }
+    } while (carried > 0)
 }
 
 /**

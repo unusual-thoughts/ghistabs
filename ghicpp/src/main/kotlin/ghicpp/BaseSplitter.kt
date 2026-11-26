@@ -149,6 +149,9 @@ class BaseSplitter(
         val own = there.firstOrNull { isOwnFields(it) }?.dataType as? Structure
             ?: emptyRun(if (inherited.isEmpty()) tailName else "$name${ClassNaming.FIELDS}_own_${from}_$from")
         layouts.forEach { it.embedBare(from, own) }
+        generateSequence(runSource()?.let { (src, at) -> src to at + from }) { (run, at) ->
+            run.runSource()?.let { (src, shift) -> src to at + shift }
+        }.take(MAX_RUN_DEPTH).forEach { (src, at) -> src.embedBare(at, own) }
         if (inherited.isEmpty() || own.name == tailName) return own
         return registry.getOrRegister<Structure>(categoryPath.at(tailName)) {
             emptyStruct(categoryPath, tailName, "$name as a base subobject: its bases' and its own fields").apply {
@@ -156,6 +159,16 @@ class BaseSplitter(
                 add(own, ClassNaming.FIELDS, "own fields, shared with deriving classes")
             }
         }
+    }
+
+    /**
+     * The base this struct is a run of ([baseFieldsRun]), with where the run starts in it: a base split again, as
+     * around a second vptr a deriving class takes over, is that run. Null for a struct that is none.
+     */
+    private fun Structure.runSource(): Pair<Structure, Int>? {
+        val (base, from) = RUN_NAME.matchEntire(name)?.destructured ?: return null
+        val src = dtm.getDataType(categoryPath, base) as? Structure ?: return null
+        return src to from.toInt()
     }
 
     /** An empty run of this base's own fields, named [name]. */
@@ -219,6 +232,12 @@ class BaseSplitter(
         }
     }
 }
+
+/** How many runs of runs [BaseSplitter] follows back to the base they are cut from. */
+private const val MAX_RUN_DEPTH = 4
+
+/** A run's name, `<Base>_fields_<from>_<to>` ([BaseSplitter]): the base, and where in it the run starts. */
+private val RUN_NAME = Regex("(.+)${ClassNaming.FIELDS}_(\\d+)_\\d+")
 
 /**
  * `<Class>_vftable` under `/ClassDataTypes/<ns>/<Class>/`, the function-pointer array `{vfptr}` points
