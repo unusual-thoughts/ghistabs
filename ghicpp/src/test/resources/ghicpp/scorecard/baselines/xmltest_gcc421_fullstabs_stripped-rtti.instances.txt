@@ -362,9 +362,6 @@ methods-fn `std::ios_base::sync_with_stdio` 474378
 methods-fn `std::ios_base::width` 43462c
 methods-fn `std::ios_base::width` 475d98
 methods-fn `std::ios_base::xalloc` 475dd0
-methods-fn `std::iostream::iostream` 441d8c
-methods-fn `std::iostream::iostream` 441ef0
-methods-fn `std::iostream::~iostream` 442380
 methods-fn `std::istream::_M_extract<bool>` 442708
 methods-fn `std::istream::_M_extract<double>` 4428c4
 methods-fn `std::istream::_M_extract<float>` 442c3c
@@ -389,7 +386,6 @@ methods-fn `std::istream::ignore` 444d80
 methods-fn `std::istream::ignore` 4450ec
 methods-fn `std::istream::ignore` 445580
 methods-fn `std::istream::istream` 4464c8
-methods-fn `std::istream::istream` 446520
 methods-fn `std::istream::operator>>` 446688
 methods-fn `std::istream::operator>>` 4466a0
 methods-fn `std::istream::operator>>` 4466c8
@@ -416,7 +412,6 @@ methods-fn `std::istream::seekg` 444890
 methods-fn `std::istream::sync` 444500
 methods-fn `std::istream::tellg` 444a60
 methods-fn `std::istream::unget` 444bbc
-methods-fn `std::istream::~istream` 44661c
 methods-fn `std::locale::_S_initialize_once` 46d590
 methods-fn `std::locale::_S_initialize` 46d55c
 methods-fn `std::locale::_S_normalize_category` 46d60c
@@ -796,9 +791,6 @@ methods-fn `std::wios::setstate` 479abc
 methods-fn `std::wios::tie` 4385ac
 methods-fn `std::wios::tie` 4795e0
 methods-fn `std::wios::widen` 438658
-methods-fn `std::wiostream::wiostream` 461144
-methods-fn `std::wiostream::wiostream` 4612a8
-methods-fn `std::wiostream::~wiostream` 461738
 methods-fn `std::wistream::_M_extract<bool>` 458570
 methods-fn `std::wistream::_M_extract<double>` 45872c
 methods-fn `std::wistream::_M_extract<float>` 458aa4
@@ -849,8 +841,6 @@ methods-fn `std::wistream::sync` 45a398
 methods-fn `std::wistream::tellg` 45a8f8
 methods-fn `std::wistream::unget` 45aa54
 methods-fn `std::wistream::wistream` 45c36c
-methods-fn `std::wistream::wistream` 45c3c4
-methods-fn `std::wistream::~wistream` 45c4c0
 methods-fn `std::wofstream::close` 46252c
 methods-fn `std::wofstream::is_open` 425718
 methods-fn `std::wofstream::is_open` 462570
@@ -924,16 +914,10 @@ methods-fp 43f588 of `std::collate<wchar_t>`: is `std::wstring`'s
 methods-fp 440c9c of `std::collate<wchar_t>`: is `std::wstring`'s
 methods-fp 440e0c of `std::messages<wchar_t>`: is `std::wstring`'s
 methods-fp 441198 of `std::collate<wchar_t>`: is `std::wstring`'s
-methods-fp 441d8c of `std::fstream`: is `std::iostream`'s
-methods-fp 441ef0 of `std::fstream`: is `std::iostream`'s
-methods-fp 442380 of `std::fstream`: is `std::iostream`'s
 methods-fp 44936c of unmatched `NPKlass_0044936c`: is `std::string::_Alloc_hider`'s
 methods-fp 44bb98 of `std::collate<char>`: is `std::string`'s
 methods-fp 4525cc of `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`: is `std::filebuf`'s
 methods-fp 454be8 of `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`: is `std::wfilebuf`'s
-methods-fp 461144 of `std::wfstream`: is `std::wiostream`'s
-methods-fp 4612a8 of `std::wfstream`: is `std::wiostream`'s
-methods-fp 461738 of `std::wfstream`: is `std::wiostream`'s
 methods-fp 47f880 of unmatched `NPKlass_0047f880`
 methods-fp 47f960 of unmatched `NPKlass_0047f960`
 sizes-fn `std::money_base`: none, is 1
@@ -948,12 +932,7 @@ sizes-fp `std::messages<wchar_t>`: 12, is 16
 sizes-fp `std::messages_byname<char>`: 12, is 16
 sizes-fp `std::messages_byname<wchar_t>`: 12, is 16
 sizes-fp `std::type_info`: 4, is 8
-structors-fn 441d8c of `std::iostream`
-structors-fn 441ef0 of `std::iostream`
-structors-fn 442380 of `std::iostream`
 structors-fn 4464c8 of `std::istream`
-structors-fn 446520 of `std::istream`
-structors-fn 44661c of `std::istream`
 structors-fn 448d1c of `std::ostream`
 structors-fn 44bc98 of `std::string`
 structors-fn 44bccc of `std::string`
@@ -984,8 +963,6 @@ structors-fn 457bb8 of `std::wfstream`
 structors-fn 457d28 of `std::wfstream`
 structors-fn 4581f0 of `std::wfstream`
 structors-fn 45c36c of `std::wistream`
-structors-fn 45c3c4 of `std::wistream`
-structors-fn 45c4c0 of `std::wistream`
 structors-fn 45ebf4 of `std::wostream`
 structors-fn 45faec of `std::ifstream`
 structors-fn 45fc48 of `std::ifstream`
@@ -993,9 +970,6 @@ structors-fn 4600e8 of `std::ifstream`
 structors-fn 4606a0 of `std::wifstream`
 structors-fn 4607fc of `std::wifstream`
 structors-fn 460c9c of `std::wifstream`
-structors-fn 461144 of `std::wiostream`
-structors-fn 4612a8 of `std::wiostream`
-structors-fn 461738 of `std::wiostream`
 structors-fn 461d08 of `std::ofstream`
 structors-fn 461e64 of `std::ofstream`
 structors-fn 462304 of `std::ofstream`
