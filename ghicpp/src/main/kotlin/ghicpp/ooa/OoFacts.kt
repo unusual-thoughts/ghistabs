@@ -14,6 +14,7 @@ import ghicpp.dissect.offsetFrom
 import ghicpp.dissect.pointerInto
 import ghicpp.dissect.thisVariable
 import ghicpp.hierarchy.slotTablesOf
+import ghicpp.takesThisAt
 import ghicpp.thisAt
 import ghicpp.thisStorage
 import ghidra.app.cmd.data.TypeDescriptorModel
@@ -172,7 +173,7 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                 methods += f.entryPoint
                 if (!read.returnsValue) f.returnsSelfOnceTyped(high, decomp)
             }
-            calls += high.objectCalls(f.thisAt(thisStorage))
+            calls += high.objectCalls(f.thisAt(thisStorage)).filter { it.callee.takesThisAt(thisStorage) }
         }
         orderFacts(methods, calls)
         for ((_, pfns) in vftables) {
@@ -377,8 +378,9 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
      * `noCallsBefore/1` and `noCallsAfter/1`, as Pharos orders a function's calls on one object. A method is no
      * constructor once another method is called on the same object before its first call there. It is no
      * destructor once another is called after its last. A call of `operator delete` ends the search. The calls
-     * on each object are the ones the dissector reads ([objectCalls]), in address order within each caller,
-     * not along its control flow.
+     * on each object are the ones the dissector reads ([objectCalls]) of functions that take `this` where a
+     * method does ([takesThisAt]), so a `cdecl` call such as an unnamed `operator delete` is not one. They go in
+     * address order within each caller, not along its control flow.
      */
     private fun orderFacts(methods: Set<Address>, calls: List<List<ObjectCall>>) {
         val notFirst = mutableSetOf<Address>()
