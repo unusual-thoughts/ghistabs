@@ -1,4 +1,5 @@
 base-access-fn `Core` of `Down`: none, is public
+base-access-fn `Core` of `Up`: none, is public
 base-access-fn `Down` of `Both`: none, is public
 base-access-fn `Logger` of `Secret`: none, is non-public
 base-access-fn `Named` of `Diamond`: none, is public
@@ -7,7 +8,6 @@ base-access-fn `Rect` of `Label`: none, is public
 base-access-fn `Shape` of `Circle`: none, is public
 base-access-fn `Shape` of `Rect`: none, is public
 base-access-fn `Up` of `Both`: none, is public
-bases-fn `Core` (virtual) of `Up`
 bases-fn `Left` of `Diamond`
 bases-fn `Right` of `Diamond`
 classes-fn `Boot` (namespace)
