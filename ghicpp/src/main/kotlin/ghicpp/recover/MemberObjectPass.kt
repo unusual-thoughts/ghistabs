@@ -161,7 +161,12 @@ class MemberObjectPass(
         for ((sub, what) in laid) {
             monitor.increment()
             val member = what.decl?.let(::structOf)?.takeUnless { it.isZeroLength } ?: continue
-            sub.container.decl?.let(::structOf)?.let { placeMember(it, sub.offset.toInt(), member) }
+            val holder = sub.container.decl?.let(::structOf) ?: continue
+            val at = sub.offset.toInt()
+            // A base subobject the class pass laid there, a virtual one too, which the constructors build alike.
+            if (holder.definedComponents.none { it.offset == at && it.dataType == member }) {
+                placeMember(holder, at, member)
+            }
         }
         // The members grew the classes they went past the end of, and with them those deriving from them.
         dtm.growToHoldBases(classStructs())

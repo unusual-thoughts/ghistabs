@@ -1,3 +1,9 @@
+bases-fp `?NPKlass_0044936c` of `std::string`
+class-splits-fp `NPKlass_00448d68` (inferred) of `std::ostream`
+class-splits-fp `NPKlass_0044c864` (inferred) of `std::string`
+class-splits-fp `NPKlass_0045142c` (inferred) of `std::__basic_file<char>`
+class-splits-fp `NPKlass_0045ec40` (inferred) of `std::wostream`
+class-splits-fp `std::money_base` (itanium_rtti) of `std::money_base`
 classes-fn `__cxa_call_unexpected::end_catch_protect` (stabs)
 classes-fn `__cxa_guard_acquire::mutex_wrapper` (stabs)
 classes-fn `__cxxabiv1::__base_class_type_info` (stabs)
@@ -15,7 +21,6 @@ classes-fn `__gnu_cxx::new_allocator<char>` (stabs)
 classes-fn `__gnu_cxx::new_allocator<wchar_t>` (stabs)
 classes-fn `__gnu_cxx::rope<char,std::allocator<char>>` (stabs)
 classes-fn `__gnu_cxx::rope<wchar_t,std::allocator<wchar_t>>` (stabs)
-classes-fn `std::__basic_file<char>` (stabs)
 classes-fn `std::__num_base` (stabs)
 classes-fn `std::__pad<char,std::char_traits<char>>` (stabs)
 classes-fn `std::__pad<wchar_t,std::char_traits<wchar_t>>` (stabs)
@@ -33,8 +38,6 @@ classes-fn `std::char_traits<wchar_t>` (stabs)
 classes-fn `std::forward_iterator_tag` (stabs)
 classes-fn `std::fpos<int>` (stabs)
 classes-fn `std::ios_base::Init` (stabs)
-classes-fn `std::ios_base::_Callback_list` (stabs)
-classes-fn `std::ios_base::_Words` (stabs)
 classes-fn `std::istream::sentry` (stabs)
 classes-fn `std::istreambuf_iterator<char,std::char_traits<char>>` (stabs)
 classes-fn `std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>` (stabs)
@@ -42,7 +45,6 @@ classes-fn `std::less<char_const*>` (stabs)
 classes-fn `std::less<wchar_t_const*>` (stabs)
 classes-fn `std::locale::_Impl` (stabs)
 classes-fn `std::locale::id` (stabs)
-classes-fn `std::locale` (stabs)
 classes-fn `std::numeric_limits<float>` (stabs)
 classes-fn `std::numeric_limits<int>` (stabs)
 classes-fn `std::numeric_limits<long>` (stabs)
@@ -62,59 +64,16 @@ classes-fn `std::reverse_iterator<__gnu_cxx::__normal_iterator<wchar_t*,std::wst
 classes-fn `std::reverse_iterator<__gnu_cxx::__normal_iterator<wchar_t_const*,std::wstring>>` (stabs)
 classes-fn `std::string::_Alloc_hider` (stabs)
 classes-fn `std::string::_Rep` (stabs)
-classes-fn `std::string` (stabs)
 classes-fn `std::wistream::sentry` (stabs)
 classes-fn `std::wostream::sentry` (stabs)
 classes-fn `std::wstring::_Alloc_hider` (stabs)
 classes-fn `std::wstring::_Rep` (stabs)
 classes-fn `std::wstring` (stabs)
-fields-fn `TiXmlAttribute`+20:4
-fields-fn `TiXmlAttribute`+24:4
-fields-fn `TiXmlAttribute`+4:4
-fields-fn `TiXmlAttribute`+8:4
-fields-fn `TiXmlBase`+4:4
-fields-fn `TiXmlBase`+8:4
-fields-fn `TiXmlComment`+32:4
-fields-fn `TiXmlComment`+4:4
-fields-fn `TiXmlComment`+8:4
-fields-fn `TiXmlDeclaration`+32:4
-fields-fn `TiXmlDeclaration`+44:4
-fields-fn `TiXmlDeclaration`+48:4
-fields-fn `TiXmlDeclaration`+4:4
-fields-fn `TiXmlDeclaration`+52:4
-fields-fn `TiXmlDeclaration`+8:4
-fields-fn `TiXmlDocument`+32:4
+classes-fp invented `NPKlass_0044936c` (inferred)
+classes-fp invented `NPKlass_0047f880` (inferred)
+classes-fp invented `NPKlass_0047f960` (inferred)
 fields-fn `TiXmlDocument`+44:1
 fields-fn `TiXmlDocument`+48:4
-fields-fn `TiXmlDocument`+4:4
-fields-fn `TiXmlDocument`+52:4
-fields-fn `TiXmlDocument`+60:4
-fields-fn `TiXmlDocument`+64:4
-fields-fn `TiXmlDocument`+8:4
-fields-fn `TiXmlElement`+32:4
-fields-fn `TiXmlElement`+44:4
-fields-fn `TiXmlElement`+48:4
-fields-fn `TiXmlElement`+4:4
-fields-fn `TiXmlElement`+52:4
-fields-fn `TiXmlElement`+56:4
-fields-fn `TiXmlElement`+60:4
-fields-fn `TiXmlElement`+64:4
-fields-fn `TiXmlElement`+68:4
-fields-fn `TiXmlElement`+72:4
-fields-fn `TiXmlElement`+76:4
-fields-fn `TiXmlElement`+8:4
-fields-fn `TiXmlNode`+32:4
-fields-fn `TiXmlNode`+4:4
-fields-fn `TiXmlNode`+8:4
-fields-fn `TiXmlPrinter`+12:4
-fields-fn `TiXmlPrinter`+16:4
-fields-fn `TiXmlPrinter`+20:4
-fields-fn `TiXmlText`+32:4
-fields-fn `TiXmlText`+4:4
-fields-fn `TiXmlText`+8:4
-fields-fn `TiXmlUnknown`+32:4
-fields-fn `TiXmlUnknown`+4:4
-fields-fn `TiXmlUnknown`+8:4
 fields-fn `__cxxabiv1::__class_type_info`+4:4
 fields-fn `__cxxabiv1::__si_class_type_info`+4:4
 fields-fn `__cxxabiv1::__si_class_type_info`+8:4
@@ -122,14 +81,6 @@ fields-fn `__cxxabiv1::__vmi_class_type_info`+12:4
 fields-fn `__cxxabiv1::__vmi_class_type_info`+16:8
 fields-fn `__cxxabiv1::__vmi_class_type_info`+4:4
 fields-fn `__cxxabiv1::__vmi_class_type_info`+8:4
-fields-fn `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`+28:4
-fields-fn `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`+40:4
-fields-fn `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`+44:1
-fields-fn `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`+28:4
-fields-fn `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`+40:4
-fields-fn `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`+44:1
-fields-fn `__gnu_cxx::stdio_sync_filebuf<char,std::char_traits<char>>`+28:4
-fields-fn `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>`+28:4
 fields-fn `std::__moneypunct_cache<char,false>`+48:4
 fields-fn `std::__moneypunct_cache<char,false>`+52:4
 fields-fn `std::__moneypunct_cache<char,false>`+56:11
@@ -158,269 +109,26 @@ fields-fn `std::ctype_byname<wchar_t>`+13:128
 fields-fn `std::ctype_byname<wchar_t>`+142:512
 fields-fn `std::ctype_byname<wchar_t>`+654:32
 fields-fn `std::ctype_byname<wchar_t>`+686:32
-fields-fn `std::domain_error`+4:4
-fields-fn `std::filebuf`+28:4
-fields-fn `std::filebuf`+40:4
-fields-fn `std::filebuf`+44:1
-fields-fn `std::fstream`+100:4
-fields-fn `std::fstream`+104:4
-fields-fn `std::fstream`+108:4
-fields-fn `std::fstream`+112:4
-fields-fn `std::fstream`+116:4
-fields-fn `std::fstream`+12:4
-fields-fn `std::fstream`+148:4
-fields-fn `std::fstream`+152:4
 fields-fn `std::fstream`+156:64
-fields-fn `std::fstream`+16:4
-fields-fn `std::fstream`+20:4
-fields-fn `std::fstream`+228:4
-fields-fn `std::fstream`+24:4
-fields-fn `std::fstream`+28:4
-fields-fn `std::fstream`+32:4
-fields-fn `std::fstream`+36:4
-fields-fn `std::fstream`+40:4
-fields-fn `std::fstream`+44:4
-fields-fn `std::fstream`+48:4
-fields-fn `std::fstream`+52:4
-fields-fn `std::fstream`+56:1
-fields-fn `std::fstream`+60:4
-fields-fn `std::fstream`+64:4
-fields-fn `std::fstream`+68:4
-fields-fn `std::fstream`+72:4
-fields-fn `std::fstream`+76:4
-fields-fn `std::fstream`+80:4
-fields-fn `std::fstream`+84:1
-fields-fn `std::fstream`+85:1
-fields-fn `std::fstream`+86:1
-fields-fn `std::fstream`+87:1
-fields-fn `std::fstream`+88:4
-fields-fn `std::fstream`+92:4
-fields-fn `std::fstream`+96:1
-fields-fn `std::ifstream`+100:4
-fields-fn `std::ifstream`+104:4
-fields-fn `std::ifstream`+108:4
-fields-fn `std::ifstream`+112:4
-fields-fn `std::ifstream`+12:4
-fields-fn `std::ifstream`+144:4
-fields-fn `std::ifstream`+148:4
 fields-fn `std::ifstream`+152:64
-fields-fn `std::ifstream`+16:4
-fields-fn `std::ifstream`+20:4
-fields-fn `std::ifstream`+224:4
-fields-fn `std::ifstream`+24:4
-fields-fn `std::ifstream`+28:4
-fields-fn `std::ifstream`+32:4
-fields-fn `std::ifstream`+36:4
-fields-fn `std::ifstream`+40:4
-fields-fn `std::ifstream`+44:4
-fields-fn `std::ifstream`+48:4
-fields-fn `std::ifstream`+52:1
-fields-fn `std::ifstream`+56:4
-fields-fn `std::ifstream`+60:4
-fields-fn `std::ifstream`+64:4
-fields-fn `std::ifstream`+68:4
-fields-fn `std::ifstream`+72:4
-fields-fn `std::ifstream`+76:4
-fields-fn `std::ifstream`+80:1
-fields-fn `std::ifstream`+81:1
-fields-fn `std::ifstream`+82:1
-fields-fn `std::ifstream`+83:1
-fields-fn `std::ifstream`+84:4
-fields-fn `std::ifstream`+88:4
-fields-fn `std::ifstream`+8:4
-fields-fn `std::ifstream`+92:1
-fields-fn `std::ifstream`+96:4
-fields-fn `std::invalid_argument`+4:4
-fields-fn `std::ios_base::failure`+4:4
-fields-fn `std::ios_base`+108:4
-fields-fn `std::ios_base`+28:4
-fields-fn `std::ios_base`+32:4
 fields-fn `std::ios_base`+36:64
-fields-fn `std::ios`+108:4
-fields-fn `std::ios`+28:4
-fields-fn `std::ios`+32:4
 fields-fn `std::ios`+36:64
-fields-fn `std::iostream`+120:4
-fields-fn `std::iostream`+40:4
-fields-fn `std::iostream`+44:4
 fields-fn `std::iostream`+48:64
-fields-fn `std::istream`+116:4
-fields-fn `std::istream`+36:4
-fields-fn `std::istream`+40:4
 fields-fn `std::istream`+44:64
-fields-fn `std::length_error`+4:4
-fields-fn `std::logic_error`+4:4
 fields-fn `std::messages<char>`+12:4
 fields-fn `std::messages<wchar_t>`+12:4
 fields-fn `std::messages_byname<char>`+12:4
 fields-fn `std::messages_byname<wchar_t>`+12:4
-fields-fn `std::ofstream`+100:4
-fields-fn `std::ofstream`+104:4
-fields-fn `std::ofstream`+108:4
-fields-fn `std::ofstream`+12:4
-fields-fn `std::ofstream`+140:4
-fields-fn `std::ofstream`+144:4
 fields-fn `std::ofstream`+148:64
-fields-fn `std::ofstream`+16:4
-fields-fn `std::ofstream`+20:4
-fields-fn `std::ofstream`+220:4
-fields-fn `std::ofstream`+24:4
-fields-fn `std::ofstream`+28:4
-fields-fn `std::ofstream`+32:4
-fields-fn `std::ofstream`+36:4
-fields-fn `std::ofstream`+40:4
-fields-fn `std::ofstream`+44:4
-fields-fn `std::ofstream`+48:1
-fields-fn `std::ofstream`+4:4
-fields-fn `std::ofstream`+52:4
-fields-fn `std::ofstream`+56:4
-fields-fn `std::ofstream`+60:4
-fields-fn `std::ofstream`+64:4
-fields-fn `std::ofstream`+68:4
-fields-fn `std::ofstream`+72:4
-fields-fn `std::ofstream`+76:1
-fields-fn `std::ofstream`+77:1
-fields-fn `std::ofstream`+78:1
-fields-fn `std::ofstream`+79:1
-fields-fn `std::ofstream`+80:4
-fields-fn `std::ofstream`+84:4
-fields-fn `std::ofstream`+88:1
-fields-fn `std::ofstream`+8:4
-fields-fn `std::ofstream`+92:4
-fields-fn `std::ofstream`+96:4
-fields-fn `std::ostream`+112:4
-fields-fn `std::ostream`+32:4
-fields-fn `std::ostream`+36:4
 fields-fn `std::ostream`+40:64
-fields-fn `std::out_of_range`+4:4
-fields-fn `std::overflow_error`+4:4
-fields-fn `std::range_error`+4:4
-fields-fn `std::runtime_error`+4:4
-fields-fn `std::streambuf`+28:4
 fields-fn `std::type_info`+4:4
-fields-fn `std::underflow_error`+4:4
-fields-fn `std::wfilebuf`+28:4
-fields-fn `std::wfilebuf`+40:4
-fields-fn `std::wfilebuf`+44:1
-fields-fn `std::wfstream`+100:1
-fields-fn `std::wfstream`+104:4
-fields-fn `std::wfstream`+108:4
-fields-fn `std::wfstream`+112:4
-fields-fn `std::wfstream`+116:4
-fields-fn `std::wfstream`+120:4
-fields-fn `std::wfstream`+12:4
-fields-fn `std::wfstream`+152:4
-fields-fn `std::wfstream`+156:4
 fields-fn `std::wfstream`+160:64
-fields-fn `std::wfstream`+16:4
-fields-fn `std::wfstream`+20:4
-fields-fn `std::wfstream`+232:4
-fields-fn `std::wfstream`+24:4
-fields-fn `std::wfstream`+28:4
-fields-fn `std::wfstream`+32:4
-fields-fn `std::wfstream`+36:4
-fields-fn `std::wfstream`+40:4
-fields-fn `std::wfstream`+44:4
-fields-fn `std::wfstream`+48:4
-fields-fn `std::wfstream`+52:4
-fields-fn `std::wfstream`+56:1
-fields-fn `std::wfstream`+60:4
-fields-fn `std::wfstream`+64:4
-fields-fn `std::wfstream`+68:4
-fields-fn `std::wfstream`+72:4
-fields-fn `std::wfstream`+76:4
-fields-fn `std::wfstream`+80:4
-fields-fn `std::wfstream`+84:1
-fields-fn `std::wfstream`+85:1
-fields-fn `std::wfstream`+86:1
-fields-fn `std::wfstream`+88:2
-fields-fn `std::wfstream`+92:4
-fields-fn `std::wfstream`+96:4
-fields-fn `std::wifstream`+100:4
-fields-fn `std::wifstream`+104:4
-fields-fn `std::wifstream`+108:4
-fields-fn `std::wifstream`+112:4
-fields-fn `std::wifstream`+116:4
-fields-fn `std::wifstream`+12:4
-fields-fn `std::wifstream`+148:4
-fields-fn `std::wifstream`+152:4
 fields-fn `std::wifstream`+156:64
-fields-fn `std::wifstream`+16:4
-fields-fn `std::wifstream`+20:4
-fields-fn `std::wifstream`+228:4
-fields-fn `std::wifstream`+24:4
-fields-fn `std::wifstream`+28:4
-fields-fn `std::wifstream`+32:4
-fields-fn `std::wifstream`+36:4
-fields-fn `std::wifstream`+40:4
-fields-fn `std::wifstream`+44:4
-fields-fn `std::wifstream`+48:4
-fields-fn `std::wifstream`+52:1
-fields-fn `std::wifstream`+56:4
-fields-fn `std::wifstream`+60:4
-fields-fn `std::wifstream`+64:4
-fields-fn `std::wifstream`+68:4
-fields-fn `std::wifstream`+72:4
-fields-fn `std::wifstream`+76:4
-fields-fn `std::wifstream`+80:1
-fields-fn `std::wifstream`+81:1
-fields-fn `std::wifstream`+82:1
-fields-fn `std::wifstream`+84:2
-fields-fn `std::wifstream`+88:4
-fields-fn `std::wifstream`+8:4
-fields-fn `std::wifstream`+92:4
-fields-fn `std::wifstream`+96:1
-fields-fn `std::wios`+108:4
-fields-fn `std::wios`+28:4
-fields-fn `std::wios`+32:4
 fields-fn `std::wios`+36:64
-fields-fn `std::wiostream`+120:4
-fields-fn `std::wiostream`+40:4
-fields-fn `std::wiostream`+44:4
 fields-fn `std::wiostream`+48:64
-fields-fn `std::wistream`+116:4
-fields-fn `std::wistream`+36:4
-fields-fn `std::wistream`+40:4
 fields-fn `std::wistream`+44:64
-fields-fn `std::wofstream`+100:4
-fields-fn `std::wofstream`+104:4
-fields-fn `std::wofstream`+108:4
-fields-fn `std::wofstream`+112:4
-fields-fn `std::wofstream`+12:4
-fields-fn `std::wofstream`+144:4
-fields-fn `std::wofstream`+148:4
 fields-fn `std::wofstream`+152:64
-fields-fn `std::wofstream`+16:4
-fields-fn `std::wofstream`+20:4
-fields-fn `std::wofstream`+224:4
-fields-fn `std::wofstream`+24:4
-fields-fn `std::wofstream`+28:4
-fields-fn `std::wofstream`+32:4
-fields-fn `std::wofstream`+36:4
-fields-fn `std::wofstream`+40:4
-fields-fn `std::wofstream`+44:4
-fields-fn `std::wofstream`+48:1
-fields-fn `std::wofstream`+4:4
-fields-fn `std::wofstream`+52:4
-fields-fn `std::wofstream`+56:4
-fields-fn `std::wofstream`+60:4
-fields-fn `std::wofstream`+64:4
-fields-fn `std::wofstream`+68:4
-fields-fn `std::wofstream`+72:4
-fields-fn `std::wofstream`+76:1
-fields-fn `std::wofstream`+77:1
-fields-fn `std::wofstream`+78:1
-fields-fn `std::wofstream`+80:2
-fields-fn `std::wofstream`+84:4
-fields-fn `std::wofstream`+88:4
-fields-fn `std::wofstream`+8:4
-fields-fn `std::wofstream`+92:1
-fields-fn `std::wofstream`+96:4
-fields-fn `std::wostream`+112:4
-fields-fn `std::wostream`+32:4
-fields-fn `std::wostream`+36:4
 fields-fn `std::wostream`+40:64
-fields-fn `std::wstreambuf`+28:4
 methods-fn `TiXmlAttribute::DoubleValue` 405b06
 methods-fn `TiXmlAttribute::IntValue` 405b3e
 methods-fn `TiXmlAttribute::NameTStr` 420e64
@@ -528,6 +236,14 @@ methods-fn `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>::fd` 41e
 methods-fn `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>::file` 41e34c
 methods-fn `__gnu_cxx::stdio_sync_filebuf<char,std::char_traits<char>>::file` 41e9d8
 methods-fn `__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>::file` 41ee0c
+methods-fn `std::__basic_file<char>::__basic_file` 4515e4
+methods-fn `std::__basic_file<char>::fd` 451234
+methods-fn `std::__basic_file<char>::file` 451244
+methods-fn `std::__basic_file<char>::open` 451250
+methods-fn `std::__basic_file<char>::seekoff` 4513f4
+methods-fn `std::__basic_file<char>::showmanyc` 4515c0
+methods-fn `std::__basic_file<char>::xsputn` 4513cc
+methods-fn `std::__basic_file<char>::~__basic_file` 451614
 methods-fn `std::__codecvt_abstract_base<char,char,int>::always_noconv` 425c34
 methods-fn `std::__codecvt_abstract_base<char,char,int>::encoding` 425d10
 methods-fn `std::__codecvt_abstract_base<char,char,int>::in` 425c58
@@ -627,6 +343,8 @@ methods-fn `std::ios::setstate` 4790e0
 methods-fn `std::ios::tie` 4383d8
 methods-fn `std::ios::tie` 478c0c
 methods-fn `std::ios::widen` 438480
+methods-fn `std::ios_base::_Callback_list::_M_add_reference` 47431c
+methods-fn `std::ios_base::_Callback_list::_M_remove_reference` 474334
 methods-fn `std::ios_base::_M_getloc` 434704
 methods-fn `std::ios_base::_M_grow_words` 47405c
 methods-fn `std::ios_base::_M_init` 475e78
@@ -698,6 +416,10 @@ methods-fn `std::istream::sync` 444500
 methods-fn `std::istream::tellg` 444a60
 methods-fn `std::istream::unget` 444bbc
 methods-fn `std::istream::~istream` 44661c
+methods-fn `std::locale::_S_initialize_once` 46d590
+methods-fn `std::locale::_S_initialize` 46d55c
+methods-fn `std::locale::_S_normalize_category` 46d60c
+methods-fn `std::locale::classic` 472224
 methods-fn `std::locale::facet::_M_add_reference` 426ba8
 methods-fn `std::locale::facet::_M_remove_reference` 426c48
 methods-fn `std::locale::facet::_S_clone_c_locale` 471f6c
@@ -706,6 +428,15 @@ methods-fn `std::locale::facet::_S_destroy_c_locale` 471fd0
 methods-fn `std::locale::facet::_S_get_c_locale` 471f50
 methods-fn `std::locale::facet::_S_get_c_name` 471f44
 methods-fn `std::locale::facet::_S_initialize_once` 471fb0
+methods-fn `std::locale::global` 472098
+methods-fn `std::locale::locale` 472238
+methods-fn `std::locale::locale` 472348
+methods-fn `std::locale::locale` 472358
+methods-fn `std::locale::locale` 47237c
+methods-fn `std::locale::name` 4269b8
+methods-fn `std::locale::operator==` 426d40
+methods-fn `std::locale::operator=` 472490
+methods-fn `std::locale::~locale` 472474
 methods-fn `std::messages<char>::_M_convert_from_char` 434734
 methods-fn `std::messages<char>::_M_convert_to_char` 43471c
 methods-fn `std::messages<char>::close` 4347cc
@@ -719,7 +450,6 @@ methods-fn `std::messages<wchar_t>::get` 434854
 methods-fn `std::messages<wchar_t>::open` 434888
 methods-fn `std::messages<wchar_t>::open` 4348ac
 methods-fn `std::money_base::_S_construct_pattern` 44cb2c
-methods-fn `std::money_base::money_base` 44cb4c
 methods-fn `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 439d38
 methods-fn `std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get` 439d7c
 methods-fn `std::money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>::get` 43b790
@@ -853,13 +583,11 @@ methods-fn `std::ostream::operator<<` 4492f4
 methods-fn `std::ostream::operator<<` 44931c
 methods-fn `std::ostream::operator<<` 449344
 methods-fn `std::ostream::ostream` 448d1c
-methods-fn `std::ostream::ostream` 448d68
 methods-fn `std::ostream::put` 446b2c
 methods-fn `std::ostream::seekp` 446ea8
 methods-fn `std::ostream::seekp` 447094
 methods-fn `std::ostream::tellp` 447264
 methods-fn `std::ostream::write` 4473c0
-methods-fn `std::ostream::~ostream` 448e44
 methods-fn `std::streambuf::eback` 425750
 methods-fn `std::streambuf::getloc` 425780
 methods-fn `std::streambuf::in_avail` 464404
@@ -880,6 +608,132 @@ methods-fn `std::streambuf::sputbackc` 464578
 methods-fn `std::streambuf::sputc` 463ef4
 methods-fn `std::streambuf::sputn` 463f8c
 methods-fn `std::streambuf::sungetc` 464384
+methods-fn `std::string::_M_assign` 44b8fc
+methods-fn `std::string::_M_check_length` 422258
+methods-fn `std::string::_M_check` 422e14
+methods-fn `std::string::_M_copy` 44aff0
+methods-fn `std::string::_M_data` 422a58
+methods-fn `std::string::_M_disjunct` 421fa8
+methods-fn `std::string::_M_leak_hard` 4493cc
+methods-fn `std::string::_M_leak` 44b038
+methods-fn `std::string::_M_limit` 422e40
+methods-fn `std::string::_M_move` 44b06c
+methods-fn `std::string::_M_mutate` 44b93c
+methods-fn `std::string::_M_rep` 4229cc
+methods-fn `std::string::_M_replace_aux` 4499c8
+methods-fn `std::string::_M_replace_safe` 449a34
+methods-fn `std::string::_S_construct<__gnu_cxx::__normal_iterator<char*,std::string>>` 449510
+methods-fn `std::string::_S_construct<__gnu_cxx::__normal_iterator<char*,std::string>>` 449530
+methods-fn `std::string::_S_construct<char*>` 4497b8
+methods-fn `std::string::_S_construct<char*>` 4497d8
+methods-fn `std::string::_S_construct<char_const*>` 449674
+methods-fn `std::string::_S_construct<char_const*>` 449694
+methods-fn `std::string::_S_construct_aux<__gnu_cxx::__normal_iterator<char*,std::string>>` 449a7c
+methods-fn `std::string::_S_construct_aux<char*>` 449ad4
+methods-fn `std::string::_S_construct_aux<char_const*>` 449aa8
+methods-fn `std::string::_S_construct` 449430
+methods-fn `std::string::_S_copy_chars` 449908
+methods-fn `std::string::_S_copy_chars` 449940
+methods-fn `std::string::_S_copy_chars` 449978
+methods-fn `std::string::_S_copy_chars` 4499a0
+methods-fn `std::string::_S_empty_rep` 4498fc
+methods-fn `std::string::append` 44a4dc
+methods-fn `std::string::append` 44a504
+methods-fn `std::string::append` 44a6f8
+methods-fn `std::string::assign` 44a8f0
+methods-fn `std::string::assign` 44ab80
+methods-fn `std::string::at` 422518
+methods-fn `std::string::at` 449b00
+methods-fn `std::string::begin` 422804
+methods-fn `std::string::capacity` 422e84
+methods-fn `std::string::clear` 44a370
+methods-fn `std::string::compare` 422aa4
+methods-fn `std::string::compare` 422b14
+methods-fn `std::string::compare` 422b90
+methods-fn `std::string::compare` 422c28
+methods-fn `std::string::compare` 422cac
+methods-fn `std::string::compare` 422d50
+methods-fn `std::string::copy` 4225c0
+methods-fn `std::string::end` 422558
+methods-fn `std::string::end` 449b4c
+methods-fn `std::string::erase` 44a394
+methods-fn `std::string::erase` 44a40c
+methods-fn `std::string::find_first_not_of` 4223f8
+methods-fn `std::string::find_first_not_of` 422420
+methods-fn `std::string::find_first_not_of` 422484
+methods-fn `std::string::find_first_of` 422144
+methods-fn `std::string::find_first_of` 42216c
+methods-fn `std::string::find_first_of` 4221e0
+methods-fn `std::string::find_first_of` 422214
+methods-fn `std::string::find_last_not_of` 42229c
+methods-fn `std::string::find_last_not_of` 4222c4
+methods-fn `std::string::find_last_not_of` 422344
+methods-fn `std::string::find_last_not_of` 422378
+methods-fn `std::string::find_last_of` 42203c
+methods-fn `std::string::find_last_of` 422064
+methods-fn `std::string::find_last_of` 4220ec
+methods-fn `std::string::find_last_of` 422120
+methods-fn `std::string::find` 422630
+methods-fn `std::string::find` 422658
+methods-fn `std::string::find` 42271c
+methods-fn `std::string::find` 422750
+methods-fn `std::string::get_allocator` 422238
+methods-fn `std::string::insert` 44ac98
+methods-fn `std::string::insert` 44acc4
+methods-fn `std::string::insert` 44acec
+methods-fn `std::string::insert` 44ae6c
+methods-fn `std::string::insert` 44ae98
+methods-fn `std::string::max_size` 422e98
+methods-fn `std::string::operator+=` 44c8f0
+methods-fn `std::string::operator+=` 44c928
+methods-fn `std::string::operator[]` 422ed0
+methods-fn `std::string::push_back` 44bb98
+methods-fn `std::string::rbegin` 4229f4
+methods-fn `std::string::rbegin` 44af34
+methods-fn `std::string::rend` 4227c8
+methods-fn `std::string::rend` 449ff0
+methods-fn `std::string::replace` 44b0a0
+methods-fn `std::string::replace` 44b114
+methods-fn `std::string::replace` 44b144
+methods-fn `std::string::replace` 44b1a8
+methods-fn `std::string::replace` 44b1fc
+methods-fn `std::string::replace` 44b238
+methods-fn `std::string::replace` 44b29c
+methods-fn `std::string::replace` 44b310
+methods-fn `std::string::replace` 44b370
+methods-fn `std::string::replace` 44b3a0
+methods-fn `std::string::replace` 44b694
+methods-fn `std::string::replace` 44b6d0
+methods-fn `std::string::replace` 44b72c
+methods-fn `std::string::reserve` 44b784
+methods-fn `std::string::resize` 44af60
+methods-fn `std::string::resize` 44af7c
+methods-fn `std::string::rfind` 42285c
+methods-fn `std::string::rfind` 422884
+methods-fn `std::string::rfind` 422918
+methods-fn `std::string::rfind` 42294c
+methods-fn `std::string::string<__gnu_cxx::__normal_iterator<char*,std::string>>` 44c0c0
+methods-fn `std::string::string<__gnu_cxx::__normal_iterator<char*,std::string>>` 44c5cc
+methods-fn `std::string::string<char*>` 44c120
+methods-fn `std::string::string<char*>` 44c62c
+methods-fn `std::string::string<char_const*>` 44c0f0
+methods-fn `std::string::string<char_const*>` 44c5fc
+methods-fn `std::string::string` 44bc98
+methods-fn `std::string::string` 44bccc
+methods-fn `std::string::string` 44be5c
+methods-fn `std::string::string` 44bfc0
+methods-fn `std::string::string` 44c03c
+methods-fn `std::string::string` 44c150
+methods-fn `std::string::string` 44c1a4
+methods-fn `std::string::string` 44c1d8
+methods-fn `std::string::string` 44c208
+methods-fn `std::string::string` 44c368
+methods-fn `std::string::string` 44c4cc
+methods-fn `std::string::string` 44c548
+methods-fn `std::string::string` 44c580
+methods-fn `std::string::substr` 422a1c
+methods-fn `std::string::swap` 44a01c
+methods-fn `std::string::~string` 44c760
 methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::_M_extract_num` 4352c4
 methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::date_order` 434fe4
 methods-fn `std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>::get_date` 43648c
@@ -1035,9 +889,7 @@ methods-fn `std::wostream::seekp` 45cd54
 methods-fn `std::wostream::seekp` 45cf40
 methods-fn `std::wostream::tellp` 45d110
 methods-fn `std::wostream::wostream` 45ebf4
-methods-fn `std::wostream::wostream` 45ec40
 methods-fn `std::wostream::write` 45d26c
-methods-fn `std::wostream::~wostream` 45ed1c
 methods-fn `std::wstreambuf::eback` 4257bc
 methods-fn `std::wstreambuf::getloc` 4257ec
 methods-fn `std::wstreambuf::in_avail` 464fbc
@@ -1058,9 +910,11 @@ methods-fn `std::wstreambuf::sputbackc` 465150
 methods-fn `std::wstreambuf::sputc` 464a64
 methods-fn `std::wstreambuf::sputn` 464b08
 methods-fn `std::wstreambuf::sungetc` 464f30
+methods-fp 405cea of `std::string`: is `TiXmlBase`'s
 methods-fp 406eb8 of `TiXmlDocument`: is `TiXmlNode`'s
 methods-fp 41da74 of `TiXmlText`: is `TiXmlNode`'s
 methods-fp 420f34 of `TiXmlElement`: is `TiXmlNode`'s
+methods-fp 4229cc of unmatched `NPKlass_0044936c`: is `std::string`'s
 methods-fp 425750 of `std::filebuf`: is `std::streambuf`'s
 methods-fp 425774 of `std::filebuf`: is `std::streambuf`'s
 methods-fp 4257bc of `std::wfilebuf`: is `std::wstreambuf`'s
@@ -1072,44 +926,27 @@ methods-fp 441198 of `std::collate<wchar_t>`: is `std::wstring`'s
 methods-fp 441d8c of `std::fstream`: is `std::iostream`'s
 methods-fp 441ef0 of `std::fstream`: is `std::iostream`'s
 methods-fp 442380 of `std::fstream`: is `std::iostream`'s
-methods-fp 448d68 of `std::ofstream`: is `std::ostream`'s
-methods-fp 448e44 of `std::ofstream`: is `std::ostream`'s
-methods-fp 44a504 of `std::collate<char>`: is `std::string`'s
+methods-fp 44936c of unmatched `NPKlass_0044936c`: is `std::string::_Alloc_hider`'s
 methods-fp 44bb98 of `std::collate<char>`: is `std::string`'s
-methods-fp 44bcfc of `std::messages<char>`: is `std::string`'s
-methods-fp 44c074 of `std::collate<char>`: is `std::string`'s
 methods-fp 4525cc of `__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>`: is `std::filebuf`'s
 methods-fp 454be8 of `__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>`: is `std::wfilebuf`'s
-methods-fp 45ec40 of `std::wofstream`: is `std::wostream`'s
-methods-fp 45ed1c of `std::wofstream`: is `std::wostream`'s
 methods-fp 461144 of `std::wfstream`: is `std::wiostream`'s
 methods-fp 4612a8 of `std::wfstream`: is `std::wiostream`'s
 methods-fp 461738 of `std::wfstream`: is `std::wiostream`'s
+methods-fp 47f880 of unmatched `NPKlass_0047f880`
+methods-fp 47f960 of unmatched `NPKlass_0047f960`
 sizes-fn `std::money_base`: none, is 1
-sizes-fp `TiXmlPrinter`: 12, is 24
 sizes-fp `__cxxabiv1::__class_type_info`: 4, is 8
 sizes-fp `__cxxabiv1::__si_class_type_info`: 4, is 12
 sizes-fp `__cxxabiv1::__vmi_class_type_info`: 4, is 24
+sizes-fp `std::__basic_file<char>`: 5, is 8
 sizes-fp `std::ctype<wchar_t>`: 16, is 720
 sizes-fp `std::ctype_byname<wchar_t>`: 16, is 720
-sizes-fp `std::domain_error`: 4, is 8
-sizes-fp `std::invalid_argument`: 4, is 8
-sizes-fp `std::ios_base::failure`: 4, is 8
-sizes-fp `std::ios_base`: 108, is 112
-sizes-fp `std::length_error`: 4, is 8
-sizes-fp `std::logic_error`: 4, is 8
 sizes-fp `std::messages<char>`: 12, is 16
 sizes-fp `std::messages<wchar_t>`: 12, is 16
 sizes-fp `std::messages_byname<char>`: 12, is 16
 sizes-fp `std::messages_byname<wchar_t>`: 12, is 16
-sizes-fp `std::out_of_range`: 4, is 8
-sizes-fp `std::overflow_error`: 4, is 8
-sizes-fp `std::range_error`: 4, is 8
-sizes-fp `std::runtime_error`: 4, is 8
-sizes-fp `std::streambuf`: 28, is 32
 sizes-fp `std::type_info`: 4, is 8
-sizes-fp `std::underflow_error`: 4, is 8
-sizes-fp `std::wstreambuf`: 28, is 32
 structors-fn 441d8c of `std::iostream`
 structors-fn 441ef0 of `std::iostream`
 structors-fn 442380 of `std::iostream`
@@ -1119,7 +956,28 @@ structors-fn 44661c of `std::istream`
 structors-fn 448d1c of `std::ostream`
 structors-fn 448d68 of `std::ostream`
 structors-fn 448e44 of `std::ostream`
-structors-fn 44cb4c of `std::money_base`
+structors-fn 44bc98 of `std::string`
+structors-fn 44bccc of `std::string`
+structors-fn 44be5c of `std::string`
+structors-fn 44bfc0 of `std::string`
+structors-fn 44c03c of `std::string`
+structors-fn 44c0c0 of `std::string`
+structors-fn 44c0f0 of `std::string`
+structors-fn 44c120 of `std::string`
+structors-fn 44c150 of `std::string`
+structors-fn 44c1a4 of `std::string`
+structors-fn 44c1d8 of `std::string`
+structors-fn 44c208 of `std::string`
+structors-fn 44c368 of `std::string`
+structors-fn 44c4cc of `std::string`
+structors-fn 44c548 of `std::string`
+structors-fn 44c580 of `std::string`
+structors-fn 44c5cc of `std::string`
+structors-fn 44c5fc of `std::string`
+structors-fn 44c62c of `std::string`
+structors-fn 44c760 of `std::string`
+structors-fn 4515e4 of `std::__basic_file<char>`
+structors-fn 451614 of `std::__basic_file<char>`
 structors-fn 456fa8 of `std::fstream`
 structors-fn 457118 of `std::fstream`
 structors-fn 4575e0 of `std::fstream`
@@ -1147,3 +1005,8 @@ structors-fn 462304 of `std::ofstream`
 structors-fn 4628bc of `std::wofstream`
 structors-fn 462a18 of `std::wofstream`
 structors-fn 462eb8 of `std::wofstream`
+structors-fn 472238 of `std::locale`
+structors-fn 472348 of `std::locale`
+structors-fn 472358 of `std::locale`
+structors-fn 47237c of `std::locale`
+structors-fn 472474 of `std::locale`

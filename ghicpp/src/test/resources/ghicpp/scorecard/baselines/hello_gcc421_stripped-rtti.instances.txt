@@ -1,4 +1,5 @@
 abstract-fn `Shape`
+class-splits-fp `NPKlass_00407bc0` (inferred) of `Down`
 classes-fn `Boot` (stabs)
 classes-fn `Quals` (stabs)
 classes-fn `Stack<Point,2>` (stabs)
@@ -33,8 +34,6 @@ fields-fp `Circle`+20:4
 fields-fp `Diamond`+27:1
 fields-fp `Label`+35:1
 fields-fp `Named`+11:1
-methods-fn `Down::Down` 407bc0
-methods-fn `Down::~Down` 407ca4
 methods-fn `Up::Up` 4077bc
 methods-fn `Up::~Up` 4078a0
 methods-fp 4019f6 of `Circle`: no method

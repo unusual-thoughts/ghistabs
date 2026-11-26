@@ -6,6 +6,7 @@ import ghicpp.abi.itanium.ItaniumRttiParser
 import ghicpp.recover.ClassPass
 import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
 import ghicpp.recover.ClassPass.Companion.INLINED_CONSTRUCTORS
+import ghicpp.recover.ClassPass.Companion.MEMBER_OBJECTS
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -44,17 +45,19 @@ class ItaniumClassAnalyzer :
         GnuDemangler().canDemangle(program) && !ClassRecordSource.describedElsewhere(program)
 
     override fun registerOptions(options: Options, program: Program) =
-        options.register(VfptrModel.OPTION, FILL_ARRAYS, INLINED_CONSTRUCTORS)
+        options.register(VfptrModel.OPTION, FILL_ARRAYS, INLINED_CONSTRUCTORS, MEMBER_OBJECTS)
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
         val pass = ClassPass(program, ItaniumRttiParser(program, sink), sink, program.analyzerOptions(NAME))
         val result = pass.run(monitor)
+        val members = pass.layMembers(result, monitor)
         if (result.classes > 0) {
             report(
                 "${result.classes} class(es), ${result.owned} virtual function(s) owned, ${result.moved} moved, " +
                     "${result.shared} shared, ${result.structors} constructor(s) and destructor(s) named, " +
-                    "${result.sized} class size(s) recorded, ${result.filled} struct(s) filled",
+                    "${result.sized} class size(s) recorded, ${result.filled} struct(s) filled, " +
+                    "$members member object class(es)",
             )
         }
         return true

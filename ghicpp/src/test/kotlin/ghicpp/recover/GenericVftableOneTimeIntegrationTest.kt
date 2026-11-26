@@ -117,7 +117,7 @@ class GenericVftableOneTimeIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         methodClasses.isUpToDate(program).mustBeTrue()
         program.runTransaction("option") {
             val options = program.analyzerOptions(GenericVftableAnalyzer.NAME)
-            val member = GenericVftableAnalyzer.MEMBER_OBJECTS
+            val member = ClassPass.MEMBER_OBJECTS
             options.setBoolean(member.name, !options.getBoolean(member.name, member.default))
         }
         methodClasses.isUpToDate(program).mustBe(false)

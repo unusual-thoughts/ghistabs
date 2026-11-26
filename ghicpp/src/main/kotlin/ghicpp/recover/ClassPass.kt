@@ -45,6 +45,9 @@ class ClassPass(
     /** Whether a constructor inlined after `operator new` is read for its class's size, bases and fields. */
     var inlinedConstructors: Boolean by INLINED_CONSTRUCTORS
 
+    /** Whether the member objects [run]'s constructors build get classes, laid in their holders ([layMembers]). */
+    var memberObjects: Boolean by MEMBER_OBJECTS
+
     init {
         options?.let { import(it) }
     }
@@ -245,6 +248,13 @@ class ClassPass(
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
 
+    /**
+     * Gives a class to each member object the structors [run] found build, and lays it in its holder
+     * ([MemberObjectPass]), where [memberObjects] says to; returns how many classes it gave.
+     */
+    fun layMembers(result: Result, monitor: TaskMonitor = DUMMY): Int = result.found?.takeIf { memberObjects }
+        ?.let { MemberObjectPass(program, this, fillArrays).run(it, monitor) } ?: 0
+
     private fun classStructId(ns: GhidraClass): Long? {
         val struct = program.classStruct(ns) ?: return null
         return program.dataTypeManager.getID(struct).takeIf { it >= 0 }
@@ -263,6 +273,12 @@ class ClassPass(
             "Read the vtables, fields and member constructors that code stores into or calls on what " +
                 "operator new(size) returns as a constructor inlined there: the last vtable stored is the class " +
                 "built, of that size, each one before it a base of the next",
+            true,
+        )
+        val MEMBER_OBJECTS = BoolOption(
+            "Classes of member objects",
+            "Give a class to each member a constructor builds at an offset into this with a function that " +
+                "stores no vtable, and lay it in the class holding it",
             true,
         )
     }
