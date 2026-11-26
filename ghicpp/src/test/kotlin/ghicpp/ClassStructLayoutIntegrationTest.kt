@@ -171,6 +171,33 @@ class ClassStructLayoutIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
         unplaced() mustBe emptyList()
     }
 
+    @Test
+    fun `a member laid in a base sized ahead of its fields reaches the class split around both its vptrs`() {
+        val (base, member) = edit {
+            add(
+                StructureDataType(category, "Owner", 0x20).apply {
+                    replaceAtOffset(0, PointerDataType.dataType, 4, ClassUtils.VFPTR, null)
+                    replaceAtOffset(4, PointerDataType.dataType, 4, ClassUtils.VFPTR, null)
+                },
+            ) to member()
+        }
+        val derived = edit {
+            add(StructureDataType(CategoryPath("/ClassDataTypes/Derived"), "Derived", 0x28)).also {
+                val laid = it.replaceAtOffset(4, base, base.length, ClassNaming.baseFieldName(false, "Owner", 1), null)
+                val splitter = BaseSplitter(DtmRegistry(program.dataTypeManager), sink)
+                splitter.splitBase(it, listOf("Derived"), 4, laid, PointerDataType.dataType) mustBe true
+                splitter.splitBase(it, listOf("Derived"), 8, it.getComponentAt(8), PointerDataType.dataType) mustBe true
+            }
+        }
+        edit { sink.placeMember(base, 8, member) }
+        fun Structure.leafAt(at: Int): DataType? = getComponentContaining(at)?.let { c ->
+            (c.dataType as? Structure)?.takeIf { c.offset != at || it != member }?.leafAt(at - c.offset) ?: c.dataType
+        }
+        base.leafAt(8) mustBe member
+        derived.leafAt(12) mustBe member
+        unplaced() mustBe emptyList()
+    }
+
     /** `Owner` with a secondary `{vfptr}` at 0x10 too, typed [secondary], over undefined bytes. */
     private fun twoVptrOwner(secondary: PointerDataType) = add(
         StructureDataType(category, "Owner", 0x20).apply {

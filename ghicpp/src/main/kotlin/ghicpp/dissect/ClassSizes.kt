@@ -61,7 +61,7 @@ fun sizeBounds(
             members[k].orEmpty().maxOfOrNull { (m, at) -> at + atLeast(m, depth + 1) },
         ).maxOrNull() ?: 0
         val vbases = k.allVirtualBases
-        val pastVbases = if (k.nonVirtualSize == null && vbases.isNotEmpty()) {
+        val pastVbases = if (k.vbaseOffsets.isEmpty() && vbases.isNotEmpty()) {
             // Laid out past the non-virtual part, which fills what its holders leave it.
             val room = holders[k].orEmpty().mapNotNull { it.second }.minOrNull() ?: 0
             vbases.fold(maxOf(nonVirtual, room)) { at, v -> at.alignedTo(ptrSize) + vbaseLeast(v.cls) }

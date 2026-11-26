@@ -354,7 +354,10 @@ class GenericVftableFinder(
 
         const val SEEDED_CLASS_PREFIX = "Klass_"
 
-        /** How many vbase and vcall offset words may sit between two tables of one group. */
-        const val MAX_OFFSET_WORDS = 8L
+        /**
+         * How many vbase and vcall offset words may sit between two tables of one group: a virtual base's secondary
+         * has a vcall offset for each of its virtual functions, a dozen and more in a library's.
+         */
+        const val MAX_OFFSET_WORDS = 64L
     }
 }
