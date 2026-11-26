@@ -13,7 +13,8 @@ import ghidrakt.*
 
 /**
  * A base-object [structor] of [base], which a structor of [built] calls on its subobject at [offset], passing it a
- * sub-VTT that opens with [table], the construction vtable of [base] in [built].
+ * sub-VTT that opens with [table], the construction vtable of [base] in [built]; [base]'s [virtualBases], off that
+ * sub-VTT ([virtualBasesOf]).
  */
 internal class VttStructor(
     val structor: Function,
@@ -21,6 +22,7 @@ internal class VttStructor(
     val built: PlainClass,
     val offset: Long,
     val table: Address,
+    val virtualBases: List<PlainClass> = emptyList(),
 )
 
 /**
@@ -53,12 +55,41 @@ internal fun Program.findVttStructors(
             if (base == null) {
                 unmatched?.add(table)
             } else {
-                found += VttStructor(call.callee, base, built, call.offset, table)
+                val virtual = virtualBasesOf(call.vtt, table, byTable, primaries) - base
+                found += VttStructor(call.callee, base, built, call.offset, table, virtual)
             }
         }
     }
     return found
 }
+
+/**
+ * The virtual bases of the class whose construction vtable [table] the sub-VTT at [vtt] opens with. The words after
+ * it point at the construction vtable's secondaries, each before the `offset_to_top` that is minus its subobject's
+ * offset, up to the next sub-VTT's primary, whose is 0. A secondary is a virtual base's where that offset is one of
+ * the vbase offsets in front of [table]'s header; its class is the one whose table holds its slots ([holding]).
+ * They place the base inside the class built, so only the class is kept, not the offset.
+ */
+private fun Program.virtualBasesOf(
+    vtt: Address,
+    table: Address,
+    byTable: Map<Address, PlainClass>,
+    primaries: Map<PlainClass, List<Address>>,
+): List<PlainClass> {
+    val ptr = defaultPointerSize.toLong()
+    val vbaseOffsets = headerVbaseOffsets(table)
+    if (vbaseOffsets.isEmpty()) return emptyList()
+    return (1..vbaseOffsets.size + MAX_SUB_VTT_WORDS).asSequence()
+        .map { i -> vtableAt(vtt.add(i * ptr))?.first }
+        .takeWhile { it != null && isConstructionTable(it) && (vtableHeader(it)?.offsetToTop ?: 0L) < 0 }
+        .filterNotNull()
+        .filter { -(vtableHeader(it)?.offsetToTop ?: 0L) in vbaseOffsets }
+        .mapNotNull { byTable[it] ?: holding(functionSlots(it), primaries) }
+        .distinct().toList()
+}
+
+/** How many more words than a class has virtual bases its sub-VTT may hold: its non-virtual bases' secondaries. */
+private const val MAX_SUB_VTT_WORDS = 16
 
 /**
  * The vbase offsets in front of [table]'s header: the words before its `offset_to_top` and RTTI word, while they are

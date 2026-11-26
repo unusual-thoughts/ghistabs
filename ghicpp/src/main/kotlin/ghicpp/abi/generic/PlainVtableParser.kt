@@ -405,6 +405,19 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             v.built.bases += ClassBase(v.base, isVirtual, access = null, v.offset)
         }
         program.nestVirtualBases(vtt)
+        // A class built only inside others has no table of its own that code stores: its virtual bases are known
+        // off the sub-VTTs it is built with alone.
+        for (v in vtt) {
+            for (vb in v.virtualBases) {
+                if (v.base.bases.any { it.cls == vb } || vb.derivesFrom(v.base) || v.base.derivesFrom(vb)) continue
+                v.base.bases += ClassBase(vb, isVirtual = true, access = null, offset = null, SourceType.DEFAULT)
+                sink.debug(
+                    "base-inferred-vtt",
+                    "${v.base.name} : virtual ${vb.name}, off a sub-VTT",
+                    v.base.vftables.firstOrNull()?.addressPoint,
+                )
+            }
+        }
         return ClassPassInput(classes, classes, holders, vtt.associate { it.structor to it.base })
     }
 
