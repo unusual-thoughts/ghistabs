@@ -245,6 +245,35 @@ class ThisFunctionDissectorIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         structors(storers, emptyMap())["ctor"] mustBe (b to CONSTRUCTOR)
     }
 
+    /**
+     * The classes [Dissections] takes each function to store the vptr of where it belongs, off one function storing
+     * the primary table of [stored] through a vbtable at `this` + 12 and calling `vbaseCtor` there, which stores
+     * [vbase]'s table at its `this` + 0.
+     */
+    private fun storedThroughVbtable(stored: ClassDecl, vbase: ClassDecl): Map<String, Set<ClassDecl>> {
+        val at = builder.program.addressFactory.defaultAddressSpace.getAddress(0x500000L)
+        return Dissections(
+            mapOf(
+                fn("ctor") to DissectionCache.Dissection(
+                    listOf(VptrStore(at, 12, stored, 0, throughVbtable = true)),
+                    mapOf(12L to setOf(fn("vbaseCtor"))),
+                ),
+                fn("vbaseCtor") to builder.program.storer(setOf(vbase)),
+            ),
+        ).stores.map { (f, ss) -> f.name to ss.classes }.toMap()
+    }
+
+    @Test
+    fun `a table stored only through a vbtable is where it belongs, the class having no vfptr of its own`() {
+        // struct Down : virtual Core { int f(); }: MSVC gives Down no vfptr, only its table for Core at +12
+        storedThroughVbtable(b, a)["ctor"] mustBe setOf(b)
+    }
+
+    @Test
+    fun `a table the virtual base's own constructor stores is that base's, stored through the vbtable or not`() {
+        storedThroughVbtable(a, a)["ctor"] mustBe emptySet()
+    }
+
     private companion object {
         // As Ghidra's demangler names it
         const val FREE = "operator_delete"
