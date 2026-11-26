@@ -172,6 +172,37 @@ class ClassStructLayoutIntegrationTest : AbstractGhidraHeadlessIntegrationTest()
     }
 
     @Test
+    fun `a member laid past a base's first own field reaches the class split around its vptr`() {
+        // The base's constructor stores one field at +4, after the empty run of a base of its own, before the member
+        // pass lays the member past it.
+        val (base, member) = edit {
+            val grand = add(StructureDataType(category, "Grand_fields_4_4", 0).apply { isPackingEnabled = true })
+            add(
+                StructureDataType(category, "Owner", 0x20).apply {
+                    replaceAtOffset(0, PointerDataType.dataType, 4, ClassUtils.VFPTR, null)
+                    replaceAtOffset(4, DWordDataType.dataType, 4, "field_0x4", null)
+                    insertAtOffset(4, grand, 0, ClassNaming.baseFieldName(false, "Grand", 1), null)
+                },
+            ) to member()
+        }
+        val derived = edit {
+            add(StructureDataType(CategoryPath("/ClassDataTypes/Derived"), "Derived", 0x28)).also {
+                val laid = it.replaceAtOffset(0, base, base.length, ClassNaming.baseFieldName(false, "Owner", 1), null)
+                BaseSplitter(DtmRegistry(program.dataTypeManager), sink)
+                    .splitBase(it, listOf("Derived"), 0, laid, PointerDataType.dataType) mustBe true
+            }
+        }
+        edit { sink.placeMember(base, 8, member) }
+        fun Structure.leafAt(at: Int): DataType? = getComponentContaining(at)?.let { c ->
+            (c.dataType as? Structure)?.takeIf { c.offset != at || it != member }?.leafAt(at - c.offset) ?: c.dataType
+        }
+        base.leafAt(8) mustBe member
+        derived.leafAt(8) mustBe member
+        derived.leafAt(4)?.name mustBe "dword"
+        unplaced() mustBe emptyList()
+    }
+
+    @Test
     fun `a member laid in a base sized ahead of its fields reaches the class split around both its vptrs`() {
         val (base, member) = edit {
             add(
