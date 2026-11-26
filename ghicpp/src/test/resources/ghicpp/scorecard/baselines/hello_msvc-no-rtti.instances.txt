@@ -1,15 +1,14 @@
+base-access-fn `Core` of `Down`: none, is public
 base-access-fn `Core` of `Up`: none, is public
+base-access-fn `Down` of `Both`: none, is public
+base-access-fn `Left` of `Diamond`: none, is public
 base-access-fn `Logger` of `Secret`: none, is non-public
 base-access-fn `Named` of `Diamond`: none, is public
 base-access-fn `Named` of `Label`: none, is public
 base-access-fn `Rect` of `Label`: none, is public
+base-access-fn `Right` of `Diamond`: none, is public
 base-access-fn `Shape` of `Circle`: none, is public
 base-access-fn `Shape` of `Rect`: none, is public
 base-access-fn `Up` of `Both`: none, is public
-bases-fn `Core` (virtual) of `Down`
-bases-fn `Down` of `Both`
-bases-fn `Left` of `Diamond`
-bases-fn `Right` of `Diamond`
 class-splits-fp `Shape` (namespace) of `Shape`
-classes-fp invented `NPKlass_00401a80` (inferred)
 vftables-fp 00404204 of `Down`
