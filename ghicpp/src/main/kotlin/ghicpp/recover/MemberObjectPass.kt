@@ -385,10 +385,14 @@ class MemberObjectPass(
             Structor(structor, into, s.role).takeIf { role.add(structor) }
         }
 
-        /** The class of [container]'s base subobject at [offset], a nonzero one, or null. */
+        /**
+         * The class of [container]'s polymorphic base subobject at [offset], a nonzero one, or null. Only a
+         * polymorphic base holds its vptr at its own +0, so only there is what is built at the base's offset the base
+         * itself: a plain base whose constructor was inlined starts with its first member, which is built there.
+         */
         private fun baseAt(container: ContainingClass, offset: Long): ClassDecl? =
             (container as? ContainingClass.Existing)?.cls?.bases?.firstOrNull {
-                offset > 0L && it.offset == offset
+                offset > 0L && it.offset == offset && it.cls.vftables.isNotEmpty()
             }?.cls
 
         /**
