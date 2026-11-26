@@ -76,16 +76,18 @@ internal fun Program.headerVbaseOffsets(table: Address): Set<Long> {
  * nearly empty virtual base over the vptr of a non-virtual base it is the primary base of, so the vbase offset is
  * no longer where the non-virtual part ends: `DL_KeyImpl`'s `CryptoMaterial` shares the vptr of its `PublicKey` at
  * +4, ahead of its own fields. A virtual base past the non-virtual part moves when the class is built inside
- * another, past that one's own non-virtual part. One at the same offset in the class's own table, in its
- * construction table in the class deriving from it, and in that class's own table, has not moved, so it is inside.
+ * another with fields past it, as `std::ostream`'s `std::ios` does in `std::ofstream`. One at the same offset in the
+ * class's own table, in its construction table in each class deriving from it, and in those classes' own tables,
+ * never moves, so it is inside. Where the class is the last part of every class deriving from it, as
+ * `std::ostream` is of `std::iostream`, that reads one past it as inside too.
  * What is inside a base is inside the class deriving from it too, so the marks are carried up the derivations.
  */
 internal fun Program.nestVirtualBases(vtt: List<VttStructor>) {
-    val stay = vtt.associateWith { v ->
-        val built = headerVbaseOffsets(v.table)
-        v.base.headerVbaseOffsets.filter { it in built && v.offset + it in v.built.headerVbaseOffsets }
+    for ((base, builds) in vtt.groupBy { it.base }) {
+        base.nestedVbaseOffsets += base.headerVbaseOffsets.filter { k ->
+            builds.all { v -> k in headerVbaseOffsets(v.table) && v.offset + k in v.built.headerVbaseOffsets }
+        }
     }
-    for ((v, offsets) in stay) v.base.nestedVbaseOffsets += offsets
     do {
         val carried = vtt.count { v ->
             val inside = v.base.nestedVbaseOffsets.map { v.offset + it }.filter { it in v.built.headerVbaseOffsets }
