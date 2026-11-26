@@ -36,12 +36,6 @@ fun Function.argumentAt(i: Int): Address? {
 fun Function.takesThisAt(thisStorage: Address?) = !isExternal && thisStorage != null && argumentAt(0) == thisStorage
 
 /**
- * Whether [this] takes `this` where a method does ([takesThisAt]), so a pointer into an object passed first is
- * its object. Unknown, so taken, where it has no parameters yet.
- */
-fun Function.mayTakeThisAt(thisStorage: Address?) = takesThisAt(thisStorage) || (!isExternal && parameterCount == 0)
-
-/**
  * Whether [this] takes a hidden pointer to the object it returns ahead of its arguments, and pops it itself:
  * a 32-bit `__cdecl` function popping one word, as gcc's i386 code returns a class in memory. One whose
  * convention Ghidra doesn't know goes by the program's default, so MSVC's, `__stdcall`, never counts.
