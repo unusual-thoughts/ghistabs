@@ -82,29 +82,33 @@ class ThisFunctionDissector(
             thisStores += more.thisStores
             built = found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
         }
-        val helpers = setupHelpers(roles, subobjectCalls, slots.keys)
-        val unread = helpers.values.flatten().filterTo(mutableSetOf()) { it !in thisStores }
-        if (unread.isNotEmpty()) {
-            thisStores +=
-                decompile(unread, emptyMap(), monitor, "Decompiling what constructors call on this").thisStores
-        }
-        return FoundStructors(roles, folded, thisStores, subobjectCalls, uses.inlined, helpers)
+        // A virtual function a deriving class's constructor calls there is its base's, on the base's behalf.
+        val ctors = roles.filterValues { it.second == CONSTRUCTOR }.keys.associateWith { listOf(it) }
+        val setup = setupStores(ctors, { _, f -> subobjectCalls[f] }, monitor) { _, f -> f in roles || f in slots }
+        return FoundStructors(roles, folded, thisStores, subobjectCalls, uses.inlined, setup)
     }
 
     /**
-     * The functions each constructor calls on `this` + 0 that set up its class's fields: any taking `this` there but
-     * a structor ([roles]) or a virtual function ([virtuals]), which a deriving class's constructor calls on its
-     * base's behalf. Such a method, which its destructor may call too, stores fields of the class.
+     * What the methods each of [owners]' constructors call on `this` + 0 to set up its fields store, decompiled:
+     * any of the functions [calls] has a constructor call there that may take `this` ([mayTakeThisAt]), but the
+     * constructors themselves and what [skip] names, such as another class's structors. Such a method, which the
+     * class's destructor may call too, stores its fields where its constructor stores none itself.
      */
-    private fun setupHelpers(
-        roles: Map<Function, Pair<ClassDecl, StructorRole>>,
-        subobjectCalls: Map<Function, Map<Long, Set<Function>>>,
-        virtuals: Set<Function>,
-    ): Map<Function, List<Function>> = roles.filterValues { it.second == CONSTRUCTOR }.keys.associateWith { ctor ->
-        subobjectCalls[ctor].orEmpty()[0L].orEmpty().filter { f ->
-            f !in roles && f !in virtuals && f != ctor && f.takesThisAt(thisStorage)
-        }
-    }.filterValues { it.isNotEmpty() }
+    fun <K> setupStores(
+        owners: Map<K, Collection<Function>>,
+        calls: (K, Function) -> Map<Long, Set<Function>>?,
+        monitor: TaskMonitor,
+        message: String = "Decompiling what constructors call on this",
+        skip: (K, Function) -> Boolean,
+    ): Map<K, Stores> {
+        val helpers = owners.mapValues { (k, ctors) ->
+            ctors.flatMap { calls(k, it).orEmpty()[0L].orEmpty() }.distinct().filter { f ->
+                f !in ctors && !skip(k, f) && f.mayTakeThisAt(thisStorage)
+            }
+        }.filterValues { it.isNotEmpty() }.ifEmpty { return emptyMap() }
+        val read = decompile(helpers.values.flatten().toSet(), emptyMap(), monitor, message).thisStores
+        return helpers.mapValues { (_, fs) -> fs.map { read[it].orEmpty() }.mergedStores() }
+    }
 
     /** What [funcs] store and call through `this`, decompiled, whatever vptrs they store. */
     fun readCalls(

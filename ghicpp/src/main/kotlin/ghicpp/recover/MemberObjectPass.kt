@@ -290,25 +290,18 @@ class MemberObjectPass(
         }
 
         /**
-         * Adds to each of [drafts]' stores what the functions its constructors call on `this` + 0 store, but the
-         * structors of a class ([byFunction]): a method setting up its fields, such as one its destructor calls
-         * too, or one a compiler folded into its destructor, where its constructor stores nothing itself.
+         * Adds to each of [drafts]' stores what the methods its constructors call on `this` + 0 to set up its
+         * fields store ([ThisFunctionDissector.setupStores]), but the structors of another class ([byFunction]):
+         * its own destructor may be one, folded into it by a compiler.
          */
         fun helperStores(byFunction: Map<Function, NonPolymorphicClass>) {
-            val helpers = drafts.associateWith { m ->
-                m.ctors.flatMap { m.calls[it].orEmpty()[0L].orEmpty() }.distinct().filter { f ->
-                    f !in found.roles && byFunction[f].let { it == null || it == m } && f !in m.ctors &&
-                        !f.isExternal && f.takesThis()
-                }
-            }.filterValues { it.isNotEmpty() }.ifEmpty { return }
-            val uses = dissector.readCalls(
-                helpers.values.flatten().distinct(),
+            val setup = dissector.setupStores(
+                drafts.associateWith { it.ctors },
+                { m, f -> m.calls[f] },
                 monitor,
                 "Decompiling what member constructors call on this",
-            )
-            for ((m, fs) in helpers) {
-                m.stores = (listOf(m.stores) + fs.map { uses.thisStores[it].orEmpty() }).mergedStores()
-            }
+            ) { m, f -> f in found.roles || byFunction[f].let { it != null && it != m } }
+            for ((m, stores) in setup) m.stores = listOf(m.stores, stores).mergedStores()
         }
 
         /**
@@ -565,11 +558,7 @@ class MemberObjectPass(
         }.onFailure { warn("member-structor-unnamed", "$name -> ${ns.qualifiedName}: $it", entryPoint) }
     }
 
-    /**
-     * Whether [this] takes `this` where a method does ([takesThisAt]), so a pointer into an object passed first is
-     * its object. Unknown, so taken, where it has no parameters yet.
-     */
-    private fun Function.takesThis() = takesThisAt(thisStorage) || (!isExternal && parameterCount == 0)
+    private fun Function.takesThis() = mayTakeThisAt(thisStorage)
 
     private fun structOf(cls: ClassDecl): Structure? = cls.ns?.toClass()?.let(program::classStruct)
 
