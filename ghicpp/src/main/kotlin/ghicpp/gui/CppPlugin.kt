@@ -16,7 +16,10 @@ import ghidra.util.Msg
 import ghidra.util.task.TaskBuilder
 import java.io.File
 
-/** `Window > Class Hierarchy`: the class tree ([ClassTree]), over whichever source recorded the classes. */
+/**
+ * `Window > Class Hierarchy`: the class tree ([ClassTree]), over whichever source recorded the classes. And the
+ * decompiler's popup actions on classes ([addDecompilerActions]).
+ */
 @PluginInfo(
     status = PluginStatus.RELEASED,
     packageName = CorePluginPackage.NAME,
@@ -25,7 +28,8 @@ import java.io.File
     description = "Adds a 'Class Hierarchy' window: each C++ class under its namespace, expanding into its " +
         "direct bases and its members, or inverted into the classes derived from it. Classes come from the " +
         "class record the RTTI analyzers or another source (the stabs import) write, else from typeinfo, " +
-        "vtables or namespaces alone.",
+        "vtables or namespaces alone. Adds Rename Slot and Move Function into Class to the decompiler's " +
+        "popup menu.",
     servicesRequired = [GoToService::class],
 )
 class CppPlugin(tool: PluginTool) : ProgramPlugin(tool) {
@@ -39,6 +43,7 @@ class CppPlugin(tool: PluginTool) : ProgramPlugin(tool) {
             .enabledWhen { currentProgram != null }
             .onAction { exportFacts() }
             .buildAndInstall(tool)
+        addDecompilerActions()
     }
 
     private fun exportFacts() {

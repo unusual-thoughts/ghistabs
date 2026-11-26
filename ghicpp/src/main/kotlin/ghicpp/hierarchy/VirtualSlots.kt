@@ -61,6 +61,8 @@ data class SlotRenames(val functions: Int, val fields: Int, val skipped: List<St
  * Where a slot is, and what it holds, is read off memory by the ABI's geometry, laid or not; its name and
  * type are its field's ([field]), in whatever struct is laid over it, edited or not.
  */
+// One query or edit per slot question the class tree and the decompiler ask: 13, past the stock 11.
+@Suppress("TooManyFunctions")
 class VirtualSlots(private val program: Program, private val hierarchy: ClassHierarchy) {
     private val tables: Map<Long, List<SlotTable>> =
         hierarchy.classes.associate { c -> c.id to program.resolve(c)?.let(program::slotTablesOf).orEmpty() }
@@ -142,6 +144,35 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
                 .onSuccess { functions++ }.onFailure { skipped += "${f.qualifiedName}: ${it.message}" }
         }
         return SlotRenames(functions, slots.count { nameSlot(it, newName, skipped) }, skipped)
+    }
+
+    /**
+     * The slots whose field is [struct]'s at [offset], in every table laid with [struct]: the slot a call the
+     * decompiler shows through `vptr->field` goes through.
+     */
+    fun slotsAt(struct: Structure, offset: Int): List<VirtualSlot> {
+        val dtm = program.dataTypeManager
+        val id = dtm.getID(struct)
+        val ordinal = struct.getComponentContaining(offset)?.ordinal ?: return emptyList()
+        return hierarchy.classes.flatMap(::slotsOf).filter { slot ->
+            field(slot)?.let { (laid, f) -> f.ordinal == ordinal && dtm.getID(laid) == id } == true
+        }
+    }
+
+    /**
+     * Renames the slot whose field is [struct]'s at [offset] ([slotsAt]) to [newName], and the same slot in
+     * every table, overriding it or overridden by it: as [rename] does, off a function one of them holds, else,
+     * each being empty or pure virtual, its fields alone. Throws where no laid table types a slot with that field.
+     */
+    fun renameField(struct: Structure, offset: Int, newName: String): SlotRenames {
+        val at = slotsAt(struct, offset)
+        require(at.isNotEmpty()) { "No vftable of a known class is laid with ${struct.name} there" }
+        val roots = at.map(::root).toSet()
+        val same = hierarchy.classes.flatMap(::slotsOf).filter { root(it) in roots }
+        // The clicked table's own function first: a slot it fills is the one meant, whatever else shares it.
+        (at + same).firstNotNullOfOrNull(::target)?.let { return rename(it, newName) }
+        val skipped = mutableListOf<String>()
+        return SlotRenames(0, same.count { nameSlot(it, newName, skipped) }, skipped)
     }
 
     /** Names each of [slots] after the function it holds, when that function has a name of its own. */
