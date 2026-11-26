@@ -70,8 +70,6 @@ classes-fn `std::wstring` (stabs)
 classes-fp invented `NPKlass_0044936c` (inferred)
 classes-fp invented `NPKlass_0047f880` (inferred)
 classes-fp invented `NPKlass_0047f960` (inferred)
-fields-fn `TiXmlDocument`+44:1
-fields-fn `TiXmlDocument`+48:4
 fields-fn `__cxxabiv1::__class_type_info`+4:4
 fields-fn `__cxxabiv1::__si_class_type_info`+4:4
 fields-fn `__cxxabiv1::__si_class_type_info`+8:4

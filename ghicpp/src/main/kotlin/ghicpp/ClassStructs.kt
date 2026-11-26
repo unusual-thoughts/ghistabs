@@ -226,8 +226,8 @@ private fun DataTypeComponent.endsAtEndOf(struct: Structure) =
 /**
  * Where [length] bytes at [at] in this class struct go first, and at what offset into it: past the run of its own
  * fields ([isOwnFields]) with nothing laid after it, into that run, stretched to hold them, which each class
- * deriving from it holds too; else into this. Past the end, the run the struct ends in; short of it, only a run
- * still empty, which a struct sized ahead of its fields holds before the undefined bytes they go over.
+ * deriving from it holds too; else into this. Short of the end too, as a struct sized ahead of its fields holds
+ * undefined bytes past that run, which they go over.
  */
 private fun Structure.landing(at: Int, length: Int): Pair<Structure, Int> {
     settle()
@@ -235,7 +235,6 @@ private fun Structure.landing(at: Int, length: Int): Pair<Structure, Int> {
         definedComponents.none { it.ordinal > run.ordinal && it.length > 0 && it.offset < at + length }
     }
     if (tail == null || at < tail.offset + tail.length) return this to at
-    if (at + length <= this.length && tail.length > 0) return this to at
     return stretch(tail, at.withLength(length)) to at - tail.offset
 }
 

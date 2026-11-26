@@ -188,6 +188,12 @@ field-sizes-fp `CryptoPP::IteratedHashBase<unsigned_long_long,CryptoPP::MessageA
 field-sizes-fp `CryptoPP::MaurerRandomnessTest`+16: 4, is 8
 field-sizes-fp `CryptoPP::NullStore`+24: 4, is 8
 field-sizes-fp `CryptoPP::PrivateKey`+0: 1, is 4
+field-sizes-fp `std::ctype<wchar_t>`+142: 2, is 512
+field-sizes-fp `std::ctype<wchar_t>`+654: 2, is 32
+field-sizes-fp `std::ctype<wchar_t>`+686: 2, is 32
+field-sizes-fp `std::ctype_byname<wchar_t>`+142: 2, is 512
+field-sizes-fp `std::ctype_byname<wchar_t>`+654: 2, is 32
+field-sizes-fp `std::ctype_byname<wchar_t>`+686: 2, is 32
 field-sizes-fp `std::ios_base`+36: 4, is 64
 fields-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::Integer>`+4:4
 fields-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::PolynomialMod2>`+4:4
@@ -265,8 +271,6 @@ fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+52:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+56:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+60:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+64:4
-fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+72:4
-fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+76:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+84:4
 fields-fn `CryptoPP::AuthenticatedEncryptionFilter`+88:4
 fields-fn `CryptoPP::AutoSeededRandomPool`+41:1
@@ -305,8 +309,6 @@ fields-fn `CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::DES::Base
 fields-fn `CryptoPP::BlockCipherFinal<(CryptoPP::CipherDir)0,CryptoPP::Rijndael::Enc>`+16:240
 fields-fn `CryptoPP::Bufferless<CryptoPP::Filter>`+12:4
 fields-fn `CryptoPP::Bufferless<CryptoPP::Filter>`+16:4
-fields-fn `CryptoPP::ByteQueue`+12:1
-fields-fn `CryptoPP::ByteQueue`+16:4
 fields-fn `CryptoPP::ByteQueue`+36:1
 fields-fn `CryptoPP::CBC_CTS_Decryption`+28:4
 fields-fn `CryptoPP::CBC_CTS_Decryption`+32:4
@@ -456,11 +458,7 @@ fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_Encrypti
 fields-fn `CryptoPP::ConcretePolicyHolder<CryptoPP::Empty,CryptoPP::CFB_EncryptionTemplate<CryptoPP::AbstractPolicyHolder<CryptoPP::CFB_CipherAbstractPolicy,CryptoPP::CFB_ModePolicy>>,CryptoPP::CFB_CipherAbstractPolicy>`+44:4
 fields-fn `CryptoPP::CustomFlushPropagation<CryptoPP::Filter>`+12:4
 fields-fn `CryptoPP::CustomFlushPropagation<CryptoPP::Filter>`+16:4
-fields-fn `CryptoPP::DERGeneralEncoder`+12:1
-fields-fn `CryptoPP::DERGeneralEncoder`+16:4
 fields-fn `CryptoPP::DERGeneralEncoder`+36:1
-fields-fn `CryptoPP::DERSequenceEncoder`+12:1
-fields-fn `CryptoPP::DERSequenceEncoder`+16:4
 fields-fn `CryptoPP::DERSequenceEncoder`+36:1
 fields-fn `CryptoPP::DES::Base`+16:128
 fields-fn `CryptoPP::DES_EDE2::Base`+160:128
@@ -2556,8 +2554,6 @@ fields-fn `CryptoPP::MessageQueue`+116:4
 fields-fn `CryptoPP::MessageQueue`+124:4
 fields-fn `CryptoPP::MessageQueue`+128:4
 fields-fn `CryptoPP::MessageQueue`+132:4
-fields-fn `CryptoPP::MessageQueue`+28:1
-fields-fn `CryptoPP::MessageQueue`+32:4
 fields-fn `CryptoPP::MessageQueue`+52:1
 fields-fn `CryptoPP::MessageQueue`+68:4
 fields-fn `CryptoPP::MessageQueue`+72:4
@@ -2613,13 +2609,9 @@ fields-fn `CryptoPP::PKCS8PrivateKey`+44:1
 fields-fn `CryptoPP::PKCS8PrivateKey`+8:4
 fields-fn `CryptoPP::PK_DefaultDecryptionFilter`+12:4
 fields-fn `CryptoPP::PK_DefaultDecryptionFilter`+16:4
-fields-fn `CryptoPP::PK_DefaultDecryptionFilter`+48:1
-fields-fn `CryptoPP::PK_DefaultDecryptionFilter`+52:4
 fields-fn `CryptoPP::PK_DefaultDecryptionFilter`+72:1
 fields-fn `CryptoPP::PK_DefaultEncryptionFilter`+12:4
 fields-fn `CryptoPP::PK_DefaultEncryptionFilter`+16:4
-fields-fn `CryptoPP::PK_DefaultEncryptionFilter`+48:1
-fields-fn `CryptoPP::PK_DefaultEncryptionFilter`+52:4
 fields-fn `CryptoPP::PK_DefaultEncryptionFilter`+72:1
 fields-fn `CryptoPP::PK_FinalTemplate<CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>>`+100:4
 fields-fn `CryptoPP::PK_FinalTemplate<CryptoPP::DL_DecryptorImpl<CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>>>`+104:4
@@ -3092,14 +3084,8 @@ fields-fn `std::__timepunct<char>`+12:4
 fields-fn `std::__timepunct<wchar_t>`+12:4
 fields-fn `std::ctype<char>`+8:4
 fields-fn `std::ctype<wchar_t>`+13:128
-fields-fn `std::ctype<wchar_t>`+142:512
-fields-fn `std::ctype<wchar_t>`+654:32
-fields-fn `std::ctype<wchar_t>`+686:32
 fields-fn `std::ctype_byname<char>`+8:4
 fields-fn `std::ctype_byname<wchar_t>`+13:128
-fields-fn `std::ctype_byname<wchar_t>`+142:512
-fields-fn `std::ctype_byname<wchar_t>`+654:32
-fields-fn `std::ctype_byname<wchar_t>`+686:32
 fields-fn `std::deque<CryptoPP::MeterFilter::MessageRange,std::allocator<CryptoPP::MeterFilter::MessageRange>>`+0:4
 fields-fn `std::deque<CryptoPP::MeterFilter::MessageRange,std::allocator<CryptoPP::MeterFilter::MessageRange>>`+12:4
 fields-fn `std::deque<CryptoPP::MeterFilter::MessageRange,std::allocator<CryptoPP::MeterFilter::MessageRange>>`+16:4
@@ -4265,8 +4251,8 @@ sizes-fp `CryptoPP::Timer`: 12, is 32
 sizes-fp `std::__codecvt_abstract_base<char,char,int>`: 4, is 8
 sizes-fp `std::__codecvt_abstract_base<wchar_t,char,int>`: 4, is 8
 sizes-fp `std::__ctype_abstract_base<wchar_t>`: 4, is 8
-sizes-fp `std::ctype<wchar_t>`: 16, is 720
-sizes-fp `std::ctype_byname<wchar_t>`: 16, is 720
+sizes-fp `std::ctype<wchar_t>`: 688, is 720
+sizes-fp `std::ctype_byname<wchar_t>`: 688, is 720
 sizes-fp `std::deque<unsigned_int,std::allocator<unsigned_int>>`: 28, is 40
 sizes-fp `std::deque<unsigned_long_long,std::allocator<unsigned_long_long>>`: 28, is 40
 sizes-fp `std::locale::facet`: 4, is 8
