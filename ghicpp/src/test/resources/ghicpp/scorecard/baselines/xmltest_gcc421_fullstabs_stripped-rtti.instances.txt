@@ -5,10 +5,8 @@ abstract-fn `std::__codecvt_abstract_base<wchar_t,char,int>`
 abstract-fn `std::__ctype_abstract_base<char>`
 abstract-fn `std::__ctype_abstract_base<wchar_t>`
 bases-fp `?NPKlass_0044936c` of `std::string`
-class-splits-fp `NPKlass_00448d68` (inferred) of `std::ostream`
 class-splits-fp `NPKlass_0044c864` (inferred) of `std::string`
 class-splits-fp `NPKlass_0045142c` (inferred) of `std::__basic_file<char>`
-class-splits-fp `NPKlass_0045ec40` (inferred) of `std::wostream`
 class-splits-fp `std::money_base` (itanium_rtti) of `std::money_base`
 classes-fn `__cxa_call_unexpected::end_catch_protect` (stabs)
 classes-fn `__cxa_guard_acquire::mutex_wrapper` (stabs)
@@ -959,8 +957,6 @@ structors-fn 4464c8 of `std::istream`
 structors-fn 446520 of `std::istream`
 structors-fn 44661c of `std::istream`
 structors-fn 448d1c of `std::ostream`
-structors-fn 448d68 of `std::ostream`
-structors-fn 448e44 of `std::ostream`
 structors-fn 44bc98 of `std::string`
 structors-fn 44bccc of `std::string`
 structors-fn 44be5c of `std::string`
@@ -993,8 +989,6 @@ structors-fn 45c36c of `std::wistream`
 structors-fn 45c3c4 of `std::wistream`
 structors-fn 45c4c0 of `std::wistream`
 structors-fn 45ebf4 of `std::wostream`
-structors-fn 45ec40 of `std::wostream`
-structors-fn 45ed1c of `std::wostream`
 structors-fn 45faec of `std::ifstream`
 structors-fn 45fc48 of `std::ifstream`
 structors-fn 4600e8 of `std::ifstream`

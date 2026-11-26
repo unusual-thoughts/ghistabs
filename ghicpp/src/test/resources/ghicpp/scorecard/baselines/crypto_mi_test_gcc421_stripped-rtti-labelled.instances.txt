@@ -70,16 +70,6 @@ bases-fp `CryptoPP::CryptoMaterial` (virtual) of `CryptoPP::PublicKey`
 bases-fp `CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>` of `CryptoPP::FixedSizeSecBlock<unsigned_char,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>>`
 bases-fp `CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,32u,CryptoPP::NullAllocator<unsigned_char>,false>` of `CryptoPP::FixedSizeSecBlock<unsigned_char,32u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,32u,CryptoPP::NullAllocator<unsigned_char>,false>>`
 bases-fp `CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,32u,CryptoPP::NullAllocator<unsigned_int>,false>` of `CryptoPP::FixedSizeSecBlock<unsigned_int,32u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,32u,CryptoPP::NullAllocator<unsigned_int>,false>>`
-class-splits-fp `NPKlass_0048a218` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048a838` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048ae60` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048b488` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048bab0` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048c10c` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048c780` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048cf08` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048d584` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048dc00` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 class-splits-fp `NPKlass_004b5bd8` (inferred) of `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,16u,CryptoPP::NullAllocator<unsigned_int>,false>>`
 class-splits-fp `NPKlass_00521e84` (inferred) of `CryptoPP::Integer`
 class-splits-fp `std::money_base` (itanium_rtti) of `std::moneypunct<char,false>`
@@ -5827,26 +5817,16 @@ sizes-fp `std::messages_byname<char>`: 12, is 16
 sizes-fp `std::messages_byname<wchar_t>`: 12, is 16
 sizes-fp `std::type_info`: 4, is 8
 structors-fn 489e00 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
-structors-fn 48a218 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
 structors-fn 48a420 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
-structors-fn 48a838 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
 structors-fn 48aa48 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-structors-fn 48ae60 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
 structors-fn 48b070 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-structors-fn 48b488 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
 structors-fn 48b698 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
-structors-fn 48bab0 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 structors-fn 48bcb8 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
-structors-fn 48c10c of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
 structors-fn 48c32c of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
-structors-fn 48c780 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
 structors-fn 48c9a8 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
 structors-fn 48cab4 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-structors-fn 48cf08 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
 structors-fn 48d130 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-structors-fn 48d584 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
 structors-fn 48d7ac of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
-structors-fn 48dc00 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 structors-fn 48ecd4 of `CryptoPP::PrivateKey`
 structors-fn 48ed18 of `CryptoPP::PrivateKey`
 structors-fn 48ee30 of `CryptoPP::PrivateKey`

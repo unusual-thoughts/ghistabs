@@ -934,13 +934,6 @@ class-splits-fp `Klass_005f18b8` (inferred, vftable 005f18b8) of `CryptoPP::DL_G
 class-splits-fp `Klass_005f1e08` (inferred, vftable 005f1e08) of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>`
 class-splits-fp `Klass_005f1f08` (inferred, vftable 005f1f08) of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>`
 class-splits-fp `Klass_005f2008` (inferred, vftable 005f2008) of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`
-class-splits-fp `NPKlass_0048cc18` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048d238` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048d860` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048de88` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048e4b0` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
-class-splits-fp `NPKlass_0048ff48` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-class-splits-fp `NPKlass_004905c4` (inferred) of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 class-splits-fp `NPKlass_004b89f0` (inferred) of `CryptoPP::FixedSizeSecBlock<unsigned_int,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_int,16u,CryptoPP::NullAllocator<unsigned_int>,false>>`
 class-splits-fp `NPKlass_0052545c` (inferred) of `CryptoPP::Integer`
 class-splits-fp `NPKlass_005517b4` (inferred) of `std::string`
@@ -1741,9 +1734,7 @@ fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupPara
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+36:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+40:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+44:1
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+48:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+4:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+52:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+56:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+60:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+68:4
@@ -1774,9 +1765,7 @@ fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupPara
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+36:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+40:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+44:1
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+48:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+4:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+52:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+56:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+60:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+68:4
@@ -1789,7 +1778,6 @@ fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupPara
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+92:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+100:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+104:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+12:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+16:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+20:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+28:4
@@ -1807,91 +1795,14 @@ fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParame
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+76:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+84:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+88:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+8:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+92:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+96:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+104:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+108:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+112:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+116:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+124:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+128:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+12:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+132:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+136:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+140:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+144:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+148:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+152:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+156:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+160:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+168:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+16:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+172:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+176:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+180:1
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+181:1
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+184:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+192:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+196:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+200:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+20:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+24:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+32:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+36:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+44:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+48:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+4:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+52:1
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+60:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+64:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+72:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+76:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+80:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+84:1
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+8:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+92:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`+96:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+100:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+104:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+108:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+112:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+116:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+120:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+124:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+12:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+132:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+136:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+140:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+144:1
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+145:1
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+148:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+156:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+160:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+164:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+16:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+20:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+24:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+28:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+32:1
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+36:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+44:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+48:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+4:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+52:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+56:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+64:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+68:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+72:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+76:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+80:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+88:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+8:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+92:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`+96:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+100:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+104:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+12:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+16:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+20:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+28:4
@@ -1909,12 +1820,10 @@ fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParame
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+76:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+84:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+88:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+8:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+92:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`+96:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+100:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+104:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+12:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+16:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+20:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+28:4
@@ -1932,7 +1841,6 @@ fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParame
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+76:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+84:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+88:4
-fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+8:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+92:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`+96:4
 fields-fn `CryptoPP::DL_ObjectImpl<CryptoPP::DL_DecryptorBase<CryptoPP::Integer>,CryptoPP::DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>,CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>>`+100:4
@@ -5459,26 +5367,12 @@ methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupPar
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::operator=` 48f74c
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::DL_KeyImpl` 48ead0
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::operator=` 48f0d8
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::AccessGroupParameters` 48ff0c
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::GetGroupParameters` 4f9f64
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::operator=` 490550
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::AccessGroupParameters` 490588
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::GetGroupParameters` 4f9fcc
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::operator=` 490bcc
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::AccessGroupParameters` 48d824
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::GetGroupParameters` 4f9d04
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>::operator=` 48de18
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::AccessGroupParameters` 48d204
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::GetGroupParameters` 4f9ca4
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>::operator=` 48d7f0
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::AccessGroupParameters` 48cbe4
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::GetGroupParameters` 4f9c44
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>::operator=` 48d1d0
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::AccessGroupParameters` 48de4c
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::GetGroupParameters` 4f9d6c
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>::operator=` 48e440
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::AccessGroupParameters` 48e474
-methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::GetGroupParameters` 4f9dd4
 methods-fn `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>::operator=` 48ea68
 methods-fn `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_SignerBase<CryptoPP::EC2NPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>>::AccessKey` 4b22b0
 methods-fn `CryptoPP::DL_ObjectImplBase<CryptoPP::DL_SignerBase<CryptoPP::ECPPoint>,CryptoPP::DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>,CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>>::AccessKey` 4b1ed8
@@ -6945,17 +6839,10 @@ sizes-fp `std::messages<wchar_t>`: 12, is 16
 sizes-fp `std::messages_byname<char>`: 12, is 16
 sizes-fp `std::messages_byname<wchar_t>`: 12, is 16
 sizes-fp `std::type_info`: 4, is 8
-structors-fn 48cc18 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
-structors-fn 48d238 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
-structors-fn 48d860 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-structors-fn 48de88 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-structors-fn 48e4b0 of `CryptoPP::DL_KeyImpl<CryptoPP::X509PublicKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 structors-fn 48ead0 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>`
 structors-fn 48f144 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>`
 structors-fn 48f7c0 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
 structors-fn 48f8cc of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`
-structors-fn 48ff48 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>`
-structors-fn 4905c4 of `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>`
 structors-fn 491aec of `CryptoPP::PrivateKey`
 structors-fn 491b30 of `CryptoPP::PrivateKey`
 structors-fn 49e0f4 of `CryptoPP::X509PublicKey`
