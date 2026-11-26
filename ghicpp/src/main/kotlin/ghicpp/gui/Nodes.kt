@@ -11,6 +11,7 @@ import ghicpp.VirtKind
 import ghicpp.gui.Hues.*
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghicpp.hierarchy.VirtualSlot
 import ghicpp.hierarchy.basesStated
 import ghidra.program.model.address.Address
 import ghidra.program.model.symbol.SourceType
@@ -28,7 +29,9 @@ private val ROOT_ICON: Icon = GIcon("icon.plugin.symboltree.node.category.classe
 
 /**
  * The program's classes, filed by namespace, with their members of the [memberKinds] shown, and with
- * [showInherited] the slots their vftables fill with a base's function among them. [inverted],
+ * [showInherited] the slots their vftables fill with a base's function among them. With [groupSlots], a
+ * class's virtual functions go under the vftable that holds them, by the base that first declares each
+ * slot ([VftableNode], [BaseSlotsNode]). [inverted],
  * files only the basal classes, each expanding into the classes derived from it: a class with several
  * bases shows under each, and a virtual derivation is marked on the derived class.
  */
@@ -39,6 +42,7 @@ class ClassTreeRoot(
     val inverted: Boolean = false,
     val showEmpty: Boolean = false,
     val showInherited: Boolean = false,
+    val groupSlots: Boolean = false,
 ) : GTreeNode() {
     init {
         val filed = (if (inverted) hierarchy.classes.filter(hierarchy::isBasal) else hierarchy.classes)
@@ -47,6 +51,7 @@ class ClassTreeRoot(
             it.path to ClassNode(hierarchy, it, inverted).also { n ->
                 n.memberKinds = memberKinds
                 n.showInherited = showInherited
+                n.groupSlots = groupSlots
             }
         }
         val folders = mutableMapOf<List<String>, NamespaceNode>()
@@ -88,7 +93,7 @@ class ClassTreeRoot(
     fun nodeAt(addresses: List<Address>): GTreeNode? = addresses.firstNotNullOfOrNull { a ->
         hierarchy.classes.firstNotNullOfOrNull { c ->
             c.members.firstOrNull { it.address == a }?.let { m ->
-                nodeOf(c)?.children?.firstOrNull { it is MemberNode && it.member == m }
+                nodeOf(c)?.memberNodes()?.firstOrNull { it.member == m }
             }
         } ?: hierarchy.classes.firstOrNull { it.address == a }?.let(::nodeOf)
     }
@@ -144,6 +149,7 @@ class ClassNode private constructor(
             ClassNode(hierarchy, it.cls, it.clause, true).also { n ->
                 n.memberKinds = memberKinds
                 n.showInherited = showInherited
+                n.groupSlots = groupSlots
             }
         }
     } else {
@@ -156,6 +162,20 @@ class ClassNode private constructor(
     /** Whether it lists the slots a base's function fills, as its root shows them. */
     internal var showInherited = false
 
+    /** Whether its virtual functions go under their vftables, by the base declaring each slot. */
+    internal var groupSlots = false
+
+    /** Its members' nodes, under its vftables' too: its bases and nested classes left out. */
+    fun memberNodes(): List<MemberNode> {
+        fun under(n: GTreeNode): List<MemberNode> = when (n) {
+            is VftableNode -> listOf(n) + n.children.flatMap(::under)
+            is BaseSlotsNode -> n.children.flatMap(::under)
+            is MemberNode -> listOf(n)
+            else -> emptyList()
+        }
+        return children.flatMap(::under)
+    }
+
     // Normally only the class filed under its namespace lists its members: under a base, they'd repeat.
     // Inverted, only the basal classes are filed, so every class lists them.
     private fun membersOf() = info?.members?.takeIf { edge == null || inverted }.orEmpty().filter {
@@ -165,7 +185,9 @@ class ClassNode private constructor(
 
     private fun inheritedOf() = info?.inherited?.takeIf { showInherited && (edge == null || inverted) }.orEmpty()
 
-    override fun generateChildren(): List<GTreeNode> = linked() + withInherited(membersOf(), inheritedOf()) + nested
+    override fun generateChildren(): List<GTreeNode> = linked() +
+        (if (groupSlots) bySlotTable(info, membersOf(), inheritedOf()) else withInherited(membersOf(), inheritedOf())) +
+        nested
 
     private val qualifiers get() = edge?.let { e ->
         listOfNotNull("virtual".takeIf { e.isVirtual }, e.access?.takeIf { it != Access.PUBLIC }?.name?.lowercase())
@@ -250,7 +272,7 @@ class ClassNode private constructor(
  * A function or label of the class above it. Its icon's colour, and its text's ([color]), say its access
  * and virtuality, or that it is imported, and a `c`/`v` badge on the icon its cv-qualifiers ([memberIcon]).
  */
-class MemberNode(val member: Member) : GTreeNode() {
+open class MemberNode(val member: Member) : GTreeNode() {
     override fun getName() = member.label
     override fun getIcon(expanded: Boolean): Icon = memberIcon(member.kind, member.attrs, member.library != null)
     override fun getToolTip(): String = buildString {
@@ -277,7 +299,7 @@ class MemberNode(val member: Member) : GTreeNode() {
         }
     }
 
-    override fun isLeaf() = true
+    override fun isLeaf(): Boolean = true
 
     // Overloads share a name: equal only to its own filtered clone, as a [ClassNode].
     private val identity = Any()
@@ -321,8 +343,98 @@ private fun withInherited(members: List<Member>, inherited: List<InheritedSlot>)
     return placed.sortedBy { it.first }.map { it.second }
 }
 
+/**
+ * A vftable of the class above it, its label's [member] (one made up of the slot's label when the class
+ * has none at the table), holding the class's virtual functions and inherited slots in it, by slot. A
+ * slot a base first declares goes under that base's [BaseSlotsNode], however far up; the class's own
+ * new slots stay directly under the table, where the base's slots end.
+ */
+class VftableNode(member: Member, slots: List<GTreeNode>) : MemberNode(member) {
+    init {
+        setChildren(slots)
+    }
+
+    override fun getToolTip(): String = super.getToolTip() + "<br>" + slotCount(children) + " slots shown"
+
+    override fun isLeaf() = false
+}
+
+/** The slots of a vftable that the base at [path] first declares, the class's overrides among them. */
+class BaseSlotsNode(val path: List<String>, slots: List<GTreeNode>) : GTreeNode() {
+    init {
+        setChildren(slots)
+    }
+
+    override fun getName() = path.joinToString("::").ifEmpty { "?" }
+    override fun getIcon(expanded: Boolean): Icon = BASE_SLOTS_ICON
+    override fun getToolTip(): String =
+        "<html>slots first declared by " + escape(name) + "<br>" + slotCount(children) + " shown"
+
+    override fun isLeaf() = false
+
+    private val identity = Any()
+    override fun equals(other: Any?) = other is BaseSlotsNode && other.identity === identity
+    override fun hashCode() = identity.hashCode()
+}
+
+private fun slotCount(nodes: List<GTreeNode>): Int = nodes.sumOf {
+    if (it is BaseSlotsNode) slotCount(it.children) else 1
+}
+
+/**
+ * [members] and [inherited] with every slotted function under its vftable's [VftableNode], in the place
+ * of the table's label among the members (after the last vtable or ABI object, for a table with no
+ * label), and by the base declaring each slot within it. The rest as [withInherited] lays them.
+ */
+private fun bySlotTable(cls: ClassView?, members: List<Member>, inherited: List<InheritedSlot>): List<GTreeNode> {
+    val slotted = members.filter { it.slot != null && it.kind >= MemberKind.FUNCTION }.toSet()
+    val entries = slotted.map { SlotKey(it.slot!!, it.introducedBy) to MemberNode(it) } +
+        inherited.map { SlotKey(it.slot, it.introducedBy) to InheritedSlotNode(it) }
+    if (entries.isEmpty()) return withInherited(members, inherited)
+    val labels = members.filter { it.kind == MemberKind.VTABLE }
+    val groups = entries.groupBy { it.first.slot.table }.values.sortedBy { e -> e.minOf { it.first.slot } }
+        .associate { inTable ->
+            val slot = inTable.first().first.slot
+            val label = labels.firstOrNull { it.address == slot.table } ?: labels.firstOrNull { it.name == slot.label }
+            (label ?: Member(slot.label, slot.table, MemberKind.VTABLE)) to
+                byIntroducer(cls?.path, inTable.sortedBy { it.first.slot.index })
+        }
+    val unlabelled = groups.filterKeys { it !in labels }.map { (m, kids) -> VftableNode(m, kids) }
+    val lastAbi = members.indexOfLast { it.kind < MemberKind.FUNCTION }
+    val out = mutableListOf<GTreeNode>()
+    if (lastAbi < 0) out += unlabelled
+    for ((i, m) in members.withIndex()) {
+        if (m in slotted) continue
+        out += groups[m]?.let { VftableNode(m, it) } ?: MemberNode(m)
+        if (i == lastAbi) out += unlabelled
+    }
+    return out
+}
+
+private data class SlotKey(val slot: VirtualSlot, val introducedBy: List<String>?)
+
+/**
+ * [entries], in slot order, those a base first declares gathered under its [BaseSlotsNode] where its
+ * first one is: the class's own ([own]), and any whose base is unknown, stay as they are.
+ */
+private fun byIntroducer(own: List<String>?, entries: List<Pair<SlotKey, GTreeNode>>): List<GTreeNode> {
+    val byBase = entries.filter { it.first.introducedBy.let { b -> b != null && b != own } }
+        .groupBy({ it.first.introducedBy!! }, { it.second })
+    val out = mutableListOf<GTreeNode>()
+    val placed = HashSet<List<String>>()
+    for ((key, node) in entries) {
+        val base = key.introducedBy?.takeIf { it != own }
+        when {
+            base == null -> out += node
+            placed.add(base) -> out += BaseSlotsNode(base, byBase.getValue(base))
+        }
+    }
+    return out
+}
+
 /** Where going to [node] goes. */
 internal val GTreeNode.address: Address? get() = when (this) {
+    is BaseSlotsNode -> null
     is InheritedSlotNode -> inherited.address
     is MemberNode -> member.address
     is ClassNode -> info?.address
@@ -525,6 +637,34 @@ internal val INHERITED_ICON: Icon by lazy {
         val rgb = Color.HSBtoRGB(hue, sat * (1 - INHERITED_MUTE.toFloat()), v)
         Triple(rgb shr 16 and 0xff, rgb shr 8 and 0xff, rgb and 0xff)
     }
+}
+
+/** A base's slots: the class icon, as the base it names. */
+private val BASE_SLOTS_ICON: Icon get() = CLASS_ICON
+
+/** The vtable icon with a small class icon over its bottom-right corner: the grouping toggle's. */
+internal val GROUP_SLOTS_ICON: Icon by lazy {
+    val table = MEMBER_ICONS.getValue(MemberKind.VTABLE).first.centered()
+    val image = BufferedImage(table.iconWidth, table.iconHeight, BufferedImage.TYPE_INT_ARGB)
+    val g = image.createGraphics()
+    try {
+        table.paintIcon(null, g, 0, 0)
+        val small = CLASS_ICON.scaledTo(GROUP_BADGE_SIZE)
+        small.paintIcon(null, g, table.iconWidth - GROUP_BADGE_SIZE, table.iconHeight - GROUP_BADGE_SIZE)
+    } finally {
+        g.dispose()
+    }
+    ImageIcon(image)
+}
+
+private const val GROUP_BADGE_SIZE = 10
+
+private fun Icon.scaledTo(size: Int): Icon {
+    val w = iconWidth.coerceAtLeast(1)
+    val h = iconHeight.coerceAtLeast(1)
+    val image = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+    image.createGraphics().also { paintIcon(null, it, 0, 0) }.dispose()
+    return ImageIcon(image.getScaledInstance(size, size, Image.SCALE_SMOOTH))
 }
 
 /** [this] colour moved [amount] of the way to [other]. */

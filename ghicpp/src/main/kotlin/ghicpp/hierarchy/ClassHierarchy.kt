@@ -120,6 +120,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val aliases: List<String> = emptyList(),
         /** For a virtual function the class's own vftables hold, its first slot there: the table and the index. */
         val slot: VirtualSlot? = null,
+        /** The class first declaring [slot], up its bases (its [VirtualSlots.root]'s owner): its own for a new one. */
+        val introducedBy: List<String>? = null,
     ) {
         val label: String get() = (if (isOverloaded && parameters != null) name + parameters else name) +
             (variants.map { it.label } + listOfNotNull(msvcStructor?.label))
@@ -141,6 +143,8 @@ data class ClassHierarchy(val classes: List<ClassView>) {
         val address: Address,
         val slot: VirtualSlot,
         val signature: String? = null,
+        /** The class that first declares [slot], up the bases (the owner of its [VirtualSlots.root]). */
+        val introducedBy: List<String>? = null,
     ) {
         /** `Base::f`, by the class's own name: the tooltip has the rest. */
         val label: String get() = (ownerPath.lastOrNull()?.let { "$it::" }.orEmpty()) + name
@@ -342,7 +346,16 @@ data class ClassHierarchy(val classes: List<ClassView>) {
             }
             val built = ClassHierarchy(classes.sortedBy { it.qualifiedName })
             val slots = VirtualSlots(program, built)
-            return ClassHierarchy(built.classes.map { it.copy(inherited = slots.inheritedOf(it)) })
+            return ClassHierarchy(
+                built.classes.map { c ->
+                    c.copy(
+                        members = c.members.map { m ->
+                            m.slot?.let { m.copy(introducedBy = slots.owner[slots.root(it).table]?.path) } ?: m
+                        },
+                        inherited = slots.inheritedOf(c),
+                    )
+                },
+            )
         }
 
         fun basesOf(ns: GhidraClass, typeinfo: Address?, classIds: Map<Long, Long>, idOf: (List<String>) -> Long?) =
