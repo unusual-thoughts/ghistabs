@@ -1,4 +1,3 @@
-class-splits-fp `NPKlass_00407bc0` (inferred) of `Down`
 classes-fn `Boot` (stabs)
 classes-fn `Quals` (stabs)
 classes-fn `Stack<Point,2>` (stabs)
@@ -40,5 +39,3 @@ methods-fp 4077bc of `Both`: is `Up`'s
 methods-fp 4078a0 of `Both`: is `Up`'s
 structors-fn 4077bc of `Up`
 structors-fn 4078a0 of `Up`
-structors-fn 407bc0 of `Down`
-structors-fn 407ca4 of `Down`
