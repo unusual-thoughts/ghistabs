@@ -12,8 +12,9 @@ import ghidra.program.model.listing.Program
 import ghidrakt.*
 
 /**
- * A base-object [structor] of [base], which a structor of [built] calls on its subobject at [offset]; [base]'s
- * [virtualBases], off the sub-VTT it is passed ([virtualBasesOf]).
+ * A base-object [structor] of [base], which a structor of [built] calls on its subobject at [offset], passing it a
+ * sub-VTT that opens with [table], the construction vtable of [base] in [built]; [base]'s [virtualBases], off that
+ * sub-VTT ([virtualBasesOf]).
  */
 internal class VttStructor(
     val structor: Function,
@@ -55,7 +56,7 @@ internal fun Program.findVttStructors(
                 unmatched?.add(table)
             } else {
                 val virtual = virtualBasesOf(call.vtt, table, byTable, primaries) - base
-                found += VttStructor(call.callee, base, built, call.offset, virtual)
+                found += VttStructor(call.callee, base, built, call.offset, table, virtual)
             }
         }
     }
@@ -76,10 +77,7 @@ private fun Program.virtualBasesOf(
     primaries: Map<PlainClass, List<Address>>,
 ): List<PlainClass> {
     val ptr = defaultPointerSize.toLong()
-    val vbaseOffsets = (3..2 + PlainVtableParser.MAX_VBASE_WORDS).asSequence()
-        .map { table.signedWordBefore(this, it) }
-        .takeWhile { it != null && it in ptr until PlainVtables.MAX_SUBOBJECT_OFFSET }
-        .filterNotNull().toSet()
+    val vbaseOffsets = headerVbaseOffsets(table)
     if (vbaseOffsets.isEmpty()) return emptyList()
     return (1..vbaseOffsets.size + MAX_SUB_VTT_WORDS).asSequence()
         .map { i -> vtableAt(vtt.add(i * ptr))?.first }
