@@ -480,20 +480,11 @@ classes-fp invented `CryptoPP::VariableKeyLength<16u,16u,32u,8u,4u,0u>` (itanium
 classes-fp invented `NPKlass_004b9b44` (inferred)
 classes-fp invented `NPKlass_005a24dc` (inferred)
 classes-fp invented `NPKlass_005a25bc` (inferred)
-field-sizes-fp `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`+4: 1, is 4
-field-sizes-fp `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>`+4: 1, is 4
 field-sizes-fp `CryptoPP::ASN1CryptoMaterial<CryptoPP::PublicKey>`+4: 1, is 4
 field-sizes-fp `CryptoPP::ArraySink`+24: 4, is 8
 field-sizes-fp `CryptoPP::ArrayXorSink`+24: 4, is 8
 field-sizes-fp `CryptoPP::ByteQueue::Walker`+24: 4, is 8
 field-sizes-fp `CryptoPP::CryptoParameters`+0: 1, is 4
-field-sizes-fp `CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>`+0: 1, is 4
-field-sizes-fp `CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>`+0: 1, is 4
-field-sizes-fp `CryptoPP::DL_GroupParameters<CryptoPP::Integer>`+0: 1, is 4
-field-sizes-fp `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::EC2N>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::EC2NPoint>,CryptoPP::DL_GroupParameters<CryptoPP::EC2NPoint>>`+0: 1, is 4
-field-sizes-fp `CryptoPP::DL_GroupParametersImpl<CryptoPP::EcPrecomputation<CryptoPP::ECP>,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::ECPPoint>,CryptoPP::DL_GroupParameters<CryptoPP::ECPPoint>>`+0: 1, is 4
-field-sizes-fp `CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>`+0: 1, is 4
-field-sizes-fp `CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>`+0: 1, is 4
 field-sizes-fp `CryptoPP::IteratedHashBase<unsigned_long_long,CryptoPP::HashTransformation>`+16: 4, is 8
 field-sizes-fp `CryptoPP::IteratedHashBase<unsigned_long_long,CryptoPP::HashTransformation>`+8: 4, is 8
 field-sizes-fp `CryptoPP::IteratedHashBase<unsigned_long_long,CryptoPP::MessageAuthenticationCode>`+16: 4, is 8
@@ -501,7 +492,6 @@ field-sizes-fp `CryptoPP::IteratedHashBase<unsigned_long_long,CryptoPP::MessageA
 field-sizes-fp `CryptoPP::MaurerRandomnessTest`+16: 4, is 8
 field-sizes-fp `CryptoPP::NullStore`+24: 4, is 8
 field-sizes-fp `CryptoPP::PrivateKey`+0: 1, is 4
-fields-fn `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`+8:4
 fields-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::Integer>`+4:4
 fields-fn `CryptoPP::AbstractEuclideanDomain<CryptoPP::PolynomialMod2>`+4:4
 fields-fn `CryptoPP::AbstractPolicyHolder<CryptoPP::AdditiveCipherAbstractPolicy,CryptoPP::CTR_ModePolicy>`+32:4
@@ -791,7 +781,6 @@ fields-fn `CryptoPP::DES_XEX3::Base`+56:4
 fields-fn `CryptoPP::DES_XEX3::Base`+60:4
 fields-fn `CryptoPP::DES_XEX3::Base`+64:4
 fields-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`+100:4
-fields-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`+12:4
 fields-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`+16:4
 fields-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`+24:4
 fields-fn `CryptoPP::DH_Domain<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>`+28:4
@@ -949,7 +938,6 @@ fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,Crypt
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`+80:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`+84:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`+88:4
-fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`+8:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`+92:4
 fields-fn `CryptoPP::DL_GroupParametersImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>,CryptoPP::DL_GroupParameters_IntegerBased>`+96:4
 fields-fn `CryptoPP::DL_GroupParameters_DSA`+12:4
@@ -969,7 +957,6 @@ fields-fn `CryptoPP::DL_GroupParameters_DSA`+76:4
 fields-fn `CryptoPP::DL_GroupParameters_DSA`+80:4
 fields-fn `CryptoPP::DL_GroupParameters_DSA`+84:4
 fields-fn `CryptoPP::DL_GroupParameters_DSA`+88:4
-fields-fn `CryptoPP::DL_GroupParameters_DSA`+8:4
 fields-fn `CryptoPP::DL_GroupParameters_DSA`+92:4
 fields-fn `CryptoPP::DL_GroupParameters_DSA`+96:4
 fields-fn `CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>`+100:4
@@ -1038,7 +1025,6 @@ fields-fn `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`+76:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`+80:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`+84:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`+88:4
-fields-fn `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`+8:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`+92:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`+96:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP`+12:4
@@ -1058,7 +1044,6 @@ fields-fn `CryptoPP::DL_GroupParameters_GFP`+76:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP`+80:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP`+84:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP`+88:4
-fields-fn `CryptoPP::DL_GroupParameters_GFP`+8:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP`+92:4
 fields-fn `CryptoPP::DL_GroupParameters_GFP`+96:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+12:4
@@ -1078,14 +1063,12 @@ fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomp
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+80:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+84:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+88:4
-fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+8:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+92:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>`+96:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBased`+12:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBased`+20:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBased`+24:4
 fields-fn `CryptoPP::DL_GroupParameters_IntegerBased`+28:4
-fields-fn `CryptoPP::DL_GroupParameters_IntegerBased`+8:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+100:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+104:4
 fields-fn `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>`+108:4
