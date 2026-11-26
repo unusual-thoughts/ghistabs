@@ -136,6 +136,27 @@ class GenericVftableFinderIntegrationTest : AbstractGhidraHeadlessIntegrationTes
     }
 
     @Test
+    fun `a virtual base's secondary joins its group past a dozen vcall offsets`() {
+        // Each table after `offset_to_top` and a null rtti word: the primary's 0, the secondary's -4, a dozen vbase
+        // and vcall offsets before the latter.
+        builder.setBytes(GROUP, "00 00 00 00 00 00 00 00 00 11 40 00 10 11 40 00")
+        val offsets = listOf(0, 0, 0, 0, 0, -4, -4, 0, 0, 0, 0, -4)
+        builder.setBytes(
+            builder.addr(GROUP).add(16).toString(),
+            (offsets + listOf(-4, 0)).joinToString(" ") { w ->
+                (0 until 4).joinToString(" ") { "%02x".format((w shr (8 * it)) and 0xff) }
+            } + " 20 11 40 00 30 11 40 00",
+        )
+        val primary = builder.addr(GROUP).add(8)
+        val secondary = builder.addr(GROUP).add(16 + 4L * (offsets.size + 2))
+        builder.createMemoryReference(CTOR, primary.toString(), RefType.DATA, SourceType.ANALYSIS, 0)
+        builder.createMemoryReference(CTOR2, secondary.toString(), RefType.DATA, SourceType.ANALYSIS, 0)
+        val found = GenericVftableFinder(program).secondaries[secondary]
+        found?.primary?.addr mustBe primary
+        found?.offset mustBe 4L
+    }
+
+    @Test
     fun `a slot pointing at code another function only jumps to is a function of its own`() {
         // mov dword ptr [ecx], 0x402080; jmp 0x4011b0; int3 padding; xor eax, eax; ret
         builder.setBytes(TAIL_DTOR, "c7 01 80 20 40 00 e9 05 00 00 00 cc cc cc cc cc 33 c0 c3")
@@ -176,5 +197,6 @@ class GenericVftableFinderIntegrationTest : AbstractGhidraHeadlessIntegrationTes
         const val TABLE2 = "0x402018"
         const val UNREFERENCED = "0x402030"
         const val JUMP_TABLE = "0x402040"
+        const val GROUP = "0x402090"
     }
 }
