@@ -8,8 +8,8 @@ import ghicpp.hierarchy.unattachedVirtuals
 import ghicpp.recover.ClassPass
 import ghicpp.recover.ClassPass.Companion.FILL_ARRAYS
 import ghicpp.recover.ClassPass.Companion.INLINED_CONSTRUCTORS
+import ghicpp.recover.ClassPass.Companion.MEMBER_OBJECTS
 import ghicpp.recover.GenericVftableFinder
-import ghicpp.recover.MemberObjectPass
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
@@ -59,12 +59,13 @@ class GenericVftableAnalyzer :
 
     override fun added(program: Program, set: AddressSetView, monitor: TaskMonitor, log: MessageLog): Boolean {
         val sink = AnalysisProbe.sinkFor(program, MessageLogSink(log, originator = NAME))
-        val seeded = GenericVftableFinder(program, sink = sink).seed(monitor)
+        val finder = GenericVftableFinder(program, sink = sink)
+        val parser = PlainVtableParser(program, sink)
+        val seeded = finder.seed(monitor) + finder.settle(parser, monitor)
         val options = program.analyzerOptions(NAME)
-        val pass = ClassPass(program, PlainVtableParser(program, sink), sink, options)
+        val pass = ClassPass(program, parser, sink, options)
         val result = pass.run(monitor)
-        val members = result.found?.takeIf { options[MEMBER_OBJECTS] }
-            ?.let { MemberObjectPass(program, sink, pass.fillArrays).run(it, monitor) } ?: 0
+        val members = pass.layMembers(result, monitor)
         val unattached = ClassHierarchy.of(program, ClassRecordSource.describedElsewhere(program))
             .unattachedVirtuals(program)
         for (at in unattached) sink.debug(UNATTACHED, "held in a vftable slot, in no class", at)
@@ -82,12 +83,5 @@ class GenericVftableAnalyzer :
 
         /** A virtual function no class has ([unattachedVirtuals]): its introducing class's bases went unrecovered. */
         const val UNATTACHED = "vfunction-unattached"
-
-        val MEMBER_OBJECTS = BoolOption(
-            "Classes of member objects",
-            "Give a class to each member a constructor builds at an offset into this with a function that " +
-                "stores no vtable, and lay it in the class holding it",
-            true,
-        )
     }
 }

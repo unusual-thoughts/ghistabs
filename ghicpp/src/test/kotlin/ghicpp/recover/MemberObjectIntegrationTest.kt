@@ -1,20 +1,25 @@
 package ghicpp.recover
 
+import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.MemberAttrs
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.StructorRole
 import ghicpp.abi.generic.PlainVtableParser
 import ghicpp.classStruct
 import ghicpp.dissect.ThisFunctionDissector
+import ghicpp.isFlatInferred
 import ghicpp.stubClassStruct
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.Pointer
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
+import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.RefType
@@ -25,6 +30,7 @@ import ghidrakt.*
 import ghidrakt.diagnose.CapturingSink
 import ghidrakt.diagnose.DummySink
 import ghidrakt.test.mustBe
+import ghidrakt.test.mustBeTrue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -41,9 +47,15 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     /**
      * Builds the program, with [afterMember] the 8 bytes of the constructor after it builds the member, and, where
-     * [chained], the member's method calling [HELPER] on its own `this`.
+     * [chained], the member's method calling [HELPER] on its own `this`; [memberCtor] the member's constructor's 16
+     * bytes, and [extra] more functions.
      */
-    private fun build(afterMember: String = CALL_MEMBER_METHOD, chained: Boolean = false) {
+    private fun build(
+        afterMember: String = CALL_MEMBER_METHOD,
+        chained: Boolean = false,
+        memberCtor: String = STORING_MEMBER_CTOR,
+        extra: List<Extra> = emptyList(),
+    ) {
         builder = ProgramBuilder("member-objects", ProgramBuilder._X86)
         builder.setExecute(builder.createMemory(".text", "0x401000", 0x200), true)
         builder.createMemory(".data", "0x402000", 0x100)
@@ -57,8 +69,8 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 " 8d 7e 10 b9 04 00 00 00 33 c0 f3 ab" + // lea edi, [esi+0x10]; mov ecx, 4; xor eax, eax; rep stosd
                 " 8b c6 5f 5e c3", // mov eax, esi; pop edi; pop esi; ret
         )
-        // mov eax, ecx; mov dword ptr [eax], 0; mov dword ptr [eax+4], 0; ret
-        builder.setBytes(MEMBER_CTOR, "8b c1 c7 00 00 00 00 00 c7 40 04 00 00 00 00 c3")
+        builder.setBytes(MEMBER_CTOR, memberCtor)
+        for (e in extra) builder.setBytes(e.at, e.bytes)
         // mov eax, ecx; mov dword ptr [eax+4], 1; (mov ecx, eax; call HELPER;) ret
         builder.setBytes(
             MEMBER_METHOD,
@@ -74,10 +86,12 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val methodLength = if (chained) 0x11 else 0x0a
         builder.disassemble(MEMBER_METHOD, methodLength)
         if (chained) builder.disassemble(HELPER, 0x09)
+        for (e in extra) builder.disassemble(e.at, e.length)
         builder.createMemoryReference(TABLE_STORE, TABLE, RefType.DATA, SourceType.ANALYSIS, 0)
         builder.withTransaction {
             val bodies = listOf(CTOR to 0x2b, MEMBER_CTOR to 0x10, MEMBER_METHOD to methodLength) +
-                (if (chained) listOf(HELPER to 0x09) else emptyList())
+                (if (chained) listOf(HELPER to 0x09) else emptyList()) +
+                extra.map { it.at to it.length }
             for ((at, length) in bodies) {
                 val functions = program.functionManager
                 val body = AddressSet(addr(at), addr(at).add(length - 1L))
@@ -85,6 +99,17 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     functions.getFunctionAt(addr(at))
                         ?: functions.createFunction(null, addr(at), body, SourceType.DEFAULT)
                 func.setCallingConvention("__thiscall")
+            }
+            // Ghidra types a function reading only ECX a `__fastcall` taking it.
+            for (e in extra.filter { it.fastcall }) {
+                program.functionManager.getFunctionAt(addr(e.at)).updateFunction(
+                    "__fastcall",
+                    null,
+                    (1..e.params).map { ParameterImpl("param_$it", PointerDataType(program.dataTypeManager), program) },
+                    Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+                    true,
+                    SourceType.ANALYSIS,
+                )
             }
         }
     }
@@ -113,6 +138,10 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         program.functionManager.getFunctionAt(addr(MEMBER_CTOR)).getName(true) mustBe "$member::$member"
         structOf(member).length mustBe 8
         structOf(member).description mustBe "No vtable: named after its first constructor, at 00401080"
+        // Nothing else in it, its own fields go in it as they are, no `_data` struct around them.
+        structOf(member).definedComponents.map { "+${it.offset} ${it.fieldName} (${it.comment})" } mustBe
+            listOf("+0 field_0x0 (inferred)", "+4 field_0x4 (inferred)")
+        structOf(member).isFlatInferred().mustBeTrue()
         program.memberAttrs(addr(MEMBER_CTOR)) mustBe
             MemberAttrs(source = SourceType.ANALYSIS, structor = StructorRole.CONSTRUCTOR)
 
@@ -315,7 +344,118 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         sink.lines.single { it.tag == "dissection-stale" }.msg mustBe "1 read before the program changed"
     }
 
+    private fun recover(): Int = program.runTransaction("recover") {
+        GenericVftableFinder(program).seed() mustBe 1
+        val found = ClassPass(program, PlainVtableParser(program), DummySink).run(TaskMonitor.DUMMY).found!!
+        MemberObjectPass(program, DummySink).run(found)
+    }
+
+    @Test
+    fun `a member whose constructor stores through a method it calls on this is filled off that method`() {
+        // mov dword ptr [ecx], 0; mov dword ptr [ecx+4], 0; ret
+        build(
+            memberCtor = CALLING_MEMBER_CTOR,
+            extra = listOf(Extra(OTHER, "c7 01 00 00 00 00 c7 41 04 00 00 00 00 c3")),
+        )
+        recover() mustBe 1
+        val member = structOf("${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080")
+        member.length mustBe 8
+        // Its own fields alone, so with no wrapper of them.
+        member.numDefinedComponents mustBe 2
+        structOf("${GenericVftableFinder.SEEDED_CLASS_PREFIX}00402010").getComponentAt(8).dataType mustBe member
+    }
+
+    @Test
+    fun `a member whose constructor calls another member's first on this derives from it`() {
+        // lea ecx, [esi+4]; call OTHER: the holder builds a second member at +4, whose constructor is
+        // mov eax, ecx; mov dword ptr [eax], 0; ret
+        build(
+            afterMember = "8d 4e 04 e8 2c 01 00 00",
+            memberCtor = DERIVED_MEMBER_CTOR,
+            extra = listOf(Extra(OTHER, "8b c1 c7 00 00 00 00 00 c3")),
+        )
+        recover() mustBe 2
+        val base = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401140"
+        val derived = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
+        val ids = program.readClassRecord().orEmpty().mapValues { (_, e) -> e.bases.map { it.namespaceId } }
+        fun id(name: String) = program.symbolTable.getClassSymbol(name, program.globalNamespace).id
+        ids[id(derived)] mustBe listOf(id(base))
+        structOf(derived).length mustBe 8
+        structOf(derived).getComponentAt(0).dataType mustBe structOf(base)
+    }
+
+    @Test
+    fun `a member whose structors build and destroy a base no one else does derives from that base`() {
+        build(
+            memberCtor = DERIVED_MEMBER_CTOR,
+            extra = listOf(
+                // mov eax, ecx; mov dword ptr [eax], 0; ret: the base's constructor
+                Extra(OTHER, "8b c1 c7 00 00 00 00 00 c3"),
+                // push esi; mov esi, ecx; mov dword ptr [esi], TABLE; lea ecx, [esi+8]; call MEMBER_DTOR; pop esi; ret
+                Extra(HOLDER_DTOR, "56 8b f1 c7 06 10 20 40 00 8d 4e 08 e8 4f 00 00 00 5e c3", fastcall = false),
+                // push esi; mov esi, ecx; mov ecx, esi; call BASE_DTOR; pop esi; ret
+                Extra(MEMBER_DTOR, "56 8b f1 8b ce e8 16 00 00 00 5e c3", fastcall = false),
+                // mov dword ptr [ecx], 0; ret
+                Extra(BASE_DTOR, "c7 01 00 00 00 00 c3"),
+            ),
+        )
+        builder.createMemoryReference(HOLDER_DTOR_STORE, TABLE, RefType.DATA, SourceType.ANALYSIS, 0)
+        // The holder's table holds its destructor, which tells it from its constructor.
+        builder.setBytes(TABLE, "60 11 40 00")
+        recover() mustBe 2
+        val base = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401140"
+        val derived = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
+        val ids = program.readClassRecord().orEmpty().mapValues { (_, e) -> e.bases.map { it.namespaceId } }
+        fun id(name: String) = program.symbolTable.getClassSymbol(name, program.globalNamespace).id
+        ids[id(derived)] mustBe listOf(id(base))
+        program.functionManager.getFunctionAt(addr(BASE_DTOR)).getName(true) mustBe "$base::~$base"
+        structOf(derived).getComponentAt(0).dataType mustBe structOf(base)
+        structOf(base).length mustBe 4
+    }
+
+    @Test
+    fun `a function a member's destructor passes more than this to last is no base's destructor`() {
+        build(
+            memberCtor = DERIVED_MEMBER_CTOR,
+            extra = listOf(
+                // mov eax, ecx; mov dword ptr [eax], 0; ret: an allocator member's allocate
+                Extra(OTHER, "8b c1 c7 00 00 00 00 00 c3"),
+                // push esi; mov esi, ecx; mov dword ptr [esi], TABLE; lea ecx, [esi+8]; call MEMBER_DTOR; pop esi; ret
+                Extra(HOLDER_DTOR, "56 8b f1 c7 06 10 20 40 00 8d 4e 08 e8 4f 00 00 00 5e c3", fastcall = false),
+                // push esi; mov esi, ecx; mov edx, [esi+4]; mov ecx, esi; call BASE_DTOR; pop esi; ret
+                Extra(MEMBER_DTOR, "56 8b f1 8b 56 04 8b ce e8 13 00 00 00 5e c3", fastcall = false),
+                // mov dword ptr [ecx], 0; ret: its deallocate, given what to free after `this`
+                Extra(BASE_DTOR, "c7 01 00 00 00 00 c3", params = 2),
+            ),
+        )
+        builder.createMemoryReference(HOLDER_DTOR_STORE, TABLE, RefType.DATA, SourceType.ANALYSIS, 0)
+        builder.setBytes(TABLE, "60 11 40 00")
+        recover() mustBe 1
+        val derived = "${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401080"
+        val ids = program.readClassRecord().orEmpty().mapValues { (_, e) -> e.bases.map { it.namespaceId } }
+        fun symbol(name: String) = program.symbolTable.getClassSymbol(name, program.globalNamespace)
+        ids[symbol(derived).id].orEmpty() mustBe emptyList()
+        symbol("${MemberObjectPass.NON_POLYMORPHIC_PREFIX}00401140") mustBe null
+    }
+
+    /**
+     * A function at [at] of [bytes], a `__fastcall` taking [params] pointers where [fastcall], else a
+     * `__thiscall`.
+     */
+    private data class Extra(val at: String, val bytes: String, val fastcall: Boolean = true, val params: Int = 1) {
+        val length get() = bytes.split(" ").size
+    }
+
     private companion object {
+        /** mov eax, ecx; mov dword ptr [eax], 0; mov dword ptr [eax+4], 0; ret */
+        const val STORING_MEMBER_CTOR = "8b c1 c7 00 00 00 00 00 c7 40 04 00 00 00 00 c3"
+
+        /** push esi; mov esi, ecx; call OTHER; mov eax, esi; pop esi; ret */
+        const val CALLING_MEMBER_CTOR = "56 8b f1 e8 b8 00 00 00 8b c6 5e c3 90 90 90 90"
+
+        /** push esi; mov esi, ecx; call OTHER; mov [esi+4], eax; mov eax, esi; pop esi; ret */
+        const val DERIVED_MEMBER_CTOR = "56 8b f1 e8 b8 00 00 00 89 46 04 8b c6 5e c3 90"
+
         /** lea ecx, [esi+8]; call MEMBER_METHOD */
         const val CALL_MEMBER_METHOD = "8d 4e 08 e8 8c 00 00 00"
 
@@ -326,6 +466,11 @@ class MemberObjectIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         const val HELPER = "0x4010c0"
         const val LOCAL_METHOD = "0x4010e0"
         const val VF1 = "0x401100"
+        const val OTHER = "0x401140"
+        const val HOLDER_DTOR = "0x401160"
+        const val HOLDER_DTOR_STORE = "0x401163"
+        const val MEMBER_DTOR = "0x4011c0"
+        const val BASE_DTOR = "0x4011e0"
         const val STACK_CALLER = "0x401180"
         const val TABLE = "0x402010"
     }

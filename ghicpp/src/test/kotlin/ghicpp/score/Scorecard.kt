@@ -4,6 +4,7 @@ import ghicpp.VirtKind
 import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghicpp.nameSegments
 import ghidra.program.model.address.Address
 
 /** True positives, false positives and false negatives of one thing a recovery claims. */
@@ -320,17 +321,8 @@ class Scorer(
     }
 
     /** Each name [qualified] ends with after a `::` outside template arguments: `C`, then `B::C`, of `A::B::C`. */
-    private fun leafNames(qualified: String): List<String> {
-        var depth = 0
-        return qualified.indices.mapNotNull { i ->
-            when (qualified[i]) {
-                '<' -> depth++
-                '>' -> depth--
-            }
-            val atSeparator = depth == 0 && qualified.startsWith("::", i)
-            if (atSeparator) qualified.substring(i + 2) else null
-        }
-    }
+    private fun leafNames(qualified: String): List<String> =
+        qualified.nameSegments.let { segments -> (1 until segments.size).map { segments.drop(it).joinToString("::") } }
 
     /**
      * Whether the truth class with this key has no vtable and no functions, leaving a recovery nothing to find.

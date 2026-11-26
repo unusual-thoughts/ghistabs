@@ -37,7 +37,7 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
             4 to "_base_Rect: Rect_fields_4_24",
             24 to "vfptr: Label_vftable_for_Named *",
             28 to "_base_Named: Named_fields_4_12",
-            36 to "Label_data: Label_data",
+            36 to "_data: Label_data",
         )
         program.classStruct("Rect_vftable").definedComponents.map { it.fieldName } mustBe
             listOf(rectDeletingDestructor, "vfunction2", "vfunction3", "vfunction4")
@@ -116,7 +116,7 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
         // The constructor that stores it also stores `dn`, so `Down`'s own field is found too.
         program.layout("Down") mustBe listOf(
             0 to "vbptr: int *",
-            4 to "Down_data: Down_data",
+            4 to "_data: Down_data",
             12 to "vfptr: Down_vftable *",
             16 to "_vbase_: Core_fields_4_8",
         )
@@ -131,12 +131,24 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
     }
 
     @Test
+    fun `a base that is nothing but its vptr still gives the vptr up, and stays as an empty base`() {
+        // `Logger` declares only virtual functions: the vptr is all of it.
+        program.layout("Secret") mustBe listOf(
+            0 to "vfptr: Secret_vftable *",
+            4 to "_base_Logger: Logger_fields_4_4",
+            4 to "_data: Secret_data",
+        )
+        // The run is `Logger`'s own fields too, so what it gains past its end every deriving class does.
+        program.layout("Logger") mustBe listOf(0 to "vfptr: Logger_vftable *", 4 to "_fields: Logger_fields_4_4")
+    }
+
+    @Test
     fun `constructors the decompiler shows no this return for are told from destructors by their calls`() {
         // The unoptimised callers leave the constructors' `this` return unread.
         program.layout("Circle") mustBe listOf(
             0 to "vfptr: Circle_vftable *",
             4 to "_base_: Shape_fields_4_16",
-            16 to "Circle_data: Circle_data",
+            16 to "_data: Circle_data",
         )
     }
 
@@ -148,7 +160,7 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
             4 to "_base_Named",
             12 to "_base_Left",
             20 to "_base_Right",
-            28 to "Diamond_data",
+            28 to "_data",
         )
         program.layout("Right") mustBe listOf(0 to "vbptr: int *")
     }
@@ -261,7 +273,7 @@ abstract class MsvcClassStructsIntegrationTest(fixture: String, private val rect
     fun `renaming a class renames its own fields' struct and the field holding it`() = program.rolledBack {
         val h = ClassHierarchy.of(program, hasStabs = false)
         program.renameClass(h, h.classes.single { it.qualifiedName == "Label" }, "Tag") mustBe emptyList()
-        program.layout("Tag").last() mustBe (36 to "Tag_data: Tag_data")
+        program.layout("Tag").last() mustBe (36 to "_data: Tag_data")
     }
 
     @Test

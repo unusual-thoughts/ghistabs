@@ -1,13 +1,7 @@
 package ghicpp.dissect
 
-import ghicpp.ClassDecl
-import ghicpp.ClassNaming
-import ghicpp.StructorConvention
-import ghicpp.StructorRole
+import ghicpp.*
 import ghicpp.StructorRole.*
-import ghicpp.classStruct
-import ghicpp.introducingClass
-import ghicpp.ownData
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.NoisyStructureBuilder
@@ -41,18 +35,25 @@ internal fun Stores.withFills(fills: Stores): Stores {
 }
 
 /**
- * The [classes] whose vtables a function stores into `this` where they belong, and what it calls on `this` or a
- * subobject of it [before] the first of those stores and [after] the last. [elsewhere] maps each other offset
- * into `this` to the classes whose primary table it stores there, in store order. [vbases] holds the offsets it
- * stores at through a vbtable, which are its virtual bases' offsets.
+ * A store, at [at], of a table of [cls] into `this` + [offset]. [cls]'s vptr belongs at `this` + [home], and
+ * [throughVbtable] says the function read [offset] from a vbtable, so that it is a virtual base's.
  */
-data class VptrStores(
-    val classes: Set<ClassDecl> = emptySet(),
-    val before: Set<Function> = emptySet(),
-    val after: Set<Function> = emptySet(),
-    val elsewhere: Map<Long, List<ClassDecl>> = emptyMap(),
-    val vbases: Set<Long> = emptySet(),
+data class VptrStore(
+    val at: Address,
+    val offset: Long,
+    val cls: ClassDecl,
+    val home: Long,
+    val throughVbtable: Boolean = false,
 )
+
+/** The stores of a vptr where it belongs. */
+val List<VptrStore>.own: List<VptrStore> get() = filter { it.offset == it.home }
+
+/** The classes whose vptrs these store where they belong. */
+val List<VptrStore>.classes: Set<ClassDecl> get() = own.mapTo(mutableSetOf()) { it.cls }
+
+/** The functions these calls call. */
+val List<ObjectCall>.callees: Set<Function> get() = mapTo(mutableSetOf()) { it.callee }
 
 /**
  * A call of [callee] on `this` + [offset] that passes the address [vtt] after `this`. An Itanium structor calls
@@ -81,18 +82,21 @@ class InlinedConstruction(val function: Function, val at: Address, val size: Lon
 }
 
 /**
- * What each decompiled function does with `this`: the vptrs it stores ([stores]), the functions it calls on
- * `this` or a subobject of it, by offset into it ([subobjectCalls]), and the fields it stores through `this`, by
- * offset ([thisStores]), and the constructors inlined after an `operator new` ([inlined]).
+ * What each decompiled function does with `this`: the vptrs it stores, in address order ([stores]), the
+ * functions it calls on `this` or a subobject of it, by offset into it ([subobjectCalls]), and the fields it
+ * stores through `this`, by offset ([thisStores]), and the constructors inlined after an `operator new`
+ * ([inlined]).
  */
 class Dissections internal constructor(from: Map<Function, DissectionCache.Dissection> = emptyMap()) {
-    val stores: Map<Function, VptrStores> = from.mapNotNull { (f, r) -> r.stores?.let { f to it } }.toMap()
+    val stores: Map<Function, List<VptrStore>> = from.mapNotNull { (f, r) -> r.stores?.let { f to it } }.toMap()
     val subobjectCalls: Map<Function, Map<Long, Set<Function>>> = from.mapValues { (_, r) -> r.subobjectCalls }
     val thisStores: ThisStores = from.mapValues { (_, r) -> r.thisStores }
     val inlined: List<InlinedConstruction> = from.flatMap { (_, r) -> r.inlined }
 
     /** The calls each makes on an object, its own `this` or another, by the object's `this` argument. */
     val objectCalls: Map<Function, List<ObjectCall>> = from.mapValues { (_, r) -> r.objectCalls }
+
+    private fun Function.callsOnThis() = objectCalls[this]?.filter { it.obj == CalledObject.This && !it.slot }.orEmpty()
 
     /**
      * The objects each vptr storer builds ([objectsBuilt]). For each object, maps its class to the constant
@@ -105,6 +109,16 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
     val vttCalls: Map<Function, List<VttCall>> = objectCalls.mapValues { (_, calls) ->
         calls.mapNotNull { c -> c.next?.takeIf { c.obj == CalledObject.This }?.let { VttCall(c.offset, c.callee, it) } }
     }.filterValues { it.isNotEmpty() }
+
+    /** The calls [this] makes on `this` or a subobject of it before the first store of a vptr where it belongs. */
+    fun Function.pre(): List<ObjectCall> = stores[this]?.own?.firstOrNull()?.at?.let { first ->
+        callsOnThis().filter { it.at < first }
+    }.orEmpty()
+
+    /** The calls [this] makes on `this` or a subobject of it after the last store of a vptr where it belongs. */
+    fun Function.post(): List<ObjectCall> = stores[this]?.own?.lastOrNull()?.at?.let { last ->
+        callsOnThis().filter { it.at > last }
+    }.orEmpty()
 
     /** The functions each calls on `this` itself. */
     private val thisCalls = subobjectCalls.mapValues { (_, calls) -> calls[0L].orEmpty() }
@@ -151,20 +165,41 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
      * storing its vptr, and a destructor destroys them after, so a storer calling a base's storer before
      * its stores builds, and one calling it only after destroys; that base's storer, and what a destructor
      * calls on `this`, take the same role. A storer calling known constructors and no destructor builds, and
-     * the reverse destroys. Every storer left builds.
+     * the reverse destroys. A storer none of that sorts destroys if it calls on its members from the last down
+     * ([destroysDownwards]), and that may sort more. Every storer left builds.
      */
     private fun MutableMap<Function, Pair<ClassDecl, StructorRole>>.sortByCalls(owners: Map<Function, ClassDecl>) {
-        fun basesOf(cls: ClassDecl, fs: Set<Function>?, not: StructorRole) = fs.orEmpty().filter { g ->
+        do {
+            sortByBaseCalls(owners)
+            val downwards = owners.filter { (f, _) -> f !in this && destroysDownwards(f) }
+            for ((f, cls) in downwards) this[f] = cls to DESTRUCTOR
+        } while (downwards.isNotEmpty())
+        for ((f, cls) in owners) putIfAbsent(f, cls to CONSTRUCTOR)
+    }
+
+    /**
+     * Whether the calls a storer makes on its members after its stores, each offset where it first calls on one,
+     * go from the highest offset down, two or more. A constructor builds its members in the order they are laid,
+     * and a destructor destroys them the other way. A landing pad destroying the members built again comes later.
+     * A call on `this` + 0 is a method of the class's own or a base's, which a constructor's body calls after
+     * building its members, so it says nothing of the order.
+     */
+    private fun destroysDownwards(f: Function): Boolean {
+        val firsts = f.post().map { it.offset }.filter { it > 0 }.distinct()
+        return firsts.size >= 2 && firsts.zipWithNext().all { (a, b) -> a > b }
+    }
+
+    private fun MutableMap<Function, Pair<ClassDecl, StructorRole>>.sortByBaseCalls(owners: Map<Function, ClassDecl>) {
+        fun basesOf(cls: ClassDecl, fs: Set<Function>, not: StructorRole) = fs.filter { g ->
             owners[g]?.let { it != cls && cls.derivesFrom(it) } == true && this[g]?.second != not
         }
         do {
             val known = size
             for ((f, cls) in owners) {
                 if (f in this) continue
-                val order = stores.getValue(f)
                 val role = when {
-                    basesOf(cls, order.before, DESTRUCTOR).isNotEmpty() -> CONSTRUCTOR
-                    basesOf(cls, order.after, CONSTRUCTOR).isNotEmpty() -> DESTRUCTOR
+                    basesOf(cls, f.pre().callees, DESTRUCTOR).isNotEmpty() -> CONSTRUCTOR
+                    basesOf(cls, f.post().callees, CONSTRUCTOR).isNotEmpty() -> DESTRUCTOR
                     else -> byKnownCalls(f)
                 }
                 role?.let { this[f] = cls to it }
@@ -172,14 +207,13 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
             for ((f, entry) in toList()) {
                 val (cls, role) = entry
                 val bases = when (role) {
-                    CONSTRUCTOR -> basesOf(cls, stores[f]?.before, DESTRUCTOR)
-                    DESTRUCTOR -> basesOf(cls, thisCalls[f].orEmpty() + stores[f]?.after.orEmpty(), CONSTRUCTOR)
+                    CONSTRUCTOR -> basesOf(cls, f.pre().callees, DESTRUCTOR)
+                    DESTRUCTOR -> basesOf(cls, thisCalls[f].orEmpty() + f.post().callees, CONSTRUCTOR)
                     else -> emptyList()
                 }
                 for (g in bases) putIfAbsent(g, owners.getValue(g) to role)
             }
         } while (size != known)
-        for ((f, cls) in owners) putIfAbsent(f, cls to CONSTRUCTOR)
     }
 
     /** [CONSTRUCTOR] if [f] calls known constructors and no destructor, [DESTRUCTOR] for the reverse. */
@@ -237,6 +271,26 @@ class FoundStructors(
     val constructors = roles.filterValues { it.second == CONSTRUCTOR }.mapValues { it.value.first }
 
     /**
+     * The member objects each class's constructors build and destructors destroy, each with its offset: the class
+     * of the constructor found here that a constructor first calls on `this` + k, past `this` + 0, or of the
+     * destructor that a destructor last calls there, where that class is another. A base's subobject there is one
+     * too, as far as the class's size goes.
+     */
+    val memberObjects: Map<ClassDecl, List<Pair<ClassDecl, Long>>> by lazy {
+        roles.entries.groupBy({ it.value.first }) { (f, by) ->
+            val (cls, role) = by
+            subobjectCalls[f].orEmpty().filterKeys { it > 0 }.mapNotNull { (at, called) ->
+                val member = when (role) {
+                    CONSTRUCTOR -> called.first()
+                    DESTRUCTOR -> called.last()
+                    else -> return@mapNotNull null
+                }
+                roles[member]?.takeIf { (m, r) -> r == role && m != cls }?.let { it.first to at }
+            }
+        }.mapValues { (_, found) -> found.flatten().distinct() }.filterValues { it.isNotEmpty() }
+    }
+
+    /**
      * The fields each class's constructors, its own and those folded into another's, store through `this`, by
      * offset into it: its own fields where nothing else is laid, and how large it is at least. Where two
      * constructors disagree, [NoisyStructureBuilder] keeps the more specific type, as it does for one.
@@ -259,19 +313,26 @@ data class FieldRetype(val offset: Int, val name: String, val was: String?, val 
  * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
  * specific type, and the field keeps its name. The fields it typed.
  */
-internal fun Structure.fillData(store: Stores): List<FieldRetype> = buildList {
-    for ((offset, data) in ownData()) {
-        val inside = store.filter { (at, dt) -> offset.withLength(data.length).includes(at.withLength(dt.length)) }
-        val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(data) }
-        for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
-        for ((at, dt) in merged.iterator()) {
-            val old = data.getComponentAt(at.toInt())
-            if (at + dt.length > data.length || old?.dataType?.isEquivalent(dt) == true) continue
-            val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
-            data.replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment)
-            val was = old?.dataType?.takeUnless(Undefined::isUndefined)?.name
-            add(FieldRetype(offset + at.toInt(), name, was, dt.name))
-        }
+internal fun Structure.fillData(store: Stores): List<FieldRetype> =
+    ownData().flatMap { (offset, data) -> data.fillRun(offset, store, flat = data === this) }
+
+/**
+ * Fills this, the struct of a class's own fields at [offset] into it, with the fields of [store] it holds, as
+ * [fillData]. Where it is the class struct itself ([ghicpp.isFlatInferred]), a new field is marked as inferred.
+ * The fields it typed, at their offsets in the class struct.
+ */
+internal fun Structure.fillRun(offset: Int, store: Stores, flat: Boolean): List<FieldRetype> = buildList {
+    val inside = store.filter { (at, dt) -> offset.withLength(length).includes(at.withLength(dt.length)) }
+    val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(this@fillRun) }
+    for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
+    val mark = ClassNaming.INFERRED.takeIf { flat }
+    for ((at, dt) in merged.iterator()) {
+        val old = getComponentAt(at.toInt())
+        if (at + dt.length > length || old?.dataType?.isEquivalent(dt) == true) continue
+        val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
+        replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment ?: mark)
+        val was = old?.dataType?.takeUnless(Undefined::isUndefined)?.name
+        add(FieldRetype(offset + at.toInt(), name, was, dt.name))
     }
 }
 

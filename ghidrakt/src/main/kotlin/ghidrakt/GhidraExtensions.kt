@@ -23,7 +23,9 @@ import ghidra.program.model.mem.*
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.Reference
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.ascii.AsciiCharSetRecognizer
 import ghidra.util.ascii.CharSetRecognizer
@@ -157,6 +159,8 @@ val Function.thunked get(): Function? = getThunkedFunction(true)
 /** The function a call of this one runs: the one it ends at if a thunk ([thunked]), else itself. */
 val Function.orThunked get() = thunked ?: this
 
+val Symbol.qualifiedName: String get() = getName(true)
+val Namespace.qualifiedName: String get() = getName(true)
 fun Namespace.toClass(): GhidraClass? = this as? GhidraClass
     ?: runCatching { NamespaceUtils.convertNamespaceToClass(this) }.getOrNull()
 
@@ -250,12 +254,15 @@ fun Structure.componentsOverlapping(offset: Int, length: Int) = componentsOverla
 
 /**
  * Lays [dt] at [at] over whatever fields are there, growing this to hold it. The fields go first, as
- * [Structure.replaceAtOffset] takes only the one at [at] and the undefined bytes after it.
+ * [Structure.replaceAtOffset] takes only the one at [at] and the undefined bytes after it, and so do the zero-length
+ * ones inside it, which it can't hold: those at [at] and right past its end stay.
  */
 fun Structure.lay(at: Int, dt: DataType, name: String?, comment: String?): DataTypeComponent {
     val range = at.withLength(dt.length)
     if (range.last >= length) growStructure(range.last + 1 - length)
-    componentsOverlapping(range).sortedByDescending { it.offset }.forEach { clearAtOffset(it.offset) }
+    val inside = definedComponents.filter { it.length == 0 && it.offset > at && it.offset <= range.last }
+    // By ordinal: clearing by offset would take a zero-length component there too.
+    (componentsOverlapping(range) + inside).sortedByDescending { it.ordinal }.forEach { clearComponent(it.ordinal) }
     return replaceAtOffset(at, dt, dt.length, name, comment)
 }
 
@@ -267,11 +274,16 @@ fun Structure.stretch(part: DataTypeComponent, range: IntRange): Structure {
     val inner = part.dataType as Structure
     if (part.range.includes(range)) return inner
     val (offset, name, comment) = Triple(part.offset, part.fieldName, part.comment)
+    // An empty struct is packed to be held zero-length, and reports a length of 1 all the same.
+    if (inner.isZeroLength) inner.isPackingEnabled = false
+    val length = if (inner.isZeroLength) 0 else inner.length
     val start = minOf(offset, range.first)
-    val end = maxOf(offset + inner.length, range.last + 1)
-    clearAtOffset(offset)
+    val end = maxOf(offset + length, range.last + 1)
+    // This part alone: other zero-length ones at its offset, an empty base's, stay.
+    clearComponent(part.ordinal)
     repeat(offset - start) { inner.insertAtOffset(0, DataType.DEFAULT, 1) }
-    if (end - start > inner.length) inner.growStructure(end - start - inner.length)
+    val grown = if (inner.isZeroLength) 0 else inner.length
+    if (end - start > grown) inner.growStructure(end - start - grown)
     lay(start, inner, name, comment)
     return inner
 }
@@ -411,6 +423,13 @@ fun Program.pointerAt(addr: Address): Address? = valueAt(addr, PointerDataType(d
 
 /** Whether [addr] is in an executable block. */
 fun Program.isCode(addr: Address) = memory.getBlock(addr)?.isExecute == true
+
+/** The references to [addr] that take its address rather than call or jump there, from code or data. */
+fun Program.addressTakers(addr: Address): Sequence<Reference> = referenceManager.getReferencesTo(addr).iterator()
+    .asSequence().filterNot { it.referenceType.isCall || it.referenceType.isJump }
+
+/** Whether an instruction takes [addr]'s address, as a constructor takes its vtable's address point. */
+fun Program.isTakenByCode(addr: Address) = addressTakers(addr).any { listing.getInstructionAt(it.fromAddress) != null }
 
 /** Whether [addr] is in a block that holds bytes, which an EXTERNAL placeholder doesn't. */
 fun Program.isInitialized(addr: Address) = memory.getBlock(addr)?.isInitialized == true

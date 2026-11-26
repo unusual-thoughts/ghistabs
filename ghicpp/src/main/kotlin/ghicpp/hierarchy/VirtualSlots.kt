@@ -3,6 +3,7 @@
 package ghicpp.hierarchy
 
 import ghicpp.ClassNaming
+import ghicpp.ClassNaming.CONSTRUCTION_INFIX
 import ghicpp.ClassRecordSource
 import ghicpp.CxxAbi
 import ghicpp.abi.functionSlots
@@ -43,7 +44,7 @@ data class VirtualSlot(val table: Address, val label: String, val index: Int) : 
     val name get() = label.takeUnless { it == ClassNaming.VFTABLE }
 
     override fun compareTo(other: VirtualSlot) =
-        compareValuesBy(this, other, { it.name != null }, { it.name }, { it.index })
+        compareValuesBy(this, other, { it.name != null }, { it.name }, { it.table }, { it.index })
 
     override fun toString() = "slot $index" + name?.let { " of $it" }.orEmpty()
 }
@@ -138,7 +139,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         for (f in (slots.mapNotNull(::target) + func).distinct()) {
             if (f.name == newName) continue
             runCatching { f.setName(newName, SourceType.USER_DEFINED) }
-                .onSuccess { functions++ }.onFailure { skipped += "${f.getName(true)}: ${it.message}" }
+                .onSuccess { functions++ }.onFailure { skipped += "${f.qualifiedName}: ${it.message}" }
         }
         return SlotRenames(functions, slots.count { nameSlot(it, newName, skipped) }, skipped)
     }
@@ -221,7 +222,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         val name = generateSequence(0) { it + 1 }.map { if (it == 0) leaf else "${leaf}_$it" }
             .first { it !in used && dtm.getDataType(category, it).let { dt -> dt == null || (again && dt == old) } }
         val def = FunctionDefinitionDataType(category, name, typed[chosen], dtm)
-        val comment = TYPED_OFF + from.getName(true)
+        val comment = TYPED_OFF + from.qualifiedName
         if (again) {
             if (old.name != name) old.name = name
             old.replaceWith(def)
@@ -242,8 +243,8 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
      */
     private fun holdsStub(slot: VirtualSlot): Boolean {
         val def = definition(slot) ?: return false
-        if (def.arguments.isNotEmpty() && field(slot)?.second?.let(::isTypedOff) != true) return false
-        return pointee(slot)?.let { program.holdsPureVirtualStub(it, ::isPureVirtualStub) } == true
+        return !(def.arguments.isNotEmpty() && field(slot)?.second?.let(::isTypedOff) != true) &&
+            pointee(slot)?.let { program.holdsPureVirtualStub(it, ::isPureVirtualStub) } == true
     }
 
     private fun isTypedOff(field: DataTypeComponent) = field.comment?.startsWith(TYPED_OFF) == true
@@ -336,7 +337,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
             val name = destructorName(cls, abi)
             if (f != null && f.name != name) {
                 runCatching { f.setName(name, SourceType.USER_DEFINED) }
-                    .onSuccess { functions++ }.onFailure { skipped += "${f.getName(true)}: ${it.message}" }
+                    .onSuccess { functions++ }.onFailure { skipped += "${f.qualifiedName}: ${it.message}" }
             }
             if (nameSlot(slot, name, skipped)) fields++
         }
@@ -454,7 +455,7 @@ internal fun Program.slotPointers(vftable: Address): List<Address> {
  */
 internal fun Program.constructionSlotTargets(ns: Namespace): Set<Address> =
     symbolTable.getChildren(ns.parentNamespace.symbol).iterator().asSequence()
-        .filter { it.symbolType == SymbolType.NAMESPACE && it.name.startsWith("${ns.name}-in-") }
+        .filter { it.symbolType == SymbolType.NAMESPACE && it.name.startsWith("${ns.name}$CONSTRUCTION_INFIX") }
         .mapNotNull { it.`object` as? Namespace }
         .flatMap { symbolTable.getSymbols(it).iterator().asSequence() }
         .filter { ClassNaming.isVftableLabel(it.name) }

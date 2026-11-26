@@ -39,20 +39,42 @@ class ThisFunctionDissectorIntegrationTest : AbstractGhidraHeadlessIntegrationTe
         builder.createEmptyFunction(name, at, 1, DataType.DEFAULT)
     }
 
-    /** A function storing [classes]' vptrs, calling the functions named [before] and [after] around the stores. */
-    private fun stores(vararg classes: ClassDecl, before: Set<String> = emptySet(), after: Set<String> = emptySet()) =
-        VptrStores(classes.toSet(), before.mapTo(mutableSetOf(), ::fn), after.mapTo(mutableSetOf(), ::fn))
+    /** What a storer of [classes]' vptrs does: [pre] and [post] on `this` + 0 around the store, then [members]. */
+    private class Storer(
+        val classes: Set<ClassDecl>,
+        val pre: Set<String>,
+        val post: Set<String>,
+        val members: List<Long>,
+    )
+
+    /**
+     * A function storing [classes]' vptrs at `this` + 0, calling the functions named [pre] and [post] on `this` + 0
+     * around the store, and after them a function on each of [members], an offset into `this`, in that order.
+     */
+    private fun stores(
+        vararg classes: ClassDecl,
+        pre: Set<String> = emptySet(),
+        post: Set<String> = emptySet(),
+        members: List<Long> = emptyList(),
+    ) = Storer(classes.toSet(), pre, post, members)
 
     private fun structors(
-        storers: Map<String, VptrStores>,
+        storers: Map<String, Storer>,
         holders: Map<String, Set<ClassDecl>>,
         calls: Map<String, Set<String>> = emptyMap(),
     ) = Dissections(
         (storers.keys + calls.keys).associate {
-            fn(it) to DissectionCache.Dissection(
-                storers[it],
-                calls[it]?.let { called -> mapOf(0L to called.mapTo(mutableSetOf(), ::fn)) }.orEmpty(),
-            )
+            val byOffset = calls[it]?.let { called -> mapOf(0L to called.mapTo(mutableSetOf(), ::fn)) }.orEmpty()
+            fn(it) to (
+                storers[it]?.let { s ->
+                    builder.program.storer(
+                        s.classes,
+                        s.pre.map { g -> 0L to fn(g) },
+                        s.post.map { g -> 0L to fn(g) } + s.members.map { o -> o to fn("member$o") },
+                        byOffset,
+                    )
+                } ?: DissectionCache.Dissection(subobjectCalls = byOffset)
+                )
         },
     ).roles(holders.mapKeys { fn(it.key) }, object : StructorConvention {}).mapKeys { it.key.name }
 
@@ -144,8 +166,8 @@ class ThisFunctionDissectorIntegrationTest : AbstractGhidraHeadlessIntegrationTe
     fun `a storer calling its base's before its stores builds, and one calling it after destroys`() {
         // No slot calls either: B's destructor isn't virtual
         val storers = mapOf(
-            "ctor" to stores(b, before = setOf("baseCtor")),
-            "dtor" to stores(b, after = setOf("baseDtor")),
+            "ctor" to stores(b, pre = setOf("baseCtor")),
+            "dtor" to stores(b, post = setOf("baseDtor")),
             "baseCtor" to stores(a),
             "baseDtor" to stores(a),
         )
@@ -161,7 +183,7 @@ class ThisFunctionDissectorIntegrationTest : AbstractGhidraHeadlessIntegrationTe
     fun `a constructor that destroys its built bases where one throws still builds`() {
         // Itanium's landing pads, after the stores, destroy the bases built before them
         val storers = mapOf(
-            "ctor" to stores(b, before = setOf("baseCtor"), after = setOf("baseDtor")),
+            "ctor" to stores(b, pre = setOf("baseCtor"), post = setOf("baseDtor")),
             "baseCtor" to stores(a),
             "baseDtor" to stores(a),
         )
@@ -180,6 +202,47 @@ class ThisFunctionDissectorIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             "xDtor" to (x to DESTRUCTOR),
             "xCtor" to (x to CONSTRUCTOR),
         )
+    }
+
+    @Test
+    fun `a storer that calls on its members from the last down destroys, and one calling up builds`() {
+        // X's destructor isn't virtual, and its base and members leave no other trace: a constructor builds the
+        // members in the order they are laid, and a destructor destroys them the other way
+        val storers = mapOf(
+            "ctor" to stores(x, members = listOf(4, 8)),
+            "dtor" to stores(x, members = listOf(8, 4)),
+        )
+        structors(storers, emptyMap()) mustBe mapOf("ctor" to (x to CONSTRUCTOR), "dtor" to (x to DESTRUCTOR))
+    }
+
+    @Test
+    fun `a landing pad destroying a member again still leaves the order its first calls take`() {
+        // The constructor's pad destroys the member at 4 where the one at 8 throws; the destructor's where 8's does
+        val storers = mapOf(
+            "ctor" to stores(x, members = listOf(4, 8, 4)),
+            "dtor" to stores(x, members = listOf(8, 4, 4)),
+        )
+        structors(storers, emptyMap()) mustBe mapOf("ctor" to (x to CONSTRUCTOR), "dtor" to (x to DESTRUCTOR))
+    }
+
+    @Test
+    fun `a constructor's body calling a method on this after building its members still builds`() {
+        // The method, on `this` + 0, comes after the member at 0x28; the destructor destroys 8, then 4
+        val storers = mapOf(
+            "ctor" to stores(x, members = listOf(0x28, 0x28, 0)),
+            "dtor" to stores(x, members = listOf(0, 8, 4)),
+        )
+        structors(storers, emptyMap()) mustBe mapOf("ctor" to (x to CONSTRUCTOR), "dtor" to (x to DESTRUCTOR))
+    }
+
+    @Test
+    fun `the order of a storer's member calls decides only what nothing else does`() {
+        // B's constructor calls A's before its store, then on its members from the last down
+        val storers = mapOf(
+            "ctor" to stores(b, pre = setOf("baseCtor"), members = listOf(8, 4)),
+            "baseCtor" to stores(a),
+        )
+        structors(storers, emptyMap())["ctor"] mustBe (b to CONSTRUCTOR)
     }
 
     private companion object {

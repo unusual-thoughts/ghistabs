@@ -4,8 +4,6 @@ import ghicpp.*
 import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassRecord
 import ghicpp.MemberAttrs.Companion.recordPlaced
-import ghicpp.RttiParser
-import ghicpp.StructorRole
 import ghicpp.abi.slots
 import ghicpp.dissect.*
 import ghicpp.hierarchy.typePureSlots
@@ -46,6 +44,9 @@ class ClassPass(
 
     /** Whether a constructor inlined after `operator new` is read for its class's size, bases and fields. */
     var inlinedConstructors: Boolean by INLINED_CONSTRUCTORS
+
+    /** Whether the member objects [run]'s constructors build get classes, laid in their holders ([layMembers]). */
+    var memberObjects: Boolean by MEMBER_OBJECTS
 
     init {
         options?.let { import(it) }
@@ -110,7 +111,7 @@ class ClassPass(
         val allocated = (called.keys + found.inlinedSizes.keys).associateWith { cls ->
             maxOf(called[cls] ?: 0L, found.inlinedSizes[cls] ?: 0L)
         }
-        val sizes = sizeClasses(read.classes, allocated, reached)
+        val sizes = sizeClasses(read.classes, allocated, reached, found.memberObjects)
         monitor.message = "Filling class structs"
         val filled = ClassStructFiller(program, abi, this, vfptrModel).fillAll(read.recorded, stores)
         program.typeAllocations(found, this, monitor)
@@ -134,11 +135,11 @@ class ClassPass(
         val entry = func.entryPoint
         val ns = cls.ns?.toClass() ?: return false
         val moved = runCatching { claim(func, ns, name).first }
-            .onFailure { warn("class-vfunction-unmoved", "${func.name} -> ${ns.getName(true)}: $it", entry) }
+            .onFailure { warn("class-vfunction-unmoved", "${func.name} -> ${ns.qualifiedName}: $it", entry) }
             .getOrDefault(false)
         if (func.parentNamespace.id == ns.id) {
             runCatching { func.fixMethodConvention(takesThis = true) }
-                .onFailure { warn("class-vfunction-convention", "${func.name} -> ${ns.getName(true)}: $it", entry) }
+                .onFailure { warn("class-vfunction-convention", "${func.name} -> ${ns.qualifiedName}: $it", entry) }
         }
         return moved
     }
@@ -196,30 +197,32 @@ class ClassPass(
     private fun stubStructs(classes: Collection<ClassDecl>) {
         for (ns in classes.mapNotNull { it.ns?.toClass() }) {
             runCatching { program.stubClassStruct(ns) }
-                .onFailure { warn("class-struct-unstubbed", "${ns.getName(true)}: $it") }
+                .onFailure { warn("class-struct-unstubbed", "${ns.qualifiedName}: $it") }
         }
     }
 
     /**
-     * Each class's size range, off what it is [allocated] with, its bases' and vptrs' offsets and how far its
-     * constructors store ([reached]). Each class
-     * gets a struct of its exact size, or else its least, where `RecoverClassesFromRTTIScript` files one: a
-     * stub of undefined bytes when it has none, and its own grown when shorter.
+     * Each class's size range, off what it is [allocated] with, its bases' and vptrs' offsets, how far its
+     * constructors store ([reached]) and how far the [members] they build reach. Each class gets a struct of its
+     * exact size, or else its least, where `RecoverClassesFromRTTIScript` files one: a stub of undefined bytes
+     * when it has none, and its own grown when shorter.
      */
     private fun sizeClasses(
         classes: Collection<ClassDecl>,
         allocated: Map<ClassDecl, Long>,
         reached: Map<ClassDecl, Long>,
+        members: Map<ClassDecl, List<Pair<ClassDecl, Long>>>,
     ): Map<ClassDecl, LongRange> {
         val all = classes.toList()
-        val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, program.defaultPointerSize.toLong(), reached)
+        val ptr = program.defaultPointerSize.toLong()
+        val bounds = sizeBounds(all, vptrOffsets(all, program), allocated, ptr, reached, members)
         val sized = bounds.filterValues { it.first > 0 }
         for ((cls, size) in sized) {
             val ns = cls.ns?.toClass() ?: continue
             val length = size.first.toInt()
             runCatching {
                 program.sizeClassStruct(ns, length)
-            }.onFailure { warn("class-struct-unsized", "${ns.getName(true)} -> $length: $it") }
+            }.onFailure { warn("class-struct-unsized", "${ns.qualifiedName} -> $length: $it") }
         }
         return sized
     }
@@ -233,7 +236,7 @@ class ClassPass(
             val retyped = func.parentNamespace.id == cls.id && func.fixMethodConvention(takesThis = true)
             moves || renames || retyped
         }.onFailure {
-            warn("class-structor-unnamed", "${func.name} -> ${cls.getName(true)}::$name: $it", func.entryPoint)
+            warn("class-structor-unnamed", "${func.name} -> ${cls.qualifiedName}::$name: $it", func.entryPoint)
         }.getOrDefault(false)
     }
 
@@ -244,6 +247,13 @@ class ClassPass(
         }
         program.writeClassRecord(program.readClassRecord().orEmpty() + entries)
     }
+
+    /**
+     * Gives a class to each member object the structors [run] found build, and lays it in its holder
+     * ([MemberObjectPass]), where [memberObjects] says to; returns how many classes it gave.
+     */
+    fun layMembers(result: Result, monitor: TaskMonitor = DUMMY): Int = result.found?.takeIf { memberObjects }
+        ?.let { MemberObjectPass(program, this, fillArrays).run(it, monitor) } ?: 0
 
     private fun classStructId(ns: GhidraClass): Long? {
         val struct = program.classStruct(ns) ?: return null
@@ -263,6 +273,12 @@ class ClassPass(
             "Read the vtables, fields and member constructors that code stores into or calls on what " +
                 "operator new(size) returns as a constructor inlined there: the last vtable stored is the class " +
                 "built, of that size, each one before it a base of the next",
+            true,
+        )
+        val MEMBER_OBJECTS = BoolOption(
+            "Classes of member objects",
+            "Give a class to each member a constructor builds at an offset into this with a function that " +
+                "stores no vtable, and lay it in the class holding it",
             true,
         )
     }

@@ -10,10 +10,11 @@ import ghidrakt.diagnose.DiagnosticSink
 
 /**
  * Each class's possible size range ([Long.MAX_VALUE] when unbounded above), from its non-virtual bases'
- * offsets, its furthest vptr ([vptrs]), the end of the furthest store its constructors make ([stored])
- * and its allocation sizes ([allocated]).
+ * offsets, its furthest vptr ([vptrs]), the end of the furthest store its constructors make ([stored]), the
+ * member objects its constructors build ([members]) and its allocation sizes ([allocated]).
  *
- * A class is at least as large as its last vptr and each base's minimum, its virtual bases' included: each
+ * A class is at least as large as its last vptr, each member object's minimum past its offset, and each base's
+ * minimum, its virtual bases' included: each
  * virtual base takes a byte at least, past its offset ([ClassDecl.vbaseOffsets]), even one no class is known
  * for. A class whose virtual bases' offsets no record states lays them out past its non-virtual part, which
  * fills the gap the classes holding it leave it. A class with a vptr or virtual bases is pointer-aligned, so
@@ -27,6 +28,7 @@ fun sizeBounds(
     allocated: Map<ClassDecl, Long>,
     ptrSize: Long,
     stored: Map<ClassDecl, Long> = emptyMap(),
+    members: Map<ClassDecl, Collection<Pair<ClassDecl, Long>>> = emptyMap(),
 ): Map<ClassDecl, LongRange> {
     val placed = classes.associateWith { cls ->
         cls.bases.filterNot { it.isVirtual }.mapNotNull { b -> b.offset?.let { b.cls to it } }
@@ -56,6 +58,7 @@ fun sizeBounds(
             vptrs[k]?.plus(ptrSize),
             stored[k],
             placed[k].orEmpty().maxOfOrNull { (b, at) -> at + atLeast(b, depth + 1) },
+            members[k].orEmpty().maxOfOrNull { (m, at) -> at + atLeast(m, depth + 1) },
         ).maxOrNull() ?: 0
         val vbases = k.allVirtualBases
         val pastVbases = if (k.nonVirtualSize == null && vbases.isNotEmpty()) {

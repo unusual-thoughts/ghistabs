@@ -338,4 +338,4 @@ fun ClassDecl.servedBase(record: VtableRecord, program: Program): ClassDecl? {
 }
 
 /** A class's name with its enclosing namespaces: its namespace's where it has one. */
-val ClassDecl.qualifiedName: String get() = ns?.takeUnless { it.isGlobal }?.getName(true) ?: name
+val ClassDecl.qualifiedName: String get() = ns?.takeUnless { it.isGlobal }?.qualifiedName ?: name

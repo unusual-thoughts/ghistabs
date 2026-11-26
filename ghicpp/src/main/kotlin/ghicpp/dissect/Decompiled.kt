@@ -76,6 +76,35 @@ fun HighFunction.constantStores(): Map<HighVariable, Map<Long, Address>> {
 }
 
 /**
+ * The objects this function builds, found from the vftables of [tables] ([vptrTables]) it stores into them.
+ *
+ * An object counts when a vftable is stored at the offset where it belongs. The vftables stored into the object
+ * tell its class ([storedClass]). For each object, the result maps that class to every constant address the
+ * function stores into the object, by offset ([constantStores]). These include the vptrs and, for MSVC, the
+ * vbtables.
+ *
+ * A constructor reaches a virtual base through the vbtable it stored earlier, so its stores into that base are
+ * not at a constant offset from `this`. [throughVbtable] resolves them, so that they count as stores into the
+ * object being built, at the base's offset.
+ */
+internal fun HighFunction.objectsBuilt(
+    tables: Map<Address, Pair<ClassDecl, Long>>,
+): Map<ClassDecl, Map<Long, Address>> {
+    val objects = constantStores().toMutableMap()
+    for (root in objects.keys.toList()) {
+        val (into, at) = root.throughVbtable(function.program, objects) ?: continue
+        val moved = objects.remove(root).orEmpty()
+        objects[into] = objects[into].orEmpty() + moved.mapKeys { (offset, _) -> at + offset }
+    }
+    return objects.values.mapNotNull { stored ->
+        val classes = stored.mapNotNullTo(mutableSetOf()) { (at, value) ->
+            tables[value]?.takeIf { (_, vptrAt) -> vptrAt == at }?.first
+        }
+        storedClass(classes)?.to(stored)
+    }.toMap()
+}
+
+/**
  * The address in memory that this constant varnode holds, including the decompiler's `&DAT_…` forms, looking
  * through casts. A 32-bit caller's stack argument often comes wrapped in a cast.
  */

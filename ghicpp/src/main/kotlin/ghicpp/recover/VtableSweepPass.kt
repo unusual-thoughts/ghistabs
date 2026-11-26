@@ -1,14 +1,9 @@
 package ghicpp.recover
 
 import ghicpp.*
-import ghicpp.abi.VftableBuilder
-import ghicpp.abi.definedVtableRecord
-import ghicpp.abi.isVtableClaimed
+import ghicpp.ClassNaming.CONSTRUCTION_INFIX
+import ghicpp.abi.*
 import ghicpp.abi.itanium.*
-import ghicpp.abi.lay
-import ghicpp.abi.primaryVtableOf
-import ghicpp.abi.rttiOf
-import ghicpp.abi.slots
 import ghicpp.hierarchy.typePureSlots
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.PointerDataType
@@ -41,9 +36,6 @@ class VtableSweepPass(
     companion object {
         /** A swept table's label source, below the import's, so a class can still claim it ([isVtableClaimed]). */
         private val SWEPT = SourceType.ANALYSIS
-
-        /** How the demangler spells a construction vtable's owner: `Left-in-Diamond`. */
-        private const val CONSTRUCTION_INFIX = "-in-"
 
         val VTABLES_SWEPT = BoolOption("Vtables Swept", "Vtables no class claimed already laid.", false)
 
@@ -133,7 +125,6 @@ class VtableSweepPass(
         val groups = symtab.symbolIterator.filter { looksLikeZtc(it.name) }.distinctBy { it.address }
         for (sym in groups) {
             val ns = constructionNamespace(sym.name) ?: continue
-            val name = ns.getName(true)
             val record = Itanium.recordAt(program, sym.address).copy(construction = true)
             val targets = record.slots(program)
             val path = ClassNaming.vftablePath(ns)
@@ -149,7 +140,7 @@ class VtableSweepPass(
                 }
             }
             val at = record.lay(registry, program, vftable, ns, source = SWEPT)
-            debug("vtable-construction", "$name: ${targets.size} slot(s)", at)
+            debug("vtable-construction", "${ns.qualifiedName}: ${targets.size} slot(s)", at)
             builder.laySecondaries(record, vftable, ns.name, ns, SWEPT)
         }
     }

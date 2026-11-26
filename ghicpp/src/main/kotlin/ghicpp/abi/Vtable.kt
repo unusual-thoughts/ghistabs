@@ -55,6 +55,25 @@ fun VtableRecord.opensGroup(program: Program): Boolean =
         .takeWhile { it < addressPoint }
         .any { at -> program.symbolTable.getSymbols(at).any { startsVtableGroup(it.name) } }
 
+/**
+ * The two words in front of an Itanium vtable's address point: its [offsetToTop], at [at], then its [rtti] word,
+ * a typeinfo's address, or address 0 with no RTTI.
+ */
+data class VtableHeader(val at: Address, val offsetToTop: Long, val rtti: Address)
+
+/** The header in front of [addressPoint] ([VtableHeader]), or null where the words can't be read. */
+fun Program.vtableHeader(addressPoint: Address): VtableHeader? {
+    val ptr = defaultPointerSize.toLong()
+    val at = runCatching { addressPoint.subtractNoWrap(2 * ptr) }.getOrNull() ?: return null
+    val top = addressPoint.signedWordBefore(this, 2) ?: return null
+    val rtti = pointerAt(at.add(ptr)) ?: return null
+    return VtableHeader(at, top, rtti)
+}
+
+/** The address point a VTT word at [vttWord] points at, with the header in front of it ([vtableHeader]). */
+fun Program.vtableAt(vttWord: Address): Pair<Address, VtableHeader>? =
+    pointerAt(vttWord)?.let { table -> vtableHeader(table)?.let { table to it } }
+
 /** The functions the slots point at, in order ([functionSlots]). */
 fun VtableRecord.slots(program: Program): List<Address> = program.functionSlots(addressPoint, abi).toList()
 
@@ -102,7 +121,7 @@ fun VtableRecord.lay(
         }
     }
     fieldAddress(Itanium.RTTI)?.let {
-        program.listing.setComment(it, CommentType.EOL, rttiComment(program, ns.getName(true)))
+        program.listing.setComment(it, CommentType.EOL, rttiComment(program, ns.qualifiedName))
     }
     vftable?.let { program.forceCreateData(addressPoint, it) }
     program.labelVtable(addressPoint, vftableLabel, ns, source)
@@ -144,7 +163,7 @@ internal fun Program.functionSlots(at: Address, abi: CxxAbi, imported: (Function
  */
 private fun Program.startsTable(pfn: Address): Boolean =
     symbolTable.getPrimarySymbol(pfn)?.source?.let { it != SourceType.DEFAULT } == true ||
-        referenceManager.getReferencesTo(pfn).any { listing.getInstructionAt(it.fromAddress) != null }
+        isTakenByCode(pfn)
 
 /**
  * Whether the slot at [pfn] points at code: executable memory, and not back into the read-only block the

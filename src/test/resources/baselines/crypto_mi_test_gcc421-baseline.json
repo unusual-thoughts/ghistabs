@@ -848,17 +848,13 @@
             "min": 11,
             "max": 11
         },
-        "vfptr-inherited-from-base": {
-            "min": 192,
-            "max": 192
-        },
         "vfptr-normalized": {
             "min": 57,
             "max": 57
         },
         "vfptr-split-from-base": {
-            "min": 454,
-            "max": 454
+            "min": 646,
+            "max": 646
         },
         "vftable-pure-slot-typed": {
             "min": 397,

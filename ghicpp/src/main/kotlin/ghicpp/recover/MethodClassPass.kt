@@ -6,7 +6,6 @@ import ghicpp.MemberAttrs.Companion.isGuessedClass
 import ghicpp.MemberAttrs.Companion.isPlacedByClassPass
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.MemberAttrs.Companion.recordGuessed
-import ghicpp.StructorRole
 import ghicpp.dissect.CalledObject
 import ghicpp.dissect.ObjectCall
 import ghicpp.dissect.ThisFunctionDissector
@@ -264,7 +263,7 @@ class MethodClassPass(private val program: Program, sink: DiagnosticSink, privat
             "Class guessed from ${guess.sites} call(s) on $off",
         )
     }.onFailure {
-        warn("this-class-unplaced", "${f.name} -> ${guess.cls.getName(true)}: $it", f.entryPoint)
+        warn("this-class-unplaced", "${f.name} -> ${guess.cls.qualifiedName}: $it", f.entryPoint)
     }.isSuccess
 
     companion object {

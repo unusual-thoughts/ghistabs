@@ -299,7 +299,7 @@ internal fun Program.applySignatureToSlots(func: Function): Int {
  * - its struct, its self-base (`…/Old/!internal/Old`) and their `Old_fields_…` runs, and each
  *   category whose trailing path is the class's (`/ClassDataTypes/…/Old`, a DWARF or Ghidra `…/Old`),
  *   so the vftable structs and nested classes' types follow it;
- * - its own fields' `Old_data…` structs and the fields holding them;
+ * - its own fields' `Old_data…` structs;
  * - its vftable structs (`Old_vftable…`), and its derived classes' `vftable_for_Old` labels, their
  *   `…_vftable_for_Old` structs and `_base_Old` / `_vbase_Old` fields.
  *
@@ -352,8 +352,9 @@ fun Program.renameClass(hierarchy: ClassHierarchy, cls: ClassView, newName: Stri
 }
 
 /**
- * Renames [old]'s own fields' structs, `Old_data` and `Old_data_1`…, in its (renamed) class's category,
- * and the fields of its [struct] holding them, which share their names.
+ * Renames [old]'s own fields' structs, `Old_data` or `Old_data_0x18`…, in its (renamed) class's category.
+ * The fields holding them are `_data…`, named for no class, but those of its [struct] an earlier version
+ * named as their structs are renamed with them.
  */
 private fun Program.renameData(
     ns: Namespace,

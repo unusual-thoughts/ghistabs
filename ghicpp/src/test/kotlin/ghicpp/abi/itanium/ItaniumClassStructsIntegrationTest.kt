@@ -53,7 +53,7 @@ class ItaniumClassStructsIntegrationTest : ClassStructsFixtureTest("hello_elf_gc
             4 to "_base_Up: Up_fields_4_8",
             8 to "vfptr: Both_vftable_for_Down *",
             12 to "_base_Down: Down_fields_4_8",
-            16 to "Both_data: Both_data",
+            16 to "_data: Both_data",
             20 to "vfptr: Both_vftable_for_Core *",
             24 to "_vbase_Core: Core_fields_4_8",
         )

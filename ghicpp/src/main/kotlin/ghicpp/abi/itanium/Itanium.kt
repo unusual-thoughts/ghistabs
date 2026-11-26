@@ -1,10 +1,6 @@
 package ghicpp.abi.itanium
 
 import ghicpp.*
-import ghicpp.CxxAbi
-import ghicpp.Structor
-import ghicpp.StructorRole
-import ghicpp.VtableRecord
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.app.util.demangler.DemangledObject
@@ -319,4 +315,4 @@ private val Symbol.linkageNames get() = listOfNotNull(
     program.externalManager.getExternalLocation(this)?.originalImportedName.takeIf { isExternal },
 )
 
-private fun Symbol.classOfLabel(label: String) = parentNamespace.takeIf { name == label && !it.isGlobal }?.getName(true)
+private fun Symbol.classOfLabel(label: String) = parentNamespace.takeIf { name == label && !it.isGlobal }?.qualifiedName

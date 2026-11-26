@@ -25,6 +25,24 @@ class ClassSizesTest {
     }
 
     @Test
+    fun `a class is at least as large as the member objects its constructors build reach`() {
+        // class D : B { M m; } with m at 8; M has a vptr and its constructor stores up to 0x64
+        val b = TestClass("B")
+        val m = TestClass("M")
+        val d = TestClass("D", listOf(b at 0))
+        val bounds = sizeBounds(
+            classes = listOf(d, b, m),
+            vptrs = mapOf(b to 0L, m to 0L, d to 0L),
+            allocated = emptyMap(),
+            ptrSize = 4,
+            stored = mapOf(m to 0x64L),
+            members = mapOf(d to listOf(m to 8L)),
+        )
+        bounds.getValue(d).first mustBe 0x6cL
+        bounds.getValue(m).first mustBe 0x64L
+    }
+
+    @Test
     fun `new says a class's size, which bounds its last base`() {
         val b = TestClass("B")
         val d = TestClass("D", listOf(b at 0, s at 0x58))
