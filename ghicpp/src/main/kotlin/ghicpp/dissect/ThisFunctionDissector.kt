@@ -46,6 +46,7 @@ class ThisFunctionDissector(
         convention: StructorConvention,
         monitor: TaskMonitor,
         vttStructors: Map<Function, ClassDecl> = emptyMap(),
+        vttClassOf: (Address) -> ClassDecl? = { null },
     ): FoundStructors {
         val uses = readStorers(monitor, slots.keys)
         val roles = uses.roles(slots, convention).toMutableMap()
@@ -53,7 +54,9 @@ class ThisFunctionDissector(
         val vtt = mutableSetOf<Function>()
         for ((f, role) in roles.toList()) {
             for (call in uses.vttCalls[f].orEmpty()) {
-                val cls = vttStructors[call.callee] ?: continue
+                val cls = vttStructors[call.callee]
+                    ?: vttClassOf(call.vtt).takeIf { uses.stores[call.callee]?.classes.isNullOrEmpty() }
+                    ?: continue
                 val own = if (role.second == DELETING_DESTRUCTOR) DESTRUCTOR else role.second
                 if (roles.putIfAbsent(call.callee, cls to own) == null) vtt += call.callee
             }

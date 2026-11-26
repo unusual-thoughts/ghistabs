@@ -6,6 +6,7 @@ import ghicpp.ClassNaming
 import ghicpp.ClassPassInput
 import ghicpp.RttiParser
 import ghicpp.VtableRecord
+import ghicpp.abi.generic.ConstructionTables
 import ghicpp.abi.rttiOf
 import ghicpp.abi.slotFunction
 import ghicpp.abi.slots
@@ -75,7 +76,13 @@ class ItaniumRttiParser(private val program: Program, private val sink: Diagnost
         monitor.message = "Reading Itanium typeinfo"
         val labelled = labelled()
         monitor.message = "Reading Itanium vtables"
-        return ClassPassInput(classes.values.toList(), labelled, readVtables(labelled))
+        val all = classes.values.toList()
+        return ClassPassInput(
+            all,
+            labelled,
+            readVtables(labelled),
+            vttClassOf = ConstructionTables(program, all)::classAt,
+        )
     }
 
     /**

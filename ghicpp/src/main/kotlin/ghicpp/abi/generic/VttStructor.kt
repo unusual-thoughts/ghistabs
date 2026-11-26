@@ -1,5 +1,6 @@
 package ghicpp.abi.generic
 
+import ghicpp.ClassDecl
 import ghicpp.abi.functionSlots
 import ghicpp.abi.vtableAt
 import ghicpp.abi.vtableHeader
@@ -102,7 +103,7 @@ internal fun Program.nestVirtualBases(vtt: List<VttStructor>) {
  * picks the one with the shortest table, since classes deriving from it hold the same slots too. It returns
  * null when two matches are equally short.
  */
-private fun holding(slots: List<Address>, primaries: Map<PlainClass, List<Address>>): PlainClass? {
+private fun <C : ClassDecl> holding(slots: List<Address>, primaries: Map<C, List<Address>>): C? {
     if (slots.none { it.offset != 0L }) return null
     val holders = primaries.filter { (_, own) ->
         own.size >= slots.size && slots.withIndex().all { (i, at) -> at.offset == 0L || own[i] == at }
@@ -112,6 +113,25 @@ private fun holding(slots: List<Address>, primaries: Map<PlainClass, List<Addres
 }
 
 private fun Program.functionSlots(at: Address) = functionSlots(at, PlainVtables).toList()
+
+/**
+ * The class of the construction vtable a VTT word leads to, among [classes] known off their RTTI: the one whose
+ * primary table, the one at `offset_to_top` 0, is that table or holds its slots ([holding]). A base-object structor
+ * stores what its VTT holds, no vtable of its own, so this is what says whose it is ([ThisFunctionDissector.find]).
+ */
+class ConstructionTables(private val program: Program, classes: Collection<ClassDecl>) {
+    private val tables = classes.mapNotNull { c ->
+        c.vftables.map { it.addressPoint }.firstOrNull { program.vtableHeader(it)?.offsetToTop == 0L }?.let { c to it }
+    }.toMap()
+    private val byTable = tables.entries.associate { (c, at) -> at to c }
+    private val primaries by lazy { tables.mapValues { (_, at) -> program.functionSlots(at) } }
+
+    /** The class whose construction vtable the VTT word at [vtt] points at, or null where none or two are. */
+    fun classAt(vtt: Address): ClassDecl? {
+        val table = program.vtableAt(vtt)?.first?.takeIf { program.isConstructionTable(it) } ?: return null
+        return byTable[table] ?: holding(program.functionSlots(table), primaries)
+    }
+}
 
 /**
  * Whether the [table] that a VTT word points at is a vtable's address point: in data, after a vtable header
