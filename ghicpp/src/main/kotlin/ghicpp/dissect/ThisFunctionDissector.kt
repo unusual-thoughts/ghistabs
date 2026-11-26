@@ -82,8 +82,29 @@ class ThisFunctionDissector(
             thisStores += more.thisStores
             built = found.mapValues { (_, cls) -> cls to CONSTRUCTOR }
         }
-        return FoundStructors(roles, folded, thisStores, subobjectCalls, uses.inlined)
+        val helpers = setupHelpers(roles, subobjectCalls, slots.keys)
+        val unread = helpers.values.flatten().filterTo(mutableSetOf()) { it !in thisStores }
+        if (unread.isNotEmpty()) {
+            thisStores +=
+                decompile(unread, emptyMap(), monitor, "Decompiling what constructors call on this").thisStores
+        }
+        return FoundStructors(roles, folded, thisStores, subobjectCalls, uses.inlined, helpers)
     }
+
+    /**
+     * The functions each constructor calls on `this` + 0 that set up its class's fields: any taking `this` there but
+     * a structor ([roles]) or a virtual function ([virtuals]), which a deriving class's constructor calls on its
+     * base's behalf. Such a method, which its destructor may call too, stores fields of the class.
+     */
+    private fun setupHelpers(
+        roles: Map<Function, Pair<ClassDecl, StructorRole>>,
+        subobjectCalls: Map<Function, Map<Long, Set<Function>>>,
+        virtuals: Set<Function>,
+    ): Map<Function, List<Function>> = roles.filterValues { it.second == CONSTRUCTOR }.keys.associateWith { ctor ->
+        subobjectCalls[ctor].orEmpty()[0L].orEmpty().filter { f ->
+            f !in roles && f !in virtuals && f != ctor && f.takesThisAt(thisStorage)
+        }
+    }.filterValues { it.isNotEmpty() }
 
     /** What [funcs] store and call through `this`, decompiled, whatever vptrs they store. */
     fun readCalls(

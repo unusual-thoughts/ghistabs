@@ -285,6 +285,8 @@ class FoundStructors(
     /** What each function read calls on `this` or a subobject of it, by offset into it, in the order it calls. */
     val subobjectCalls: Map<Function, Map<Long, Set<Function>>> = emptyMap(),
     val inlined: List<InlinedConstruction> = emptyList(),
+    /** The functions each constructor calls on `this` + 0 to set up its fields, which are not structors. */
+    private val helpers: Map<Function, List<Function>> = emptyMap(),
 ) {
     /** The size each class is allocated with where a constructor is inlined after its `operator new`, the largest. */
     val inlinedSizes: Map<ClassDecl, Long> by lazy {
@@ -318,12 +320,15 @@ class FoundStructors(
 
     /**
      * The fields each class's constructors, its own and those folded into another's, store through `this`, by
-     * offset into it: its own fields where nothing else is laid, and how large it is at least. Where two
+     * offset into it, and the methods they call on `this` to set them up ([helpers]): its own fields where nothing
+     * else is laid, and how large it is at least. Where two
      * constructors disagree, [NoisyStructureBuilder] keeps the more specific type, as it does for one.
      */
     val constructorStores: Map<ClassDecl, Stores> by lazy {
         val built = constructors.map { (f, cls) -> f to cls } + folded.flatMap { (f, cs) -> cs.map { f to it } }
-        val byClass = built.groupBy({ it.second }, { thisStores[it.first].orEmpty() })
+        val byClass = built.groupBy({ it.second }, { (f, _) ->
+            (listOf(f) + helpers[f].orEmpty()).map { thisStores[it].orEmpty() }.mergedStores()
+        })
         val parts = inlined.flatMap { it.parts }.groupBy({ it.cls }, { it.fields })
         (byClass.keys + parts.keys).associateWith { cls ->
             (byClass[cls].orEmpty() + parts[cls].orEmpty()).mergedStores()
