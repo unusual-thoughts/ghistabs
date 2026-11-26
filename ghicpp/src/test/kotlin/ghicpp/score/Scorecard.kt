@@ -195,8 +195,13 @@ class Scorer(
     private val truthThunks: Set<Long> = t.classes
         .flatMap { c -> c.members.filter { it.kind == MemberKind.THUNK }.map { it.at } }.toSet()
 
+    /**
+     * The truth class whose vtable label's extent holds [at], an address point. Where an Itanium group's header
+     * opens right at it, the table there is one with no slots before it, as a construction vtable for a base whose
+     * only virtual thing is a virtual base can be, not the group's.
+     */
     private fun vtableOwner(at: Long): Long? =
-        truthVtables.lastOrNull { it.start <= at }?.takeIf { at < it.end }?.classId
+        truthVtables.lastOrNull { it.start <= at && !(it.header && it.start == at) }?.takeIf { at < it.end }?.classId
 
     /**
      * The truth class that [cls] stands for, and how strong the match is: 3 by name, 2 by vtable, 1 by most of its

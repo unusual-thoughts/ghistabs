@@ -82,6 +82,19 @@ class ScorerTest {
     }
 
     @Test
+    fun `a table with no slots right before a group's header goes by its functions, not that group`() {
+        // Point's table holds no slots, so its address point is where Shape's group, with its header, begins.
+        val headed = truthSnapshot.copy(vtables = listOf(VtableExtent(0xf8, 0x100, 1, header = true)))
+        val subject = ClassHierarchy(listOf(cls(10, "Klass_f8", Origin.INFERRED, 0xf8, listOf(fn(0x30, "f")))))
+        val card = Scorer(
+            Truth(headed, Truth.describedScope(truth), sameBinary = true, sameLayout = true),
+            Snapshot("subject", subject),
+        ).score()
+        card.instances["class-splits-fp"].orEmpty() mustBe emptyList()
+        card.tallies["methods"] mustBe Tally(tp = 1)
+    }
+
+    @Test
     fun `the truth's scope is what it describes and has a vtable or a function for`() {
         Truth.describedScope(truth) mustBe setOf(1L, 2L, 3L)
     }

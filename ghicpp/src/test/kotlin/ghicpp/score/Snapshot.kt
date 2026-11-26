@@ -19,6 +19,9 @@ data class Snapshot(
     val unattachedVirtuals: Int = 0,
 )
 
-/** A vtable label of class [classId] at [start], up to the next symbol ([end], exclusive): offsets in the program. */
+/**
+ * A vtable label of class [classId] at [start], up to the next symbol ([end], exclusive): offsets in the program.
+ * An Itanium group's `vtable` label opens its [header], in front of its address point.
+ */
 @Serializable
-data class VtableExtent(val start: Long, val end: Long, val classId: Long)
+data class VtableExtent(val start: Long, val end: Long, val classId: Long, val header: Boolean = false)
