@@ -33,6 +33,29 @@ class ItaniumClass(
     override val virtualBases: List<ClassBase>,
 ) : ClassDecl {
     override val ancestors by lazy { super.ancestors }
+
+    /**
+     * Where its first virtual base past its non-virtual part starts. gcc lays a nearly empty virtual base over the
+     * vptr of a non-virtual base subobject it is the primary base of: `DL_KeyImpl`'s `CryptoMaterial` shares its
+     * `PublicKey`'s at +4, ahead of the fields. A virtual base at the offset of a non-virtual base subobject is such a
+     * one, inside the non-virtual part, so it ends past it.
+     */
+    override val nonVirtualSize: Long? by lazy {
+        val inside = nonVirtualSubobjectOffsets()
+        vbaseOffsets.filterNot { it in inside }.minOrNull()
+    }
+
+    private fun ClassDecl.nonVirtualSubobjectOffsets(at: Long = 0, depth: Int = 0): Set<Long> {
+        if (depth > MAX_DEPTH) return emptySet()
+        return bases.filterNot { it.isVirtual }.flatMapTo(mutableSetOf()) { b ->
+            b.offset?.let { setOf(at + it) + b.cls.nonVirtualSubobjectOffsets(at + it, depth + 1) }.orEmpty()
+        }
+    }
+
+    private companion object {
+        /** How deep a chain of non-virtual bases [nonVirtualSubobjectOffsets] follows. */
+        const val MAX_DEPTH = 16
+    }
 }
 
 /**
