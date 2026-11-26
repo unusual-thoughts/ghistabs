@@ -6,11 +6,14 @@ import ghicpp.ClassNaming
 import ghicpp.ClassPassInput
 import ghicpp.RttiParser
 import ghicpp.VtableRecord
-import ghicpp.abi.generic.ConstructionTables
+import ghicpp.abi.generic.rttiVttStructors
 import ghicpp.abi.rttiOf
 import ghicpp.abi.slotFunction
 import ghicpp.abi.slots
 import ghicpp.abi.vbaseOffset
+import ghicpp.dissect.DissectingParser
+import ghicpp.dissect.DissectionCache
+import ghicpp.dissect.ThisFunctionDissector
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
@@ -64,7 +67,11 @@ class ItaniumClass(
  * [VtableSweepAnalyzer][ghicpp.analyzers.VtableSweepAnalyzer] labels them. A base whose typeinfo has no label
  * in a namespace, as a shared library's, is known by its name alone.
  */
-class ItaniumRttiParser(private val program: Program, private val sink: DiagnosticSink) : RttiParser {
+class ItaniumRttiParser(private val program: Program, private val sink: DiagnosticSink) :
+    RttiParser,
+    DissectingParser {
+    override var cache = DissectionCache()
+
     override val abi get() = Itanium
 
     private val symbols = program.symbolTable
@@ -76,13 +83,12 @@ class ItaniumRttiParser(private val program: Program, private val sink: Diagnost
         monitor.message = "Reading Itanium typeinfo"
         val labelled = labelled()
         monitor.message = "Reading Itanium vtables"
+        // Read the slots before the storers: looking a slot's function up can create it, which changes the program,
+        // and the class pass would then have to decompile the storers again.
+        val holders = readVtables(labelled)
         val all = classes.values.toList()
-        return ClassPassInput(
-            all,
-            labelled,
-            readVtables(labelled),
-            vttClassOf = ConstructionTables(program, all)::classAt,
-        )
+        val uses = ThisFunctionDissector(program, all, sink, cache).readStorers(monitor)
+        return ClassPassInput(all, labelled, holders, program.rttiVttStructors(all, uses))
     }
 
     /**

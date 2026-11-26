@@ -115,21 +115,23 @@ private fun <C : ClassDecl> holding(slots: List<Address>, primaries: Map<C, List
 private fun Program.functionSlots(at: Address) = functionSlots(at, PlainVtables).toList()
 
 /**
- * The class of the construction vtable a VTT word leads to, among [classes] known off their RTTI: the one whose
- * primary table, the one at `offset_to_top` 0, is that table or holds its slots ([holding]). A base-object structor
- * stores what its VTT holds, no vtable of its own, so this is what says whose it is ([ThisFunctionDissector.find]).
+ * The base-object structor each VTT call of [uses] makes, by the class of the construction vtable its VTT word leads
+ * to, among [classes] known off their RTTI: the one whose primary table, the one at `offset_to_top` 0, is that table
+ * or holds its slots ([holding]). A base-object structor stores what its VTT holds, no vtable of its own, so this is
+ * what says whose it is. One storing a vtable of its own is a complete one, which needs none of this.
  */
-class ConstructionTables(private val program: Program, classes: Collection<ClassDecl>) {
-    private val tables = classes.mapNotNull { c ->
-        c.vftables.map { it.addressPoint }.firstOrNull { program.vtableHeader(it)?.offsetToTop == 0L }?.let { c to it }
+internal fun Program.rttiVttStructors(classes: Collection<ClassDecl>, uses: Dissections): Map<Function, ClassDecl> {
+    val tables = classes.mapNotNull { c ->
+        c.vftables.map { it.addressPoint }.firstOrNull { vtableHeader(it)?.offsetToTop == 0L }?.let { c to it }
     }.toMap()
-    private val byTable = tables.entries.associate { (c, at) -> at to c }
-    private val primaries by lazy { tables.mapValues { (_, at) -> program.functionSlots(at) } }
-
-    /** The class whose construction vtable the VTT word at [vtt] points at, or null where none or two are. */
-    fun classAt(vtt: Address): ClassDecl? {
-        val table = program.vtableAt(vtt)?.first?.takeIf { program.isConstructionTable(it) } ?: return null
-        return byTable[table] ?: holding(program.functionSlots(table), primaries)
+    val byTable = tables.entries.associate { (c, at) -> at to c }
+    val primaries by lazy { tables.mapValues { (_, at) -> functionSlots(at) } }
+    return buildMap {
+        for (call in uses.vttCalls.values.flatten()) {
+            if (call.callee in this || uses.stores[call.callee]?.classes.orEmpty().isNotEmpty()) continue
+            val table = vtableAt(call.vtt)?.first?.takeIf(::isConstructionTable) ?: continue
+            (byTable[table] ?: holding(functionSlots(table), primaries))?.let { put(call.callee, it) }
+        }
     }
 }
 
