@@ -1,5 +1,6 @@
 package ghicpp.abi.generic
 
+import ghicpp.ClassDecl
 import ghicpp.abi.functionSlots
 import ghicpp.abi.vtableAt
 import ghicpp.abi.vtableHeader
@@ -133,7 +134,7 @@ internal fun Program.nestVirtualBases(vtt: List<VttStructor>) {
  * picks the one with the shortest table, since classes deriving from it hold the same slots too. It returns
  * null when two matches are equally short.
  */
-private fun holding(slots: List<Address>, primaries: Map<PlainClass, List<Address>>): PlainClass? {
+private fun <C : ClassDecl> holding(slots: List<Address>, primaries: Map<C, List<Address>>): C? {
     if (slots.none { it.offset != 0L }) return null
     val holders = primaries.filter { (_, own) ->
         own.size >= slots.size && slots.withIndex().all { (i, at) -> at.offset == 0L || own[i] == at }
@@ -143,6 +144,27 @@ private fun holding(slots: List<Address>, primaries: Map<PlainClass, List<Addres
 }
 
 private fun Program.functionSlots(at: Address) = functionSlots(at, PlainVtables).toList()
+
+/**
+ * The base-object structor each VTT call of [uses] makes, by the class of the construction vtable its VTT word leads
+ * to, among [classes] known off their RTTI: the one whose primary table, the one at `offset_to_top` 0, is that table
+ * or holds its slots ([holding]). A base-object structor stores what its VTT holds, no vtable of its own, so this is
+ * what says whose it is. One storing a vtable of its own is a complete one, which needs none of this.
+ */
+internal fun Program.rttiVttStructors(classes: Collection<ClassDecl>, uses: Dissections): Map<Function, ClassDecl> {
+    val tables = classes.mapNotNull { c ->
+        c.vftables.map { it.addressPoint }.firstOrNull { vtableHeader(it)?.offsetToTop == 0L }?.let { c to it }
+    }.toMap()
+    val byTable = tables.entries.associate { (c, at) -> at to c }
+    val primaries by lazy { tables.mapValues { (_, at) -> functionSlots(at) } }
+    return buildMap {
+        for (call in uses.vttCalls.values.flatten()) {
+            if (call.callee in this || uses.stores[call.callee]?.classes.orEmpty().isNotEmpty()) continue
+            val table = vtableAt(call.vtt)?.first?.takeIf(::isConstructionTable) ?: continue
+            (byTable[table] ?: holding(functionSlots(table), primaries))?.let { put(call.callee, it) }
+        }
+    }
+}
 
 /**
  * Whether the [table] that a VTT word points at is a vtable's address point: in data, after a vtable header
