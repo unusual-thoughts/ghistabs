@@ -6,10 +6,14 @@ import ghicpp.ClassNaming
 import ghicpp.ClassPassInput
 import ghicpp.RttiParser
 import ghicpp.VtableRecord
+import ghicpp.abi.generic.rttiVttStructors
 import ghicpp.abi.rttiOf
 import ghicpp.abi.slotFunction
 import ghicpp.abi.slots
 import ghicpp.abi.vbaseOffset
+import ghicpp.dissect.DissectingParser
+import ghicpp.dissect.DissectionCache
+import ghicpp.dissect.ThisFunctionDissector
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
@@ -33,6 +37,29 @@ class ItaniumClass(
     override val virtualBases: List<ClassBase>,
 ) : ClassDecl {
     override val ancestors by lazy { super.ancestors }
+
+    /**
+     * Where its first virtual base past its non-virtual part starts. gcc lays a nearly empty virtual base over the
+     * vptr of a non-virtual base subobject it is the primary base of: `DL_KeyImpl`'s `CryptoMaterial` shares its
+     * `PublicKey`'s at +4, ahead of the fields. A virtual base at the offset of a non-virtual base subobject is such a
+     * one, inside the non-virtual part, so it ends past it.
+     */
+    override val nonVirtualSize: Long? by lazy {
+        val inside = nonVirtualSubobjectOffsets()
+        vbaseOffsets.filterNot { it in inside }.minOrNull()
+    }
+
+    private fun ClassDecl.nonVirtualSubobjectOffsets(at: Long = 0, depth: Int = 0): Set<Long> {
+        if (depth > MAX_DEPTH) return emptySet()
+        return bases.filterNot { it.isVirtual }.flatMapTo(mutableSetOf()) { b ->
+            b.offset?.let { setOf(at + it) + b.cls.nonVirtualSubobjectOffsets(at + it, depth + 1) }.orEmpty()
+        }
+    }
+
+    private companion object {
+        /** How deep a chain of non-virtual bases [nonVirtualSubobjectOffsets] follows. */
+        const val MAX_DEPTH = 16
+    }
 }
 
 /**
@@ -40,7 +67,11 @@ class ItaniumClass(
  * [VtableSweepAnalyzer][ghicpp.analyzers.VtableSweepAnalyzer] labels them. A base whose typeinfo has no label
  * in a namespace, as a shared library's, is known by its name alone.
  */
-class ItaniumRttiParser(private val program: Program, private val sink: DiagnosticSink) : RttiParser {
+class ItaniumRttiParser(private val program: Program, private val sink: DiagnosticSink) :
+    RttiParser,
+    DissectingParser {
+    override var cache = DissectionCache()
+
     override val abi get() = Itanium
 
     private val symbols = program.symbolTable
@@ -52,7 +83,12 @@ class ItaniumRttiParser(private val program: Program, private val sink: Diagnost
         monitor.message = "Reading Itanium typeinfo"
         val labelled = labelled()
         monitor.message = "Reading Itanium vtables"
-        return ClassPassInput(classes.values.toList(), labelled, readVtables(labelled))
+        // Read the slots before the storers: looking a slot's function up can create it, which changes the program,
+        // and the class pass would then have to decompile the storers again.
+        val holders = readVtables(labelled)
+        val all = classes.values.toList()
+        val uses = ThisFunctionDissector(program, all, sink, cache).readStorers(monitor)
+        return ClassPassInput(all, labelled, holders, program.rttiVttStructors(all, uses))
     }
 
     /**
