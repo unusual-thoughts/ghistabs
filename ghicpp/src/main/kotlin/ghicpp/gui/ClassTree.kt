@@ -38,6 +38,7 @@ import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
+import javax.swing.tree.TreePath
 
 /**
  * The docked Class Hierarchy window: [ClassTreeRoot] over the current program, rebuilt off the
@@ -106,6 +107,7 @@ class ClassTree(plugin: Plugin) :
     internal var expandAll = false
     internal var showEmpty = false
     internal var showInherited = false
+    internal var groupSlots = false
     internal lateinit var navigateIncoming: ToggleDockingAction
     internal lateinit var navigateOutgoing: ToggleDockingAction
     internal var lastLocation: ProgramLocation? = null
@@ -190,7 +192,7 @@ class ClassTree(plugin: Plugin) :
     internal fun reshow() {
         val p = program ?: return
         val h = shown ?: return
-        val root = ClassTreeRoot(p.name, h, memberKinds, inverted, showEmpty, showInherited)
+        val root = ClassTreeRoot(p.name, h, memberKinds, inverted, showEmpty, showInherited, groupSlots)
         tree.replaceRoot(root)
         if (expandAll) tree.expandAll()
         reveal?.let { (steps, names) ->
@@ -240,16 +242,20 @@ class ClassTree(plugin: Plugin) :
     internal val selectedMembers: List<Pair<Member, ClassView>> get() =
         tree.selectionPaths.orEmpty().mapNotNull { path ->
             val member = (path.lastPathComponent as? MemberNode)?.member ?: return@mapNotNull null
-            (path.parentPath?.lastPathComponent as? ClassNode)?.info?.let { member to it }
+            path.listingClass()?.let { member to it }
         }
 
     /** The base function the selected member overrides, under the class listing it. */
     internal val selectedOverridden: Member? get() {
         val path = tree.selectionPath ?: return null
         val member = (path.lastPathComponent as? MemberNode)?.member ?: return null
-        val cls = (path.parentPath?.lastPathComponent as? ClassNode)?.info ?: return null
+        val cls = path.listingClass() ?: return null
         return shown?.overridden(cls, member)
     }
+
+    // The class a member's node is under: its parent, or above the vftable and base grouping it.
+    private fun TreePath.listingClass(): ClassView? =
+        generateSequence(parentPath) { it.parentPath }.firstNotNullOfOrNull { it.lastPathComponent as? ClassNode }?.info
 
     /** The node of the method the selected inherited slot holds, among the members of the class defining it. */
     internal val selectedBaseMethod: GTreeNode? get() {
