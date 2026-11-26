@@ -381,10 +381,11 @@ class Scorer(
         acc + when {
             tc.vftable == null && sc.vftable == null -> Tally()
 
-            // A polymorphic class the binary has no vtable of, as gcc leaves out a class that is only ever built
-            // as a base: the table its base-object structors use inside a derived class is the best a recovery has.
-            tc.vftable == null && tc.id !in truthVtableClasses && tc.functions().any { isTrulyVirtual(tc, it) } ->
-                Tally()
+            // A dynamic class the binary has no vtable of, as gcc leaves out a class that is only ever built as a
+            // base: the table its base-object structors use inside a derived class is the best a recovery has. A
+            // virtual base gives a class a vptr even with no virtual functions.
+            tc.vftable == null && tc.id !in truthVtableClasses &&
+                (tc.functions().any { isTrulyVirtual(tc, it) } || tc.bases.any { it.isVirtual }) -> Tally()
 
             tc.vftable == null -> Tally(fp = 1).also { fp("vftables", "${sc.vftable} of `${tc.qualifiedName}`") }
 
