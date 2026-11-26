@@ -7,6 +7,7 @@ import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.slotDefinition
 import ghicpp.dissect.updateFieldTypes
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghidra.app.util.NamespaceUtils
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Function
@@ -218,6 +219,22 @@ fun Program.moveMember(member: Member, target: ClassView) {
     val ns = resolve(target) ?: error("no namespace for ${target.qualifiedName}")
     val sym = member.symbolId?.let(symbolTable::getSymbol) ?: error("no symbol for ${member.name}")
     sym.setNameAndNamespace(sym.name, ns, sym.source.takeUnless { it == SourceType.DEFAULT } ?: SourceType.USER_DEFINED)
+}
+
+/**
+ * Moves [func] into the class at [path] (`ns::Cls`, from the global namespace), made where there is none, a
+ * namespace so named made a class, and makes it a method of it ([makeMethod]): `__thiscall`, its `this` typed
+ * with the class's struct, which a class with none gets empty first ([stubClassStruct]). Its name stays. The
+ * class; throws what Ghidra does (a bad path, a name taken there, a signature refused).
+ */
+fun Program.moveIntoClass(func: Function, path: String): GhidraClass {
+    val ns = NamespaceUtils.createNamespaceHierarchy(path, globalNamespace, this, SourceType.USER_DEFINED)
+        ?: error("no namespace at $path")
+    val cls = ns as? GhidraClass ?: NamespaceUtils.convertNamespaceToClass(ns)
+    stubClassStruct(cls)
+    if (func.parentNamespace != cls) func.setParentNamespace(cls)
+    func.makeMethod()
+    return cls
 }
 
 fun Program.resolve(cls: ClassView) = symbolTable.getSymbol(cls.id)?.`object` as? GhidraClass

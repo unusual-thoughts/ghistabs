@@ -115,6 +115,28 @@ class PureSlotsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         slot("A", "A_vftable") mustBe ("declared" to "undefined declared(void * this)")
     }
 
+    @Test
+    fun `renaming a slot off a pure table's field renames the override that fills it, and every table's field`() {
+        val slots = VirtualSlots(program, hierarchy)
+        slots.slotsAt(struct("A", "A_vftable"), 0).map { it.table } mustBe listOf(builder.addr(A_TABLE))
+        val done = program.runTransaction { slots.renameField(struct("A", "A_vftable"), 0, "g") }
+        done.functions mustBe 1
+        program.functionManager.getFunctionAt(builder.addr(D_F)).name mustBe "g"
+        listOf("A" to "A_vftable", "C" to "C_vftable_for_A", "D" to "D_vftable_for_A")
+            .map { (cls, name) -> struct(cls, name).getComponent(0).fieldName } mustBe listOf("g", "g", "g")
+    }
+
+    @Test
+    fun `a struct no table is laid with has no slot to rename`() {
+        val loose = program.runTransaction {
+            program.dataTypeManager.addDataType(
+                StructureDataType(CategoryPath.ROOT, "loose", 4),
+                DataTypeConflictHandler.DEFAULT_HANDLER,
+            ) as Structure
+        }
+        VirtualSlots(program, hierarchy).slotsAt(loose, 0) mustBe emptyList()
+    }
+
     private fun classNamed(name: String): GhidraClass =
         program.symbolTable.createClass(program.globalNamespace, name, SourceType.IMPORTED).also { ns ->
             program.dataTypeManager.addDataType(

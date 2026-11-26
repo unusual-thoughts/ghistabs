@@ -206,6 +206,51 @@ fun Function.fixMethodConvention(takesThis: Boolean = false): Boolean =
     fastcallToThiscall() or (takesThis && thiscallFromDefaultConvention()) or restoreThisParam()
 
 /**
+ * Makes [this], a function a user moved into a class, a method taking `this`, whatever its signature's source.
+ * [fixMethodConvention] where that gives it a convention with `this`. Else, where the program has a `__thiscall`,
+ * that: its first parameter dropped where it comes in where `this` does (a gcc x86 `__cdecl`'s first stack
+ * argument) or is named `this`, the others kept, so Ghidra derives `this` from the class. Else, where no
+ * convention takes `this` (x86-64, most other targets), its first parameter becomes `this`, a pointer to the
+ * class's struct, or a `this` is added. Whether it changed anything; throws where Ghidra refuses the signature.
+ */
+fun Function.makeMethod(): Boolean {
+    val fixed = fixMethodConvention(takesThis = true)
+    if (callingConvention?.hasThisPointer() == true && !hasCustomVariableStorage()) return fixed
+    val thiscall = program.functionManager.getCallingConvention(THISCALL)
+    val source = signatureSource.takeUnless { it == SourceType.DEFAULT } ?: SourceType.ANALYSIS
+    val params = parameters.filterNot { it.isAutoParameter }
+    if (thiscall != null) {
+        val pointer = arrayOf<DataType>(VoidDataType.dataType, PointerDataType(program.dataTypeManager))
+        val thisAt = thiscall.getStorageLocations(program, pointer, false, false)[1]
+        val first = params.firstOrNull()
+        val rest = params.filterNot {
+            it.name == Function.THIS_PARAM_NAME || (it === first && it.variableStorage == thisAt)
+        }
+        updateFunction(
+            THISCALL,
+            ReturnParameterImpl(returnTypeUnder(thiscall) ?: `return`.dataType, program),
+            rest.map { ParameterImpl(it.name, it.dataType, program, it.source) },
+            Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+            true,
+            source,
+        )
+        return true
+    }
+    val cls = parentNamespace as? GhidraClass ?: return fixed
+    val dtm = program.dataTypeManager
+    val thisType = PointerDataType(VariableUtilities.findOrCreateClassStruct(cls, dtm), dtm)
+    val first = params.firstOrNull()
+    if (first != null && first.length == program.defaultPointerSize) {
+        if (first.name == Function.THIS_PARAM_NAME && first.dataType.isEquivalent(thisType)) return fixed
+        first.setName(Function.THIS_PARAM_NAME, SourceType.USER_DEFINED)
+        first.setDataType(thisType, SourceType.USER_DEFINED)
+    } else {
+        insertParameter(0, ParameterImpl(Function.THIS_PARAM_NAME, thisType, program), SourceType.USER_DEFINED)
+    }
+    return true
+}
+
+/**
  * Gives [this], a function with no parameter, a `this`: as a method's where its convention can be made one
  * ([fixMethodConvention]), else as a first pointer parameter, where a `__cdecl` method such as gcc's takes it.
  */
