@@ -116,8 +116,13 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
             val up = byAddress[s.table]?.let(::extended)?.takeIf { seen.add(it.address) } ?: break
             if (s.index >= up.pfns.size) break
             val next = VirtualSlot(up.address, up.label, s.index)
-            // A gcc 2.x table ends in a null entry, read as one more slot: no slot to override.
-            if (pointee(next)?.offset == 0L) break
+            // A gcc 2.x table ends in a null entry, read as one more slot: no slot to override. An Itanium
+            // abstract class's destructor slots hold null too, and are overridden.
+            if (s.index == up.pfns.lastIndex && pointee(next)?.offset == 0L &&
+                CxxAbi.ofVftable(program, up.address) is Gcc2Abi
+            ) {
+                break
+            }
             s = next
             yield(s)
         }
