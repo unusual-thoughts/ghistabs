@@ -119,6 +119,7 @@ class PureSlotsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun `renaming a slot off a pure table's field renames the override that fills it, and every table's field`() {
         val slots = VirtualSlots(program, hierarchy)
+        slots.slotsAt(struct("A", "A_vftable"), 0).map { it.table } mustBe listOf(builder.addr(A_TABLE))
         val done = program.runTransaction { slots.renameField(struct("A", "A_vftable"), 0, "g") }
         done.functions mustBe 1
         program.functionManager.getFunctionAt(builder.addr(D_F)).name mustBe "g"

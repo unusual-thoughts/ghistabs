@@ -403,7 +403,11 @@
     virtual function's name, does what <B>Rename Virtual Slot</B> does: it renames the slot's field in
     every vftable that has it and every function that fills it, overriding it or overridden by it; a slot
     every class leaves empty or pure virtual only has its fields renamed. The struct must be laid over
-    some class's vftable. <B>Move Function into Class...</B>, beside <B>Rename Function</B>, on a
+    some class's vftable. <B>Update Slot Name</B> and <B>Update Slot Signature</B>, on the same, do what
+    <B>Apply Slot Names to Vftables</B> and <B>Apply Signature to Vftables</B> do for that function: on a
+    virtual function's name, each slot holding it is named after it, or typed with its signature as edited; on a
+    vftable's field, each table laid with that struct has its slot there named after, or typed as, the
+    function it holds. <B>Move Function into Class...</B>, beside <B>Rename Function</B>, on a
     function's name, moves it into a class picked from the program's, or typed as
     <CODE>ns::Class</CODE>, made where there is none, a namespace so named made a class. The function
     becomes a method of it: <CODE>__thiscall</CODE> where the program has one, with

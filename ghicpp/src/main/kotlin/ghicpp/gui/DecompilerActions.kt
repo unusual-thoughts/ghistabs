@@ -9,6 +9,7 @@ import ghicpp.ClassRecordSource
 import ghicpp.hierarchy.ClassHierarchy
 import ghicpp.hierarchy.SlotRenames
 import ghicpp.hierarchy.VirtualSlots
+import ghicpp.hierarchy.applySignatureToSlots
 import ghicpp.hierarchy.moveIntoClass
 import ghicpp.hierarchy.slotDefinitionsOf
 import ghidra.app.decompiler.ClangFieldToken
@@ -36,11 +37,15 @@ private const val VARIABLE_GROUP = "2 - Variable Group"
 private const val FUNCTION_GROUP = "1 - Function Group"
 
 /**
- * The decompiler window's popup actions on classes: Rename Slot, beside Rename Field, on a call through a
- * vftable's field or on a virtual function's name, and Move Function into Class, beside Rename Function.
+ * The decompiler window's popup actions on classes. Beside Rename Field, on a call through a vftable's field or
+ * on a virtual function's name: Rename Slot, Update Slot Name and Update Slot Signature, as the class tree's
+ * Rename Virtual Slot, Apply Slot Names to Vftables and Apply Signature to Vftables. Beside Rename Function: Move
+ * Function into Class.
  */
 internal fun Plugin.addDecompilerActions() {
     tool.addAction(renameSlotAction())
+    tool.addAction(updateSlotNameAction())
+    tool.addAction(updateSlotSignatureAction())
     tool.addAction(moveIntoClassAction())
 }
 
@@ -68,50 +73,106 @@ private fun ActionContext.decompiler() = (this as? DecompilerActionContext)?.tak
 private fun Plugin.renameSlotAction() = object : DockingAction("Rename Virtual Slot", name) {
     override fun actionPerformed(context: ActionContext) {
         val ctx = context.decompiler() ?: return
-        val p = ctx.program
         val field = ctx.slotField()
         val func = if (field == null) ctx.namedFunction() ?: return else null
         val old = field?.let { (s, at) -> s.getComponentContaining(at)?.fieldName } ?: func?.name
         val dialog = InputDialog("Rename Virtual Slot", "New name:", old.orEmpty())
         tool.showDialog(dialog, ctx.componentProvider)
         val newName = dialog.value?.trim()?.takeUnless { dialog.isCanceled || it.isEmpty() || it == old } ?: return
-        var done: Result<SlotRenames>? = null
-        TaskLauncher.launchModal(
-            "Rename Virtual Slot",
-            MonitoredRunnable { monitor ->
-                monitor.message = "Reading classes"
-                val slots = VirtualSlots(p, ClassHierarchy.of(p, ClassRecordSource.describedElsewhere(p)))
-                done = runCatching {
-                    p.runTransaction("Rename virtual slot $old") {
-                        field?.let { (s, at) -> slots.renameField(s, at, newName) }
-                            ?: slots.rename(func!!, newName)
-                    }
-                }
-            },
-        )
-        val renamed = done?.getOrElse {
-            return Msg.showError(this, ctx.componentProvider.component, "Rename Virtual Slot", it.message)
+        val renamed = ctx.withSlots("Rename Virtual Slot", "Rename virtual slot $old") { slots ->
+            field?.let { (s, at) -> slots.renameField(s, at, newName) } ?: slots.rename(func!!, newName)
         } ?: return
         tool.statusInfo = "Renamed ${renamed.functions} function(s) and ${renamed.fields} vftable slot(s)"
-        if (renamed.skipped.isNotEmpty()) {
-            Msg.showWarn(
-                this,
-                ctx.componentProvider.component,
-                "Rename Virtual Slot",
-                "Kept their old names:\n" + renamed.skipped.joinToString("\n"),
-            )
-        }
+        ctx.warnSkipped("Rename Virtual Slot", renamed)
     }
 }.apply {
     popupMenuData = MenuData(arrayOf("Rename Slot"), null, VARIABLE_GROUP, MenuData.NO_MNEMONIC, "02a")
     description = "Rename a vftable slot: its field in every class's table, and every function overriding it"
     helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
     validContextWhen { it is DecompilerActionContext }
-    popupWhen { ctx ->
-        ctx.decompiler()?.let { d ->
-            d.slotField() != null || d.namedFunction()?.let { d.program.slotDefinitionsOf(it).isNotEmpty() } == true
-        } == true
+    popupWhen { it.onSlot() }
+}
+
+/** Whether the cursor is on a vftable's field ([slotField]) or a virtual function's name. */
+private fun ActionContext.onSlot() = decompiler()?.let { d ->
+    d.slotField() != null || d.namedFunction()?.let { d.program.slotDefinitionsOf(it).isNotEmpty() } == true
+} == true
+
+/**
+ * Runs [edit] on the program's [VirtualSlots], read in a modal task, in a transaction named [transaction]: what it
+ * returns, or null after showing what it threw, titled [title].
+ */
+private fun <T> DecompilerActionContext.withSlots(title: String, transaction: String, edit: (VirtualSlots) -> T): T? {
+    val p = program
+    var done: Result<T>? = null
+    TaskLauncher.launchModal(
+        title,
+        MonitoredRunnable { monitor ->
+            monitor.message = "Reading classes"
+            done = runCatching {
+                val slots = VirtualSlots(p, ClassHierarchy.of(p, ClassRecordSource.describedElsewhere(p)))
+                p.runTransaction(transaction) { edit(slots) }
+            }
+        },
+    )
+    return done?.getOrElse {
+        Msg.showError(this, componentProvider.component, title, it.message)
+        null
     }
+}
+
+/** Warns of the names [done] kept, if any. */
+private fun DecompilerActionContext.warnSkipped(title: String, done: SlotRenames) {
+    if (done.skipped.isEmpty()) return
+    Msg.showWarn(this, componentProvider.component, title, "Kept their old names:\n" + done.skipped.joinToString("\n"))
+}
+
+/**
+ * Update Slot Name: names each vftable slot holding the virtual function under the cursor after it, or, on a
+ * vftable's field, that slot in each table laid with its struct after the function that table holds there.
+ */
+private fun Plugin.updateSlotNameAction() = object : DockingAction("Update Virtual Slot Name", name) {
+    override fun actionPerformed(context: ActionContext) {
+        val ctx = context.decompiler() ?: return
+        val field = ctx.slotField()
+        val func = if (field == null) ctx.namedFunction() ?: return else null
+        val done = ctx.withSlots("Update Slot Name", "Apply slot names to vftables") { slots ->
+            slots.applyNames(field?.let { (s, at) -> slots.slotsAt(s, at) } ?: slots.slotsOf(func!!))
+        } ?: return
+        tool.statusInfo = "Named ${done.fields} vftable slot(s)"
+        ctx.warnSkipped("Update Slot Name", done)
+    }
+}.apply {
+    popupMenuData = MenuData(arrayOf("Update Slot Name"), null, VARIABLE_GROUP, MenuData.NO_MNEMONIC, "02b")
+    description = "Name the vftable slot after the function it holds, in every table holding it"
+    helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+    validContextWhen { it is DecompilerActionContext }
+    popupWhen { it.onSlot() }
+}
+
+/**
+ * Update Slot Signature: copies the virtual function's signature under the cursor into the function definition
+ * its slots are typed with, or, on a vftable's field, that of each function the tables laid with its struct hold
+ * there.
+ */
+private fun Plugin.updateSlotSignatureAction() = object : DockingAction("Update Virtual Slot Signature", name) {
+    override fun actionPerformed(context: ActionContext) {
+        val ctx = context.decompiler() ?: return
+        val field = ctx.slotField()
+        val func = if (field == null) ctx.namedFunction() ?: return else null
+        val changed = ctx.withSlots("Update Slot Signature", "Apply signature to vftables") { slots ->
+            val funcs = field?.let { (s, at) -> slots.slotsAt(s, at).mapNotNull(slots::target).distinct() }
+                ?: listOf(func!!)
+            funcs.sumOf { ctx.program.applySignatureToSlots(it) }
+        } ?: return
+        tool.statusInfo = "Applied the signature to $changed vftable slot definition(s)"
+    }
+}.apply {
+    popupMenuData = MenuData(arrayOf("Update Slot Signature"), null, VARIABLE_GROUP, MenuData.NO_MNEMONIC, "02c")
+    description = "Type the vftable slot with the signature of the function it holds, in every table holding it"
+    helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+    validContextWhen { it is DecompilerActionContext }
+    popupWhen { it.onSlot() }
 }
 
 private fun Plugin.moveIntoClassAction() = object : DockingAction("Move Function into Class", name) {
