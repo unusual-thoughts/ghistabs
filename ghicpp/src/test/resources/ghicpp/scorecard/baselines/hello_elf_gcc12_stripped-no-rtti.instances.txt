@@ -1,18 +1,17 @@
 base-access-fn `Core` of `Down`: none, is public
 base-access-fn `Core` of `Up`: none, is public
 base-access-fn `Down` of `Both`: none, is public
+base-access-fn `Left` of `Diamond`: none, is public
 base-access-fn `Logger` of `Secret`: none, is non-public
 base-access-fn `Named` of `Diamond`: none, is public
 base-access-fn `Named` of `Label`: none, is public
 base-access-fn `Rect` of `Label`: none, is public
+base-access-fn `Right` of `Diamond`: none, is public
 base-access-fn `Shape` of `Circle`: none, is public
 base-access-fn `Shape` of `Rect`: none, is public
 base-access-fn `Up` of `Both`: none, is public
-bases-fn `Left` of `Diamond`
-bases-fn `Right` of `Diamond`
 classes-fn `Boot` (stabs)
 classes-fn `Box` (stabs)
-classes-fn `Left` (stabs)
 classes-fn `Quals` (stabs)
 classes-fn `Stack<Point,2>` (stabs)
 classes-fn `extras(int)::Local` (stabs)
@@ -33,6 +32,8 @@ fields-fn `Diamond`+12:4
 fields-fn `Diamond`+32:4
 fields-fn `Diamond`+4:4
 fields-fn `Label`+10:2
+fields-fn `Left`+4:4
+fields-fn `Left`+8:4
 fields-fn `Rect`+10:2
 fields-fn `Right`+4:4
 fields-fn `Right`+8:4
@@ -44,7 +45,7 @@ fields-fp `Label`+35:1
 fields-fp `Named`+11:1
 methods-fn `Shape::~Shape` 11bb2
 methods-fp 11559 of `Circle`: no method
-methods-fp 11cea of `Diamond`: is `Left`'s
+sizes-fp `Left`: 4, is 12
 sizes-fp `Right`: 4, is 12
 structors-fn 11bb2 of `Shape`
 virtual-methods-fn `Shape::~Shape` 11bb2
