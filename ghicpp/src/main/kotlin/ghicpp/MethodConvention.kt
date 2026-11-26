@@ -245,7 +245,16 @@ fun Function.makeMethod(): Boolean {
         first.setName(Function.THIS_PARAM_NAME, SourceType.USER_DEFINED)
         first.setDataType(thisType, SourceType.USER_DEFINED)
     } else {
-        insertParameter(0, ParameterImpl(Function.THIS_PARAM_NAME, thisType, program), SourceType.USER_DEFINED)
+        // A `this` ahead of the others, their storage derived again from the convention.
+        updateFunction(
+            callingConventionName,
+            `return`,
+            listOf(ParameterImpl(Function.THIS_PARAM_NAME, thisType, program, SourceType.USER_DEFINED)) +
+                params.map { ParameterImpl(it.name, it.dataType, program, it.source) },
+            Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+            true,
+            SourceType.USER_DEFINED,
+        )
     }
     return true
 }

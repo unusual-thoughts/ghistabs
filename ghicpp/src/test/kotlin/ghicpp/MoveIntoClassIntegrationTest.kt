@@ -2,6 +2,7 @@ package ghicpp
 
 import ghicpp.hierarchy.moveIntoClass
 import ghidra.program.database.ProgramBuilder
+import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.PointerDataType
@@ -106,6 +107,15 @@ class MoveIntoClassIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
         f.moveTo("Klass")
         f.parameters.map { it.name } mustBe listOf("this")
+        f.thisType mustBe "Klass *"
+    }
+
+    @Test
+    fun `where no convention takes this and no parameter is a pointer, a this is added ahead of the others`() {
+        val b = builder(ProgramBuilder._X64, "gcc")
+        val f = b.function("0x401000", Function.DEFAULT_CALLING_CONVENTION_STRING, listOf(CharDataType()))
+        f.moveTo("Klass")
+        f.parameters.map { it.name } mustBe listOf("this", "arg1")
         f.thisType mustBe "Klass *"
     }
 }
