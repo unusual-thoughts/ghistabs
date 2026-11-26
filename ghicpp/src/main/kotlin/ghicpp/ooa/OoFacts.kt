@@ -1,24 +1,31 @@
 package ghicpp.ooa
 
-import ghicpp.abi.gcc2.Gcc2Thunks
 import ghicpp.abi.generic.PlainVtables
-import ghicpp.abi.itanium.Itanium
+import ghicpp.abi.holdsPureVirtualStub
 import ghicpp.abi.msvc.Msvc
 import ghicpp.dissect.CalledObject
 import ghicpp.dissect.DECOMPILE_TIMEOUT_SECONDS
+import ghicpp.dissect.ObjectCall
 import ghicpp.dissect.PointerInto
+import ghicpp.dissect.constantAddress
 import ghicpp.dissect.decompileEach
 import ghicpp.dissect.objectCalls
+import ghicpp.dissect.offsetFrom
 import ghicpp.dissect.pointerInto
-import ghicpp.argumentAt
+import ghicpp.dissect.thisVariable
+import ghicpp.hierarchy.slotTablesOf
 import ghicpp.thisAt
 import ghicpp.thisStorage
+import ghidra.app.cmd.data.TypeDescriptorModel
+import ghidra.app.cmd.data.rtti.Rtti3Model
+import ghidra.app.cmd.data.rtti.Rtti4Model
 import ghidra.app.decompiler.DecompInterface
+import ghidra.app.decompiler.util.FillOutStructureHelper
+import ghidra.app.util.datatype.microsoft.DataValidationOptions
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.VoidDataType
-import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.HighFunction
@@ -28,9 +35,9 @@ import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.pcode.Varnode
 import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
+import ghidrakt.orThunked
 import ghidrakt.pointerAt
-import ghidrakt.runTransaction
-import ghidrakt.useWith
+import ghidrakt.rolledBack
 import java.io.Writer
 
 /**
@@ -76,6 +83,7 @@ enum class OoAbi(val ptrSize: Int) {
 
     val isMsvc get() = this == MSVC_32 || this == MSVC_64
 
+    /** Where `this` comes in, as the rules spell the parameter: a register, or the first stack argument. */
     val thisParam: Any get() = when (this) {
         MSVC_32 -> Term("ecx")
         MSVC_64 -> Term("rcx")
@@ -83,6 +91,7 @@ enum class OoAbi(val ptrSize: Int) {
         SYSV_64 -> Term("rdi")
     }
 
+    /** The calling convention that takes `this` there, as `oorules/util.pl`'s `thisPtrParam/2` names it. */
     val thisCall: String get() = when (this) {
         MSVC_32 -> "__thiscall"
         MSVC_64 -> "__x64call"
@@ -104,58 +113,72 @@ enum class OoAbi(val ptrSize: Int) {
     }
 }
 
-/** Writes OOAnalyzer's initial Prolog facts from Ghidra's listing and decompiler. */
+/**
+ * Writes OOAnalyzer's initial facts for a program that our analyzers already ran on, for its Prolog rules
+ * (`ooprolog --facts`) to recover the classes from.
+ *
+ * What our analysis established is taken from it, not found again. The vftables are the ones our analyzers
+ * labelled in their classes, with the slots they laid ([slotTablesOf]). The calls on each object are those
+ * the dissector reads ([objectCalls]), with `this` where our method convention puts it ([thisAt]). The
+ * accesses through `this` are those Ghidra's structure fill follows, as our class structs are filled. MSVC's
+ * RTTI is read through Ghidra's RTTI models, as [ghicpp.abi.msvc.MsvcRttiParser] reads it. What only
+ * OOAnalyzer asks for is read off the decompiler here: each function's parameters and calls, the virtual
+ * calls, `operator new` and `delete`, and whether a method returns `this`.
+ *
+ * A symbolic value (`sv_…`) is a decompiled variable of one function, `sv_<function>_<n>`, or a constant
+ * offset into one, `sv_<function>_<n>_<offset>`, with a `thisPtrOffset/3` between the two. The facts the
+ * rules never read (`thisPtrDefinition`, `funcReturn`, `callReturn`) and those this has no analysis for
+ * (`uninitializedReads`, `possibleVBTableWrite`, `symbolClass`) are left out.
+ */
 class OoFactExporter(private val program: Program, private val monitor: TaskMonitor = TaskMonitor.DUMMY) {
     val abi = OoAbi.of(program)
     private val ptrSize = abi.ptrSize
-    private val memory = program.memory
-    private val functions = program.functionManager
-    private val facts = linkedSetOf<OoFact>()
     private val dtm = program.dataTypeManager
+    private val thisStorage = program.thisStorage()
+    private val facts = linkedSetOf<OoFact>()
 
     private fun add(predicate: String, vararg args: Any) {
         facts += OoFact.of(predicate, *args)
     }
 
-    private var purecalls: Set<Long> = emptySet()
+    /** Each vftable our analyzers labelled, by its address point, to where each of its slots is. */
+    private val vftables: Map<Address, List<Address>> by lazy {
+        program.symbolTable.classNamespaces.asSequence()
+            .flatMap { program.slotTablesOf(it) }
+            .associate { it.address to it.pfns }
+    }
 
+    /** Every fact, in the order they were found: functions by address, each one's in its p-code's order. */
     fun export(): List<OoFact> {
         facts.clear()
         add("fileInfo", program.executableMD5.orEmpty().uppercase(), program.name, Term(abi.name), ptrSize)
-        val vftables = sortedSetOf<Long>()
-        val calls = mutableListOf<ThisCall>()
-        val methods = mutableSetOf<Address>()
-        val all = (functions.getFunctions(true) as Iterable<Function>).filter { !it.isExternal }
-        purecalls = all.filter(::isPureVirtual).map { it.entryPoint.offset }.toSet()
+        val all = (program.functionManager.getFunctions(true) as Iterable<Function>).filter { !it.isExternal }
         for (f in all) {
-            if (f.entryPoint.offset in purecalls) add("purecall", f.entryPoint)
-            if (f.isThunk) {
-                f.getThunkedFunction(false)?.takeIf { !it.isExternal }
-                    ?.let { add("thunk", f.entryPoint, it.entryPoint) }
+            if (program.holdsPureVirtualStub(
+                    f.entryPoint,
+                    PlainVtables::isPureVirtualStub,
+                )
+            ) {
+                add("purecall", f.entryPoint)
             }
+            f.getThunkedFunction(false)?.takeIf { !it.isExternal }?.let { add("thunk", f.entryPoint, it.entryPoint) }
         }
-
-        val thisStorage = program.thisStorage()
-        program.decompileEach(all, monitor, "Exporting OOAnalyzer facts") { f, high ->
-            val factsForFunction = FunctionFacts(f, high)
-            factsForFunction.read()
-            if (factsForFunction.thisVar != null && !factsForFunction.returnsValue) {
-                returnsSelfOnceTyped(f, high)
+        val methods = mutableSetOf<Address>()
+        val calls = mutableListOf<List<ObjectCall>>()
+        val decomp = DecompInterface()
+        decomp.decompileEach(program, all.filter { !it.isThunk }, monitor, "Exporting OOAnalyzer facts") { f, high ->
+            val read = FunctionFacts(f, high).apply { read() }
+            if (read.thisVar != null) {
+                methods += f.entryPoint
+                if (!read.returnsValue) f.returnsSelfOnceTyped(high, decomp)
             }
-            vftables += factsForFunction.stored
-            calls += factsForFunction.thisCalls
-            if (factsForFunction.thisVar != null) methods += f.entryPoint
-
-            val objectCalls = high.objectCalls(f.thisAt(thisStorage))
-            for (call in objectCalls) {
-                if (call.obj == CalledObject.This && !call.slot) {
-                    factsForFunction.recordObjectCall(call.at, call.callee)
-                }
-            }
+            calls += high.objectCalls(f.thisAt(thisStorage))
         }
         orderFacts(methods, calls)
-        if (abi.isMsvc) rtti(vftables)
-        vftables.forEach(::vftableEntries)
+        for ((_, pfns) in vftables) {
+            for (pfn in pfns) program.pointerAt(pfn)?.let { add("initialMemory", pfn, it) }
+        }
+        if (abi.isMsvc) rtti()
         return facts.toList()
     }
 
@@ -165,22 +188,23 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         out.write("% Object fact exporting complete.\n")
     }
 
-    class ThisCall(val at: Address, val caller: Address, val callee: Address?, val thisPtr: String?, val kind: Kind) {
-        enum class Kind { METHOD, NEW, DELETE }
-    }
+    // --- per function --------------------------------------------------------------------------------------
 
     private inner class FunctionFacts(val f: Function, val high: HighFunction) {
         private val ids = mutableMapOf<HighVariable, Int>()
-        val stored = mutableSetOf<Long>()
-        val thisCalls = mutableListOf<ThisCall>()
-        var thisVar: HighVariable? = null
+
+        /** The variable `this` comes in as, where our method convention puts it ([thisAt]). */
+        val thisVar: HighVariable? = high.thisVariable(f.thisAt(thisStorage))
+
+        /** Whether the decompiler gave the function a return value at all, so that [read] could test it. */
+        var returnsValue = false
+            private set
 
         private fun sv(root: HighVariable, offset: Long = 0): String {
             val n = ids.getOrPut(root) { ids.size }
             val base = "sv_${f.entryPoint.offset.toString(16)}_$n"
             if (offset == 0L) return base
-            val suffix = if (offset < 0) "m" + (-offset).toString(16) else offset.toString(16)
-            val derived = "${base}_$suffix"
+            val derived = base + "_" + (if (offset < 0) "m" + (-offset).toString(16) else offset.toString(16))
             add("thisPtrOffset", Term(base), offset, Term(derived))
             return derived
         }
@@ -189,46 +213,28 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
 
         fun read() {
             params()
+            members()
             val returns = mutableListOf<Boolean>()
             for (op in high.pcodeOps.asSequence().sortedBy { it.seqnum }) {
                 when (op.opcode) {
                     PcodeOp.CALL -> call(op)
                     PcodeOp.CALLIND -> virtualCall(op)
-                    PcodeOp.STORE -> store(op)
-                    PcodeOp.LOAD -> access(op, op.getInput(1), op.output?.size)
-                    PcodeOp.RETURN -> if (op.numInputs > 1) {
-                        returns += thisVar != null && op.getInput(1).pointerInto() == PointerInto(thisVar, 0)
-                    }
+                    PcodeOp.STORE -> vftableWrite(op)
+                    PcodeOp.RETURN -> if (op.numInputs > 1) returns += op.getInput(1).isThis()
                 }
             }
             returnsValue = returns.isNotEmpty()
             if (returns.isNotEmpty() && returns.all { it }) add("returnsSelf", f.entryPoint)
         }
 
-        var returnsValue = false
+        private fun Varnode.isThis() = thisVar != null && pointerInto() == PointerInto(thisVar, 0L)
 
-        fun recordObjectCall(at: Address, callee: Function) {
-            val thisPointer = high.objectCalls(f.thisAt(program.thisStorage()))
-                .firstOrNull { it.at == at }?.let { c ->
-                    c.offset.takeIf { it >= 0 }?.let { offset ->
-                        c.obj as? CalledObject.This
-                            ?: return@let null
-                        "sv_${f.entryPoint.offset.toString(16)}_${offset.toString(16)}"
-                    }
-                }
-            if (thisPointer != null) {
-                thisCalls += ThisCall(at, f.entryPoint, callee.entryPoint, thisPointer, ThisCall.Kind.METHOD)
-            }
-        }
-
+        /** `funcParameter/3` for each input the decompiler found it reading, and the conventions they allow. */
         private fun params() {
             val inputs = high.pcodeOps.asSequence().flatMap { it.inputs.asSequence() }
                 .filter { it.isInput && it.high != null }.distinctBy { it.address to it.size }.toList()
             val positions = inputs.mapNotNull { vn -> positionOf(vn)?.let { it to vn } }
-            for ((pos, vn) in positions) {
-                add("funcParameter", f.entryPoint, pos, Term(sv(vn.high)))
-                if (pos == abi.thisParam) thisVar = vn.high
-            }
+            for ((pos, vn) in positions) add("funcParameter", f.entryPoint, pos, Term(sv(vn.high)))
             conventions(positions.map { it.first }.toSet())
         }
 
@@ -244,148 +250,148 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
                         else -> listOf("__cdecl", "__stdcall")
                     }
                 }
+
+                // One convention per ABI, and its `this` only where the function reads it.
                 else -> listOf(abi.thisCall).filter { thisVar != null || read.isEmpty() }
             }
             conventions.forEach { add("callingConvention", f.entryPoint, it) }
         }
 
+        /**
+         * `methodMemberAccess/4` for each load and store through `this`, at a constant offset. These are the
+         * accesses Ghidra's structure fill follows, the same ones our class structs are filled from.
+         */
+        private fun members() {
+            val thisVar = thisVar ?: return
+            val fill = FillOutStructureHelper(program, monitor)
+            fill.processStructure(thisVar, f, true, false, null)
+            val loads = fill.loadPcodeOps.map { it to it.pcodeOp.output?.size }
+            val stores = fill.storePcodeOps.map { it to it.pcodeOp.getInput(2).size }
+            for ((access, size) in (loads + stores).sortedBy { it.first.pcodeOp.seqnum }) {
+                if (access.offset < 0 || size == null) continue
+                add("methodMemberAccess", access.pcodeOp.seqnum.target, f.entryPoint, access.offset, size)
+            }
+        }
+
         private fun call(op: PcodeOp) {
             val at = op.seqnum.target
-            val callee = high.directCallee(op) ?: return
-            add("callTarget", at, f.entryPoint, op.getInput(0).address)
+            val target = op.getInput(0).address
+            add("callTarget", at, f.entryPoint, target)
+            val callee = program.functionManager.getFunctionAt(target) ?: return
             val args = (1 until op.numInputs).map { op.getInput(it) }
-            var thisArg: String? = null
             args.forEachIndexed { i, arg ->
                 val pos = argPosition(callee, i) ?: return@forEachIndexed
                 val p = arg.pointerInto() ?: return@forEachIndexed
-                val term = sv(p)
-                add("callParameter", at, f.entryPoint, pos, Term(term))
-                if (pos == abi.thisParam) thisArg = term
+                add("callParameter", at, f.entryPoint, pos, Term(sv(p)))
             }
-            val names = namesOf(callee)
-            when {
-                names.any { it in OPERATOR_NEW } -> {
+            when (callee.orThunked.name) {
+                in OPERATOR_NEW -> {
                     val out = op.output?.high?.let { sv(it) }
                     add("insnCallsNew", at, f.entryPoint, Term(out ?: "invalid"))
                     val size = args.firstOrNull()?.takeIf { it.isConstant }?.offset
-                    if (out != null && size != null) add(
-                        "thisPtrAllocation", at, f.entryPoint, Term(out), Term("type_Heap"), size,
-                    )
-                    thisCalls += ThisCall(at, f.entryPoint, callee.entryPoint, out, ThisCall.Kind.NEW)
-                }
-                names.any { it in OPERATOR_DELETE } -> {
-                    val freed = args.firstOrNull()?.pointerInto()?.let(::sv)
-                    add("insnCallsDelete", at, f.entryPoint, Term(freed ?: "invalid"))
-                    thisCalls += ThisCall(at, f.entryPoint, callee.entryPoint, freed, ThisCall.Kind.DELETE)
-                }
-                thisArg != null -> thisCalls +=
-                    ThisCall(at, f.entryPoint, callee.entryPoint, thisArg, ThisCall.Kind.METHOD)
-            }
-        }
-
-        private fun argPosition(callee: Function, index: Int): Any? =
-            callee.parameters.getOrNull(index)?.takeIf { !it.variableStorage.isUnassignedStorage }
-                ?.variableStorage?.firstVarnode
-                ?: (callee.callingConvention ?: program.compilerSpec.defaultCallingConvention)
-                    .getStorageLocations(
-                        program,
-                        arrayOf<DataType>(VoidDataType.dataType) + Array(index + 1) { PointerDataType(dtm) },
-                        false,
-                        false,
-                    ).getOrNull(index + 1)?.firstVarnode?.let(::positionOf)
-
-        private fun virtualCall(op: PcodeOp) {
-            val slotLoad = op.getInput(0).def?.takeIf { it.opcode == PcodeOp.LOAD } ?: return
-            val slotPointer = slotLoad.getInput(1).pointerInto() ?: return
-            val objPointer = slotPointer.root.instances.firstNotNullOfOrNull { v ->
-                v.def?.takeIf { it.opcode == PcodeOp.LOAD }?.getInput(1)?.pointerInto()
-            } ?: return
-            val slotOffset = slotPointer.offset
-            if (slotOffset < 0 || objPointer.offset < 0) return
-            add(
-                "possibleVirtualFunctionCall",
-                op.seqnum.target,
-                f.entryPoint,
-                Term(sv(objPointer)),
-                objPointer.offset,
-                slotOffset,
-            )
-        }
-
-        private fun store(op: PcodeOp) {
-            val dest = op.getInput(1)
-            val value = op.getInput(2)
-            access(op, dest, value.size)
-            val table = value.constantAddress()?.takeIf { value.size == ptrSize && isPointerTable(it) } ?: return
-            val p = dest.pointerInto()?.takeIf { it.offset >= 0 } ?: return
-            stored += table
-            add("possibleVFTableWrite", op.seqnum.target, f.entryPoint, Term(sv(p.root)), p.offset, Term(sv(p)), table)
-        }
-
-        private fun access(op: PcodeOp, pointer: Varnode, size: Int?) {
-            val p = pointer.pointerInto() ?: return
-            if (p.root != thisVar || p.offset < 0 || size == null) return
-            add("methodMemberAccess", op.seqnum.target, f.entryPoint, p.offset, size)
-        }
-    }
-
-    private fun returnsSelfOnceTyped(f: Function, first: HighFunction) {
-        if (f.hasCustomVariableStorage()) return
-        DecompInterface().useWith(program) { decomp ->
-            program.runTransaction("Decompile as returning a pointer") {
-                if (f.signatureSource == SourceType.DEFAULT) {
-                    HighFunctionDBUtil.commitParamsToDatabase(
-                        first,
-                        true,
-                        HighFunctionDBUtil.ReturnCommitOption.NO_COMMIT,
-                        SourceType.ANALYSIS,
-                    )
-                }
-                f.setReturnType(PointerDataType(dtm), f.signatureSource)
-                decomp.decompileFunction(f, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction?.apply {
-                    val thisVar = pcodeOps.asSequence().flatMap { it.inputs.asSequence() }
-                        .firstOrNull { it.isInput && it.high != null && positionOf(it) == abi.thisParam }?.high
-                        ?: return@runTransaction
-                    val returns = pcodeOps.asSequence()
-                        .filter { it.opcode == PcodeOp.RETURN && it.numInputs > 1 }
-                        .map { it.getInput(1).pointerInto() }
-                        .toList()
-                    if (returns.isNotEmpty() && returns.all { it == PointerInto(thisVar, 0) }) {
-                        add("returnsSelf", f.entryPoint)
+                    if (out != null && size != null) {
+                        add("thisPtrAllocation", at, f.entryPoint, Term(out), Term("type_Heap"), size)
                     }
                 }
+
+                in OPERATOR_DELETE -> {
+                    val freed = args.firstOrNull()?.pointerInto()?.let(::sv)
+                    add("insnCallsDelete", at, f.entryPoint, Term(freed ?: "invalid"))
+                }
             }
+        }
+
+        /** Where [callee] takes its [index]th argument: its own parameter's storage, else its convention's. */
+        private fun argPosition(callee: Function, index: Int): Any? = callee.parameters.getOrNull(index)
+            ?.variableStorage?.takeIf { !it.isUnassignedStorage }?.firstVarnode?.let(::positionOf)
+            ?: (callee.callingConvention ?: program.compilerSpec.defaultCallingConvention)
+                .getStorageLocations(
+                    program,
+                    arrayOf<DataType>(VoidDataType.dataType) + Array(index + 1) { PointerDataType(dtm) },
+                    false,
+                    false,
+                ).getOrNull(index + 1)?.firstVarnode?.let(::positionOf)
+
+        /** A call through a vtable slot: the slot read from a pointer read from an object, both at constant offsets. */
+        private fun virtualCall(op: PcodeOp) {
+            val (slot, _) = op.getInput(0).offsetFrom()
+            val slotLoad = slot.def?.takeIf { it.opcode == PcodeOp.LOAD } ?: return
+            val (vptr, slotOffset) = slotLoad.getInput(1).offsetFrom()
+            val vptrLoad = vptr.def?.takeIf { it.opcode == PcodeOp.LOAD } ?: return
+            val obj = vptrLoad.getInput(1).pointerInto() ?: return
+            if (slotOffset < 0 || obj.offset < 0) return
+            add("possibleVirtualFunctionCall", op.seqnum.target, f.entryPoint, Term(sv(obj)), obj.offset, slotOffset)
+        }
+
+        /** `possibleVFTableWrite/6`: a store of one of the vftables our analyzers found into an object. */
+        private fun vftableWrite(op: PcodeOp) {
+            val table = op.getInput(2).constantAddress(program)?.takeIf { it in vftables } ?: return
+            val p = op.getInput(1).pointerInto()?.takeIf { it.offset >= 0 } ?: return
+            add("possibleVFTableWrite", op.seqnum.target, f.entryPoint, Term(sv(p.root)), p.offset, Term(sv(p)), table)
         }
     }
 
+    /**
+     * `returnsSelf/1` for a method the decompiler gave no return value. Pharos tests what the return register
+     * holds whatever the signature says, and an Itanium constructor, `void`, often leaves `this` there. So the
+     * method is decompiled again as returning a pointer, in a transaction that is rolled back after.
+     */
+    private fun Function.returnsSelfOnceTyped(first: HighFunction, decomp: DecompInterface) {
+        if (hasCustomVariableStorage()) return
+        program.rolledBack("Decompile as returning a pointer") {
+            // The decompiler ignores the return type of a default signature, which is not locked. Locking the
+            // parameters it found first keeps `this` where it was.
+            if (signatureSource == SourceType.DEFAULT) {
+                HighFunctionDBUtil.commitParamsToDatabase(
+                    first,
+                    true,
+                    HighFunctionDBUtil.ReturnCommitOption.NO_COMMIT,
+                    SourceType.ANALYSIS,
+                )
+            }
+            setReturnType(PointerDataType(dtm), signatureSource)
+            val high = decomp.decompileFunction(this, DECOMPILE_TIMEOUT_SECONDS, monitor).highFunction
+                ?: return@rolledBack
+            val thisVar = high.thisVariable(thisAt(thisStorage)) ?: return@rolledBack
+            val returned = high.pcodeOps.asSequence()
+                .filter { it.opcode == PcodeOp.RETURN && it.numInputs > 1 }
+                .map { it.getInput(1).pointerInto() }
+                .toList()
+            if (returned.isNotEmpty() && returned.all { it == PointerInto(thisVar, 0L) }) add("returnsSelf", entryPoint)
+        }
+    }
+
+    /** Where [vn] comes in, as the rules spell it: a register's name, or the stack argument's index. */
     private fun positionOf(vn: Varnode): Any? = when {
         vn.isRegister -> program.getRegister(vn)?.baseRegister?.name?.lowercase()?.let(::Term)
-        vn.address.isStackAddress -> stackIndex(vn.address.offset)
+
+        vn.address.isStackAddress -> (vn.address.offset - ptrSize).takeIf { it >= 0 && it % ptrSize == 0L }
+            ?.div(ptrSize)
+
         else -> null
     }
 
-    private fun stackIndex(offset: Long): Long? =
-        (offset - ptrSize).takeIf { it >= 0 && it % ptrSize == 0L }?.div(ptrSize)
+    // --- across functions ----------------------------------------------------------------------------------
 
-    private fun namesOf(f: Function): Set<String> = buildSet {
-        add(f.name)
-        add(f.name.replace('.', ' '))
-        f.externalLocation?.originalImportedName?.let(::add)
-        f.externalLocation?.label?.let(::add)
-        program.symbolTable.getSymbols(f.entryPoint).forEach { add(it.name) }
-    }
-
-    private fun orderFacts(methods: Set<Address>, calls: List<ThisCall>) {
+    /**
+     * `noCallsBefore/1` and `noCallsAfter/1`, as Pharos orders a function's calls on one object. A method is no
+     * constructor once another method is called on the same object before its first call there. It is no
+     * destructor once another is called after its last. A call of `operator delete` ends the search. The calls
+     * on each object are the ones the dissector reads ([objectCalls]), in address order within each caller,
+     * not along its control flow.
+     */
+    private fun orderFacts(methods: Set<Address>, calls: List<List<ObjectCall>>) {
         val notFirst = mutableSetOf<Address>()
         val notLast = mutableSetOf<Address>()
-        for (onObject in calls.filter { it.thisPtr != null }.groupBy { it.caller to it.thisPtr }.values) {
+        fun ObjectCall.frees() = callee.name in OPERATOR_DELETE
+        for (onObject in calls.flatMap { inCaller -> inCaller.groupBy { it.obj to it.offset }.values }) {
             val ordered = onObject.sortedBy { it.at }
             ordered.forEachIndexed { i, c ->
-                if (c.kind != ThisCall.Kind.METHOD || c.callee == null) return@forEachIndexed
-                val before = ordered.subList(0, i).takeLastWhile { it.kind == ThisCall.Kind.METHOD }
-                if (before.none { it.callee == c.callee } && before.isNotEmpty()) notFirst += c.callee
-                val after = ordered.subList(i + 1, ordered.size).takeWhile { it.kind == ThisCall.Kind.METHOD }
-                if (after.none { it.callee == c.callee } && after.isNotEmpty()) notLast += c.callee
+                if (c.frees()) return@forEachIndexed
+                val before = ordered.subList(0, i).takeLastWhile { !it.frees() }
+                if (before.isNotEmpty() && before.none { it.callee == c.callee }) notFirst += c.callee.entryPoint
+                val after = ordered.subList(i + 1, ordered.size).takeWhile { !it.frees() }
+                if (after.isNotEmpty() && after.none { it.callee == c.callee }) notLast += c.callee.entryPoint
             }
         }
         for (m in methods) {
@@ -394,129 +400,94 @@ class OoFactExporter(private val program: Program, private val monitor: TaskMoni
         }
     }
 
-    private fun vftableEntries(start: Long) {
-        val at = address(start) ?: return
-        val slots = program.functionSlots(at, Itanium) { f -> Itanium.isPureVirtualStub(f.name) }
-        for (target in slots.take(MAX_SLOTS)) {
-            facts += OoFact.of("initialMemory", at, target)
-        }
-    }
+    // --- MSVC RTTI -----------------------------------------------------------------------------------------
 
-    private fun isPointerTable(start: Long): Boolean {
-        val at = address(start) ?: return false
-        val block = memory.getBlock(at) ?: return false
-        if (!block.isInitialized || (block.isExecute && !block.isRead)) return false
-        if (block.isExecute && functions.getFunctionContaining(at) != null) return false
-        return program.functionSlots(at, Itanium) { f ->
-            Itanium.isPureVirtualStub(f.name)
-        }.take(1).any()
-    }
+    private val options = DataValidationOptions()
 
-    private fun isPureVirtual(f: Function) = PlainVtables.isPureVirtualStub(f.name) ||
-        f.getThunkedFunction(true)?.name?.let(PlainVtables::isPureVirtualStub) == true
+    private fun labelled(name: String) =
+        program.symbolTable.getSymbols(name).iterator().asSequence().map { it.address }.distinct()
 
-    private fun rtti(vftables: MutableSet<Long>) {
-        val visited = mutableSetOf<Long>()
-        for ((ptr, col) in locators(vftables).toSortedMap()) {
-            if (locator(ptr, col, visited)) vftables += ptr + ptrSize
-        }
-    }
-
-    private fun locators(vftables: Set<Long>) = buildMap {
-        for (vft in vftables) {
-            val ptr = address(vft - ptrSize) ?: continue
-            readPointer(ptr)?.let { this[ptr.offset] = it }
-        }
-        for (data in program.listing.getDefinedData(true) as Iterable<Data>) {
-            if (data.dataType.name != "RTTICompleteObjectLocator") continue
-            for (ref in program.referenceManager.getReferencesTo(data.address)) {
-                if (program.listing.getDataContaining(ref.fromAddress)?.isPointer == true) {
-                    this[ref.fromAddress.offset] = data.address.offset
-                }
+    /**
+     * The `rTTI*` facts, read through Ghidra's RTTI models off the labels its RTTI analyzer laid. These are the
+     * Complete Object Locator each vftable's meta pointer points at, and every Class Hierarchy Descriptor. A
+     * 64-bit locator's pointers are image-relative, and the models give them as absolute addresses.
+     */
+    private fun rtti() {
+        val seen = mutableSetOf<Address>()
+        for (meta in labelled(Msvc.VFTABLE_META_PTR)) {
+            val col = program.pointerAt(meta) ?: continue
+            runCatching {
+                val locator = Rtti4Model(program, col, options)
+                add(
+                    "rTTICompleteObjectLocator",
+                    meta,
+                    col,
+                    locator.rtti0Address,
+                    locator.rtti3Address,
+                    u32(locator.vbTableOffset),
+                    u32(locator.constructorOffset),
+                )
+                typeDescriptor(locator.rtti0Model, seen)
+                hierarchy(locator.rtti3Model, seen)
             }
         }
+        for (chd in labelled(Msvc.CLASS_HIERARCHY_DESCRIPTOR)) {
+            runCatching { hierarchy(Rtti3Model(program, chd, options), seen) }
+        }
     }
 
-    private fun locator(ptr: Long, col: Long, visited: MutableSet<Long>): Boolean {
-        val at = address(col) ?: return false
-        if (readInt(at) != if (ptrSize == 8) 1L else 0L) return false
-        val offset = readInt(at.add(4)) ?: return false
-        val cdOffset = readInt(at.add(8)) ?: return false
-        val td = rva(at.add(12)) ?: return false
-        val chd = rva(at.add(16)) ?: return false
-        val name = typeName(td) ?: return false
-        add("rTTICompleteObjectLocator", ptr, col, td, chd, offset, cdOffset)
-        typeDescriptor(td, name, visited)
-        hierarchy(chd, visited)
-        return true
+    private fun typeDescriptor(td: TypeDescriptorModel, seen: MutableSet<Address>) {
+        if (!seen.add(td.address)) return
+        val vftable = runCatching { td.vfTableAddress }.getOrNull() ?: 0L
+        val name = td.typeName ?: return
+        add("rTTITypeDescriptor", td.address, vftable, name, demangledType(td.address, name))
     }
 
-    private fun address(offset: Long): Address? =
-        runCatching { program.addressFactory.defaultAddressSpace.getAddress(offset) }.getOrNull()
-
-    private fun rva(at: Address): Long? = readInt(at)?.plus(if (ptrSize == 8) program.imageBase.offset else 0)
-
-    private fun typeName(td: Long): String? = runCatching {
-        val at = address(td + 2L * ptrSize) ?: return null
-        val bytes = generateSequence(0L) { it + 1 }.take(MAX_NAME).map { memory.getByte(at.add(it)) }
-            .takeWhile { it != 0.toByte() }.toList().toByteArray()
-        String(bytes, Charsets.ISO_8859_1).takeIf { it.startsWith(".?A") }
-    }.getOrNull()
-
-    private fun typeDescriptor(td: Long, name: String, visited: MutableSet<Long>) {
-        if (!visited.add(td)) return
-        val at = address(td) ?: return
-        add("rTTITypeDescriptor", td, readPointer(at) ?: 0L, name, demangledType(at, name))
-    }
-
+    /**
+     * The class [name] spells (`.?AVOuter@ns@@`: `ns::Outer`): the namespace of the descriptor's label, where
+     * Ghidra put it in one, else the name itself, unmangled.
+     */
     private fun demangledType(at: Address, name: String): String {
         val ns = program.symbolTable.getPrimarySymbol(at)?.parentNamespace
         if (ns != null && !ns.isGlobal) return ns.getName(true)
         return name.removePrefix(".?A").drop(1).removeSuffix("@@").split('@').reversed().joinToString("::")
     }
 
-    private fun hierarchy(chd: Long, visited: MutableSet<Long>) {
-        if (!visited.add(chd)) return
-        val at = address(chd) ?: return
-        val attributes = readInt(at.add(4)) ?: return
-        val count = readInt(at.add(8))?.takeIf { it in 0..MAX_BASES } ?: return
-        val array = rva(at.add(12)) ?: return
-        val bases = (0 until count).mapNotNull { i -> address(array + 4 * i)?.let(::rva) }
-        for (bcd in bases) {
-            val b = address(bcd) ?: continue
-            val td = rva(b) ?: continue
-            val fields = (1..5).map { readInt(b.add(4L * it)) ?: return }
-            val (contained, mdisp, pdisp, vdisp, attrs) = fields
-            val sub = if (attrs and 0x40L != 0L) rva(b.add(24)) ?: 0L else 0L
-            if (visited.add(bcd)) add("rTTIBaseClassDescriptor", bcd, td, contained, mdisp, pdisp, vdisp, attrs, sub)
-            typeName(td)?.let { typeDescriptor(td, it, visited) }
-            if (sub != 0L) hierarchy(sub, visited)
+    /** The descriptor [chd], each Base Class Descriptor in its array, and the classes those describe. */
+    private fun hierarchy(chd: Rtti3Model, seen: MutableSet<Address>) {
+        if (!seen.add(chd.address)) return
+        val array = chd.rtti2Model
+        val bases = (0 until chd.rtti1Count).map { array.getRtti1Address(it) }
+        for (i in bases.indices) {
+            val bcd = array.getRtti1Model(i)
+            val nested = bcd.rtti3Address.takeIf { bcd.attributes and BCD_HAS_HIERARCHY != 0 }
+            if (seen.add(bcd.address)) {
+                add(
+                    "rTTIBaseClassDescriptor",
+                    bcd.address,
+                    bcd.rtti0Address,
+                    u32(bcd.numBases),
+                    u32(bcd.mDisp),
+                    u32(bcd.pDisp),
+                    u32(bcd.vDisp),
+                    u32(bcd.attributes),
+                    nested ?: 0L,
+                )
+            }
+            typeDescriptor(bcd.rtti0Model, seen)
+            nested?.let { runCatching { hierarchy(bcd.rtti3Model, seen) } }
         }
-        add("rTTIClassHierarchyDescriptor", chd, attributes, bases)
+        add("rTTIClassHierarchyDescriptor", chd.address, u32(chd.attributes), bases)
     }
 
-    private fun readPointer(at: Address): Long? = program.pointerAt(at)?.offset
-
-    private fun readInt(at: Address): Long? = runCatching {
-        memory.getInt(at).toLong() and 0xffffffffL
-    }.getOrNull()
+    /** [value] as the unsigned 32-bit word memory holds, which is how OOAnalyzer's facts write RTTI fields. */
+    private fun u32(value: Int) = value.toLong() and 0xffffffffL
 
     private companion object {
-        const val MAX_SLOTS = 1024
-        const val MAX_NAME = 512
-        const val MAX_BASES = 256L
-        val ABIS = listOf(Itanium, Msvc, Gcc2Thunks)
-        val OPERATOR_NEW = ABIS.flatMap { it.operatorNewNames }.toSet()
-        val OPERATOR_DELETE = ABIS.flatMap { it.operatorDeleteNames }.toSet()
-    }
-}
+        val OPERATOR_NEW = PlainVtables.operatorNewNames
+        val OPERATOR_DELETE = PlainVtables.operatorDeleteNames
 
-private fun Varnode.constantAddress(): Long? {
-    val d = def ?: return if (isConstant) offset else null
-    return when (d.opcode) {
-        PcodeOp.COPY, PcodeOp.CAST -> d.getInput(0).constantAddress()
-        PcodeOp.PTRSUB -> d.getInput(1).takeIf { it.isConstant }?.offset
-            ?.takeIf { d.getInput(0).isConstant && d.getInput(0).offset == 0L }
-        else -> if (isConstant) offset else null
+        /** A Base Class Descriptor's attribute: it points at the Class Hierarchy Descriptor of its class. */
+        const val BCD_HAS_HIERARCHY = 0x40
     }
 }

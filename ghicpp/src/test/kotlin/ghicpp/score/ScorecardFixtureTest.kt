@@ -223,7 +223,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
             val bin = File(case.dir, binary)
             assumeTrue(bin.isFile, "$binary is not on disk, and no truth is committed for it")
             var runtime = emptyMap<String, Long>()
-            val snapshot = snapshotOf(bin, compiler, { runtime = runtimeFunctions() })
+            val snapshot = snapshotOf(bin, compiler, setup = { runtime = runtimeFunctions() })
             TruthFile(snapshot, runtime).also {
                 file.parentFile.mkdirs()
                 GZIPOutputStream(file.outputStream()).bufferedWriter().use { w ->

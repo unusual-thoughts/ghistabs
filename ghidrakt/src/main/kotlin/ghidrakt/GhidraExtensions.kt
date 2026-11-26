@@ -198,6 +198,19 @@ fun <T> Program.runTransaction(description: String = "Kotlin Lambda Transaction"
         }
     }
 
+/**
+ * Runs [block] in a transaction that is always rolled back, whatever [block] changed: for a look at the program
+ * as it would be after a change.
+ */
+fun <T> Program.rolledBack(description: String, block: () -> T): T {
+    val txID = startTransaction(description)
+    try {
+        return block()
+    } finally {
+        endTransaction(txID, false)
+    }
+}
+
 fun <T> DataTypeManager.runTransaction(description: String = "Kotlin Lambda Transaction", transaction: () -> T): T =
     startTransaction(description).let { txID ->
         return try {

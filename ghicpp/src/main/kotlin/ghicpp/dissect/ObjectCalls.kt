@@ -21,13 +21,11 @@ sealed interface CalledObject {
         override val id: Int? = null
     }
 
-    /** Another object, one a call at [madeAt] returned. */
-    data class Returned(
-        override val id: Int,
-        val madeAt: Address,
-        val madeBy: Function?,
-        val arg: Long?,
-    ) : CalledObject
+    /**
+     * Another object, one a call at [madeAt] returned: [madeBy] that call's callee, with [arg] its first argument
+     * where a constant, as `operator new(size)` is.
+     */
+    data class Returned(override val id: Int, val madeAt: Address, val madeBy: Function?, val arg: Long?) : CalledObject
 
     /** Another object that the caller has, a local or an argument. */
     data class Local(override val id: Int) : CalledObject
@@ -36,7 +34,7 @@ sealed interface CalledObject {
 /**
  * A call at [at] of [callee], given as its `this` ([thisArgument]) a pointer [offset] bytes into [obj]. With
  * [slot], the pointer is instead the hidden pointer to what the call returns ([returnsInSlot]), which it builds.
- * [returns] is the return object. [next] is the constant address it passes right after
+ * [returns] is the object its result points into, if any. [next] is the constant address it passes right after
  * `this`, if any, such as the VTT pointer an Itanium base-object structor takes. [args] is how many arguments
  * it passes after `this`.
  */
@@ -55,9 +53,11 @@ data class ObjectCall(
  * The calls [this] makes on an object, `this` being what comes in at [thisAt]: each direct call whose
  * callee's `this` argument points into a variable, and each one's result where it points into one.
  */
-fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
+internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
     val ids = mutableMapOf<Any, CalledObject>()
 
+    // The decompiler may merge what two calls return into one variable, as two `operator new`s into EAX:
+    // the call [pointer] comes off tells their objects apart, and only where none does, the variable.
     fun objectOf(pointer: Varnode, root: HighVariable): CalledObject {
         if (PointerInto(root, 0).isThis(thisAt)) return CalledObject.This
         val call = pointer.returnedBy()
@@ -68,15 +68,11 @@ fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
                     ids.size,
                     it.seqnum.target,
                     directCallee(it),
-                    it.takeIf { c -> c.numInputs > 1 }
-                        ?.getInput(1)
-                        ?.takeIf { v -> v.isConstant }
-                        ?.offset,
+                    it.takeIf { c -> c.numInputs > 1 }?.getInput(1)?.takeIf { v -> v.isConstant }?.offset,
                 )
             } ?: CalledObject.Local(ids.size)
         }
     }
-
     return pcodeOps.asSequence().flatMap { op ->
         val callee = directCallee(op) ?: return@flatMap emptySequence()
         val returns = op.output?.let { out ->
@@ -102,7 +98,7 @@ fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
     }.toList()
 }
 
-/** The call [this] pointer is the result of, through copies, casts and constant offsets. */
+/** The call [this] pointer is the result of, through copies, casts and constant offsets; null for none. */
 private fun Varnode.returnedBy(depth: Int = 0): PcodeOp? {
     val op = def ?: return null
     return when {
@@ -113,27 +109,12 @@ private fun Varnode.returnedBy(depth: Int = 0): PcodeOp? {
     }
 }
 
-/** The direct callee of [op], through a thunk to what it thunks. */
-fun HighFunction.directCallee(op: PcodeOp): Function? {
+private val TRACED = setOf(PcodeOp.CAST, PcodeOp.COPY, PcodeOp.INT_ADD, PcodeOp.PTRSUB, PcodeOp.PTRADD)
+
+private const val MAX_TRACE_BACK = 16
+
+/** The function [op] calls directly, through a thunk to what it thunks, or null for no direct call. */
+internal fun HighFunction.directCallee(op: PcodeOp): Function? {
     if (op.opcode != PcodeOp.CALL || op.numInputs < 2) return null
     return function.program.functionManager.getFunctionAt(op.getInput(0).address)?.orThunked
 }
-
-/** The vtable pointer and object pointer for an indirect call through a virtual table slot. */
-fun PcodeOp.virtualCall(): Pair<PointerInto, PointerInto>? {
-    val slotLoad = getInput(0).def?.takeIf { it.opcode == PcodeOp.LOAD } ?: return null
-    val slotPointer = slotLoad.getInput(1).pointerInto() ?: return null
-    val objectPointer = slotPointer.root.instances.firstNotNullOfOrNull { instance ->
-        instance.def?.takeIf { it.opcode == PcodeOp.LOAD }
-            ?.getInput(1)
-            ?.pointerInto()
-    } ?: return null
-    return slotPointer to objectPointer
-}
-
-/** Whether [op] returns to [thisVar] and the pointer has zero offset. */
-fun PcodeOp.returnsPointerTo(thisVar: HighVariable): Boolean =
-    numInputs > 1 && getInput(1).pointerInto() == PointerInto(thisVar, 0)
-
-private val TRACED = setOf(PcodeOp.CAST, PcodeOp.COPY, PcodeOp.INT_ADD, PcodeOp.PTRSUB, PcodeOp.PTRADD)
-private const val MAX_TRACE_BACK = 16
