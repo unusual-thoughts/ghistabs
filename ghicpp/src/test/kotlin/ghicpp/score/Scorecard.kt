@@ -1,5 +1,6 @@
 package ghicpp.score
 
+import ghicpp.ClassNaming
 import ghicpp.VirtKind
 import ghicpp.abi.itanium.ItaniumStructor
 import ghicpp.hierarchy.ClassHierarchy
@@ -201,7 +202,12 @@ class Scorer(
      * only virtual thing is a virtual base can be, not the group's.
      */
     private fun vtableOwner(at: Long): Long? =
-        truthVtables.lastOrNull { it.start <= at && !(it.header && it.start == at) }?.takeIf { at < it.end }?.classId
+        truthVtables.lastOrNull { it.start <= at && !(it.start == at && at in truthGroupHeaders) }
+            ?.takeIf { at < it.end }?.classId
+
+    /** Where the truth's Itanium vtable groups begin: their `vtable` labels, in front of their headers. */
+    private val truthGroupHeaders: Set<Long> = t.classes.flatMap { c -> c.members }
+        .filter { it.kind == MemberKind.VTABLE && it.name == ClassNaming.VTABLE }.mapTo(HashSet()) { it.at }
 
     /**
      * The truth class that [cls] stands for, and how strong the match is: 3 by name, 2 by vtable, 1 by most of its

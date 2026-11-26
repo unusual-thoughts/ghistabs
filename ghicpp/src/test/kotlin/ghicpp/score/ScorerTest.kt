@@ -1,6 +1,7 @@
 package ghicpp.score
 
 import ghicpp.Access
+import ghicpp.ClassNaming
 import ghicpp.MemberAttrs
 import ghicpp.VirtKind
 import ghicpp.abi.itanium.ItaniumStructor
@@ -84,7 +85,13 @@ class ScorerTest {
     @Test
     fun `a table with no slots right before a group's header goes by its functions, not that group`() {
         // Point's table holds no slots, so its address point is where Shape's group, with its header, begins.
-        val headed = truthSnapshot.copy(vtables = listOf(VtableExtent(0xf8, 0x100, 1, header = true)))
+        val shape = truth.classes.first().let {
+            it.copy(members = it.members + Member(ClassNaming.VTABLE, DetachedAddresses.at(0xf8), MemberKind.VTABLE))
+        }
+        val headed = truthSnapshot.copy(
+            hierarchy = ClassHierarchy(listOf(shape) + truth.classes.drop(1)),
+            vtables = listOf(VtableExtent(0xf8, 0x100, 1)),
+        )
         val subject = ClassHierarchy(listOf(cls(10, "Klass_f8", Origin.INFERRED, 0xf8, listOf(fn(0x30, "f")))))
         val card = Scorer(
             Truth(headed, Truth.describedScope(truth), sameBinary = true, sameLayout = true),

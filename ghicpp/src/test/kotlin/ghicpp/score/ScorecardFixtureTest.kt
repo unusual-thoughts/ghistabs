@@ -1,6 +1,5 @@
 package ghicpp.score
 
-import ghicpp.ClassNaming
 import ghicpp.ClassRecordSource
 import ghicpp.analyzers.*
 import ghicpp.hierarchy.ClassHierarchy
@@ -322,7 +321,7 @@ fun Program.snapshot(fixture: String): Snapshot {
     }.toMap()
     val vtables = hierarchy.classes.flatMap { cls ->
         cls.members.filter { it.kind == MemberKind.VTABLE && it.library == null }.map { m ->
-            VtableExtent(m.address.offset, nextSymbolAfter(m.address).offset, cls.id, m.name == ClassNaming.VTABLE)
+            VtableExtent(m.address.offset, nextSymbolAfter(m.address).offset, cls.id)
         }
     }.distinct()
     return Snapshot(fixture, hierarchy, fields, vtables, hierarchy.unattachedVirtuals(this).size)
