@@ -149,6 +149,7 @@ class MemberObjectPass(
             m.dtors.forEach { it.name(ns, DESTRUCTOR) }
             m.namedAfter?.let { (f, role) -> describe(ns, f, role) }
         }
+        nameBaseStructors(objects.baseStructors)
         val plainClasses = classes.mapNotNull { it.cls }
         monitor.message = "Filling member object class structs"
         ClassStructFiller(program, PlainVtables, this).fillAll(
@@ -190,6 +191,9 @@ class MemberObjectPass(
 
         /** The class drafted for each structor read, as first drafted: [NonPolymorphicClass.merged] since, maybe. */
         private val drafted = mutableMapOf<Function, NonPolymorphicClass>()
+
+        /** The base subobjects' structors no class names, each base's ([baseStructor]). */
+        val baseStructors = mutableMapOf<Function, Pair<ClassDecl, StructorRole>>()
 
         /** What is at each subobject, a level each: the first in [found]'s classes and the allocated objects. */
         private val levels = mutableListOf<MutableMap<Subobject, ContainingClass>>()
@@ -366,6 +370,7 @@ class MemberObjectPass(
          * the first to call: to read next.
          */
         private fun members(s: Structor): List<Structor> = s.calls.orEmpty().mapNotNull { (offset, called) ->
+            baseAt(s.container, offset)?.let { return@mapNotNull baseStructor(s, it, called) }
             val sub = Subobject(s.container, offset)
             val structor = memberStructor(s.function, sub, s.role, called) ?: return@mapNotNull null
             val there = levels.firstNotNullOfOrNull { it[sub] }
@@ -378,6 +383,33 @@ class MemberObjectPass(
             drafted.putIfAbsent(structor, into)
             val role = if (s.role == CONSTRUCTOR) into.ctors else into.dtors
             Structor(structor, into, s.role).takeIf { role.add(structor) }
+        }
+
+        /**
+         * The class of [container]'s polymorphic base subobject at [offset], a nonzero one, or null. Only a
+         * polymorphic base holds its vptr at its own +0, so only there is what is built at the base's offset the base
+         * itself: a plain base whose constructor was inlined starts with its first member, which is built there.
+         */
+        private fun baseAt(container: ContainingClass, offset: Long): ClassDecl? =
+            (container as? ContainingClass.Existing)?.cls?.bases?.firstOrNull {
+                offset > 0L && it.offset == offset && it.cls.vftables.isNotEmpty()
+            }?.cls
+
+        /**
+         * The structor of [s]'s container's [base] subobject that [s] [called] there, where no class names it: a
+         * base-object constructor or destructor of a class with virtual bases, which stores the vtables the VTT it
+         * takes holds, not one of its own. It is the base's ([baseStructors]), read next for the base's members, not
+         * a member's. Null where what is called is known, or read already.
+         */
+        private fun baseStructor(s: Structor, base: ClassDecl, called: Set<Function>): Structor? {
+            val structor = when (s.role) {
+                CONSTRUCTOR -> called.first()
+                DESTRUCTOR -> called.last()
+                else -> return null
+            }
+            if (structor == s.function || structor in found.roles || !structor.takesThis()) return null
+            if (baseStructors.putIfAbsent(structor, base to s.role) != null) return null
+            return Structor(structor, ContainingClass.Existing(base), s.role)
         }
 
         /**
@@ -501,6 +533,11 @@ class MemberObjectPass(
             GenericVftableFinder.SEEDED,
         )
         cls = PlainClass(ns, emptyList())
+    }
+
+    /** Names each of [structors] its base's constructor or destructor ([MemberObjects.baseStructor]). */
+    private fun nameBaseStructors(structors: Map<Function, Pair<ClassDecl, StructorRole>>) {
+        for ((f, by) in structors) by.first.ns?.toClass()?.let { f.name(it, by.second) }
     }
 
     /**
