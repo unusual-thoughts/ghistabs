@@ -383,7 +383,7 @@ class MemberObjectPass(
         /**
          * The structor of the member at [sub] that [f], a [role] of its container, [called] there: the first it calls
          * if it builds, the last if it destroys. Null where that's a structor [found] already, whose class is then
-         * at [sub].
+         * at [sub], and where [sub] is a base subobject of its container.
          */
         private fun memberStructor(f: Function?, sub: Subobject, role: StructorRole, called: Set<Function>): Function? {
             val structor = when (role) {
@@ -392,6 +392,9 @@ class MemberObjectPass(
                 else -> return null
             }
             if (sub.offset <= 0L || structor == f || !structor.takesThis()) return null
+            // A base subobject's, though it stores no vtable of its own: one taking a VTT stores those it is passed.
+            val holder = (sub.container as? ContainingClass.Existing)?.cls
+            if (holder?.bases?.any { it.offset == sub.offset } == true) return null
             val (cls, builtRole) = found.roles[structor] ?: return structor
             if (role == CONSTRUCTOR && builtRole == CONSTRUCTOR && sub.container != ContainingClass.Existing(cls)) {
                 if (levels.none { sub in it }) levels.last()[sub] = ContainingClass.Existing(cls)
