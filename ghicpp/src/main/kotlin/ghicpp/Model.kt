@@ -30,6 +30,13 @@ interface BaseDecl {
      */
     val access: Access?
     val offset: Long?
+
+    /**
+     * Who stated the base: [SourceType.IMPORTED] the stabs or RTTI, [SourceType.ANALYSIS] a guess off the code, as
+     * a class pass with neither infers one off constructor calls and shared vftable slots, [SourceType.USER_DEFINED]
+     * the user.
+     */
+    val source: SourceType get() = SourceType.IMPORTED
 }
 
 /** A direct base of a class a recovery pass knows: the base's [cls], and how the class holds it. */
@@ -40,6 +47,7 @@ data class ClassBase(
     override val offset: Long?,
     /** Where a virtual base's [offset] is from: IMPORTED its ABI record, ANALYSIS its vtables, DEFAULT nowhere. */
     val offsetSource: SourceType = SourceType.IMPORTED,
+    override val source: SourceType = SourceType.IMPORTED,
 ) : BaseDecl
 
 /**
@@ -116,7 +124,10 @@ interface MemberDecl {
  */
 @Serializable
 data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : CustomOption {
-    /** A direct base: its class's [namespaceId], or only [name] if none was built, and its [offset] if known. */
+    /**
+     * A direct base: its class's [namespaceId], or only [name] if none was built, its [offset] if known, and who
+     * stated it ([source]); a record written before that was kept goes by the stabs' or RTTI's.
+     */
     @Serializable
     data class Base(
         val namespaceId: Long?,
@@ -124,6 +135,7 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
         override val isVirtual: Boolean,
         override val access: Access?,
         override val offset: Long? = null,
+        override val source: SourceType = SourceType.IMPORTED,
     ) : BaseDecl
 
     /** A class's struct by datatype id, and its direct bases in order. */
@@ -157,7 +169,7 @@ data class ClassHierarchyRecords(var classes: Map<Long, Entry> = emptyMap()) : C
             val ns = cls.ns?.toClass() ?: return null
             val bases = cls.bases.map { b ->
                 val baseNs = b.cls.ns?.toClass()
-                Base(baseNs?.id, if (baseNs == null) b.cls.name else null, b.isVirtual, b.access, b.offset)
+                Base(baseNs?.id, if (baseNs == null) b.cls.name else null, b.isVirtual, b.access, b.offset, b.source)
             }
             return ns.id to Entry(structId, bases)
         }
