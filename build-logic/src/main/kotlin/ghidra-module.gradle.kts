@@ -24,7 +24,11 @@ configure<KotlinJvmProjectExtension> {
     jvmToolchain(ghidraJavaVersion)
     // Ghidra shares one classpath across installed extensions, so the oldest kotlin-stdlib wins —
     // GhidraJupyterKotlin pins 1.9.23. Binding above it fails at runtime in the GUI only.
-    compilerOptions { apiVersion.set(KotlinVersion.KOTLIN_1_9) }
+    // That pin is deliberate, so the compiler's "API version 1.9 is deprecated" warning is silenced.
+    compilerOptions {
+        apiVersion.set(KotlinVersion.KOTLIN_1_9)
+        freeCompilerArgs.add("-Xsuppress-version-warnings")
+    }
 }
 
 ktlint {
