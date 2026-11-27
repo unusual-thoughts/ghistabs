@@ -86,6 +86,7 @@ fun Data.getScalar(name: String): Scalar? = valueOf(name)
 /** Whether the one-bit field [name] is set. */
 fun Data.flag(name: String) = getScalar(name)?.unsignedValue == 1L
 
+/** The runs of [range] that none of [this] (in address order) covers; [action] sees each of [this] as it is passed. */
 fun Iterable<AddressRange>.gapsIn(range: AddressRange, action: (AddressRange) -> Unit = { }) = sequence {
     var start = range.minAddress
     for (r in this@gapsIn) {
@@ -97,8 +98,27 @@ fun Iterable<AddressRange>.gapsIn(range: AddressRange, action: (AddressRange) ->
     (start..range.maxAddress).takeIf { it.length > 0 }?.let { yield((it)) }
 }
 
-fun Iterable<AddressRange>.monitoredGapsIn(range: AddressRange, monitor: TaskMonitor? = null) = gapsIn(range) {
-    monitor?.progress = it.minAddress - range.minAddress
+/**
+ * Undefined runs in [set] - the gaps between instructions and defined data, as `getUndefinedRanges` walks
+ * them - one range of [set] at a time, so no run spans a hole in [set] or crosses an address space.
+ * [monitor] is checked for cancellation and stepped by how far through [set] the walk is, out of
+ * `set.numAddresses`.
+ */
+fun Listing.undefinedRangesIn(set: AddressSetView, monitor: TaskMonitor? = null) = sequence {
+    var before = 0L
+    for (range in set.addressRanges) {
+        val defined = getCodeUnits(AddressSet(range), true).iterator().asSequence()
+            .filter { (it as? Data)?.isDefined != false } // instructions + defined data
+            .map { it.range }
+            .asIterable()
+        yieldAll(
+            defined.gapsIn(range) {
+                monitor?.checkCancelled()
+                monitor?.progress = before + (it.minAddress - range.minAddress).coerceAtLeast(0)
+            },
+        )
+        before += range.length
+    }
 }
 
 /**
@@ -106,16 +126,6 @@ fun Iterable<AddressRange>.monitoredGapsIn(range: AddressRange, monitor: TaskMon
  * progress of: `DisassembleCommand` and `CreateFunctionCmd` set a monitor's maximum, progress and message.
  */
 val TaskMonitor.cancelOnly: TaskMonitor get() = CancelOnlyWrappingTaskMonitor(this)
-
-/** The addresses of [this] below [at]: how far through [this] a walk in address order is at [at]. */
-fun AddressSetView.addressesBefore(at: Address): Long =
-    if (at <= minAddress) 0 else intersectRange(minAddress, at.previous()).numAddresses
-
-/** Undefined runs in [range] — the gaps between instructions and defined data, as `getUndefinedRanges` walks them. */
-fun Listing.undefinedRangesIn(range: AddressRange, monitor: TaskMonitor? = null) = getCodeUnits(AddressSet(range), true)
-    .filter { (it as? Data)?.isDefined != false } // instructions + defined data
-    .map { it.range }
-    .monitoredGapsIn(range, monitor)
 
 /** The two [ghidra.program.model.listing.AutoParameterType] display names. */
 private val INJECTED_PARAM_NAMES = setOf(Function.THIS_PARAM_NAME, Function.RETURN_PTR_PARAM_NAME)
@@ -197,6 +207,19 @@ fun <T> Program.runTransaction(description: String = "Kotlin Lambda Transaction"
             throw e
         }
     }
+
+/**
+ * Runs [block] in a transaction that is always rolled back, whatever [block] changed: for a look at the program
+ * as it would be after a change.
+ */
+fun <T> Program.rolledBack(description: String, block: () -> T): T {
+    val txID = startTransaction(description)
+    try {
+        return block()
+    } finally {
+        endTransaction(txID, false)
+    }
+}
 
 fun <T> DataTypeManager.runTransaction(description: String = "Kotlin Lambda Transaction", transaction: () -> T): T =
     startTransaction(description).let { txID ->

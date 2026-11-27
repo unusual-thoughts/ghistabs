@@ -1,6 +1,7 @@
 package ghicpp.abi.generic
 
 import ghicpp.*
+import ghicpp.abi.functionSlots
 import ghicpp.abi.holdsPureVirtualStub
 import ghicpp.abi.msvc.Msvc
 import ghicpp.abi.ofVtableSymbol
@@ -247,6 +248,7 @@ internal class BaseCandidates(
         classes: Collection<PlainClass>,
         uses: Dissections,
         subobjects: Map<PlainClass, Map<Long, Boolean>> = emptyMap(),
+        sharing: (PlainClass, Long) -> ClassDecl? = { _, _ -> null },
     ) {
         addStructors(uses)
         addDeletingSlots(uses)
@@ -277,12 +279,27 @@ internal class BaseCandidates(
                 )
                 continue
             }
-            cls.bases += ClassBase(base, isVirtual = false, access = null, 0L)
+            cls.bases += ClassBase(base, isVirtual = false, access = null, 0L, source = SourceType.ANALYSIS)
             debug("base-inferred", "${cls.name} : ${base.name}, as ${evidenceOf(cls, base)}", cls.at)
         }
+        addSubobjectBases(uses, subobjects, sharing)
+    }
+
+    /**
+     * Adds the bases at [subobjects]' offsets: off the structor calls on each ([subobjectBase]), else off the
+     * class's table there ([sharing]).
+     */
+    private fun addSubobjectBases(
+        uses: Dissections,
+        subobjects: Map<PlainClass, Map<Long, Boolean>>,
+        sharing: (PlainClass, Long) -> ClassDecl?,
+    ) {
         for ((cls, offsets) in subobjects) {
             val found = offsets.mapNotNull { (offset, isVirtual) ->
-                subobjectBase(cls, offset, uses)?.let { ClassBase(it, isVirtual, access = null, offset) }
+                val base = subobjectBase(cls, offset, uses) ?: sharing(cls, offset)?.also {
+                    debug("base-inferred-sharing", "${cls.name} : ${it.name} at +$offset, off its table there", cls.at)
+                }
+                base?.let { ClassBase(it, isVirtual, access = null, offset, source = SourceType.ANALYSIS) }
             }
             // A virtual base may be one of another base's, which the complete-object constructor builds as well:
             // not while a non-virtual subobject's class is unknown, as it may be the one deriving from it.
@@ -398,7 +415,7 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
             slots,
             pureSlots(targets, own),
             sink,
-        ).inferBases(classes, uses, classes.associateWith { subobjects(it, uses) })
+        ).inferBases(classes, uses, classes.associateWith { subobjects(it, uses) }, sharingBase(classes))
         for (v in vtt) {
             if (v.built == v.base || v.built.bases.any { it.cls == v.base } || v.base.derivesFrom(v.built)) continue
             val isVirtual = v.offset in v.built.headerVbaseOffsets
@@ -455,6 +472,50 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         }
 
     /**
+     * The class of a base subobject that no structor call names, off the secondary table of the class at that
+     * offset. That table holds the base's slots in the base's order: the base's own functions where the class
+     * doesn't override them, and this-adjusting thunks where it does. So the base is the class whose primary table
+     * is as long and holds the same function in the most slots. Pure virtual stubs don't count, since many unrelated
+     * classes hold them. It is null on a tie, or where none shares a slot.
+     *
+     * It is also null where a base the class is already known to have has a table at that offset. The subobject
+     * then belongs to that base, so the class there is an indirect base, not a direct one.
+     */
+    private fun sharingBase(classes: List<PlainClass>): (PlainClass, Long) -> ClassDecl? {
+        val primaries by lazy { classes.associateWith { functionSlots(it.vftables.first().addressPoint) } }
+        return { cls, offset ->
+            cls.vftables.drop(1).firstOrNull { it.vfptrOffset(program) == offset }
+                ?.takeIf { cls.bases.none { b -> b.offset?.let { b.cls.hasTableAt(offset - it) } == true } }
+                ?.let { table ->
+                    val slots = functionSlots(table.addressPoint)
+                    val shared = primaries
+                        .filter { (other, own) -> other != cls && !other.derivesFrom(cls) && own.size == slots.size }
+                        .mapValues { (_, own) ->
+                            slots.indices.count { own[it] == slots[it] && sharable(slots[it]) }
+                        }
+                        .filterValues { it > 0 }
+                    val most = shared.values.maxOrNull()
+                    shared.filterValues { it == most }.keys.singleOrNull()
+                }
+        }
+    }
+
+    private fun sharable(slot: Address) =
+        slot.offset != 0L && !program.holdsPureVirtualStub(slot, PlainVtables::isPureVirtualStub)
+
+    /**
+     * Whether this class, or one of its bases at the right offset, has a table at [offset] from its start. The
+     * search stops at [depth] bases deep, in case the bases inferred so far form a cycle.
+     */
+    private fun ClassDecl.hasTableAt(offset: Long, depth: Int = MAX_BASE_DEPTH): Boolean {
+        if (offset < 0 || depth == 0) return false
+        return vftables.any { it.vfptrOffset(program) == offset } ||
+            bases.any { b -> b.offset?.let { b.cls.hasTableAt(offset - it, depth - 1) } == true }
+    }
+
+    private fun functionSlots(at: Address) = program.functionSlots(at, PlainVtables).toList()
+
+    /**
      * The offsets of [cls]'s base subobjects that have secondary tables, each with whether the base is virtual:
      * In an Itanium vtable group, a virtual base's offset is one of the vbase offsets in front of the primary's
      * `offset_to_top`. An MSVC class's structors store its virtual bases' tables through a vbtable.
@@ -471,7 +532,10 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         cls.headerVbaseOffsets = vbaseOffsets
         val throughVbtable = uses.stores.values.filter { cls in it.classes }
             .flatMapTo(mutableSetOf()) { ss -> ss.filter { it.throughVbtable }.map { it.offset } }
-        return cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } }
+        // A class with no vfptr of its own keeps its primary table at a virtual base's offset.
+        val primaryAtVbase = uses.stores.values.flatMap { it.own }
+            .filter { it.cls == cls && it.throughVbtable && it.home > 0 }.map { it.home }
+        return (cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } } + primaryAtVbase)
             .associateWith { it in vbaseOffsets || it in throughVbtable }
     }
 
@@ -531,6 +595,9 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
     internal companion object {
         /** How many vbase offsets to read in front of a primary table. */
         const val MAX_VBASE_WORDS = 8
+
+        /** How many bases deep [hasTableAt] looks. */
+        const val MAX_BASE_DEPTH = 16
 
         /** The labels the RTTI of a class with any is laid under: Itanium's typeinfo and vtable, MSVC's records. */
         val RTTI_LABELS = setOf(

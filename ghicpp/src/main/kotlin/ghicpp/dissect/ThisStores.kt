@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.NoisyStructureBuilder
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.Undefined
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -44,6 +45,27 @@ data class VptrStore(
     val home: Long,
     val throughVbtable: Boolean = false,
 )
+
+/**
+ * These stores, each store of a primary table that a function makes through a vbtable, at `this` + k, where it
+ * stores no table at `this` + 0, taken as one where the table belongs: MSVC gives a class whose virtuals all
+ * override its virtual bases' no vfptr of its own, so its only table is the one for the virtual base at k. Not where
+ * what the function calls on `this` + k stores the same table, as a virtual base's own structor does.
+ */
+private fun Map<Function, List<VptrStore>>.withVbaseHomes(
+    from: Map<Function, DissectionCache.Dissection>,
+): Map<Function, List<VptrStore>> = mapValues { (f, stored) ->
+    if (stored.any { it.offset == 0L && !it.throughVbtable }) return@mapValues stored
+    val calls = from[f]?.subobjectCalls.orEmpty()
+    stored.map { s ->
+        val vbase = s.throughVbtable && s.home == 0L && s.offset > 0L
+        if (vbase && calls[s.offset].orEmpty().none { g -> this[g].orEmpty().any { it.cls == s.cls } }) {
+            s.copy(home = s.offset)
+        } else {
+            s
+        }
+    }
+}
 
 /** The stores of a vptr where it belongs. */
 val List<VptrStore>.own: List<VptrStore> get() = filter { it.offset == it.home }
@@ -87,7 +109,8 @@ class InlinedConstruction(val function: Function, val at: Address, val size: Lon
  * ([inlined]).
  */
 class Dissections internal constructor(from: Map<Function, DissectionCache.Dissection> = emptyMap()) {
-    val stores: Map<Function, List<VptrStore>> = from.mapNotNull { (f, r) -> r.stores?.let { f to it } }.toMap()
+    val stores: Map<Function, List<VptrStore>> =
+        from.mapNotNull { (f, r) -> r.stores?.let { f to it } }.toMap().withVbaseHomes(from)
     val subobjectCalls: Map<Function, Map<Long, Set<Function>>> = from.mapValues { (_, r) -> r.subobjectCalls }
     val thisStores: ThisStores = from.mapValues { (_, r) -> r.thisStores }
     val inlined: List<InlinedConstruction> = from.flatMap { (_, r) -> r.inlined }
@@ -96,6 +119,10 @@ class Dissections internal constructor(from: Map<Function, DissectionCache.Disse
     val objectCalls: Map<Function, List<ObjectCall>> = from.mapValues { (_, r) -> r.objectCalls }
 
     private fun Function.callsOnThis() = objectCalls[this]?.filter { it.obj == CalledObject.This && !it.slot }.orEmpty()
+
+    /** The constants each function stores into `this` that may be vbtables, by offset. */
+    val vbtables: Map<Function, Map<Long, Address>> =
+        from.mapValues { (_, r) -> r.vbtables }.filterValues { it.isNotEmpty() }
 
     /**
      * The objects each vptr storer builds ([objectsBuilt]). For each object, maps its class to the constant
@@ -309,22 +336,25 @@ class FoundStructors(
     }
 }
 
+/** A field [fillData] typed: where in the class struct, its name, and its type before (null: none) and after. */
+data class FieldRetype(val offset: Int, val name: String, val was: String?, val type: String)
+
 /**
  * Fills each of this class struct's own `<Class>_data` structs ([ownData]) with the fields of [store] it holds,
  * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
- * specific type, and the field keeps its name
+ * specific type, and the field keeps its name. The fields it typed.
  */
-internal fun Structure.fillData(store: Stores) {
-    for ((offset, data) in ownData()) data.fillRun(offset, store, flat = data === this)
-}
+internal fun Structure.fillData(store: Stores): List<FieldRetype> =
+    ownData().flatMap { (offset, data) -> data.fillRun(offset, store, flat = data === this) }
 
 /**
  * Fills this, the struct of a class's own fields at [offset] into it, with the fields of [store] it holds, as
  * [fillData]. Where it is the class struct itself ([ghicpp.isFlatInferred]), a new field is marked as inferred.
+ * The fields it typed, at their offsets in the class struct.
  */
-internal fun Structure.fillRun(offset: Int, store: Stores, flat: Boolean) {
+internal fun Structure.fillRun(offset: Int, store: Stores, flat: Boolean): List<FieldRetype> = buildList {
     val inside = store.filter { (at, dt) -> offset.withLength(length).includes(at.withLength(dt.length)) }
-    val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(this) }
+    val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(this@fillRun) }
     for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
     val mark = ClassNaming.INFERRED.takeIf { flat }
     for ((at, dt) in merged.iterator()) {
@@ -332,16 +362,19 @@ internal fun Structure.fillRun(offset: Int, store: Stores, flat: Boolean) {
         if (at + dt.length > length || old?.dataType?.isEquivalent(dt) == true) continue
         val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
         replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment ?: mark)
+        val was = old?.dataType?.takeUnless(Undefined::isUndefined)?.name
+        add(FieldRetype(offset + at.toInt(), name, was, dt.name))
     }
 }
 
 /**
  * Retypes [ns]'s own fields off what [methods] load and store through `this`, decompiled again, as the class pass
  * fills them: the `<Class>_data` structs its struct holds take the more specific type, and keep names and comments.
+ * The fields it typed: none without a class struct.
  */
-fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor) {
-    val struct = classStruct(ns) ?: return
-    struct.fillData(
+fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor): List<FieldRetype> {
+    val struct = classStruct(ns) ?: return emptyList()
+    return struct.fillData(
         ThisFunctionDissector(this, emptyList(), DummySink).thisFields(methods, monitor).values.mergedStores(),
     )
 }

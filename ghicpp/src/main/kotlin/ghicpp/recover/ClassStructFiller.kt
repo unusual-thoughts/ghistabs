@@ -138,7 +138,10 @@ class ClassStructFiller(
      * nothing else is laid, they go in the class struct itself, each marked as inferred ([isFlatInferred]).
      */
     private fun Structure.placeData(store: Stores, ns: GhidraClass) {
-        if (numDefinedComponents == 0) return fillRun(0, store.filterKeys { it >= 0 }, flat = true)
+        if (numDefinedComponents == 0) {
+            fillRun(0, store.filterKeys { it >= 0 }, flat = true)
+            return
+        }
         val own = store.filter { (at, dt) -> at >= 0 && componentsOverlapping(at, dt.length).isEmpty() }
         // A zero-length field, an empty base's, divides nothing.
         val runs = own.toSortedMap().entries

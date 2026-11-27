@@ -162,16 +162,18 @@ class MemberObjectPass(
         for ((sub, what) in laid) {
             monitor.increment()
             val member = what.decl?.let(::structOf)?.takeUnless { it.isZeroLength } ?: continue
-            val holder = sub.container.decl?.let(::structOf) ?: continue
+            // A runtime's layout ([knownLayout]) holds its members already.
+            val holder = sub.container.decl?.let(::structOf)?.takeUnless { it.isKnownLayout() } ?: continue
             val at = sub.offset.toInt()
             // A base subobject the class pass laid there, a virtual one too, which the constructors build alike.
             if (holder.definedComponents.none { it.offset == at && it.dataType == member }) {
                 placeMember(holder, at, member)
             }
         }
+        val built = addFlaggedBases(objects.flaggedBases())
         // The members grew the classes they went past the end of, and with them those deriving from them.
         dtm.growToHoldBases(classStructs())
-        writeRecords(plainClasses + derived)
+        writeRecords((plainClasses + derived + built).distinct())
         return classes.size
     }
 
@@ -359,6 +361,41 @@ class MemberObjectPass(
             }.mapValues { (_, bases) -> bases.flatten().distinct() }.filterValues { it.isNotEmpty() }
         }
 
+        /**
+         * The subobjects past `this` + 0 that are bases, not members, each with its class. MSVC builds the virtual
+         * bases in the complete object's constructor alone, so the constructor of a class with any takes a flag
+         * saying whether to, right after `this`, and stores the vbtables when it does. A class's constructor calls
+         * its base's with the flag clear, and stores the vbtables of the base's subobject itself, as the complete
+         * object's, where a member's gets the flag set and stores its own: here a constructor of the container
+         * calling the subobject's class's constructor at `this` + k with zero, that storing a vbtable at its
+         * `this` + j, and the caller one at `this` + k + j.
+         */
+        fun flaggedBases(): List<Pair<Subobject, ClassDecl>> {
+            val candidates = subobjects.filter { (sub, what) ->
+                sub.offset > 0 && what.decl != null && sub.container.decl is PlainClass
+            }
+            fun ctorsOf(c: ContainingClass): Set<Function> = when (c) {
+                is ContainingClass.Existing -> found.constructors.filterValues { it == c.cls }.keys
+                is NonPolymorphicClass -> c.merged.ctors
+            }
+            val callers = dissector.readCalls(candidates.flatMap { ctorsOf(it.first.container) }.distinct(), monitor)
+            val flagged = callers.objectCalls.mapValues { (_, calls) ->
+                calls.filter { it.obj == CalledObject.This && it.offset > 0 && it.flag == 0L && !it.slot }
+            }
+            val callees = dissector.readCalls(flagged.values.flatten().map { it.callee }.distinct(), monitor)
+            return candidates.mapNotNull { (sub, what) ->
+                val built = ctorsOf(what)
+                val isBase = ctorsOf(sub.container).any { f ->
+                    val own = callers.vbtables[f].orEmpty()
+                    flagged[f].orEmpty().any { call ->
+                        call.offset == sub.offset && call.callee in built &&
+                            callees.vbtables[call.callee].orEmpty().keys.any { j -> sub.offset + j in own }
+                    }
+                }
+                what.decl?.takeIf { isBase }?.let { sub to it }
+            }
+        }
+
         /** [structors] with what each calls on `this` + k, decompiled. */
         private fun withCalls(structors: List<Structor>, monitor: TaskMonitor): List<Structor> {
             val uses = dissector.readCalls(structors.mapNotNull { it.function }, monitor)
@@ -503,6 +540,16 @@ class MemberObjectPass(
         }
     }
 
+    /** Adds each of [flagged] as a base of its container at its offset, and returns the classes given one. */
+    private fun addFlaggedBases(flagged: List<Pair<Subobject, ClassDecl>>): List<ClassDecl> = flagged.mapNotNull {
+        val (sub, base) = it
+        val cls = sub.container.decl as? PlainClass ?: return@mapNotNull null
+        if (base == cls || base.derivesFrom(cls) || cls.bases.any { b -> b.cls == base }) return@mapNotNull null
+        cls.bases += ClassBase(base, isVirtual = false, access = null, sub.offset)
+        debug("base-inferred-flag", "${cls.name} : ${base.name} at +${sub.offset}, built with no virtual bases")
+        cls
+    }.distinct()
+
     /** Adds each of [empty]'s classes as a base at offset 0 of its class, and returns the classes given one. */
     private fun addEmptyBases(empty: Map<ClassDecl, List<NonPolymorphicClass>>): List<ClassDecl> =
         empty.mapNotNull { (cls, bases) ->
@@ -545,7 +592,7 @@ class MemberObjectPass(
      * vtable's.
      */
     private fun describe(ns: GhidraClass, structor: Function, role: StructorRole) {
-        val struct = program.classStruct(ns)?.takeIf { it.description.isNullOrEmpty() } ?: return
+        val struct = program.classStruct(ns)?.takeIf { it.description.isNullOrEmpty() && !it.isKnownLayout() } ?: return
         val what = if (role == CONSTRUCTOR) "constructor" else "destructor"
         struct.description = "No vtable: named after its first $what, at ${structor.entryPoint}"
     }

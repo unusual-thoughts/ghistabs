@@ -5,8 +5,10 @@ import ghicpp.ClassHierarchyRecords.Companion.readClassRecord
 import ghicpp.ClassHierarchyRecords.Companion.writeClassEdit
 import ghicpp.MemberAttrs.Companion.memberAttrs
 import ghicpp.abi.slotDefinition
+import ghicpp.dissect.FieldRetype
 import ghicpp.dissect.updateFieldTypes
 import ghicpp.hierarchy.ClassHierarchy.*
+import ghidra.app.util.NamespaceUtils
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Function
@@ -95,8 +97,25 @@ internal fun ClassHierarchy.derivesFrom(cls: ClassView, ancestor: ClassView): Bo
 }
 
 /** What a class's bases come from when that is worth a warning before changing them: null if nothing solid. */
-internal fun ClassView.solidSource(): String? =
-    origin.desc.removePrefix("from ").takeIf { origin.baseSource == SourceType.IMPORTED }
+internal fun ClassView.solidSource(): String? = origin.desc.removePrefix("from ").takeIf {
+    // With no bases, whether its origin says it has none; a hand edit's own say is the user's.
+    if (bases.isEmpty()) {
+        origin.basesKnown && origin != Origin.EDITED
+    } else {
+        bases.any {
+            it.source == SourceType.IMPORTED
+        }
+    }
+}
+
+/**
+ * Whether its bases are stated rather than guessed or unknown: each by the stabs, RTTI or a hand edit, or, with
+ * none, by an origin that says it has none.
+ */
+val ClassView.basesStated: Boolean
+    get() = if (bases.isEmpty()) origin.basesKnown else bases.all { it.source in STATED_BASES }
+
+private val STATED_BASES = setOf(SourceType.IMPORTED, SourceType.USER_DEFINED)
 
 /** What ties [member] to its class when that is worth a warning before moving it: null if nothing does. */
 fun Program.memberSource(member: Member): String? = when {
@@ -110,7 +129,8 @@ fun Program.memberSource(member: Member): String? = when {
 
 /**
  * Sets [owner]'s bases to [bases], by hand ([ClassHierarchyRecords.EDITS]): the class then shows these
- * whatever its stabs or typeinfo say.
+ * whatever its stabs or typeinfo say. A base it already had keeps who stated it; one added or changed here is the
+ * user's.
  */
 fun Program.setBases(owner: ClassView, bases: List<BaseRef>) {
     val entries = bases.map {
@@ -120,6 +140,7 @@ fun Program.setBases(owner: ClassView, bases: List<BaseRef>) {
             it.isVirtual,
             it.access ?: Access.PUBLIC,
             it.offset,
+            it.source ?: SourceType.USER_DEFINED,
         )
     }
     writeClassEdit(owner.id, ClassHierarchyRecords.Entry(owner.structId, entries))
@@ -220,6 +241,22 @@ fun Program.moveMember(member: Member, target: ClassView) {
     sym.setNameAndNamespace(sym.name, ns, sym.source.takeUnless { it == SourceType.DEFAULT } ?: SourceType.USER_DEFINED)
 }
 
+/**
+ * Moves [func] into the class at [path] (`ns::Cls`, from the global namespace), made where there is none, a
+ * namespace so named made a class, and makes it a method of it ([makeMethod]): `__thiscall`, its `this` typed
+ * with the class's struct, which a class with none gets empty first ([stubClassStruct]). Its name stays. The
+ * class; throws what Ghidra does (a bad path, a name taken there, a signature refused).
+ */
+fun Program.moveIntoClass(func: Function, path: String): GhidraClass {
+    val ns = NamespaceUtils.createNamespaceHierarchy(path, globalNamespace, this, SourceType.USER_DEFINED)
+        ?: error("no namespace at $path")
+    val cls = ns as? GhidraClass ?: NamespaceUtils.convertNamespaceToClass(ns)
+    stubClassStruct(cls)
+    if (func.parentNamespace != cls) func.setParentNamespace(cls)
+    func.makeMethod()
+    return cls
+}
+
 fun Program.resolve(cls: ClassView) = symbolTable.getSymbol(cls.id)?.`object` as? GhidraClass
 
 /** The functions [ns] holds, its thunks and imports aside. */
@@ -233,11 +270,15 @@ internal fun Program.functionOf(m: Member): Function? = m.takeIf { it.kind == Me
 
 /**
  * Retypes [cls]'s own fields off what [methods] load and store through `this`, or off all of [methodsOf] its
- * namespace's when null.
+ * namespace's when null. The fields it typed.
  */
-internal fun Program.updateFieldTypes(cls: ClassView, methods: List<Function>?, monitor: TaskMonitor) {
-    val ns = resolve(cls) ?: return
-    updateFieldTypes(ns, methods ?: methodsOf(ns), monitor)
+internal fun Program.updateFieldTypes(
+    cls: ClassView,
+    methods: List<Function>?,
+    monitor: TaskMonitor,
+): List<FieldRetype> {
+    val ns = resolve(cls) ?: return emptyList()
+    return updateFieldTypes(ns, methods ?: methodsOf(ns), monitor)
 }
 
 /**

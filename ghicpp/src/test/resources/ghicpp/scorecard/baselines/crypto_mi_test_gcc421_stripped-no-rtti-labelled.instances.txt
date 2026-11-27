@@ -570,6 +570,14 @@ bases-fp `CryptoPP::CryptoMaterial` of `CryptoPP::PrivateKey`
 bases-fp `CryptoPP::DL_GroupParameters<CryptoPP::Integer>` (virtual) of `CryptoPP::ASN1CryptoMaterial<CryptoPP::DL_GroupParameters<CryptoPP::Integer>>`
 bases-fp `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>` of `CryptoPP::DL_GroupParameters_DSA`
 bases-fp `CryptoPP::DL_GroupParameters_IntegerBasedImpl<CryptoPP::ModExpPrecomputation,CryptoPP::DL_FixedBasePrecomputationImpl<CryptoPP::Integer>>` of `CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime`
+bases-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>` of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>`
+bases-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_DSA,CryptoPP::OID>` of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_DSA>,CryptoPP::DSA2<CryptoPP::SHA1>>`
+bases-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>` of `CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>`
+bases-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::EC2N>,CryptoPP::OID>` of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::EC2N>,CryptoPP::ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>>`
+bases-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>` of `CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>`
+bases-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>,CryptoPP::OID>` of `CryptoPP::DL_PrivateKey_WithSignaturePairwiseConsistencyTest<CryptoPP::DL_PrivateKey_EC<CryptoPP::ECP>,CryptoPP::ECDSA<CryptoPP::ECP,CryptoPP::SHA256>>`
+bases-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP,CryptoPP::OID>` of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP>`
+bases-fp `CryptoPP::DL_KeyImpl<CryptoPP::PKCS8PrivateKey,CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime,CryptoPP::OID>` of `CryptoPP::DL_PrivateKey_GFP<CryptoPP::DL_GroupParameters_GFP_DefaultSafePrime>`
 bases-fp `CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>` of `CryptoPP::FixedSizeSecBlock<unsigned_char,16u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,16u,CryptoPP::NullAllocator<unsigned_char>,false>>`
 bases-fp `CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,32u,CryptoPP::NullAllocator<unsigned_char>,false>` of `CryptoPP::FixedSizeSecBlock<unsigned_char,32u,CryptoPP::FixedSizeAllocatorWithCleanup<unsigned_char,32u,CryptoPP::NullAllocator<unsigned_char>,false>>`
 bases-fp `CryptoPP::PrivateKey` (virtual) of `CryptoPP::ASN1CryptoMaterial<CryptoPP::PrivateKey>`

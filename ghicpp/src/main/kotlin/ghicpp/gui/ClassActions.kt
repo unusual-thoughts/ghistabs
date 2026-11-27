@@ -26,6 +26,7 @@ import ghidra.program.util.FunctionSignatureFieldLocation
 import ghidra.util.HTMLUtilities
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
+import ghidra.util.Swing
 import ghidra.util.task.MonitoredRunnable
 import ghidra.util.task.TaskLauncher
 import ghidrakt.*
@@ -146,10 +147,10 @@ private fun ClassTree.addMemberActions() {
             override fun actionPerformed(context: ActionContext?) {
                 val p = program ?: return
                 val funcs = selectedMethods().map { it.first }
-                val changed = p.runTransaction("Apply signature to vftables") {
-                    funcs.sumOf { p.applySignatureToSlots(it) }
+                val applied = p.runTransaction("Apply signature to vftables") {
+                    funcs.map { it.getName(true) to p.applySignatureToSlots(it) }
                 }
-                tool.statusInfo = "Applied ${funcs.size} signature(s) to $changed vftable slot definition(s)"
+                Msg.showInfo(this, component, "Apply Signature to Vftables", signaturesResult(applied))
             }
         }.apply {
             popupMenuData = MenuData(arrayOf("Apply Signature to Vftables..."), PROCESS_ICON)
@@ -286,18 +287,20 @@ private fun memberSymbols(context: ActionContext): List<Symbol> =
 
 /**
  * Retypes each class's fields off the methods paired with it, or off all its own when null, decompiling
- * them in a task that can be cancelled: what it retyped before then stays.
+ * them in a task that can be cancelled: what it retyped before then stays. A dialog then lists the fields typed.
  */
 private fun ClassTree.updateFieldTypes(targets: List<Pair<ClassView, List<Function>?>>) {
     val p = program ?: return
     TaskLauncher.launchModal(
         "Update Field Types",
         MonitoredRunnable { monitor ->
-            p.runTransaction("Update field types") {
-                for ((cls, methods) in targets) {
-                    if (!monitor.isCancelled) p.updateFieldTypes(cls, methods, monitor)
-                }
+            val retyped = p.runTransaction("Update field types") {
+                targets.asSequence().takeWhile { !monitor.isCancelled }
+                    .map { (cls, methods) -> cls.qualifiedName to p.updateFieldTypes(cls, methods, monitor) }
+                    .toList()
             }
+            val text = fieldTypesResult(retyped, monitor.isCancelled)
+            Swing.runLater { Msg.showInfo(this, component, "Update Field Types", text) }
         },
     )
 }
@@ -312,14 +315,15 @@ private fun ClassTree.selectedMethods(): List<Pair<Function, ClassView>> {
 private fun ClassTree.hasSlots(methods: List<Pair<Function, ClassView>>) =
     methods.isNotEmpty() && methods.all { (f, _) -> program?.slotDefinitionsOf(f)?.isNotEmpty() == true }
 
-/** Names the slots [of] picks after the functions they hold. */
+/** Names the slots [of] picks after the functions they hold, then says in a dialog how many, and what it skipped. */
 private fun ClassTree.applySlotNames(of: (VirtualSlots) -> List<VirtualSlot>) {
     val p = program ?: return
     val h = shown ?: return
     val done = p.runTransaction("Apply slot names to vftables") { VirtualSlots(p, h).run { applyNames(of(this)) } }
-    tool.statusInfo = "Named ${done.fields} vftable slot(s)"
-    if (done.skipped.isNotEmpty()) {
-        Msg.showWarn(this, component, "Apply Slot Names", "Kept their old names:\n" + done.skipped.joinToString("\n"))
+    if (done.skipped.isEmpty()) {
+        Msg.showInfo(this, component, "Apply Slot Names to Vftables", slotNamesResult(done))
+    } else {
+        Msg.showWarn(this, component, "Apply Slot Names to Vftables", slotNamesResult(done))
     }
 }
 
@@ -440,6 +444,19 @@ private fun ClassTree.addViewToggles() {
             toolBarData = ToolBarData(INHERITED_ICON, null)
             description = "Also show, muted, each vftable slot a class leaves to its base's function " +
                 "(Base::f), in slot order among its own virtual functions; pure virtual slots left out"
+            helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+        },
+    )
+    addLocalAction(
+        object : ToggleDockingAction("Group Virtual Slots", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                groupSlots = isSelected
+                reshow()
+            }
+        }.apply {
+            toolBarData = ToolBarData(GROUP_SLOTS_ICON, null)
+            description = "List each class's virtual functions under the vftable that holds them, and in it " +
+                "under the base or grand-base that first declares each slot; the class's own new slots last"
             helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
         },
     )
