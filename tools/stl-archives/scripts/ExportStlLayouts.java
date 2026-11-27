@@ -1,7 +1,10 @@
 // Writes an archive's types as the version-neutral text ghicpp bundles (ghicpp.stl.StlLayouts reads
-// it): released Ghidras cannot open a .gdt written by a newer one. Arguments: archive, output file.
+// it): released Ghidras cannot open a .gdt written by a newer one. Arguments: archive (or `-` for the
+// program's own types), output file.
 //
-// One type per line, its members on the indented lines after it, fields separated by tabs:
+// An archive made for one architecture starts with it:
+//   A <language id> <compiler spec id>
+// Then one type per line, its members on the indented lines after it, fields separated by tabs:
 //   S <path> <length>                      structure, non-packed
 //     <offset> <length> <name> <type> [<bit offset> <bit size>]
 //   U <path> <length>                      union
@@ -32,7 +35,10 @@ public class ExportStlLayouts extends GhidraScript {
 	@Override
 	public void run() throws Exception {
 		String[] args = getScriptArgs();
-		FileDataTypeManager archive = FileDataTypeManager.openFileArchive(new File(args[0]), false);
+		// `-` writes the program's own types, as GccStlArchiveScript leaves them.
+		boolean own = args[0].equals("-");
+		DataTypeManager archive = own ? currentProgram.getDataTypeManager()
+				: FileDataTypeManager.openFileArchive(new File(args[0]), false);
 		int written = 0;
 		try (PrintWriter out = new PrintWriter(args[1], "UTF-8")) {
 			ProgramArchitecture arch = archive.getProgramArchitecture();
@@ -45,7 +51,8 @@ public class ExportStlLayouts extends GhidraScript {
 			types.sort(Comparator.comparing(DataType::getPathName));
 			Set<String> seen = new HashSet<>();
 			for (DataType dt : types) {
-				if (write(out, dt)) {
+				// A program's getAllDataTypes lists some of its types twice, and some it has deleted.
+				if (!dt.isDeleted() && seen.add(dt.getPathName()) && write(out, dt)) {
 					written++;
 				}
 			}
@@ -82,7 +89,10 @@ public class ExportStlLayouts extends GhidraScript {
 			}
 		}
 		else if (dt instanceof TypeDef t) {
-			out.println("T\t" + path + "\t" + ref(t.getDataType()));
+			// A shifted pointer (`char * __((offset(0xc)))`) carries its offset.
+			ComponentOffsetSettingsDefinition shift = ComponentOffsetSettingsDefinition.DEF;
+			long offset = shift.hasValue(t.getDefaultSettings()) ? shift.getValue(t.getDefaultSettings()) : 0;
+			out.println("T\t" + path + "\t" + ref(t.getDataType()) + (offset != 0 ? "\t" + offset : ""));
 		}
 		else if (dt instanceof FunctionDefinition f) {
 			out.println("F\t" + path + "\t" + ref(f.getReturnType()) + "\t" + (f.hasVarArgs() ? 1 : 0));
@@ -95,7 +105,7 @@ public class ExportStlLayouts extends GhidraScript {
 			out.println("B\t" + path + "\t" + i.getLength() + "\t" + (i.isSigned() ? 1 : 0));
 		}
 		else {
-			return false; // built-ins, pointers and arrays are written where they are used
+			return false; // other built-ins, pointers and arrays are written where they are used
 		}
 		return true;
 	}

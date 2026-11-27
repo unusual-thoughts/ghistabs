@@ -1,12 +1,14 @@
 package ghicpp.stl
 
 import ghidra.program.database.ProgramBuilder
+import ghidra.program.model.data.ComponentOffsetSettingsDefinition
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.TypeDef
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
@@ -41,6 +43,7 @@ class GnuStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         "_ZNSs7reserveEj",
         "/std/string",
         4,
+        shift = 12,
     )
 
     @Test
@@ -80,7 +83,28 @@ class GnuStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         16,
     )
 
-    private fun check(language: String, archiveName: String, mangled: String, path: String, size: Int) {
+    @Test
+    fun `gcc 3's string, whose pointer is past its header`() = check(
+        ProgramBuilder._X86,
+        "libstdcxx5_x86",
+        "_ZNSs7reserveEj",
+        "/std/string",
+        4,
+        shift = 12,
+    )
+
+    /**
+     * [shift]: a copy-on-write string's `_M_p` points [shift] bytes into `_Rep_chars`, past the header, so
+     * the decompiler reaches the header's fields through it.
+     */
+    private fun check(
+        language: String,
+        archiveName: String,
+        mangled: String,
+        path: String,
+        size: Int,
+        shift: Long? = null,
+    ) {
         val builder = ProgramBuilder("stl", language, "gcc", this)
         try {
             builder.createMemory(".text", "0x401000", 0x100)
@@ -114,6 +138,15 @@ class GnuStlApplierIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 self.pathName mustBe path
                 self.length mustBe size
                 self.sourceArchive.name mustBe archiveName
+                if (shift != null) {
+                    val hider = self.getComponent(0).dataType as Structure
+                    val p = hider.getComponent(0).dataType as TypeDef
+                    p.name mustBe "_Rep_chars_ptr"
+                    ComponentOffsetSettingsDefinition.DEF.getValue(p.defaultSettings) mustBe shift
+                    val chars = (p.baseDataType as Pointer).dataType as Structure
+                    chars.name mustBe "_Rep_chars"
+                    chars.getComponentAt(shift.toInt()).fieldName mustBe "_M_data"
+                }
             }
         } finally {
             builder.dispose()

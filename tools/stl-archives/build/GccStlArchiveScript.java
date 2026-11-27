@@ -34,6 +34,9 @@ public class GccStlArchiveScript extends GhidraScript {
 
 	private int pointerSize;
 
+	/** How many characters a copy-on-write string's `_Rep_chars` gives room for. */
+	private static final int STRING_CHARS = 4096;
+
 	@Override
 	public void run() throws Exception {
 		String[] args = getScriptArgs();
@@ -107,17 +110,19 @@ public class GccStlArchiveScript extends GhidraScript {
 		// Last, as laying the classes brings the built-ins back.
 		portableBuiltins(dtm);
 		fitBases(dtm);
+		int shifted = shiftStringPointers(dtm);
 		int folded = foldConflicts(dtm);
 		tagAbi(dtm, read);
 		int methods = checkAgainstMethods(dtm);
 		println(String.format(
 			"%s: %d std types filed at their demangled paths, %d unrelated types dropped, " +
-				"%d typedefs, %d vfptrs named, %d bases laid as their non-virtual part, %d beside an empty one, " +
+				"%d typedefs, %d strings' pointers shifted, %d vfptrs named, %d bases laid as their non-virtual part, " +
+				"%d beside an empty one, " +
 				"%d bases named, " +
 				"%d own vftables, " +
 				"%d classes split around one; %d method classes resolve to an archive type; " +
 				"%d classes with bases; %d copies folded",
-			name, moved, dropped, typedefs, vfptrs, selfBases, beside, shape.getBases(), shape.getVftables(), shape.getSplit(),
+			name, moved, dropped, typedefs, shifted, vfptrs, selfBases, beside, shape.getBases(), shape.getVftables(), shape.getSplit(),
 			methods, read.classes().getClasses().stream().filter(c -> !c.getBases().isEmpty()).count(), folded));
 		read.moved().write(classesFile);
 	}
@@ -846,6 +851,54 @@ public class GccStlArchiveScript extends GhidraScript {
 			e.getValue().setName(e.getValue().getName().replaceFirst("\\.stl$", ""));
 		}
 		return made.size();
+	}
+
+	/**
+	 * Types the character pointer of each copy-on-write string (the libstdc++ of gcc 3 and 4, and the old
+	 * ABI's since) as a shifted pointer into `_Rep_chars`, its `_Rep` header followed by the characters.
+	 * `_M_p` points past the header, so the decompiler otherwise reads the length as `*(int *)(p + -0xc)`;
+	 * with the shift it reads `ADJ(p)._M_rep._M_length`, and a character `ADJ(p)->_M_data[i]`. A string
+	 * with no `_Rep`, the C++11 ABI's, keeps its pointer. Returns how many strings it shifted.
+	 */
+	private int shiftStringPointers(DataTypeManager dtm) throws Exception {
+		List<Structure> hiders = new ArrayList<>();
+		dtm.getAllStructures().forEachRemaining(s -> {
+			if (s.getName().equals("_Alloc_hider")) {
+				hiders.add(s);
+			}
+		});
+		int shifted = 0;
+		for (Structure hider : hiders) {
+			CategoryPath string = hider.getCategoryPath();
+			DataTypeComponent p = hider.getNumDefinedComponents() == 1 ? hider.getDefinedComponents()[0] : null;
+			DataType header = dtm.getDataType(string, "_Rep_base");
+			if (header == null) {
+				header = dtm.getDataType(string, "_Rep");
+			}
+			// From gcc 4 on, `_M_p` is the allocator's `pointer`, a typedef of `char *`.
+			DataType type = p == null ? null : p.getDataType();
+			if (type instanceof TypeDef t) {
+				type = t.getBaseDataType();
+			}
+			if (!(type instanceof Pointer ptr) || ptr.getDataType() == null ||
+				!(header instanceof Structure rep) || rep.isNotYetDefined()) {
+				continue;
+			}
+			StructureDataType chars = new StructureDataType(string, "_Rep_chars", 0, dtm);
+			chars.setToDefaultPacking();
+			chars.add(rep, "_M_rep", null);
+			DataType charT = ptr.getDataType();
+			// Long enough that a constant index lands in it, where past its end it would read as padding.
+			chars.add(new ArrayDataType(charT, STRING_CHARS, charT.getLength(), dtm), "_M_data", null);
+			DataType target = dtm.addDataType(chars, DataTypeConflictHandler.REPLACE_HANDLER);
+			TypedefDataType typedef = new TypedefDataType(string, "_Rep_chars_ptr",
+				new PointerDataType(target, ptr.getLength(), dtm), dtm);
+			ComponentOffsetSettingsDefinition.DEF.setValue(typedef.getDefaultSettings(), rep.getLength());
+			DataType t = dtm.addDataType(typedef, DataTypeConflictHandler.REPLACE_HANDLER);
+			hider.replace(p.getOrdinal(), t, ptr.getLength(), p.getFieldName(), p.getComment());
+			shifted++;
+		}
+		return shifted;
 	}
 
 	/**

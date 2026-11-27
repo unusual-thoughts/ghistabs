@@ -35,26 +35,40 @@ class StlApplier(
 
     private val dtm = program.dataTypeManager
 
-    /** The archive's classes by [untagged] path; a path two of them share finds neither. */
-    private val untaggedIndex: Map<String, Composite?> by lazy {
-        buildMap {
-            archive.allComposites.forEach { c ->
-                if (c.isNotYetDefined) return@forEach
-                val key = untagged(c.categoryPath.pathElements.joinToString("::") + "::" + c.name)
-                put(key, if (key in this) null else c)
-            }
-        }
-    }
-
-    /** The archive's class at [category] / [name], or the one that is spelled alike but for [untagged]. */
-    private fun lookup(category: CategoryPath, name: String): Composite? =
-        (archive.getDataType(DataTypePath(category, name)) as? Composite)?.takeUnless { it.isNotYetDefined }
-            ?: untaggedIndex[untagged(category.pathElements.joinToString("::") + "::" + name)]
+    private val index by lazy { StlIndex(archive) }
 
     fun apply(): Result {
         val (replaced, filled) = replacePlaceholders()
         val laid = layClasses()
+        if (roots == GNU_ROOTS) nameAliasedClasses()
         return Result(replaced, filled, record(), laid)
+    }
+
+    /**
+     * Files each class the GNU demangler names by an alias ([gnuAliases]) under that alias, in place of the
+     * empty struct Ghidra made for its methods' `this`: a method of `std::__cxx11::string` takes a
+     * `string *`, and Ghidra finds a class's struct by the class's own name, so the class must be the
+     * struct `/std/__cxx11/string`. A function taking `std::string const&` then passes the same type its
+     * methods take, where it took a `basic_string<char,…> *` the decompiler cast at every call. The
+     * archive's typedef of the alias, if it came in, is folded into the class. Returns how many it named.
+     */
+    private fun nameAliasedClasses(): Int {
+        var named = 0
+        for (category in listOf(CategoryPath("/std"), CategoryPath("/std/__cxx11"))) {
+            val structs = dtm.getCategory(category)?.dataTypes.orEmpty().filterIsInstance<Structure>()
+                .filterNot { it.isNotYetDefined }
+                .groupBy { StlIndex.key(category.pathElements.toList() + it.name) }
+            for ((alias, target) in gnuAliases()) {
+                val real = structs[StlIndex.key(category.pathElements.toList() + target)]?.singleOrNull() ?: continue
+                val existing = dtm.getDataType(category, alias)
+                val foldable = existing == null || (existing is Structure && existing.isNotYetDefined) ||
+                    (existing is TypeDef && existing.baseDataType == real)
+                if (!foldable) continue
+                if (existing != null) dtm.replaceDataType(existing, real, false)
+                if (runCatching { real.name = alias }.isSuccess) named++
+            }
+        }
+        return named
     }
 
     private fun replacePlaceholders(): Pair<Int, Int> {
@@ -62,7 +76,8 @@ class StlApplier(
         dtm.allStructures.forEach { stub ->
             if (!stub.isNotYetDefined) return@forEach
             val path = archivePath(stub.categoryPath, roots) ?: return@forEach
-            stubs.add(stub to (lookup(path, stub.name) ?: return@forEach))
+            val layout = lookup(archive, path, stub.name, index) ?: return@forEach
+            if (!layout.isNotYetDefined) stubs.add(stub to layout)
         }
         if (stubs.isEmpty()) return 0 to 0
 
@@ -85,8 +100,9 @@ class StlApplier(
     private fun layClasses(): Int = program.symbolTable.classNamespaces.asSequence().count { ns ->
         val scopes = ns.getPathList(true).dropLast(1)
         if (scopes.firstOrNull() !in roots) return@count false
-        val layout = lookup(CategoryPath(CategoryPath.ROOT, scopes), ns.name) ?: return@count false
-        if ((dtm.getDataType(layout.dataTypePath) as? Composite)?.isNotYetDefined == false) return@count false
+        val layout = lookup(archive, CategoryPath(CategoryPath.ROOT, scopes), ns.name, index)
+        val laid = layout != null && (dtm.getDataType(layout.dataTypePath) as? Composite)?.isNotYetDefined == false
+        if (layout == null || layout.isNotYetDefined || laid) return@count false
         dtm.resolve(layout, DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER)
         true
     }
@@ -99,17 +115,17 @@ class StlApplier(
     private fun record(): Int {
         if (classes.isEmpty()) return 0
         val namespaces = program.symbolTable.classNamespaces.asSequence().toList()
-            .groupBy { it.getPathList(true) }
+            .groupBy { StlIndex.key(canonical(archive, it.getPathList(true))) }
             .mapValues { (_, group) -> group.firstOrNull { !it.isExternal } ?: group.first() }
         val old = program.readClassRecord().orEmpty()
         val name = archive.name.removeSuffix(".gdt")
         val entries = classes.mapNotNull { cls ->
-            val ns: GhidraClass = namespaces[cls.segments] ?: return@mapNotNull null
+            val ns: GhidraClass = namespaces[StlIndex.key(cls.segments)] ?: return@mapNotNull null
             if (ns.id in old) return@mapNotNull null
             val struct = dtm.getDataType(cls.path) as? Structure
             val bases = cls.bases.map { base ->
                 val segments = StdClass(base.path).segments
-                val baseNs = namespaces[segments]
+                val baseNs = namespaces[StlIndex.key(segments)]
                 ClassHierarchyRecords.Base(
                     baseNs?.id,
                     if (baseNs == null) segments.joinToString("::") else null,
@@ -137,6 +153,76 @@ class StlApplier(
          */
         @JvmStatic
         fun untagged(name: String): String = TAG.replace(name, "")
+
+        /** libstdc++'s: `__gnu_cxx` holds its extensions and the iterators of its containers. */
+        @JvmField
+        val GNU_ROOTS = setOf("std", "__gnu_cxx")
+
+        /**
+         * The names Ghidra's GNU demangler (11.4 on) puts in place of a library template, with the class each
+         * stands for, as the demangler and the DWARF importer spell it: `string` for
+         * `basic_string<char,_std::char_traits<char>,_std::allocator<char>_>`. A GNU archive keeps each as a
+         * typedef of the class, in `std` and in `std::__cxx11`, which [lookup] follows.
+         */
+        @JvmStatic
+        fun gnuAliases(): Map<String, String> = buildMap {
+            for ((prefix, char) in listOf("" to "char", "w" to "wchar_t")) {
+                val traits = "std::char_traits<$char>"
+                val alloc = "std::allocator<$char>"
+                for (name in listOf(
+                    "ios", "streambuf", "istream", "ostream", "iostream", "filebuf",
+                    "ifstream", "ofstream", "fstream",
+                )) {
+                    put("$prefix$name", spelled("basic_$name<$char, $traits >"))
+                }
+                for (name in listOf("string", "stringbuf", "istringstream", "ostringstream", "stringstream")) {
+                    put("$prefix$name", spelled("basic_$name<$char, $traits, $alloc >"))
+                }
+            }
+            for (char in listOf("char8_t", "char16_t", "char32_t")) {
+                put(
+                    char.removeSuffix("_t").replace("char", "u") + "string",
+                    spelled("basic_string<$char, std::char_traits<$char>, std::allocator<$char> >"),
+                )
+            }
+        }
+
+        private fun categoryOf(scopes: List<String>) =
+            if (scopes.isEmpty()) CategoryPath.ROOT else CategoryPath(CategoryPath.ROOT, scopes)
+
+        private fun spelled(cxx: String) = cxx.replace(' ', '_')
+
+        /**
+         * The class [archive] files at [category] / [name], through the typedefs it keeps for the names a
+         * demangler gives a library template ([gnuAliases]), in the name or in any scope of the category;
+         * failing that, the one [index] finds however the demangler spelled it. Null if it has none, or only
+         * an empty one.
+         */
+        @JvmStatic
+        @JvmOverloads
+        fun lookup(
+            archive: DataTypeManager,
+            category: CategoryPath,
+            name: String,
+            index: StlIndex? = null,
+        ): Composite? {
+            val path = category.pathElements.toList() + name
+            val scopes = canonical(archive, path)
+            val found = archive.getDataType(DataTypePath(categoryOf(scopes.dropLast(1)), scopes.last()))
+            return (found as? Composite)?.takeUnless { it.isNotYetDefined } ?: index?.find(path)
+        }
+
+        /** [path], each scope that names a typedef of [archive]'s replaced by the class it names. */
+        fun canonical(archive: DataTypeManager, path: List<String>): List<String> {
+            val out = mutableListOf<String>()
+            for (segment in path) {
+                val category = categoryOf(out)
+                val typedef = archive.getDataType(category, segment) as? TypeDef
+                val target = typedef?.baseDataType as? Composite
+                out.add(if (target != null && target.categoryPath == category) target.name else segment)
+            }
+            return out
+        }
 
         /**
          * Where the archive files the type a placeholder at [category] stands for; null outside the
