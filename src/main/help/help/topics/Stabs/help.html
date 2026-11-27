@@ -398,6 +398,24 @@
 
     <P>After a drop, the node dropped on opens to show what landed there.</P>
 
+    <P>The decompiler's popup menu has two of these actions too. <B>Rename Slot</B>, beside
+    <B>Rename Field</B>, on a call through a vftable's field (<CODE>this-&gt;vftable-&gt;f</CODE>) or on a
+    virtual function's name, does what <B>Rename Virtual Slot</B> does: it renames the slot's field in
+    every vftable that has it and every function that fills it, overriding it or overridden by it; a slot
+    every class leaves empty or pure virtual only has its fields renamed. The struct must be laid over
+    some class's vftable. <B>Update Slot Name</B> and <B>Update Slot Signature</B>, on the same, do what
+    <B>Apply Slot Names to Vftables</B> and <B>Apply Signature to Vftables</B> do for that function: on a
+    virtual function's name, each slot holding it is named after it, or typed with its signature as edited; on a
+    vftable's field, each table laid with that struct has its slot there named after, or typed as, the
+    function it holds. <B>Move Function into Class...</B>, beside <B>Rename Function</B>, on a
+    function's name, moves it into a class picked from the program's, or typed as
+    <CODE>ns::Class</CODE>, made where there is none, a namespace so named made a class. The function
+    becomes a method of it: <CODE>__thiscall</CODE> where the program has one, with
+    <CODE>this</CODE> typed as the class's struct, the first argument dropped where it is where
+    <CODE>this</CODE> comes in (a gcc <CODE>__cdecl</CODE>'s first stack argument), the others kept;
+    where no convention takes <CODE>this</CODE>, as on x86-64 gcc, the first pointer parameter
+    becomes <CODE>this</CODE>, or one is added. A class with no struct gets an empty one first.</P>
+
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
 
     <P>Fifteen analyzers ship with the extension that do not read stabs at all. They are enabled
