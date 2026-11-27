@@ -64,7 +64,9 @@ data class SlotRenames(val functions: Int, val fields: Int, val skipped: List<St
 class VirtualSlots(private val program: Program, private val hierarchy: ClassHierarchy) {
     private val tables: Map<Long, List<SlotTable>> =
         hierarchy.classes.associate { c -> c.id to program.resolve(c)?.let(program::slotTablesOf).orEmpty() }
-    private val owner: Map<Address, ClassView> =
+
+    /** The class each table is of. Of a slot's [root]'s: the base that first declares the slot. */
+    val owner: Map<Address, ClassView> =
         hierarchy.classes.flatMap { c -> tables[c.id].orEmpty().map { it.address to c } }.toMap()
     private val byAddress: Map<Address, SlotTable> = tables.values.flatten().associateBy { it.address }
 
@@ -97,6 +99,7 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
                     entryPoint,
                     slot,
                     getPrototypeString(false, false),
+                    owner[root(slot).table]?.path,
                 )
             }
         }
@@ -112,7 +115,15 @@ class VirtualSlots(private val program: Program, private val hierarchy: ClassHie
         while (true) {
             val up = byAddress[s.table]?.let(::extended)?.takeIf { seen.add(it.address) } ?: break
             if (s.index >= up.pfns.size) break
-            s = VirtualSlot(up.address, up.label, s.index)
+            val next = VirtualSlot(up.address, up.label, s.index)
+            // A gcc 2.x table ends in a null entry, read as one more slot: no slot to override. An Itanium
+            // abstract class's destructor slots hold null too, and are overridden.
+            if (s.index == up.pfns.lastIndex && pointee(next)?.offset == 0L &&
+                CxxAbi.ofVftable(program, up.address) is Gcc2Abi
+            ) {
+                break
+            }
+            s = next
             yield(s)
         }
     }

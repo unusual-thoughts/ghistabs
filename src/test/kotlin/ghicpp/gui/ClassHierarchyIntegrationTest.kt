@@ -604,6 +604,48 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         ((base as? MemberNode)?.parent as? ClassNode)?.info?.qualifiedName mustBe "Shape"
     }
 
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `grouped, a class's virtual slots go under their vftable, by the base that declares each`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        fun names(nodes: List<GTreeNode>) = nodes.map { it.name }
+        fun classNode(name: String, group: Boolean = true) =
+            ClassTreeRoot(program.name, hierarchy, showInherited = true, groupSlots = group)
+                .children.single { it.name == name } as ClassNode
+
+        // Label : Rect : Shape. Its primary table holds Shape's slots, its override of area among them,
+        // then Rect's perim, which it inherits.
+        val label = classNode("Label")
+        val tables = label.children.filterIsInstance<VftableNode>()
+        (tables.isNotEmpty()).mustBeTrue("vftables: ${names(label.children)}")
+        val primary = tables.firstOrNull { t -> t.children.any { it is BaseSlotsNode && it.name == "Rect" } }
+            ?: fail("no table with Rect's slots: ${tables.map { it.name to names(it.children) }}")
+        val byBase = primary.children.filterIsInstance<BaseSlotsNode>().associate { it.name to names(it.children) }
+        listOf("area", "Shape::name").forEach { it mustBeIn byBase["Shape"].orEmpty() }
+        "Rect::perim" mustBeIn byBase["Rect"].orEmpty()
+        // Shape's slots first, in slot order.
+        names(primary.children).let { (it.indexOf("Shape") < it.indexOf("Rect")).mustBeTrue("$it") }
+        // Nothing slotted is left directly under the class, and its other members still are.
+        val loose = label.children.filter { n ->
+            n is InheritedSlotNode || (n is MemberNode && n !is VftableNode && n.member.slot != null)
+        }
+        loose mustBe emptyList()
+        val flat = classNode("Label", group = false).memberNodes().map { it.member }.toSet()
+        val grouped = label.memberNodes().map { it.member }.toSet()
+        ((grouped - flat) + (flat - grouped)).mustBeEmpty("the same members, grouped or not")
+
+        // Rect's own perim is new: straight under its table, after Shape's.
+        val rect = classNode("Rect").children.filterIsInstance<VftableNode>()
+            .single { t -> t.children.any { it.name == "perim" } }
+        names(rect.children).let { (it.indexOf("Shape") in 0 until it.indexOf("perim")).mustBeTrue("$it") }
+
+        // Found again under the grouping, and the class still lists it.
+        val perim = hierarchy.cls("Rect").members.first { it.name == "perim" }
+        val root = ClassTreeRoot(program.name, hierarchy, groupSlots = true)
+        (root.nodeAt(listOf(perim.address)) as? MemberNode)?.member mustBe perim
+    }
+
     companion object {
         @JvmStatic
         fun hellos() = stabsHellos()

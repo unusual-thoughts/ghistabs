@@ -444,6 +444,19 @@ private fun ClassTree.addViewToggles() {
         },
     )
     addLocalAction(
+        object : ToggleDockingAction("Group Virtual Slots", owner) {
+            override fun actionPerformed(context: ActionContext?) {
+                groupSlots = isSelected
+                reshow()
+            }
+        }.apply {
+            toolBarData = ToolBarData(GROUP_SLOTS_ICON, null)
+            description = "List each class's virtual functions under the vftable that holds them, and in it " +
+                "under the base or grand-base that first declares each slot; the class's own new slots last"
+            helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+        },
+    )
+    addLocalAction(
         object : ToggleDockingAction("Show Empty Classes", owner) {
             override fun actionPerformed(context: ActionContext?) {
                 showEmpty = isSelected
