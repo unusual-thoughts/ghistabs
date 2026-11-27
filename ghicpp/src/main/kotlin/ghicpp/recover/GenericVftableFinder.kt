@@ -244,14 +244,17 @@ class GenericVftableFinder(
     /**
      * Seeds the construction vtable at [table] as the `vftable` of a new class. Code never takes its address, but
      * a VTT points at it. The new class stands for the base the table is built for, whose slots it holds. Returns
-     * whether it seeded a class. It doesn't when a table is already laid out or labelled at [table].
+     * whether it seeded a class. It doesn't when a table is already laid out or labelled at [table]. A base whose
+     * only virtual thing is a virtual base has a table with no slots, which is labelled but not laid out: what
+     * follows its address point is not its own, so may be laid out already.
      */
     private fun seedConstruction(table: Address): Boolean {
-        if (symtab.getSymbols(table).any { it.source != SourceType.DEFAULT } || !isFree(table)) return false
-        val slots = program.functionSlots(table, PlainVtables).toList().takeIf { it.isNotEmpty() } ?: return false
+        if (symtab.getSymbols(table).any { it.source != SourceType.DEFAULT }) return false
+        val slots = program.functionSlots(table, PlainVtables).toList()
+        if (slots.isNotEmpty() && !isFree(table)) return false
         val ns = symtab.buildClassNamespaces(listOf("$SEEDED_CLASS_PREFIX$table"), SEEDED)
         symtab.createLabel(table, ClassNaming.VFTABLE, ns, SEEDED)
-        lay(PotentialVtable(table, slots, emptyList()), ns)
+        if (slots.isNotEmpty()) lay(PotentialVtable(table, slots, emptyList()), ns)
         debug("vftable-seeded-construction", "${slots.size} slot(s), a VTT's", table)
         return true
     }

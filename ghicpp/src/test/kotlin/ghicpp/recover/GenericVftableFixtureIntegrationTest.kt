@@ -57,7 +57,10 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
     private fun seeded(): Map<Long, Int> = program.symbolTable.getSymbols(ClassNaming.VFTABLE)
         .let { it as Iterator<Symbol> }.asSequence()
         .filter { it.parentNamespace.name.startsWith(GenericVftableFinder.SEEDED_CLASS_PREFIX) }
-        .associate { it.address.subtract(program.imageBase) to program.listing.getDataAt(it.address).numComponents }
+        .associate {
+            it.address.subtract(program.imageBase) to
+                (program.listing.getDataAt(it.address)?.numComponents ?: 0)
+        }
 
     /** Each secondary table seeded, by its offset from the image base: its primary's, and its subobject's offset. */
     private fun secondaries(): Map<Long, Pair<Long, Long>> =
@@ -85,6 +88,9 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             0x6c88L to 2, // Diamond
             0x6d00L to 2, // Named
             0x6d20L to 4, // Shape
+            // Left and Right, off their construction tables in Diamond: a virtual base gives them a vptr, no slots.
+            0x40b0L to 0,
+            0x40c8L to 0,
         )
     }
 
@@ -123,7 +129,7 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             .associate { (id, e) -> table(id) to e.bases.map { table(it.namespaceId) } }
         // A base at a nonzero offset is found from the class's secondary table there and the constructor called on
         // that subobject. Both's Up and Down are built by base-object constructors that take Both's VTT, and the
-        // construction vtables it points at identify them.
+        // construction vtables it points at identify them. So are Diamond's Left and Right.
         bases mustBe mapOf(
             0x6930L to listOf(SHAPE), // Circle
             0x6960L to listOf(0x6988L), // Secret : Logger
@@ -133,7 +139,8 @@ class GenericVftableFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTe
             0x6a88L to listOf(0x6bc8L),
             0x6bf0L to listOf(0x6c48L, 0x6d00L), // Label : Rect, Named
             0x6c48L to listOf(SHAPE), // Rect
-            0x6c88L to listOf(0x6d00L), // Diamond : Named, past its Left and Right, which have no table of their own
+            // Diamond : Named, Left, Right. Left's and Right's tables, built in Diamond only, hold no slots.
+            0x6c88L to listOf(0x6d00L, 0x40b0L, 0x40c8L),
         )
     }
 
