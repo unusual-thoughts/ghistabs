@@ -250,6 +250,7 @@ abstract class ScorecardFixtureTest : AbstractGhidraHeadlessIntegrationTest() {
         analyzeAll(program)
         facts?.bufferedWriter()?.use { OoFactExporter(program).write(it) }
         program.analysed()
+        facts?.bufferedWriter()?.use { OoFactExporter(program).write(it) }
         program.snapshot(file.name)
     }
 

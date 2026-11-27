@@ -371,11 +371,6 @@ class ThisFunctionDissector(
         return v
     }
 
-    /** The variable `this` comes in as, at [thisAt]; null where nothing reads it. */
-    private fun HighFunction.thisVariable(thisAt: Address?): HighVariable? = pcodeOps.asSequence()
-        .flatMap { it.inputs.asSequence() }
-        .firstOrNull { it.isInput && it.address == thisAt }?.high
-
     /**
      * The stores of the vptrs [at] holds that the function filled makes through `this`, in address order.
      * [virtual] maps the address of each store it makes through a vbtable to the store's offset. The structure
