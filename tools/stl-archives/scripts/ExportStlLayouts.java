@@ -1,10 +1,7 @@
 // Writes an archive's types as the version-neutral text ghicpp bundles (ghicpp.stl.StlLayouts reads
-// it): released Ghidras cannot open a .gdt written by a newer one. Arguments: archive (or `-` for the
-// program's own types), output file.
+// it): released Ghidras cannot open a .gdt written by a newer one. Arguments: archive, output file.
 //
-// An archive made for one architecture starts with it:
-//   A <language id> <compiler spec id>
-// Then one type per line, its members on the indented lines after it, fields separated by tabs:
+// One type per line, its members on the indented lines after it, fields separated by tabs:
 //   S <path> <length>                      structure, non-packed
 //     <offset> <length> <name> <type> [<bit offset> <bit size>]
 //   U <path> <length>                      union
@@ -35,10 +32,7 @@ public class ExportStlLayouts extends GhidraScript {
 	@Override
 	public void run() throws Exception {
 		String[] args = getScriptArgs();
-		// `-` writes the program's own types, as GccStlArchiveScript leaves them.
-		boolean own = args[0].equals("-");
-		DataTypeManager archive = own ? currentProgram.getDataTypeManager()
-				: FileDataTypeManager.openFileArchive(new File(args[0]), false);
+		FileDataTypeManager archive = FileDataTypeManager.openFileArchive(new File(args[0]), false);
 		int written = 0;
 		try (PrintWriter out = new PrintWriter(args[1], "UTF-8")) {
 			ProgramArchitecture arch = archive.getProgramArchitecture();
@@ -51,8 +45,7 @@ public class ExportStlLayouts extends GhidraScript {
 			types.sort(Comparator.comparing(DataType::getPathName));
 			Set<String> seen = new HashSet<>();
 			for (DataType dt : types) {
-				// A program's getAllDataTypes lists some of its types twice, and some it has deleted.
-				if (!dt.isDeleted() && seen.add(dt.getPathName()) && write(out, dt)) {
+				if (write(out, dt)) {
 					written++;
 				}
 			}
@@ -102,7 +95,7 @@ public class ExportStlLayouts extends GhidraScript {
 			out.println("B\t" + path + "\t" + i.getLength() + "\t" + (i.isSigned() ? 1 : 0));
 		}
 		else {
-			return false; // other built-ins, pointers and arrays are written where they are used
+			return false; // built-ins, pointers and arrays are written where they are used
 		}
 		return true;
 	}

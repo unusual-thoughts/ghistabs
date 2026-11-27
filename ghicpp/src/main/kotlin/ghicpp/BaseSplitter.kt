@@ -207,7 +207,8 @@ class BaseSplitter(
             StructureDataType(baseDt.categoryPath, name, length, dtm).apply {
                 description = "${baseDt.name} as a base subobject (+$first..${last + 1}): its fields " +
                     "without the vptr the deriving class now owns"
-                for (it in baseDt.definedComponents.filter { overlaps(it) || holds(it) }) {
+                // A zero-length member (`T x[0]`) overlaps nothing, so it is kept where the run holds it.
+                for (it in baseDt.definedComponents.filter { overlaps(it) || (it.length == 0 && holds(it)) }) {
                     val inner = it.dataType as? Structure
                     // A base of the base that the vptr word cuts, as a runtime's layout holds it whole
                     // (`exception` in `runtime_error`): its own fields in the run, cut the same way.

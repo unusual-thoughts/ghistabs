@@ -45,7 +45,31 @@ object StlShape {
         val vftables = StlVftables.lay(dtm, classes, pointerSize, typeOf)
         val splitter = BaseSplitter(DtmRegistry(dtm), DummySink, pointerSize)
         val split = baseFirst(classes).count { split(dtm, splitter, it, pointerSize, typeOf) }
+        dropEmptyRuns(dtm)
         return Result(bases, vftables, split)
+    }
+
+    /**
+     * Takes out the empty runs a split leaves where a base is nothing but its vptr ([BaseSplitter.splitBase]'s
+     * zero-length `_base_`), and the components holding them. A Ghidra before 11 cannot hold an empty struct
+     * in a component without it taking a byte, so an archive keeping them reads back a byte longer there.
+     */
+    private fun dropEmptyRuns(dtm: DataTypeManager) {
+        val empty = mutableMapOf<Structure, Boolean>()
+
+        // A split's own runs only: an empty class of the library's (a lambda) keeps its byte.
+        fun Structure.isEmpty(): Boolean = empty.getOrPut(this) {
+            empty[this] = false
+            ClassNaming.FIELDS in name && isZeroLength &&
+                definedComponents.all { (it.dataType as? Structure)?.isEmpty() == true }
+        }
+        val runs = dtm.allStructures.asSequence().filter { it.isEmpty() }.toList()
+        dtm.allStructures.asSequence().filterNot { it in runs }.forEach { struct ->
+            struct.definedComponents.filter { it.length == 0 && it.dataType in runs }
+                .sortedByDescending { it.ordinal }
+                .forEach { struct.delete(it.ordinal) }
+        }
+        runs.forEach { dtm.remove(it) }
     }
 
     /** Names [cls]'s non-virtual base subobjects, found at their offsets. Returns how many. */
@@ -70,7 +94,7 @@ object StlShape {
     }
 
     /** [classes], each after the ones it derives from. */
-    internal fun baseFirst(classes: List<StdClass>): List<StdClass> {
+    private fun baseFirst(classes: List<StdClass>): List<StdClass> {
         val byPath = classes.associateBy { it.path }
         val done = linkedMapOf<String, StdClass>()
         fun visit(cls: StdClass, seen: Set<String>) {
@@ -116,9 +140,7 @@ object StlShape {
     }
 
     private fun StructureDataType.lay(at: Int, dt: DataType, name: String?) {
-        // An empty struct reports a length of 1, but grows from 0.
-        val current = if (numComponents == 0 && isNotYetDefined) 0 else length
-        if (at + dt.length > current) growStructure(at + dt.length - current)
+        if (at + dt.length > length) growStructure(at + dt.length - length)
         replaceAtOffset(at, dt, dt.length, name, null)
     }
 }

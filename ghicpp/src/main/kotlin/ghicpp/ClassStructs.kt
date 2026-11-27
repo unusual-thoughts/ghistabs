@@ -122,10 +122,26 @@ fun Program.stubClassStruct(ns: GhidraClass) {
 private const val GHIDRA_PLACEHOLDER = "PlaceHolder Class Structure"
 
 /**
- * Gives [ns] a [classStruct] of [size] bytes, or grows its own to them. Where its last field is one of its own
- * `<Class>_data` structs, or, split around a deriving class's vptr, its own `_fields` run ending in one, that grows
- * with it, so the fields its constructors store past the old end are refilled there. A base's `_fields` part keeps
- * its size: it is the base's, which grew none.
+ * The layout an archive gives the class, at its namespace path (`/std/basic_streambuf<…>` for
+ * `std::basic_streambuf<…>`), as the bundled MSVC runtime archives do ([ghicpp.stl.StlApplier]): what the
+ * class passes take as it is, rather than size and fill a struct of their own.
+ */
+fun Program.knownLayout(ns: GhidraClass): Structure? {
+    val scopes = ns.getPathList(true).dropLast(1)
+    val category = if (scopes.isEmpty()) CategoryPath.ROOT else CategoryPath(CategoryPath.ROOT, scopes)
+    val struct = dataTypeManager.getDataType(category, ns.name)
+    return (struct as? Structure)?.takeIf { it.isKnownLayout() }
+}
+
+/** Whether this struct is a defined one linked to an archive ([knownLayout]), which no class pass changes. */
+fun Structure.isKnownLayout() = !isNotYetDefined &&
+    sourceArchive?.archiveType.let { it == ArchiveType.FILE || it == ArchiveType.PROJECT }
+
+/**
+ * Gives [ns] a [classStruct] of [size] bytes, or grows its own to them; a [knownLayout] stays as it is. Where its
+ * last field is one of its own `<Class>_data` structs, or, split around a deriving class's vptr, its own `_fields`
+ * run ending in one, that grows with it, so the fields its constructors store past the old end are refilled there.
+ * A base's `_fields` part keeps its size: it is the base's, which grew none.
  */
 fun Program.sizeClassStruct(ns: GhidraClass, size: Int) {
     if (size <= 0) return

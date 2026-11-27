@@ -14,8 +14,6 @@ import java.util.regex.Pattern;
 
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.data.*;
-import ghidra.program.model.lang.*;
-import ghidra.program.util.DefaultLanguageService;
 
 public class LayoutsToGdt extends GhidraScript {
 
@@ -34,8 +32,6 @@ public class LayoutsToGdt extends GhidraScript {
 	private final Map<String, DataType> built = new HashMap<>();
 	private final Set<String> filled = new HashSet<>();
 	private final Map<String, DataType> builtins = new HashMap<>();
-	/** The archive's language and compiler spec, when it is made for one architecture. */
-	private String[] architecture;
 
 	@Override
 	public void run() throws Exception {
@@ -57,11 +53,6 @@ public class LayoutsToGdt extends GhidraScript {
 		out.delete();
 		FileDataTypeManager gdt = FileDataTypeManager.createFileArchive(out);
 		try {
-			if (architecture != null) {
-				Language language = DefaultLanguageService.getLanguageService()
-						.getLanguage(new LanguageID(architecture[0]));
-				setArchitecture(gdt, language, new CompilerSpecID(architecture[1]));
-			}
 			int tx = gdt.startTransaction("layouts");
 			try {
 				for (String path : records.keySet()) {
@@ -79,26 +70,6 @@ public class LayoutsToGdt extends GhidraScript {
 		}
 	}
 
-	/**
-	 * Makes [gdt] an archive for [language]: by reflection, since the option the call takes moved from
-	 * StandAloneDataTypeManager to DataTypeArchive in 12.3, and this compiles on every Ghidra that runs
-	 * a script beside it.
-	 */
-	private void setArchitecture(FileDataTypeManager gdt, Language language, CompilerSpecID spec)
-			throws Exception {
-		for (java.lang.reflect.Method m : gdt.getClass().getMethods()) {
-			Class<?>[] params = m.getParameterTypes();
-			if (m.getName().equals("setProgramArchitecture") && params.length == 4 &&
-				params[0] == Language.class && params[2].isEnum()) {
-				@SuppressWarnings({ "unchecked", "rawtypes" })
-				Object clear = java.lang.Enum.valueOf((Class) params[2], "CLEAR");
-				m.invoke(gdt, language, spec, clear, monitor);
-				return;
-			}
-		}
-		throw new IllegalStateException("no setProgramArchitecture on " + gdt.getClass());
-	}
-
 	private void parse(String text) {
 		Record current = null;
 		for (String line : text.split("\n")) {
@@ -108,9 +79,6 @@ public class LayoutsToGdt extends GhidraScript {
 			String[] fields = line.split("\t", -1);
 			if (line.startsWith("\t")) {
 				current.members.add(Arrays.copyOfRange(fields, 1, fields.length));
-			}
-			else if (fields[0].equals("A")) {
-				architecture = new String[] { fields[1], fields[2] };
 			}
 			else {
 				current = new Record(fields[0].charAt(0), Arrays.copyOfRange(fields, 1, fields.length));
@@ -128,28 +96,9 @@ public class LayoutsToGdt extends GhidraScript {
 		Record record = records.get(path);
 		if (record == null) {
 			DataType builtin = builtins.get(path);
-			if (builtin == null && path.lastIndexOf('/') == 0) {
-				// Any other built-in type the debug info used (`qword`, `int16`), by its name.
-				builtin = BuiltInDataTypeManager.getDataTypeManager()
-						.getDataType(new DataTypePath(CategoryPath.ROOT, path.substring(1)));
-			}
 			if (builtin == null) {
 				throw new IllegalArgumentException("no type " + path);
 			}
-			return builtin;
-		}
-		if (record.kind == 'B') {
-			DataType builtin = builtins.get(path);
-			if (builtin == null) {
-				builtin = BuiltInDataTypeManager.getDataTypeManager()
-						.getDataType(new DataTypePath(CategoryPath.ROOT, path.substring(1)));
-			}
-			if (builtin == null) {
-				int length = Integer.parseInt(record.fields[1]);
-				builtin = record.fields[2].equals("1") ? AbstractIntegerDataType.getSignedDataType(length, null)
-						: AbstractIntegerDataType.getUnsignedDataType(length, null);
-			}
-			built.put(path, builtin);
 			return builtin;
 		}
 		CategoryPath at = new CategoryPath(path);
@@ -214,10 +163,6 @@ public class LayoutsToGdt extends GhidraScript {
 					}
 					else if (length > 0) {
 						s.replaceAtOffset(offset, type, length, name, null);
-					}
-					else {
-						// A trailing `T x[0]`, which takes no room.
-						s.insertAtOffset(offset, type, 0, name, null);
 					}
 				}
 				catch (InvalidDataTypeException e) {
