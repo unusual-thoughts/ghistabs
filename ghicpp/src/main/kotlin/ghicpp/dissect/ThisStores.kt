@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.NoisyStructureBuilder
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.Undefined
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
@@ -309,22 +310,25 @@ class FoundStructors(
     }
 }
 
+/** A field [fillData] typed: where in the class struct, its name, and its type before (null: none) and after. */
+data class FieldRetype(val offset: Int, val name: String, val was: String?, val type: String)
+
 /**
  * Fills each of this class struct's own `<Class>_data` structs ([ownData]) with the fields of [store] it holds,
  * as Auto Fill in Structure fills one: where a field is there already, [NoisyStructureBuilder] keeps the more
- * specific type, and the field keeps its name
+ * specific type, and the field keeps its name. The fields it typed.
  */
-internal fun Structure.fillData(store: Stores) {
-    for ((offset, data) in ownData()) data.fillRun(offset, store, flat = data === this)
-}
+internal fun Structure.fillData(store: Stores): List<FieldRetype> =
+    ownData().flatMap { (offset, data) -> data.fillRun(offset, store, flat = data === this) }
 
 /**
  * Fills this, the struct of a class's own fields at [offset] into it, with the fields of [store] it holds, as
  * [fillData]. Where it is the class struct itself ([ghicpp.isFlatInferred]), a new field is marked as inferred.
+ * The fields it typed.
  */
-internal fun Structure.fillRun(offset: Int, store: Stores, flat: Boolean) {
+internal fun Structure.fillRun(offset: Int, store: Stores, flat: Boolean): List<FieldRetype> = buildList {
     val inside = store.filter { (at, dt) -> offset.withLength(length).includes(at.withLength(dt.length)) }
-    val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(this) }
+    val merged = NoisyStructureBuilder().also { it.populateOriginalStructure(this@fillRun) }
     for ((at, dt) in inside) merged.addDataType(at.toLong() - offset, dt)
     val mark = ClassNaming.INFERRED.takeIf { flat }
     for ((at, dt) in merged.iterator()) {
@@ -332,16 +336,19 @@ internal fun Structure.fillRun(offset: Int, store: Stores, flat: Boolean) {
         if (at + dt.length > length || old?.dataType?.isEquivalent(dt) == true) continue
         val name = old?.fieldName ?: ClassNaming.fieldName(offset + at.toInt())
         replaceAtOffset(at.toInt(), dt, dt.length, name, old?.comment ?: mark)
+        val was = old?.dataType?.takeUnless(Undefined::isUndefined)?.name
+        add(FieldRetype(offset + at.toInt(), name, was, dt.name))
     }
 }
 
 /**
  * Retypes [ns]'s own fields off what [methods] load and store through `this`, decompiled again, as the class pass
  * fills them: the `<Class>_data` structs its struct holds take the more specific type, and keep names and comments.
+ * The fields it typed: none without a class struct.
  */
-fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor) {
-    val struct = classStruct(ns) ?: return
-    struct.fillData(
+fun Program.updateFieldTypes(ns: GhidraClass, methods: Collection<Function>, monitor: TaskMonitor): List<FieldRetype> {
+    val struct = classStruct(ns) ?: return emptyList()
+    return struct.fillData(
         ThisFunctionDissector(this, emptyList(), DummySink).thisFields(methods, monitor).values.mergedStores(),
     )
 }
