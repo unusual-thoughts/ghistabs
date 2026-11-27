@@ -10,4 +10,6 @@ dependencies {
     api(libs.kotlinx.serialization.core)
     // The `must…` assertions and the fixture paths every project's tests share.
     testFixturesApi(libs.junit.jupiter)
+    // ForkTempDir's interface; Gradle's test runtime brings the launcher itself.
+    testFixturesCompileOnly(libs.junit.platform.launcher)
 }
