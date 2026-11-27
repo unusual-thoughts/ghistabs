@@ -36,7 +36,8 @@ sealed interface CalledObject {
  * [slot], the pointer is instead the hidden pointer to what the call returns ([returnsInSlot]), which it builds.
  * [returns] is the object its result points into, if any. [next] is the constant address it passes right after
  * `this`, if any, such as the VTT pointer an Itanium base-object structor takes. [args] is how many arguments
- * it passes after `this`.
+ * it passes after `this`, and [flag] the integer constant it passes right after `this`, if any, such as the flag an
+ * MSVC constructor of a class with virtual bases takes, zero where it builds a base subobject.
  */
 data class ObjectCall(
     val at: Address,
@@ -47,6 +48,7 @@ data class ObjectCall(
     val slot: Boolean = false,
     val next: Address? = null,
     val args: Int = 0,
+    val flag: Long? = null,
 )
 
 /**
@@ -79,8 +81,8 @@ internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
             out.pointerInto()?.let { objectOf(out, it.root) as? CalledObject.Returned }
         }
         val slot = op.getInput(1).takeIf { callee.returnsInSlot() }
-        val next = (callee.thisIndex() + 2).takeIf { it < op.numInputs }
-            ?.let { op.getInput(it).constantAddress(function.program) }
+        val after = (callee.thisIndex() + 2).takeIf { it < op.numInputs }?.let(op::getInput)
+        val next = after?.constantAddress(function.program)
         listOfNotNull(op.thisArgument(callee)?.let { it to false }, slot?.let { it to true }).asSequence()
             .mapNotNull { (arg, inSlot) ->
                 val obj = arg.pointerInto() ?: return@mapNotNull null
@@ -93,6 +95,7 @@ internal fun HighFunction.objectCalls(thisAt: Address?): List<ObjectCall> {
                     inSlot,
                     next = next.takeUnless { inSlot },
                     args = if (inSlot) 0 else (op.numInputs - callee.thisIndex() - 2).coerceAtLeast(0),
+                    flag = after?.takeIf { it.isConstant && !inSlot }?.offset,
                 )
             }
     }.toList()

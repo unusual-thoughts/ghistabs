@@ -471,7 +471,10 @@ class PlainVtableParser(private val program: Program, private val sink: Diagnost
         cls.headerVbaseOffsets = vbaseOffsets
         val throughVbtable = uses.stores.values.filter { cls in it.classes }
             .flatMapTo(mutableSetOf()) { ss -> ss.filter { it.throughVbtable }.map { it.offset } }
-        return cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } }
+        // A class with no vfptr of its own keeps its primary table at a virtual base's offset.
+        val primaryAtVbase = uses.stores.values.flatMap { it.own }
+            .filter { it.cls == cls && it.throughVbtable && it.home > 0 }.map { it.home }
+        return (cls.vftables.drop(1).mapNotNull { it.vfptrOffset(program)?.takeIf { k -> k > 0 } } + primaryAtVbase)
             .associateWith { it in vbaseOffsets || it in throughVbtable }
     }
 

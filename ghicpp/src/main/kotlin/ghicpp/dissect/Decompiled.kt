@@ -62,13 +62,15 @@ fun Program.vptrWriters(
 
 /**
  * The addresses this function stores as constants into each object, by the variable the object is
- * ([PointerInto.root]) and the offset into it: the vptrs and vbtables a constructor stores, among others.
+ * ([PointerInto.root]) and the offset into it: the vptrs and vbtables a constructor stores, among others. With
+ * [castless], also those cast to the type of the field they go in, as a vbtable stored where a vptr is laid.
  */
-fun HighFunction.constantStores(): Map<HighVariable, Map<Long, Address>> {
+fun HighFunction.constantStores(castless: Boolean = false): Map<HighVariable, Map<Long, Address>> {
     val stores = mutableMapOf<HighVariable, MutableMap<Long, Address>>()
     for (op in pcodeOps) {
         if (op.opcode != PcodeOp.STORE) continue
-        val value = op.getInput(2).constant()?.let { function.program.addressIn(it) } ?: continue
+        val stored = op.getInput(2).let { if (castless) it.castless() else it }
+        val value = stored.constant()?.let { function.program.addressIn(it) } ?: continue
         val (root, offset) = op.getInput(1).pointerInto() ?: continue
         stores.getOrPut(root) { mutableMapOf() }[offset] = value
     }

@@ -183,8 +183,8 @@ class ThisFunctionDissector(
             val inlined = writes[func]?.let { fill.inlined(high, it, objectCalls) }.orEmpty()
             val calls = objectCalls.filter { it.obj == CalledObject.This && !it.slot }
             val filled = fill.fillThis(high, thisAt)
-            val virtual = writes[func]?.let { high.thisVariable(thisAt) }
-                ?.let { high.storesThroughVbtables(it) }.orEmpty()
+            val self = high.thisVariable(thisAt)
+            val virtual = self?.takeIf { writes[func] != null }?.let { high.storesThroughVbtables(it) }.orEmpty()
             val stores = writes[func]?.let { filled.vptrStores(it, virtual) }
             val fills = if (fillArrays) high.fills(intoThis).associate { it.second } else emptyMap()
             cache.reads[key(func)] = DissectionCache.Dissection(
@@ -194,6 +194,7 @@ class ThisFunctionDissector(
                 inlined,
                 objectCalls,
                 writes[func]?.let { high.objectsBuilt(tables) }.orEmpty(),
+                self?.let { high.constantStores(castless = true)[it] }.orEmpty().filterValues(program::mayBeVbtable),
                 version,
             )
         }
@@ -433,6 +434,8 @@ class DissectionCache(
         val inlined: List<InlinedConstruction> = emptyList(),
         val objectCalls: List<ObjectCall> = emptyList(),
         val objectsBuilt: Map<ClassDecl, Map<Long, Address>> = emptyMap(),
+        /** The constants it stores into `this` that may be vbtables ([mayBeVbtable]), by offset. */
+        val vbtables: Map<Long, Address> = emptyMap(),
         /** The program's [Program.getModificationNumber] when the function was read. */
         val version: Long = 0,
     )
